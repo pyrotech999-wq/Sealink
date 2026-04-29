@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AiForecast48hBox } from "@/components/home/AiForecast48hBox";
 import { DEFAULT_MAP_CENTER } from "@/lib/map-constants";
 import { fetchSevenDayMaxWindMph } from "@/lib/open-meteo-forecast";
 import { mphToKnots, seaStateForMaxWindMph } from "@/lib/wind-tiers";
@@ -125,6 +126,8 @@ export function WeatherForecast7Day({ lat, lng }: Props) {
             })
         }
       </div>
+
+      <AiForecast48hBox lat={lat} lng={lng} />
     </div>
   );
 }
