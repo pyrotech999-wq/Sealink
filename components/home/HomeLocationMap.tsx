@@ -32,6 +32,15 @@ const DEFAULT_ZOOM = 6;
 /** Statute miles → metres (for ~5 mi “nearby” ring). */
 const NEARBY_RING_METRES = 5 * 1609.344;
 
+function clearMapPresence(keepalive = false) {
+  void fetch("/api/map/presence", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    keepalive,
+    body: JSON.stringify({ shareNearby: false }),
+  });
+}
+
 function buildNearbyPinIcon(label: string): L.DivIcon {
   const safe = escapeHtml(label.trim() || "Nearby");
   const html = `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;padding-bottom:4px"><div style="width:36px;height:36px;border-radius:9999px;background:#2563eb;border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff">⌖</div><span style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:2px 8px;border-radius:9999px;background:rgba(255,255,255,.95);font-size:11px;font-weight:600;color:#1e3a8a;box-shadow:0 1px 4px rgba(0,0,0,.15)">${safe}</span></div>`;
@@ -185,6 +194,7 @@ export default function HomeLocationMap() {
 
   function setSharingOn(on: boolean) {
     if (!on) {
+      clearMapPresence();
       setShareNearby(false);
       setShareNearbyPeers(false);
       setNearbyPeers([]);
@@ -214,6 +224,51 @@ export default function HomeLocationMap() {
     () => (activeWind ? buildWindArrowDivIcon(activeWind.mph, activeWind.dirFromDeg) : null),
     [activeWind],
   );
+
+  useEffect(() => {
+    return () => clearMapPresence(true);
+  }, []);
+
+  useEffect(() => {
+    if (!sharing || !pos || !shareNearby) return;
+    const label = boatInput.trim() || "Boat";
+    const pulse = () => {
+      void fetch("/api/map/presence", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          shareNearby: true,
+          lat: pos.lat,
+          lng: pos.lng,
+          label,
+        }),
+      });
+    };
+    pulse();
+    const id = window.setInterval(pulse, 45_000);
+    return () => window.clearInterval(id);
+  }, [sharing, pos?.lat, pos?.lng, shareNearby, boatInput]);
+
+  useEffect(() => {
+    if (!sharing || !pos || !shareNearby) {
+      setNearbyPeers([]);
+      return;
+    }
+    const load = () => {
+      void (async () => {
+        try {
+          const r = await fetch(`/api/map/presence?lat=${encodeURIComponent(String(pos.lat))}&lng=${encodeURIComponent(String(pos.lng))}`);
+          const d = (await r.json()) as { peers?: NearbyPeer[] };
+          setNearbyPeers(Array.isArray(d.peers) ? d.peers : []);
+        } catch {
+          setNearbyPeers([]);
+        }
+      })();
+    };
+    load();
+    const id = window.setInterval(load, 25_000);
+    return () => window.clearInterval(id);
+  }, [sharing, pos?.lat, pos?.lng, shareNearby]);
 
   function persistBoat() {
     setBoatName(boatInput);
@@ -315,6 +370,27 @@ export default function HomeLocationMap() {
                         weight: 1,
                       }}
                     />
+                    {shareNearby ? (
+                      <Circle
+                        center={[pos.lat, pos.lng]}
+                        radius={NEARBY_RING_METRES}
+                        pathOptions={{
+                          color: "#3b82f6",
+                          fillColor: "#3b82f6",
+                          fillOpacity: 0.04,
+                          weight: 1,
+                          dashArray: "6 10",
+                        }}
+                      />
+                    ) : null}
+                    {nearbyPeers.map((p) => (
+                      <Marker
+                        key={`nearby-${p.id}`}
+                        position={[p.lat, p.lng]}
+                        icon={buildNearbyPinIcon(p.label)}
+                        zIndexOffset={620}
+                      />
+                    ))}
                     <Marker
                       key={`${boatInput}:${avatarUrl.slice(0, 40)}`}
                       position={[pos.lat, pos.lng]}
@@ -392,6 +468,34 @@ export default function HomeLocationMap() {
           >
             {sharing ? "Stop sharing location on map" : "Share my location on this map"}
           </button>
+
+          <label
+            className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 text-[11px] leading-snug ${
+              sharing && pos
+                ? "border-blue-200 bg-blue-50/90 text-blue-950 dark:border-blue-900/50 dark:bg-blue-950/35 dark:text-blue-100"
+                : "cursor-not-allowed border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-500"
+            }`}
+          >
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-400 text-blue-600 disabled:opacity-50"
+              checked={shareNearby}
+              disabled={!sharing || !pos}
+              onChange={(e) => {
+                const on = e.target.checked;
+                setShareNearby(on);
+                setShareNearbyPeers(on);
+                if (!on) clearMapPresence();
+              }}
+            />
+            <span>
+              <span className="font-semibold">Show me to nearby SeaLink users (~5 mi)</span>
+              <span className="mt-1 block opacity-90">
+                Only members who also turn this on appear on your map (blue pins). Your position is refreshed about
+                every 45s while this page is open; others drop off after a couple of minutes without a heartbeat.
+              </span>
+            </span>
+          </label>
 
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-[11px] leading-snug text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
             <p className="font-semibold">Background updates</p>
