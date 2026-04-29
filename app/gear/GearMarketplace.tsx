@@ -175,9 +175,16 @@ export function GearMarketplace() {
       <div className="rounded-xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm leading-6 text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
         <p className="font-semibold">Boat equipment &amp; gear only</p>
         <p className="mt-1 opacity-90">
-          This board is for chandlery, kit, spares, and everything except boats and hulls. Listings are removed
-          automatically after about {policy?.listingTtlDays ?? 60} days unless you extend. You&apos;ll see an in-app
-          reminder in the last {policy?.reminderDaysBefore ?? 7} days with a button to add another {policy?.listingTtlDays ?? 60} days.
+          This board is for chandlery, kit, spares, and everything except boats and hulls.
+        </p>
+        <p className="mt-2 opacity-90">
+          Listings are removed automatically after about {listingTtl}
+          {" "}
+          days unless you extend. You&apos;ll see an in-app reminder in the last {reminderDays}
+          {" "}
+          days with a button to add another {listingTtl}
+          {" "}
+          days.
         </p>
       </div>
 
@@ -202,7 +209,9 @@ export function GearMarketplace() {
                   onClick={() => void extend(r.id)}
                   className="h-9 shrink-0 rounded-lg bg-orange-700 px-3 text-sm font-semibold text-white hover:bg-orange-800 dark:bg-orange-600 dark:hover:bg-orange-500"
                 >
-                  Extend {policy?.listingTtlDays ?? 60} days
+                  Extend {listingTtl}
+                  {" "}
+                  days
                 </button>
               </li>
             ))}
@@ -290,8 +299,9 @@ export function GearMarketplace() {
                 </div>
                 <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-zinc-700 dark:text-zinc-300">{l.description}</p>
                 <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
-                  Listed {fmtDate(l.createdAt)} · removes on or after {fmtDate(l.expiresAt)} ({l.daysUntilExpiry} day
-                  {l.daysUntilExpiry === 1 ? "" : "s"} left)
+                  Listed {fmtDate(l.createdAt)} · removes on or after {fmtDate(l.expiresAt)} ({l.daysUntilExpiry}
+                  {" "}
+                  day{l.daysUntilExpiry === 1 ? "" : "s"} left)
                 </p>
                 {l.isOwner ? (
                   <div className="mt-3 flex flex-wrap gap-2">
@@ -300,7 +310,9 @@ export function GearMarketplace() {
                       onClick={() => void extend(l.id)}
                       className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
                     >
-                      Extend {policy?.listingTtlDays ?? 60} days
+                      Extend {listingTtl}
+                  {" "}
+                  days
                     </button>
                     <button
                       type="button"
