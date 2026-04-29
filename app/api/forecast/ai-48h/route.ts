@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { fetch48hHourlyContext, sampleEvery3Hours } from "@/lib/open-meteo-ai-context";
+import { openAiChatCompletionsUrl, parseOpenAiErrorBody } from "@/lib/openai-server-helpers";
 
 type Body = { lat?: unknown; lng?: unknown };
 
@@ -7,25 +8,6 @@ function clampLatLng(lat: number, lng: number): { lat: number; lng: number } | n
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
   if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
   return { lat, lng };
-}
-
-function openAiChatUrl(): string {
-  const raw = process.env.OPENAI_BASE_URL?.trim();
-  const base = raw ? raw.replace(/\/$/, "") : "https://api.openai.com/v1";
-  return `${base}/chat/completions`;
-}
-
-async function parseOpenAiErrorBody(res: Response): Promise<string> {
-  const errText = await res.text();
-  try {
-    const j = JSON.parse(errText) as { error?: { message?: string } };
-    if (typeof j.error?.message === "string" && j.error.message.trim()) {
-      return j.error.message.trim();
-    }
-  } catch {
-    /* use raw */
-  }
-  return errText.slice(0, 500);
 }
 
 /** Lightweight: whether server has an API key (no token usage). */
@@ -91,7 +73,7 @@ ${JSON.stringify(payload)}
 Write 2–4 short paragraphs for a small-boat / coastal reader: trends, rain risk, wind, comfort (humidity/dew point if useful), pressure tendency if visible. End with one line that this is automated model guidance, not a substitute for official shipping forecasts or your own judgement.`;
 
   try {
-    const res = await fetch(openAiChatUrl(), {
+    const res = await fetch(openAiChatCompletionsUrl(), {
       method: "POST",
       headers: {
         Authorization: `Bearer ${key}`,

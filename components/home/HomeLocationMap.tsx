@@ -4,7 +4,12 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Circle, MapContainer, Marker, TileLayer, useMap } from "react-leaflet";
+import { LifeOnSeasDailyModal } from "@/components/home/LifeOnSeasDailyModal";
 import { WeatherForecast7Day } from "@/components/home/WeatherForecast7Day";
+import {
+  markLifeOnSeasPopupShownToday,
+  wasLifeOnSeasPopupShownToday,
+} from "@/lib/life-on-seas-popup-storage";
 import { WindTimelineControls } from "@/components/home/WindTimelineControls";
 import { DEFAULT_MAP_CENTER } from "@/lib/map-constants";
 import { fetchWindSlotsEvery3h, nearestSlotIndex, type HourlyWindSlot } from "@/lib/open-meteo-hourly";
@@ -67,6 +72,7 @@ export default function HomeLocationMap() {
   const [windSlotIdx, setWindSlotIdx] = useState(0);
   const [windLoading, setWindLoading] = useState(true);
   const [windErr, setWindErr] = useState<string | null>(null);
+  const [lifeSeasOpen, setLifeSeasOpen] = useState(false);
   const watchId = useRef<number | null>(null);
 
   const forecastLat = useMemo(
@@ -145,6 +151,16 @@ export default function HomeLocationMap() {
     };
   }, [forecastLat, forecastLng]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (wasLifeOnSeasPopupShownToday()) return;
+    const t = window.setTimeout(() => {
+      markLifeOnSeasPopupShownToday();
+      setLifeSeasOpen(true);
+    }, 1100);
+    return () => window.clearTimeout(t);
+  }, []);
+
   function setSharingOn(on: boolean) {
     if (!on) {
       setPos(null);
@@ -219,7 +235,7 @@ export default function HomeLocationMap() {
 
   return (
     <section className="mt-8 w-full space-y-4" aria-labelledby="map-heading">
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 id="map-heading" className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
             Your map
@@ -229,6 +245,13 @@ export default function HomeLocationMap() {
             browser — use a native app for that, or leave a tab open.
           </p>
         </div>
+        <button
+          type="button"
+          onClick={() => setLifeSeasOpen(true)}
+          className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-teal-300 bg-teal-50 px-4 text-sm font-semibold text-teal-900 shadow-sm hover:bg-teal-100 dark:border-teal-800 dark:bg-teal-950/60 dark:text-teal-100 dark:hover:bg-teal-900/70"
+        >
+          Life on the seas
+        </button>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
@@ -374,6 +397,14 @@ export default function HomeLocationMap() {
       </div>
 
       <WeatherForecast7Day lat={pos?.lat ?? null} lng={pos?.lng ?? null} />
+
+      <LifeOnSeasDailyModal
+        open={lifeSeasOpen}
+        onClose={() => setLifeSeasOpen(false)}
+        pinLive={Boolean(sharing && pos)}
+        lat={pos?.lat ?? null}
+        lng={pos?.lng ?? null}
+      />
     </section>
   );
 }
