@@ -4,7 +4,6 @@ const BANNED = [
   /\b(hull|fibreglass\s*hull|GRP\s*hull)\s+(for\s*sale|f\/s)\b/i,
   /\b(complete\s*)?(sail|motor)\s*boat\s+(only|for\s*sale)\b/i,
   /\b(vessel)\s+for\s+sale\b/i,
-  /\bdinghy\s+only\b.*\b(no\s*)?(gear|equipment)\b/i,
 ];
 
 export function looksLikeBoatSale(title: string, description: string): boolean {

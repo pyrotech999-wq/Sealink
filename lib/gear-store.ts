@@ -69,8 +69,6 @@ function applyPruneAndReminders(list: GearListing[], now: Date): { next: GearLis
     }
   }
 
-  if (kept.length !== list.length) changed = true;
-
   return { next: kept, changed };
 }
 
@@ -130,4 +128,9 @@ export function daysUntilExpiry(expiresAt: string, now = new Date()): number {
 export function isInReminderWindow(expiresAt: string, now = new Date()): boolean {
   const d = daysUntilExpiry(expiresAt, now);
   return d > 0 && d <= reminderDays();
+}
+
+/** Add another full listing period onto the current expiry instant. */
+export function extendExpiresFromCurrent(expiresAtIso: string): string {
+  return new Date(new Date(expiresAtIso).getTime() + ttlDays() * DAY_MS).toISOString();
 }

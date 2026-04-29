@@ -19,15 +19,33 @@ import {
   getAvatarDataUrl,
   getBackgroundLocationConsent,
   getBoatName,
+  getShareNearbyPeers,
   setAvatarDataUrl,
   setBackgroundLocationConsent,
   setBoatName,
+  setShareNearbyPeers,
 } from "@/lib/map-profile-storage";
 
 const DEFAULT_CENTER: [number, number] = [DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng];
 const DEFAULT_ZOOM = 6;
 
+/** Statute miles → metres (for ~5 mi “nearby” ring). */
+const NEARBY_RING_METRES = 5 * 1609.344;
+
+function buildNearbyPinIcon(label: string): L.DivIcon {
+  const safe = escapeHtml(label.trim() || "Nearby");
+  const html = `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;padding-bottom:4px"><div style="width:36px;height:36px;border-radius:9999px;background:#2563eb;border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff">⌖</div><span style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:2px 8px;border-radius:9999px;background:rgba(255,255,255,.95);font-size:11px;font-weight:600;color:#1e3a8a;box-shadow:0 1px 4px rgba(0,0,0,.15)">${safe}</span></div>`;
+  return L.divIcon({
+    className: "sealink-nearby-pin",
+    html,
+    iconSize: [120, 84],
+    iconAnchor: [60, 84],
+  });
+}
+
 type LatLngAcc = { lat: number; lng: number; accuracyM: number };
+
+type NearbyPeer = { id: string; lat: number; lng: number; label: string };
 
 function MapRecenter({ lat, lng, zoom }: { lat: number; lng: number; zoom: number }) {
   const map = useMap();
@@ -73,6 +91,10 @@ export default function HomeLocationMap() {
   const [windLoading, setWindLoading] = useState(true);
   const [windErr, setWindErr] = useState<string | null>(null);
   const [lifeSeasOpen, setLifeSeasOpen] = useState(false);
+  const [shareNearby, setShareNearby] = useState(() =>
+    typeof window !== "undefined" ? getShareNearbyPeers() : false,
+  );
+  const [nearbyPeers, setNearbyPeers] = useState<NearbyPeer[]>([]);
   const watchId = useRef<number | null>(null);
 
   const forecastLat = useMemo(
@@ -163,6 +185,9 @@ export default function HomeLocationMap() {
 
   function setSharingOn(on: boolean) {
     if (!on) {
+      setShareNearby(false);
+      setShareNearbyPeers(false);
+      setNearbyPeers([]);
       setPos(null);
       setGeoError(null);
       setSharing(false);

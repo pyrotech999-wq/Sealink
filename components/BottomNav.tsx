@@ -7,7 +7,7 @@ const NAV: readonly { href: string; label: string; short: string; sub?: string }
   { href: "/", label: "Home", short: "Home" },
   { href: "/ifm", label: "IFM", short: "IFM", sub: "International Friends Map" },
   { href: "/local-map", label: "Local Map", short: "Local" },
-  { href: "/gear", label: "Gear buys and sell", short: "Gear", sub: "Buy & sell" },
+  { href: "/gear", label: "Boat gear", short: "Gear", sub: "Buy & sell kit" },
   { href: "/vessels", label: "Vessels for sale", short: "Vessels", sub: "For sale" },
 ];
 
