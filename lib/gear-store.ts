@@ -46,21 +46,19 @@ function writeRaw(list: GearListing[]): void {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** Drop expired (unsold) listings; mark reminderSentAt when entering reminder window. */
-function pruneAndTouchReminders(list: GearListing[], now: Date): GearListing[] {
+function applyPruneAndReminders(list: GearListing[], now: Date): { next: GearListing[]; changed: boolean } {
   const nowMs = now.getTime();
   const remMs = reminderDays() * DAY_MS;
   let changed = false;
-  const kept: GearListing[] = [];
 
-  for (const l of list) {
+  const kept = list.filter((l) => {
     const exp = new Date(l.expiresAt).getTime();
     if (!l.soldAt && exp <= nowMs) {
       changed = true;
-      continue;
+      return false;
     }
-    kept.push(l);
-  }
+    return true;
+  });
 
   for (const l of kept) {
     if (l.soldAt) continue;
@@ -71,8 +69,9 @@ function pruneAndTouchReminders(list: GearListing[], now: Date): GearListing[] {
     }
   }
 
-  if (changed) writeRaw(kept);
-  return kept;
+  if (kept.length !== list.length) changed = true;
+
+  return { next: kept, changed };
 }
 
 export function newListingId(): string {
@@ -86,21 +85,18 @@ export function defaultExpiresAt(createdAt: Date): string {
 export async function loadGearListings(now = new Date()): Promise<GearListing[]> {
   return enqueue(async () => {
     const raw = readRaw();
-    return pruneAndTouchReminders(raw, now);
-  });
-}
-
-export async function saveGearListings(list: GearListing[]): Promise<void> {
-  return enqueue(async () => {
-    writeRaw(list);
+    const { next, changed } = applyPruneAndReminders(raw, now);
+    if (changed) writeRaw(next);
+    return next;
   });
 }
 
 export async function appendListing(listing: GearListing): Promise<void> {
   return enqueue(async () => {
-    const list = readRaw();
-    list.push(listing);
-    writeRaw(pruneAndTouchReminders(list, new Date()));
+    const raw = readRaw();
+    raw.push(listing);
+    const { next } = applyPruneAndReminders(raw, new Date());
+    writeRaw(next);
   });
 }
 
@@ -110,16 +106,17 @@ export async function updateListing(
   mutator: (l: GearListing) => GearListing | null,
 ): Promise<{ ok: boolean; error?: string }> {
   return enqueue(async () => {
-    let list = readRaw();
-    list = pruneAndTouchReminders(list, new Date());
+    const raw = readRaw();
+    const { next: list } = applyPruneAndReminders(raw, new Date());
     const idx = list.findIndex((l) => l.id === id);
     if (idx < 0) return { ok: false, error: "Listing not found" };
     const row = list[idx];
     if (!row || row.sellerUid !== sellerUid) return { ok: false, error: "Not allowed" };
-    const next = mutator(row);
-    if (next === null) return { ok: false, error: "Update rejected" };
-    list[idx] = next;
-    writeRaw(list);
+    const updated = mutator(row);
+    if (updated === null) return { ok: false, error: "Update rejected" };
+    const merged = [...list.slice(0, idx), updated, ...list.slice(idx + 1)];
+    const { next } = applyPruneAndReminders(merged, new Date());
+    writeRaw(next);
     return { ok: true };
   });
 }
