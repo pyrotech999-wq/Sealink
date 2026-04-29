@@ -8,16 +8,16 @@ type Props = {
   lng: number | null;
 };
 
-type ApiSuccess = { configured: false; text: null; hint: string } | { configured: true; text: string; model?: string };
+type ApiSuccess = { configured: true; text: string; model?: string; openAi?: boolean };
 type ApiFail = { error: string; detail?: string };
-type StatusJson = { configured?: boolean };
+
+type GenerateOpts = { signal?: AbortSignal; persistAutoKey?: string };
 
 export function AiForecast48hBox({ lat, lng }: Props) {
   const [text, setText] = useState<string | null>(null);
   const [model, setModel] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [notConfigured, setNotConfigured] = useState<string | null>(null);
 
   const useLat = lat ?? DEFAULT_MAP_CENTER.lat;
   const useLng = lng ?? DEFAULT_MAP_CENTER.lng;
@@ -30,30 +30,26 @@ export function AiForecast48hBox({ lat, lng }: Props) {
     setText(null);
     setModel(null);
     try {
-        const res = await fetch("/api/forecast/ai-48h", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ lat: useLat, lng: useLng }),
-        });
-        const data = (await res.json()) as ApiSuccess | ApiFail;
-        if (!res.ok) {
-          const fail = data as ApiFail;
-          setErr(fail.detail ? `${fail.error}: ${fail.detail}` : fail.error);
-          return;
-        }
-        const ok = data as ApiSuccess;
-        if (ok.configured === false) {
-          setNotConfigured(ok.hint);
-          return;
-        }
-        if (ok.configured === true && ok.text) {
-          setText(ok.text);
-          setModel(ok.model ?? null);
-          return;
-        }
-        setErr("Unexpected response");
-      } catch {
-        setErr("Network error");
+      const res = await fetch("/api/forecast/ai-48h", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lat: useLat, lng: useLng }),
+      });
+      const data = (await res.json()) as ApiSuccess | ApiFail;
+      if (!res.ok) {
+        const fail = data as ApiFail;
+        setErr(fail.detail ? `${fail.error}: ${fail.detail}` : fail.error);
+        return;
+      }
+      const ok = data as ApiSuccess;
+      if (ok.configured === true && ok.text) {
+        setText(ok.text);
+        setModel(ok.model ?? null);
+        return;
+      }
+      setErr("Unexpected response");
+    } catch {
+      setErr("Network error");
     } finally {
       setLoading(false);
     }
@@ -61,19 +57,12 @@ export function AiForecast48hBox({ lat, lng }: Props) {
 
   useEffect(() => {
     let cancelled = false;
+    const storageKey = `sealink_ai48_auto_${useLat.toFixed(3)}_${useLng.toFixed(3)}`;
+    if (typeof window !== "undefined" && sessionStorage.getItem(storageKey)) return;
+    if (typeof window !== "undefined") sessionStorage.setItem(storageKey, "1");
     void (async () => {
-      try {
-        const res = await fetch("/api/forecast/ai-48h");
-        const d = (await res.json()) as StatusJson;
-        if (cancelled) return;
-        if (d.configured !== true) return;
-        const storageKey = `sealink_ai48_auto_${useLat.toFixed(3)}_${useLng.toFixed(3)}`;
-        if (typeof window !== "undefined" && sessionStorage.getItem(storageKey)) return;
-        if (typeof window !== "undefined") sessionStorage.setItem(storageKey, "1");
-        await generate();
-      } catch {
-        /* ignore status probe */
-      }
+      await generate();
+      if (cancelled) return;
     })();
     return () => {
       cancelled = true;
@@ -85,12 +74,14 @@ export function AiForecast48hBox({ lat, lng }: Props) {
       <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h3 className="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-            48-hour AI outlook
+            48-hour outlook
           </h3>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Uses Open-Meteo hourly data for your point, then an OpenAI model to summarise the next two days in plain
-            language. When <code className="rounded bg-white/60 px-1 py-0.5 text-[10px] dark:bg-zinc-900/80">OPENAI_API_KEY</code>{" "}
-            is set, the first outlook loads automatically; use Regenerate for a fresh run (each call uses the API).
+            Open-Meteo hourly data for your point, summarised for the next two days. Without{" "}
+            <code className="rounded bg-white/60 px-1 py-0.5 text-[10px] dark:bg-zinc-900/80">OPENAI_API_KEY</code> you
+            get a built-in heuristic read; with a key, an OpenAI model writes the narrative instead. The first outlook
+            loads automatically once per map position (this session); use Regenerate for a fresh run (GPT calls use the
+            API).
           </p>
         </div>
         <p className="text-[11px] font-medium text-zinc-600 dark:text-zinc-300">

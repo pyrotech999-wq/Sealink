@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { buildHeuristic48hOutlook } from "@/lib/ai-48h-fallback-outlook";
 import { fetch48hHourlyContext, sampleEvery3Hours } from "@/lib/open-meteo-ai-context";
 import { openAiChatCompletionsUrl, parseOpenAiErrorBody } from "@/lib/openai-server-helpers";
 
@@ -10,21 +11,14 @@ function clampLatLng(lat: number, lng: number): { lat: number; lng: number } | n
   return { lat, lng };
 }
 
-/** Lightweight: whether server has an API key (no token usage). */
+/** `openAi`: GPT available. `heuristic`: outlook still works without it. */
 export async function GET() {
-  const configured = Boolean(process.env.OPENAI_API_KEY?.trim());
-  return NextResponse.json({ configured });
+  const openAi = Boolean(process.env.OPENAI_API_KEY?.trim());
+  return NextResponse.json({ configured: true as const, openAi });
 }
 
 export async function POST(req: Request) {
   const key = process.env.OPENAI_API_KEY?.trim();
-  if (!key) {
-    return NextResponse.json({
-      configured: false as const,
-      text: null,
-      hint: "Add OPENAI_API_KEY to .env.local to enable the AI outlook.",
-    });
-  }
 
   let body: Body;
   try {
@@ -49,6 +43,17 @@ export async function POST(req: Request) {
   }
 
   const sample = sampleEvery3Hours(series);
+
+  if (!key) {
+    const text = buildHeuristic48hOutlook(sample);
+    return NextResponse.json({
+      configured: true as const,
+      text,
+      model: "Heuristic (add OPENAI_API_KEY for GPT)",
+      openAi: false as const,
+    });
+  }
+
   const payload = {
     location: { latitude: coords.lat, longitude: coords.lng },
     hours_48_sampled_every_3h: sample.map((p) => ({
