@@ -5,6 +5,7 @@ import "leaflet/dist/leaflet.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Circle, MapContainer, Marker, TileLayer, useMap } from "react-leaflet";
 import { LifeOnSeasDailyModal } from "@/components/home/LifeOnSeasDailyModal";
+import { MapBroadcastPanel } from "@/components/home/MapBroadcastPanel";
 import { WeatherForecast7Day } from "@/components/home/WeatherForecast7Day";
 import {
   markLifeOnSeasPopupShownToday,
@@ -12,6 +13,7 @@ import {
 } from "@/lib/life-on-seas-popup-storage";
 import { WindTimelineControls } from "@/components/home/WindTimelineControls";
 import { DEFAULT_MAP_CENTER } from "@/lib/map-constants";
+import { recordLastKnownPosition } from "@/lib/map-last-known";
 import { fetchWindSlotsEvery3h, nearestSlotIndex, type HourlyWindSlot } from "@/lib/open-meteo-hourly";
 import { buildWindArrowDivIcon } from "@/lib/wind-map-icon";
 import {
@@ -181,6 +183,12 @@ export default function HomeLocationMap() {
       window.clearTimeout(t);
     };
   }, [forecastLat, forecastLng]);
+
+  useEffect(() => {
+    if (sharing && pos) {
+      recordLastKnownPosition(pos.lat, pos.lng);
+    }
+  }, [sharing, pos?.lat, pos?.lng]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -523,6 +531,16 @@ export default function HomeLocationMap() {
             )}
           </div>
         </div>
+      </div>
+
+      <div className="mt-4">
+        <MapBroadcastPanel
+          readLat={pos?.lat ?? DEFAULT_MAP_CENTER.lat}
+          readLng={pos?.lng ?? DEFAULT_MAP_CENTER.lng}
+          canSend={Boolean(sharing && pos)}
+          sendLat={pos?.lat ?? null}
+          sendLng={pos?.lng ?? null}
+        />
       </div>
 
       <WeatherForecast7Day lat={pos?.lat ?? null} lng={pos?.lng ?? null} />

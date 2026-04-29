@@ -86,10 +86,8 @@ export function MapBroadcastPanel({ readLat, readLng, canSend, sendLat, sendLng 
     }
   }, [readLat, readLng, toast]);
 
-  const firstRef = useRef(true);
   useEffect(() => {
     void load();
-    firstRef.current = false;
     const id = window.setInterval(() => void load(), 22_000);
     return () => window.clearInterval(id);
   }, [load]);
