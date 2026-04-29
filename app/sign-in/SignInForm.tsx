@@ -3,6 +3,25 @@
 import Link from "next/link";
 import { useState } from "react";
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+async function startDemoSession(): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    const res = await fetch("/api/demo/sign-in", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) {
+      return { ok: false, message: "Could not start session. Try again." };
+    }
+  } catch {
+    return { ok: false, message: "Network error. Try again." };
+  }
+  window.location.assign("/");
+  return { ok: true };
+}
+
 export function SignInForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -12,35 +31,41 @@ export function SignInForm() {
 
   async function onSubmit(ev: React.FormEvent) {
     ev.preventDefault();
-    if (!email.trim() || !password) {
+    const trimmed = email.trim();
+    if (!trimmed || !password) {
       setError("Enter email and password");
       return;
     }
+    if (!EMAIL_RE.test(trimmed)) {
+      setError("Enter a valid email address (or use “Skip sign-in” below).");
+      return;
+    }
     if (!agree) {
-      setError("Confirm you agree to the policies before signing in");
+      setError("Tick the box to confirm you agree to the terms and privacy policy — or use “Skip sign-in”.");
       return;
     }
     setError("");
     setPending(true);
-    try {
-      // Sets httpOnly demo cookie so middleware can keep you off /sign-in after a full reload or Stripe return.
-      const res = await fetch("/api/demo/sign-in", { method: "POST" });
-      if (!res.ok) {
-        setError("Could not start session. Try again.");
-        setPending(false);
-        return;
-      }
-    } catch {
-      setError("Network error. Try again.");
+    const result = await startDemoSession();
+    if (!result.ok) {
+      setError(result.message);
       setPending(false);
-      return;
     }
-    // Full navigation so the new cookie is always sent on the next request (avoids flaky client-only redirects).
-    window.location.assign("/");
+  }
+
+  async function skipSignIn() {
+    setError("");
+    setPending(true);
+    const result = await startDemoSession();
+    if (!result.ok) {
+      setError(result.message);
+      setPending(false);
+    }
   }
 
   return (
     <form
+      noValidate
       onSubmit={onSubmit}
       className="rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-950"
     >
@@ -110,8 +135,20 @@ export function SignInForm() {
         disabled={pending}
         className="mt-6 flex h-10 w-full items-center justify-center rounded-lg bg-green-600 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-60"
       >
-        {pending ? "Signing in…" : "Sign in"}
+        {pending ? "Opening app…" : "Sign in"}
       </button>
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() => void skipSignIn()}
+        className="mt-3 flex h-10 w-full items-center justify-center rounded-lg border border-zinc-300 bg-white text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+      >
+        Skip sign-in — try the app (demo)
+      </button>
+      <p className="mt-4 text-center text-xs leading-5 text-zinc-500 dark:text-zinc-400">
+        You can also use the <strong className="text-zinc-700 dark:text-zinc-300">Home</strong> tab in the bottom bar —
+        nothing in this build requires a real account.
+      </p>
     </form>
   );
 }

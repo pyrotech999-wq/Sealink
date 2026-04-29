@@ -24,3 +24,14 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Leaflet custom marker (no default white tile box) */
+.leaflet-div-icon.sealink-map-pin {
+  background: transparent !important;
+  border: none !important;
+}
+
+.leaflet-div-icon.sealink-wind-arrow {
+  background: transparent !important;
+  border: none !important;
+}

@@ -1,0 +1,379 @@
+"use client";
+
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Circle, MapContainer, Marker, TileLayer, useMap } from "react-leaflet";
+import { WeatherForecast7Day } from "@/components/home/WeatherForecast7Day";
+import { WindTimelineControls } from "@/components/home/WindTimelineControls";
+import { DEFAULT_MAP_CENTER } from "@/lib/map-constants";
+import { fetchWindSlotsEvery3h, nearestSlotIndex, type HourlyWindSlot } from "@/lib/open-meteo-hourly";
+import { buildWindArrowDivIcon } from "@/lib/wind-map-icon";
+import {
+  escapeHtml,
+  getAvatarDataUrl,
+  getBackgroundLocationConsent,
+  getBoatName,
+  setAvatarDataUrl,
+  setBackgroundLocationConsent,
+  setBoatName,
+} from "@/lib/map-profile-storage";
+
+const DEFAULT_CENTER: [number, number] = [DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng];
+const DEFAULT_ZOOM = 6;
+
+type LatLngAcc = { lat: number; lng: number; accuracyM: number };
+
+function MapRecenter({ lat, lng, zoom }: { lat: number; lng: number; zoom: number }) {
+  const map = useMap();
+  const framed = useRef(false);
+  useEffect(() => {
+    const next: [number, number] = [lat, lng];
+    if (!framed.current) {
+      map.setView(next, zoom);
+      framed.current = true;
+      return;
+    }
+    map.panTo(next, { animate: true, duration: 0.35 });
+  }, [lat, lng, zoom, map]);
+  return null;
+}
+
+function buildPinIcon(boat: string, avatarUrl: string): L.DivIcon {
+  const label = escapeHtml(boat || "Your boat");
+  const safeAvatar = avatarUrl.replace(/'/g, "");
+  const img = avatarUrl
+    ? `<img src='${safeAvatar}' alt="" width="40" height="40" style="border-radius:9999px;object-fit:cover;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.25)"/>`
+    : `<div style="width:40px;height:40px;border-radius:9999px;background:#71717a;border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#fff">You</div>`;
+  const html = `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;padding-bottom:4px">${img}<span style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:2px 8px;border-radius:9999px;background:rgba(255,255,255,.95);font-size:11px;font-weight:600;color:#18181b;box-shadow:0 1px 4px rgba(0,0,0,.15)">${label}</span></div>`;
+  return L.divIcon({
+    className: "sealink-map-pin",
+    html,
+    iconSize: [120, 88],
+    iconAnchor: [60, 88],
+  });
+}
+
+export default function HomeLocationMap() {
+  const [boatInput, setBoatInput] = useState(() => (typeof window !== "undefined" ? getBoatName() : ""));
+  const [avatarUrl, setAvatarUrlState] = useState(() => (typeof window !== "undefined" ? getAvatarDataUrl() : ""));
+  const [sharing, setSharing] = useState(false);
+  const [bgConsent, setBgConsentState] = useState(() =>
+    typeof window !== "undefined" ? getBackgroundLocationConsent() : false,
+  );
+  const [pos, setPos] = useState<LatLngAcc | null>(null);
+  const [geoError, setGeoError] = useState<string | null>(null);
+  const [windSlots, setWindSlots] = useState<HourlyWindSlot[]>([]);
+  const [windSlotIdx, setWindSlotIdx] = useState(0);
+  const [windLoading, setWindLoading] = useState(true);
+  const [windErr, setWindErr] = useState<string | null>(null);
+  const watchId = useRef<number | null>(null);
+
+  const forecastLat = useMemo(
+    () => Number((pos?.lat ?? DEFAULT_MAP_CENTER.lat).toFixed(2)),
+    [pos?.lat],
+  );
+  const forecastLng = useMemo(
+    () => Number((pos?.lng ?? DEFAULT_MAP_CENTER.lng).toFixed(2)),
+    [pos?.lng],
+  );
+
+  const stopWatch = useCallback(() => {
+    if (watchId.current != null && typeof navigator !== "undefined" && navigator.geolocation) {
+      navigator.geolocation.clearWatch(watchId.current);
+    }
+    watchId.current = null;
+  }, []);
+
+  useEffect(() => {
+    if (!sharing) {
+      stopWatch();
+      return;
+    }
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      return;
+    }
+
+    const opts: PositionOptions = {
+      enableHighAccuracy: true,
+      maximumAge: bgConsent ? 45_000 : 15_000,
+      timeout: 25_000,
+    };
+
+    watchId.current = navigator.geolocation.watchPosition(
+      (p) => {
+        setGeoError(null);
+        setPos({
+          lat: p.coords.latitude,
+          lng: p.coords.longitude,
+          accuracyM: Math.min(Math.max(p.coords.accuracy || 0, 8), 1200),
+        });
+      },
+      (e) => {
+        setGeoError(e.message || "Location error");
+        setPos(null);
+      },
+      opts,
+    );
+
+    return stopWatch;
+  }, [sharing, bgConsent, stopWatch]);
+
+  useEffect(() => {
+    const ac = new AbortController();
+    const t = window.setTimeout(() => {
+      setWindLoading(true);
+      setWindErr(null);
+      fetchWindSlotsEvery3h(forecastLat, forecastLng, ac.signal)
+        .then((data) => {
+          if (ac.signal.aborted) return;
+          setWindSlots(data);
+          setWindSlotIdx(data.length ? nearestSlotIndex(data) : 0);
+          setWindLoading(false);
+        })
+        .catch((e: unknown) => {
+          if (ac.signal.aborted || (e instanceof Error && e.name === "AbortError")) return;
+          setWindErr(e instanceof Error ? e.message : "Could not load hourly wind");
+          setWindSlots([]);
+          setWindLoading(false);
+        });
+    }, 320);
+
+    return () => {
+      ac.abort();
+      window.clearTimeout(t);
+    };
+  }, [forecastLat, forecastLng]);
+
+  function setSharingOn(on: boolean) {
+    if (!on) {
+      setPos(null);
+      setGeoError(null);
+      setSharing(false);
+      return;
+    }
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setGeoError("Geolocation is not supported in this browser.");
+      return;
+    }
+    setGeoError(null);
+    setSharing(true);
+  }
+
+  const pinIcon = useMemo(() => buildPinIcon(boatInput.trim(), avatarUrl), [boatInput, avatarUrl]);
+
+  const baseLat = pos?.lat ?? DEFAULT_MAP_CENTER.lat;
+  const baseLng = pos?.lng ?? DEFAULT_MAP_CENTER.lng;
+  /** Tiny offset north (~4 m) so the arrow label clears the boat pin; stays visually on your position. */
+  const windMarkerLat = pos ? baseLat + 0.000035 : baseLat;
+  const windMarkerLng = baseLng;
+
+  const activeWind = windSlots.length ? windSlots[Math.min(windSlotIdx, windSlots.length - 1)] : null;
+  const windIcon = useMemo(
+    () => (activeWind ? buildWindArrowDivIcon(activeWind.mph, activeWind.dirFromDeg) : null),
+    [activeWind],
+  );
+
+  function persistBoat() {
+    setBoatName(boatInput);
+  }
+
+  function onAvatarPick(ev: React.ChangeEvent<HTMLInputElement>) {
+    const file = ev.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setGeoError("Choose an image file.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const url = String(reader.result || "");
+        setAvatarDataUrl(url);
+        setAvatarUrlState(url);
+        setGeoError(null);
+      } catch {
+        setGeoError("That image is too large for browser storage. Try a smaller photo.");
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function clearAvatar() {
+    setAvatarDataUrl(null);
+    setAvatarUrlState("");
+  }
+
+  function confirmBackground() {
+    setBackgroundLocationConsent(true);
+    setBgConsentState(true);
+  }
+
+  function revokeBackground() {
+    setBackgroundLocationConsent(false);
+    setBgConsentState(false);
+  }
+
+  const center: [number, number] = pos ? [pos.lat, pos.lng] : DEFAULT_CENTER;
+  const zoom = pos ? 14 : DEFAULT_ZOOM;
+
+  return (
+    <section className="mt-8 w-full space-y-4" aria-labelledby="map-heading">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 id="map-heading" className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+            Your map
+          </h2>
+          <p className="text-xs leading-5 text-zinc-500 dark:text-zinc-400">
+            GPS updates while this page is open. Standard browsers cannot keep GPS running after you fully quit the
+            browser — use a native app for that, or leave a tab open.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+        <div className="flex min-w-0 flex-col gap-0">
+          <div className="overflow-hidden rounded-xl border border-zinc-200 shadow-sm dark:border-zinc-800">
+            <div className="relative h-[min(55vh,420px)] w-full min-h-[280px] bg-zinc-100 dark:bg-zinc-900">
+              <MapContainer
+                center={center}
+                zoom={zoom}
+                className="h-full w-full [&_.leaflet-tile-pane]:opacity-90"
+                scrollWheelZoom
+                attributionControl
+              >
+                <TileLayer
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
+                {activeWind && windIcon ? (
+                  <Marker
+                    key={`wind-${activeWind.at}-${windSlotIdx}`}
+                    position={[windMarkerLat, windMarkerLng]}
+                    icon={windIcon}
+                    zIndexOffset={650}
+                  />
+                ) : null}
+                {pos ? (
+                  <>
+                    <MapRecenter lat={pos.lat} lng={pos.lng} zoom={14} />
+                    <Circle
+                      center={[pos.lat, pos.lng]}
+                      radius={pos.accuracyM}
+                      pathOptions={{
+                        color: "#16a34a",
+                        fillColor: "#22c55e",
+                        fillOpacity: 0.12,
+                        weight: 1,
+                      }}
+                    />
+                    <Marker
+                      key={`${boatInput}:${avatarUrl.slice(0, 40)}`}
+                      position={[pos.lat, pos.lng]}
+                      icon={pinIcon}
+                      zIndexOffset={750}
+                    />
+                  </>
+                ) : null}
+              </MapContainer>
+            </div>
+            {geoError && (
+              <p className="border-t border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800 dark:border-red-900/40 dark:bg-red-950/50 dark:text-red-200">
+                {geoError}
+              </p>
+            )}
+          </div>
+          {windErr ? (
+            <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-100">
+              Hourly wind: {windErr}
+            </p>
+          ) : null}
+          <WindTimelineControls
+            slots={windSlots}
+            index={windSlotIdx}
+            loading={windLoading}
+            onPrev={() => setWindSlotIdx((i) => Math.max(0, i - 1))}
+            onNext={() => setWindSlotIdx((i) => Math.min(windSlots.length - 1, i + 1))}
+          />
+        </div>
+
+        <div className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">On your pin</p>
+          <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+            Boat name
+            <input
+              value={boatInput}
+              onChange={(e) => setBoatInput(e.target.value)}
+              onBlur={persistBoat}
+              placeholder="e.g. Sea Sprite"
+              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 outline-none focus:border-green-600 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+            />
+          </label>
+          <div>
+            <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Profile photo</p>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <label className="inline-flex cursor-pointer rounded-lg border border-zinc-300 bg-zinc-50 px-2 py-1 text-xs font-medium text-zinc-800 hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800">
+                Upload
+                <input type="file" accept="image/*" className="sr-only" onChange={onAvatarPick} />
+              </label>
+              {avatarUrl ? (
+                <button
+                  type="button"
+                  onClick={clearAvatar}
+                  className="text-xs font-medium text-red-700 underline dark:text-red-400"
+                >
+                  Remove photo
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          <hr className="border-zinc-200 dark:border-zinc-800" />
+
+          <button
+            type="button"
+            onClick={() => {
+              setGeoError(null);
+              setSharingOn(!sharing);
+            }}
+            className={`flex h-10 w-full items-center justify-center rounded-lg text-sm font-medium ${
+              sharing
+                ? "border border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                : "bg-green-600 text-white hover:bg-green-700"
+            }`}
+          >
+            {sharing ? "Stop sharing location on map" : "Share my location on this map"}
+          </button>
+
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-[11px] leading-snug text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+            <p className="font-semibold">Background updates</p>
+            <p className="mt-1 opacity-90">
+              When confirmed, we keep requesting your position on a slower interval while the tab is in the
+              background. This is still a website: once the browser is fully closed, tracking stops.
+            </p>
+            {bgConsent ? (
+              <button
+                type="button"
+                onClick={revokeBackground}
+                className="mt-2 text-xs font-semibold text-amber-900 underline dark:text-amber-200"
+              >
+                Turn off background-style updates
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={confirmBackground}
+                disabled={!sharing}
+                className="mt-2 flex h-9 w-full items-center justify-center rounded-lg bg-amber-700 text-xs font-semibold text-white hover:bg-amber-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                I confirm — keep updating when tab is in background
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <WeatherForecast7Day lat={pos?.lat ?? null} lng={pos?.lng ?? null} />
+    </section>
+  );
+}
