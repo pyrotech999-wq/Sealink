@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { DEFAULT_MAP_CENTER } from "@/lib/map-constants";
 
 type Props = {
@@ -10,6 +10,7 @@ type Props = {
 
 type ApiSuccess = { configured: false; text: null; hint: string } | { configured: true; text: string; model?: string };
 type ApiFail = { error: string; detail?: string };
+type StatusJson = { configured?: boolean };
 
 export function AiForecast48hBox({ lat, lng }: Props) {
   const [text, setText] = useState<string | null>(null);
@@ -29,34 +30,55 @@ export function AiForecast48hBox({ lat, lng }: Props) {
     setText(null);
     setModel(null);
     try {
-      const res = await fetch("/api/forecast/ai-48h", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lat: useLat, lng: useLng }),
-      });
-      const data = (await res.json()) as ApiSuccess | ApiFail;
-      if (!res.ok) {
-        const fail = data as ApiFail;
-        setErr(fail.detail ? `${fail.error}: ${fail.detail}` : fail.error);
-        return;
-      }
-      const ok = data as ApiSuccess;
-      if (ok.configured === false) {
-        setNotConfigured(ok.hint);
-        return;
-      }
-      if (ok.configured === true && ok.text) {
-        setText(ok.text);
-        setModel(ok.model ?? null);
-        return;
-      }
-      setErr("Unexpected response");
-    } catch {
-      setErr("Network error");
+        const res = await fetch("/api/forecast/ai-48h", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ lat: useLat, lng: useLng }),
+        });
+        const data = (await res.json()) as ApiSuccess | ApiFail;
+        if (!res.ok) {
+          const fail = data as ApiFail;
+          setErr(fail.detail ? `${fail.error}: ${fail.detail}` : fail.error);
+          return;
+        }
+        const ok = data as ApiSuccess;
+        if (ok.configured === false) {
+          setNotConfigured(ok.hint);
+          return;
+        }
+        if (ok.configured === true && ok.text) {
+          setText(ok.text);
+          setModel(ok.model ?? null);
+          return;
+        }
+        setErr("Unexpected response");
+      } catch {
+        setErr("Network error");
     } finally {
       setLoading(false);
     }
   }, [useLat, useLng]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/forecast/ai-48h");
+        const d = (await res.json()) as StatusJson;
+        if (cancelled) return;
+        if (d.configured !== true) return;
+        const storageKey = `sealink_ai48_auto_${useLat.toFixed(3)}_${useLng.toFixed(3)}`;
+        if (typeof window !== "undefined" && sessionStorage.getItem(storageKey)) return;
+        if (typeof window !== "undefined") sessionStorage.setItem(storageKey, "1");
+        await generate();
+      } catch {
+        /* ignore status probe */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [useLat, useLng, generate]);
 
   return (
     <div className="mt-8 w-full border-t border-zinc-200 pt-8 dark:border-zinc-800">
@@ -67,7 +89,8 @@ export function AiForecast48hBox({ lat, lng }: Props) {
           </h3>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
             Uses Open-Meteo hourly data for your point, then an OpenAI model to summarise the next two days in plain
-            language. Press the button when you want a fresh paragraph (each run uses the API).
+            language. When <code className="rounded bg-white/60 px-1 py-0.5 text-[10px] dark:bg-zinc-900/80">OPENAI_API_KEY</code>{" "}
+            is set, the first outlook loads automatically; use Regenerate for a fresh run (each call uses the API).
           </p>
         </div>
         <p className="text-[11px] font-medium text-zinc-600 dark:text-zinc-300">
@@ -83,7 +106,7 @@ export function AiForecast48hBox({ lat, lng }: Props) {
             onClick={() => void generate()}
             className="inline-flex h-10 items-center justify-center rounded-lg bg-violet-700 px-4 text-sm font-semibold text-white hover:bg-violet-800 disabled:opacity-60 dark:bg-violet-600 dark:hover:bg-violet-500"
           >
-            {loading ? "Generating…" : "Generate 48-hour outlook"}
+            {loading ? "Generating…" : text ? "Regenerate outlook" : "Generate 48-hour outlook"}
           </button>
           {model ? (
             <span className="text-[11px] text-violet-900/80 dark:text-violet-200/90">Model: {model}</span>

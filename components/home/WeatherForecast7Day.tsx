@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { AiForecast48hBox } from "@/components/home/AiForecast48hBox";
 import { DEFAULT_MAP_CENTER } from "@/lib/map-constants";
-import { fetchSevenDayMaxWindMph } from "@/lib/open-meteo-forecast";
+import { type DailyForecastRow, fetchSevenDayDailyForecast } from "@/lib/open-meteo-forecast";
+import { wmoWeatherEmoji, wmoWeatherLabel } from "@/lib/wmo-weather";
 import { mphToKnots, seaStateForMaxWindMph } from "@/lib/wind-tiers";
 
 type Props = {
@@ -19,8 +20,89 @@ function formatDayLabel(isoDate: string): { dow: string; dayMonth: string } {
   return { dow, dayMonth };
 }
 
+function dash<T>(v: T | null | undefined, fmt: (x: T) => string): string {
+  if (v == null || (typeof v === "number" && Number.isNaN(v))) return "—";
+  return fmt(v as T);
+}
+
+function fmtSunshineSec(sec: number): string {
+  const h = sec / 3600;
+  if (h < 0.05) return "0 h";
+  return `${Math.round(h * 10) / 10} h`;
+}
+
+function ConditionsCard({ day }: { day: DailyForecastRow }) {
+  const { dow, dayMonth } = formatDayLabel(day.date);
+  const wmo = day.wmo;
+  const label = wmo != null ? wmoWeatherLabel(wmo) : "—";
+  const emoji = wmo != null ? wmoWeatherEmoji(wmo) : "";
+
+  return (
+    <article className="flex flex-col rounded-xl border border-zinc-200 bg-zinc-50/90 p-3 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/60">
+      <div className="flex items-start justify-between gap-1">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-wide text-zinc-700 dark:text-zinc-300">{dow}</p>
+          <p className="text-[10px] text-zinc-500 dark:text-zinc-400">{dayMonth}</p>
+        </div>
+        {emoji ? <span className="text-lg leading-none" aria-hidden>{emoji}</span> : null}
+      </div>
+      <p className="mt-2 text-[11px] font-medium leading-snug text-zinc-800 dark:text-zinc-200">{label}</p>
+      <dl className="mt-2 space-y-1 text-[11px] leading-snug text-zinc-600 dark:text-zinc-400">
+        <div className="flex justify-between gap-2">
+          <dt className="shrink-0 text-zinc-500 dark:text-zinc-500">Hi / lo</dt>
+          <dd className="text-right font-medium tabular-nums text-zinc-800 dark:text-zinc-200">
+            {dash(day.tempMaxC, (t) => `${Math.round(t)}°`)} / {dash(day.tempMinC, (t) => `${Math.round(t)}°`)} C
+          </dd>
+        </div>
+        <div className="flex justify-between gap-2">
+          <dt className="shrink-0 text-zinc-500">Rain</dt>
+          <dd className="text-right font-medium tabular-nums text-zinc-800 dark:text-zinc-200">
+            {dash(day.rainMm, (m) => `${Math.round(m * 10) / 10} mm`)}
+          </dd>
+        </div>
+        <div className="flex justify-between gap-2">
+          <dt className="shrink-0 text-zinc-500">Precip</dt>
+          <dd className="text-right font-medium tabular-nums text-zinc-800 dark:text-zinc-200">
+            {dash(day.precipMm, (m) => `${Math.round(m * 10) / 10} mm`)}
+          </dd>
+        </div>
+        <div className="flex justify-between gap-2">
+          <dt className="shrink-0 text-zinc-500">Rain prob</dt>
+          <dd className="text-right font-medium tabular-nums text-zinc-800 dark:text-zinc-200">
+            {dash(day.precipProbMax, (p) => `${Math.round(p)}%`)}
+          </dd>
+        </div>
+        <div className="flex justify-between gap-2">
+          <dt className="shrink-0 text-zinc-500">Sun</dt>
+          <dd className="text-right font-medium tabular-nums text-zinc-800 dark:text-zinc-200">
+            {dash(day.sunshineSec, fmtSunshineSec)}
+          </dd>
+        </div>
+        <div className="flex justify-between gap-2">
+          <dt className="shrink-0 text-zinc-500">Humidity</dt>
+          <dd className="text-right font-medium tabular-nums text-zinc-800 dark:text-zinc-200">
+            {dash(day.rhMax, (h) => `${Math.round(h)}%`)}
+          </dd>
+        </div>
+        <div className="flex justify-between gap-2">
+          <dt className="shrink-0 text-zinc-500">Pressure</dt>
+          <dd className="text-right font-medium tabular-nums text-zinc-800 dark:text-zinc-200">
+            {dash(day.pressureMslMax, (p) => `${Math.round(p)} hPa`)}
+          </dd>
+        </div>
+        <div className="flex justify-between gap-2">
+          <dt className="shrink-0 text-zinc-500">Dew</dt>
+          <dd className="text-right font-medium tabular-nums text-zinc-800 dark:text-zinc-200">
+            {dash(day.dewMaxC, (t) => `${Math.round(t * 10) / 10}°C`)}
+          </dd>
+        </div>
+      </dl>
+    </article>
+  );
+}
+
 export function WeatherForecast7Day({ lat, lng }: Props) {
-  const [rows, setRows] = useState<Awaited<ReturnType<typeof fetchSevenDayMaxWindMph>> | null>(null);
+  const [rows, setRows] = useState<DailyForecastRow[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
@@ -33,7 +115,7 @@ export function WeatherForecast7Day({ lat, lng }: Props) {
     const t = window.setTimeout(() => {
       setLoading(true);
       setErr(null);
-      fetchSevenDayMaxWindMph(useLat, useLng, ac.signal)
+      fetchSevenDayDailyForecast(useLat, useLng, ac.signal)
         .then((data) => {
           if (ac.signal.aborted) return;
           setRows(data);
@@ -125,6 +207,30 @@ export function WeatherForecast7Day({ lat, lng }: Props) {
               );
             })
         }
+      </div>
+
+      <div className="mt-8">
+        <div className="mb-3">
+          <h3 className="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+            7-day conditions
+          </h3>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            Daily summary: dominant weather code, temperatures, rain and totals, sunshine duration, humidity, pressure,
+            and dew point when the API provides them.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
+          {loading
+            ? Array.from({ length: 7 }, (_, i) => (
+                <div
+                  key={`c-${i}`}
+                  className="h-52 animate-pulse rounded-xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900"
+                />
+              ))
+            : !rows?.length
+              ? null
+              : rows.map((day) => <ConditionsCard key={`cond-${day.date}`} day={day} />)}
+        </div>
       </div>
 
       <AiForecast48hBox lat={lat} lng={lng} />

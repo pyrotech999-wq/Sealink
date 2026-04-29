@@ -9,6 +9,31 @@ function clampLatLng(lat: number, lng: number): { lat: number; lng: number } | n
   return { lat, lng };
 }
 
+function openAiChatUrl(): string {
+  const raw = process.env.OPENAI_BASE_URL?.trim();
+  const base = raw ? raw.replace(/\/$/, "") : "https://api.openai.com/v1";
+  return `${base}/chat/completions`;
+}
+
+async function parseOpenAiErrorBody(res: Response): Promise<string> {
+  const errText = await res.text();
+  try {
+    const j = JSON.parse(errText) as { error?: { message?: string } };
+    if (typeof j.error?.message === "string" && j.error.message.trim()) {
+      return j.error.message.trim();
+    }
+  } catch {
+    /* use raw */
+  }
+  return errText.slice(0, 500);
+}
+
+/** Lightweight: whether server has an API key (no token usage). */
+export async function GET() {
+  const configured = Boolean(process.env.OPENAI_API_KEY?.trim());
+  return NextResponse.json({ configured });
+}
+
 export async function POST(req: Request) {
   const key = process.env.OPENAI_API_KEY?.trim();
   if (!key) {
@@ -66,7 +91,7 @@ ${JSON.stringify(payload)}
 Write 2–4 short paragraphs for a small-boat / coastal reader: trends, rain risk, wind, comfort (humidity/dew point if useful), pressure tendency if visible. End with one line that this is automated model guidance, not a substitute for official shipping forecasts or your own judgement.`;
 
   try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    const res = await fetch(openAiChatUrl(), {
       method: "POST",
       headers: {
         Authorization: `Bearer ${key}`,
@@ -88,11 +113,8 @@ Write 2–4 short paragraphs for a small-boat / coastal reader: trends, rain ris
     });
 
     if (!res.ok) {
-      const errText = await res.text();
-      return NextResponse.json(
-        { error: `OpenAI error ${res.status}`, detail: errText.slice(0, 500) },
-        { status: 502 },
-      );
+      const detail = await parseOpenAiErrorBody(res);
+      return NextResponse.json({ error: `OpenAI error ${res.status}`, detail }, { status: 502 });
     }
 
     const data = (await res.json()) as {
