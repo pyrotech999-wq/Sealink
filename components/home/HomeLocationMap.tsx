@@ -93,7 +93,7 @@ export default function HomeLocationMap() {
   const [avatarUrl, setAvatarUrlState] = useState(() => (typeof window !== "undefined" ? getAvatarDataUrl() : ""));
   const [sharing, setSharing] = useState(false);
   const [bgConsent, setBgConsentState] = useState(() =>
-    typeof window !== "undefined" ? getBackgroundLocationConsent() : false,
+    typeof window !== "undefined" ? getBackgroundLocationConsent() : true,
   );
   const [pos, setPos] = useState<LatLngAcc | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
@@ -308,16 +308,6 @@ export default function HomeLocationMap() {
     setAvatarUrlState("");
   }
 
-  function confirmBackground() {
-    setBackgroundLocationConsent(true);
-    setBgConsentState(true);
-  }
-
-  function revokeBackground() {
-    setBackgroundLocationConsent(false);
-    setBgConsentState(false);
-  }
-
   const center: [number, number] = pos ? [pos.lat, pos.lng] : DEFAULT_CENTER;
   const zoom = pos ? 14 : DEFAULT_ZOOM;
 
@@ -329,8 +319,9 @@ export default function HomeLocationMap() {
             Your map
           </h2>
           <p className="text-xs leading-5 text-zinc-500 dark:text-zinc-400">
-            GPS updates while this page is open. Standard browsers cannot keep GPS running after you fully quit the
-            browser — use a native app for that, or leave a tab open.
+            GPS updates while this page is open, including in the background while the tab stays open (you can pause
+            that below). Standard browsers cannot keep GPS after you fully quit the browser — use a native app for that,
+            or leave a tab open.
           </p>
         </div>
         <button
@@ -505,31 +496,33 @@ export default function HomeLocationMap() {
             </span>
           </label>
 
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-[11px] leading-snug text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
-            <p className="font-semibold">Background updates</p>
-            <p className="mt-1 opacity-90">
-              When confirmed, we keep requesting your position on a slower interval while the tab is in the
-              background. This is still a website: once the browser is fully closed, tracking stops.
-            </p>
-            {bgConsent ? (
-              <button
-                type="button"
-                onClick={revokeBackground}
-                className="mt-2 text-xs font-semibold text-amber-900 underline dark:text-amber-200"
-              >
-                Turn off background-style updates
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={confirmBackground}
-                disabled={!sharing}
-                className="mt-2 flex h-9 w-full items-center justify-center rounded-lg bg-amber-700 text-xs font-semibold text-white hover:bg-amber-800 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                I confirm — keep updating when tab is in background
-              </button>
-            )}
-          </div>
+          <label
+            className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 text-[11px] leading-snug ${
+              sharing
+                ? "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100"
+                : "cursor-not-allowed border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-500"
+            }`}
+          >
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-400 text-amber-700 disabled:opacity-50"
+              checked={bgConsent}
+              disabled={!sharing}
+              onChange={(e) => {
+                const on = e.target.checked;
+                setBackgroundLocationConsent(on);
+                setBgConsentState(on);
+              }}
+            />
+            <span>
+              <span className="font-semibold">Keep updating in the background</span>
+              <span className="mt-1 block opacity-90">
+                On by default: we keep requesting your position on a slower cadence while this tab stays open, even if
+                you switch apps (browser may still throttle GPS). Turn this off to only update while this tab is visible.
+                Fully closing the browser stops tracking — this is not a native app.
+              </span>
+            </span>
+          </label>
         </div>
       </div>
 

@@ -36,15 +36,16 @@ export function setAvatarDataUrl(dataUrl: string | null): void {
   localStorage.setItem(MAP_PROFILE.avatar, dataUrl);
 }
 
+/** Background-friendly GPS cadence is on unless the user explicitly pauses (`"0"` in storage). */
 export function getBackgroundLocationConsent(): boolean {
-  if (typeof window === "undefined") return false;
-  return localStorage.getItem(MAP_PROFILE.bgConsent) === "1";
+  if (typeof window === "undefined") return true;
+  return localStorage.getItem(MAP_PROFILE.bgConsent) !== "0";
 }
 
 export function setBackgroundLocationConsent(on: boolean): void {
   if (typeof window === "undefined") return;
-  if (on) localStorage.setItem(MAP_PROFILE.bgConsent, "1");
-  else localStorage.removeItem(MAP_PROFILE.bgConsent);
+  if (on) localStorage.removeItem(MAP_PROFILE.bgConsent);
+  else localStorage.setItem(MAP_PROFILE.bgConsent, "0");
 }
 
 export function getShareNearbyPeers(): boolean {

@@ -16,8 +16,8 @@ export default async function Home() {
         <h1 className="text-3xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Stay linked</h1>
         <p className="mt-3 max-w-2xl text-base leading-7 text-zinc-600 dark:text-zinc-400">
           Your home screen includes a live map: share your GPS position, show your boat name and profile photo on the
-          pin, and choose slower updates while the tab is in the background. Fully closed browsers cannot keep GPS on a
-          normal website — that needs a native wrapper app.
+          pin, and keep slower background updates on by default while the tab stays open (you can pause on the map).
+          Fully closed browsers cannot keep GPS on a normal website — that needs a native wrapper app.
         </p>
         {signedIn ? (
           <p className="mt-4 text-sm text-green-800 dark:text-green-300">

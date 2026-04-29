@@ -170,6 +170,9 @@ export function GearMarketplace() {
     [],
   );
 
+  const listingTtl = policy?.listingTtlDays ?? 60;
+  const reminderDays = policy?.reminderDaysBefore ?? 7;
+
   return (
     <div className="flex flex-col gap-8">
       <div className="rounded-xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm leading-6 text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
@@ -201,7 +204,9 @@ export function GearMarketplace() {
                 <div>
                   <p className="font-medium text-zinc-900 dark:text-zinc-100">{r.title}</p>
                   <p className="text-xs text-zinc-600 dark:text-zinc-400">
-                    {r.daysLeft} day{r.daysLeft === 1 ? "" : "s"} left · removes after {fmtDate(r.expiresAt)}
+                    {r.daysLeft}
+                    {" "}
+                    day{r.daysLeft === 1 ? "" : "s"} left · removes after {fmtDate(r.expiresAt)}
                   </p>
                 </div>
                 <button
@@ -311,8 +316,8 @@ export function GearMarketplace() {
                       className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
                     >
                       Extend {listingTtl}
-                  {" "}
-                  days
+                      {" "}
+                      days
                     </button>
                     <button
                       type="button"
