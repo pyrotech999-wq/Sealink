@@ -1,0 +1,714 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+
+type Step = 1 | 2 | 3 | 4;
+
+type LocationAccess = "always" | "while_using";
+
+const initial = {
+  companyName: "",
+  companyNumber: "",
+  contactName: "",
+  jobTitle: "",
+  email: "",
+  phone: "",
+  line1: "",
+  line2: "",
+  city: "",
+  postcode: "",
+  password: "",
+  confirmPassword: "",
+  agreeTerms: false,
+  agreePrivacy: false,
+  age: "",
+  locationAccess: "always" as LocationAccess,
+  bluetoothOptIn: false,
+  smartNotificationsOptIn: false,
+  invitedEmails: "",
+};
+
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+
+export function SignUpForm() {
+  const [step, setStep] = useState<Step>(1);
+  const [form, setForm] = useState(initial);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitted, setSubmitted] = useState(false);
+  const [geoHint, setGeoHint] = useState<string | null>(null);
+  const [notifHint, setNotifHint] = useState<string | null>(null);
+  const [bleHint, setBleHint] = useState<string | null>(null);
+  const [shareHint, setShareHint] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const progress = useMemo(() => ({ 1: 25, 2: 50, 3: 75, 4: 100 }[step]), [step]);
+
+  useEffect(() => {
+    return () => {
+      if (photoPreview) URL.revokeObjectURL(photoPreview);
+    };
+  }, [photoPreview]);
+
+  function set<K extends keyof typeof initial>(key: K, value: (typeof initial)[K]) {
+    setForm((f) => ({ ...f, [key]: value }));
+    setErrors((e) => {
+      const next = { ...e };
+      delete next[key as string];
+      return next;
+    });
+  }
+
+  function clearPhotoError() {
+    setErrors((e) => {
+      const next = { ...e };
+      delete next.profilePhoto;
+      return next;
+    });
+  }
+
+  function onPickPhoto(ev: React.ChangeEvent<HTMLInputElement>) {
+    const file = ev.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setErrors((e) => ({ ...e, profilePhoto: "Choose an image file (JPEG, PNG, or WebP)" }));
+      return;
+    }
+    if (file.size > MAX_PHOTO_BYTES) {
+      setErrors((e) => ({ ...e, profilePhoto: "Image must be 5MB or smaller" }));
+      return;
+    }
+    clearPhotoError();
+    setPhotoFile(file);
+    setPhotoPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
+  }
+
+  function removePhoto() {
+    clearPhotoError();
+    setPhotoFile(null);
+    setPhotoPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function validateStep(s: Step): boolean {
+    const e: Record<string, string> = {};
+    if (s === 1) {
+      if (!photoFile) e.profilePhoto = "Add a profile photo";
+      const ageNum = parseInt(form.age, 10);
+      if (!form.age.trim()) e.age = "Enter your age";
+      else if (Number.isNaN(ageNum) || ageNum < 13 || ageNum > 120) e.age = "Enter a valid age (13–120)";
+      if (!form.contactName.trim()) e.contactName = "Enter your name";
+      if (!form.email.trim()) e.email = "Enter your email";
+      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = "Enter a valid email";
+    }
+    if (s === 2) {
+      if (!form.line1.trim()) e.line1 = "Enter the first line of your address";
+      if (!form.city.trim()) e.city = "Enter town or city";
+      if (!form.postcode.trim()) e.postcode = "Enter postcode";
+      if (!form.phone.trim()) e.phone = "Enter a phone number";
+    }
+    if (s === 3) {
+      if (form.password.length < 10) e.password = "Use at least 10 characters";
+      if (form.password !== form.confirmPassword) e.confirmPassword = "Passwords do not match";
+      if (!form.agreeTerms) e.agreeTerms = "You need to accept the terms";
+      if (!form.agreePrivacy) e.agreePrivacy = "You need to accept the privacy policy";
+    }
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  }
+
+  function next() {
+    if (!validateStep(step)) return;
+    setStep((s) => (s < 4 ? ((s + 1) as Step) : s));
+  }
+
+  function back() {
+    setStep((s) => (s > 1 ? ((s - 1) as Step) : s));
+  }
+
+  function requestLocation() {
+    if (!navigator.geolocation) {
+      setGeoHint("Location is not supported in this browser.");
+      return;
+    }
+    setGeoHint(null);
+    navigator.geolocation.getCurrentPosition(
+      () =>
+        setGeoHint(
+          "Location works for this browser session. Your \"always\" vs \"while using\" choice is saved for the native app.",
+        ),
+      (err) => setGeoHint(err.message ? `Could not read location: ${err.message}` : "Location permission was blocked or unavailable."),
+      { enableHighAccuracy: true, timeout: 12_000 },
+    );
+  }
+
+  async function requestNotifications() {
+    if (!("Notification" in window)) {
+      setNotifHint("Notifications are not supported in this browser.");
+      return;
+    }
+    try {
+      const result = await Notification.requestPermission();
+      setNotifHint(
+        result === "granted"
+          ? "You’ll get smart alerts for this site (arrivals, invites, and reminders in a full build)."
+          : result === "denied"
+            ? "Notifications were denied. You can change this in browser settings."
+            : "Notification permission dismissed.",
+      );
+      set("smartNotificationsOptIn", result === "granted");
+    } catch {
+      setNotifHint("Could not request notification permission.");
+    }
+  }
+
+  async function requestBluetooth() {
+    const nav = navigator as Navigator & { bluetooth?: { requestDevice: (opts: object) => Promise<unknown> } };
+    if (!nav.bluetooth?.requestDevice) {
+      setBleHint("Bluetooth pairing needs Web Bluetooth (often Chrome desktop) or the native app.");
+      return;
+    }
+    setBleHint(null);
+    try {
+      await nav.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: ["generic_access"],
+      });
+      setBleHint("Bluetooth device selected.");
+      set("bluetoothOptIn", true);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Request cancelled or failed.";
+      setBleHint(msg);
+    }
+  }
+
+  async function shareApp() {
+    const url = typeof window !== "undefined" ? window.location.origin : "";
+    setShareHint(null);
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: "SeaLink",
+          text: "Join my Circle on SeaLink — family location and check-ins.",
+          url,
+        });
+        setShareHint("Thanks for sharing.");
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+        setShareHint("App link copied to clipboard.");
+      } else {
+        setShareHint(`Copy this link manually: ${url}`);
+      }
+    } catch {
+      setShareHint("Share was cancelled or is not available.");
+    }
+  }
+
+  function onSubmit(ev: React.FormEvent) {
+    ev.preventDefault();
+    if (!validateStep(4)) return;
+    setSubmitted(true);
+    const ageNum = parseInt(form.age, 10);
+    console.info("sign-up", {
+      ...form,
+      age: ageNum,
+      profilePhoto: photoFile ? { name: photoFile.name, size: photoFile.size, type: photoFile.type } : null,
+      invitedEmails: form.invitedEmails
+        .split(/[\n,;]+/)
+        .map((s) => s.trim())
+        .filter(Boolean),
+    });
+  }
+
+  if (submitted) {
+    return (
+      <div className="rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">You&apos;re in</h2>
+        <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+          Your profile, Circle invites, and safety preferences are saved for the next step: email verification and opening
+          your map with the people you trust.
+        </p>
+        <div className="mt-6 flex flex-wrap gap-3">
+          <Link
+            href="/sign-in"
+            className="inline-flex h-10 items-center justify-center rounded-lg bg-green-600 px-4 text-sm font-medium text-white hover:bg-green-700"
+          >
+            Go to sign in
+          </Link>
+          <Link
+            href="/"
+            className="inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
+          >
+            Home
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+      <div className="mb-6">
+        <div className="flex items-center justify-between gap-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Step {step} of 4</p>
+          <p className="text-xs text-zinc-500">{progress}%</p>
+        </div>
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+          <div
+            className="h-full rounded-full bg-green-600 transition-[width] duration-300 ease-out"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
+
+      {step === 1 && (
+        <div className="space-y-5">
+          <div>
+            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Profile photo</p>
+            <p className="mt-0.5 text-xs text-zinc-500">A clear face photo helps people in your Circle recognise you on the map.</p>
+            <div className="mt-3 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+              <div className="relative size-24 shrink-0 overflow-hidden rounded-full border-2 border-dashed border-zinc-300 bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900">
+                {photoPreview ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- user-uploaded blob preview
+                  <img src={photoPreview} alt="Profile preview" className="size-full object-cover" />
+                ) : (
+                  <span className="flex size-full items-center justify-center text-xs text-zinc-400">No photo</span>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={onPickPhoto} />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="inline-flex h-9 items-center justify-center rounded-lg bg-green-700 px-3 text-sm font-medium text-white hover:bg-green-800"
+                >
+                  Upload photo
+                </button>
+                {photoPreview && (
+                  <button
+                    type="button"
+                    onClick={removePhoto}
+                    className="inline-flex h-9 items-center justify-center rounded-lg border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            </div>
+            {errors.profilePhoto && <p className="mt-2 text-xs text-red-600">{errors.profilePhoto}</p>}
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="age">
+                Age
+              </label>
+              <input
+                id="age"
+                type="number"
+                inputMode="numeric"
+                min={13}
+                max={120}
+                className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 placeholder:text-zinc-400 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                value={form.age}
+                onChange={(ev) => set("age", ev.target.value)}
+                placeholder="e.g. 28"
+              />
+              {errors.age && <p className="mt-1 text-xs text-red-600">{errors.age}</p>}
+            </div>
+            <div>
+              <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="contactName">
+                Your name
+              </label>
+              <input
+                id="contactName"
+                autoComplete="name"
+                className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                value={form.contactName}
+                onChange={(ev) => set("contactName", ev.target.value)}
+              />
+              {errors.contactName && <p className="mt-1 text-xs text-red-600">{errors.contactName}</p>}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="email">
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              autoComplete="email"
+              className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+              value={form.email}
+              onChange={(ev) => set("email", ev.target.value)}
+            />
+            {errors.email && <p className="mt-1 text-xs text-red-600">{errors.email}</p>}
+          </div>
+
+          <div>
+            <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="companyName">
+              Family or household name <span className="font-normal text-zinc-500">(optional)</span>
+            </label>
+            <input
+              id="companyName"
+              autoComplete="organization"
+              className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 placeholder:text-zinc-400 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+              value={form.companyName}
+              onChange={(ev) => set("companyName", ev.target.value)}
+              placeholder="e.g. The Smiths"
+            />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="companyNumber">
+                Invite code <span className="font-normal text-zinc-500">(optional)</span>
+              </label>
+              <input
+                id="companyNumber"
+                className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                value={form.companyNumber}
+                onChange={(ev) => set("companyNumber", ev.target.value)}
+                placeholder="If someone invited you"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="jobTitle">
+                Map nickname <span className="font-normal text-zinc-500">(optional)</span>
+              </label>
+              <input
+                id="jobTitle"
+                autoComplete="nickname"
+                className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                value={form.jobTitle}
+                onChange={(ev) => set("jobTitle", ev.target.value)}
+                placeholder="e.g. Mum, Alex"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {step === 2 && (
+        <div className="space-y-4">
+          <p className="text-xs text-zinc-500">
+            Home address powers place alerts (school, work, home) in a full app — same idea as family location apps on
+            your phone.
+          </p>
+          <div>
+            <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="line1">
+              Address line 1
+            </label>
+            <input
+              id="line1"
+              autoComplete="address-line1"
+              className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+              value={form.line1}
+              onChange={(ev) => set("line1", ev.target.value)}
+            />
+            {errors.line1 && <p className="mt-1 text-xs text-red-600">{errors.line1}</p>}
+          </div>
+          <div>
+            <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="line2">
+              Address line 2 <span className="font-normal text-zinc-500">(optional)</span>
+            </label>
+            <input
+              id="line2"
+              autoComplete="address-line2"
+              className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+              value={form.line2}
+              onChange={(ev) => set("line2", ev.target.value)}
+            />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="city">
+                Town / city
+              </label>
+              <input
+                id="city"
+                autoComplete="address-level2"
+                className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                value={form.city}
+                onChange={(ev) => set("city", ev.target.value)}
+              />
+              {errors.city && <p className="mt-1 text-xs text-red-600">{errors.city}</p>}
+            </div>
+            <div>
+              <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="postcode">
+                Postcode
+              </label>
+              <input
+                id="postcode"
+                autoComplete="postal-code"
+                className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                value={form.postcode}
+                onChange={(ev) => set("postcode", ev.target.value)}
+              />
+              {errors.postcode && <p className="mt-1 text-xs text-red-600">{errors.postcode}</p>}
+            </div>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="phone">
+              Phone
+            </label>
+            <input
+              id="phone"
+              type="tel"
+              autoComplete="tel"
+              className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+              value={form.phone}
+              onChange={(ev) => set("phone", ev.target.value)}
+            />
+            {errors.phone && <p className="mt-1 text-xs text-red-600">{errors.phone}</p>}
+          </div>
+        </div>
+      )}
+
+      {step === 3 && (
+        <div className="space-y-4">
+          <div>
+            <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="password">
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              autoComplete="new-password"
+              className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+              value={form.password}
+              onChange={(ev) => set("password", ev.target.value)}
+            />
+            {errors.password && <p className="mt-1 text-xs text-red-600">{errors.password}</p>}
+            <p className="mt-1 text-xs text-zinc-500">At least 10 characters.</p>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="confirmPassword">
+              Confirm password
+            </label>
+            <input
+              id="confirmPassword"
+              type="password"
+              autoComplete="new-password"
+              className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+              value={form.confirmPassword}
+              onChange={(ev) => set("confirmPassword", ev.target.value)}
+            />
+            {errors.confirmPassword && <p className="mt-1 text-xs text-red-600">{errors.confirmPassword}</p>}
+          </div>
+          <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                className="mt-1 size-4 rounded border-zinc-300 text-green-700 focus:ring-green-600"
+                checked={form.agreeTerms}
+                onChange={(ev) => set("agreeTerms", ev.target.checked)}
+              />
+              <span className="text-sm text-zinc-700 dark:text-zinc-300">
+                I agree to the{" "}
+                <Link href="/terms" className="font-medium text-green-800 underline-offset-2 hover:underline dark:text-green-400">
+                  terms of use
+                </Link>
+                .
+              </span>
+            </label>
+            {errors.agreeTerms && <p className="mt-2 text-xs text-red-600">{errors.agreeTerms}</p>}
+          </div>
+          <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                className="mt-1 size-4 rounded border-zinc-300 text-green-700 focus:ring-green-600"
+                checked={form.agreePrivacy}
+                onChange={(ev) => set("agreePrivacy", ev.target.checked)}
+              />
+              <span className="text-sm text-zinc-700 dark:text-zinc-300">
+                I agree to the{" "}
+                <Link href="/privacy" className="font-medium text-green-800 underline-offset-2 hover:underline dark:text-green-400">
+                  privacy policy
+                </Link>
+                .
+              </span>
+            </label>
+            {errors.agreePrivacy && <p className="mt-2 text-xs text-red-600">{errors.agreePrivacy}</p>}
+          </div>
+        </div>
+      )}
+
+      {step === 4 && (
+        <div className="space-y-6">
+          <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/40">
+            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Location sharing</p>
+            <p className="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-400">
+              Apps like Life360 usually recommend all-day location so Circles see arrivals, Battery, and driving context.
+              On the web, the browser only shares when you allow it here; on iPhone or Android, pick{" "}
+              <span className="font-medium text-green-800 dark:text-green-400">Always</span> in system settings for the
+              closest behaviour.
+            </p>
+            <div className="mt-3 space-y-2">
+              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-950">
+                <input
+                  type="radio"
+                  name="locationAccess"
+                  className="mt-1 text-green-700"
+                  checked={form.locationAccess === "always"}
+                  onChange={() => set("locationAccess", "always")}
+                />
+                <span>
+                  <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Always allow</span>
+                  <span className="ml-2 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-green-900 dark:bg-green-900/40 dark:text-green-200">
+                    Recommended
+                  </span>
+                  <span className="mt-0.5 block text-xs text-zinc-500">Best for battery-friendly background updates on your phone.</span>
+                </span>
+              </label>
+              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-950">
+                <input
+                  type="radio"
+                  name="locationAccess"
+                  className="mt-1 text-green-700"
+                  checked={form.locationAccess === "while_using"}
+                  onChange={() => set("locationAccess", "while_using")}
+                />
+                <span>
+                  <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Only while using the app</span>
+                  <span className="mt-0.5 block text-xs text-zinc-500">Location when SeaLink is open and active.</span>
+                </span>
+              </label>
+            </div>
+            <button
+              type="button"
+              onClick={requestLocation}
+              className="mt-3 inline-flex h-9 items-center justify-center rounded-lg border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+            >
+              Check browser location
+            </button>
+            {geoHint && <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">{geoHint}</p>}
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Bluetooth</p>
+                  <p className="mt-1 text-xs text-zinc-500">For Bluetooth tags and in-car accessories some families pair with their map.</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={form.bluetoothOptIn}
+                  onClick={() => set("bluetoothOptIn", !form.bluetoothOptIn)}
+                  className={`relative inline-flex h-7 w-12 shrink-0 rounded-full transition-colors ${form.bluetoothOptIn ? "bg-green-600" : "bg-zinc-300 dark:bg-zinc-600"}`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block size-6 translate-y-0.5 rounded-full bg-white shadow transition-transform ${form.bluetoothOptIn ? "translate-x-5" : "translate-x-1"}`}
+                  />
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={requestBluetooth}
+                className="mt-3 w-full rounded-lg border border-zinc-300 bg-white py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+              >
+                Pair / test Bluetooth
+              </button>
+              {bleHint && <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">{bleHint}</p>}
+            </div>
+
+            <div className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Smart notifications</p>
+                  <p className="mt-1 text-xs text-zinc-500">Circle activity, place alerts, and low-priority nudges — off by default until you opt in.</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={form.smartNotificationsOptIn}
+                  onClick={() => set("smartNotificationsOptIn", !form.smartNotificationsOptIn)}
+                  className={`relative inline-flex h-7 w-12 shrink-0 rounded-full transition-colors ${form.smartNotificationsOptIn ? "bg-green-600" : "bg-zinc-300 dark:bg-zinc-600"}`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block size-6 translate-y-0.5 rounded-full bg-white shadow transition-transform ${form.smartNotificationsOptIn ? "translate-x-5" : "translate-x-1"}`}
+                  />
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={requestNotifications}
+                className="mt-3 w-full rounded-lg border border-zinc-300 bg-white py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+              >
+                Enable in browser
+              </button>
+              {notifHint && <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">{notifHint}</p>}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Add people to your Circle</p>
+            <p className="mt-1 text-xs text-zinc-500">Invite family or friends by email so they can join your Circle (optional).</p>
+            <textarea
+              className="mt-2 min-h-[88px] w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+              placeholder="mum@email.com, partner@email.com"
+              value={form.invitedEmails}
+              onChange={(ev) => set("invitedEmails", ev.target.value)}
+            />
+          </div>
+
+          <div className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Share the app</p>
+            <p className="mt-1 text-xs text-zinc-500">Send your invite link by message or copy it — same habit as sharing Life360 with family.</p>
+            <button
+              type="button"
+              onClick={shareApp}
+              className="mt-3 w-full rounded-lg bg-green-600 py-2.5 text-sm font-medium text-white hover:bg-green-700"
+            >
+              Share SeaLink
+            </button>
+            {shareHint && <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">{shareHint}</p>}
+          </div>
+        </div>
+      )}
+
+      <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
+        <div className="flex gap-2">
+          {step > 1 && (
+            <button
+              type="button"
+              onClick={back}
+              className="inline-flex h-10 items-center justify-center rounded-lg border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+            >
+              Back
+            </button>
+          )}
+        </div>
+        <div className="flex gap-2 sm:ml-auto">
+          {step < 4 ? (
+            <button
+              type="button"
+              onClick={next}
+              className="inline-flex h-10 flex-1 items-center justify-center rounded-lg bg-green-700 px-4 text-sm font-medium text-white hover:bg-green-800 sm:flex-none"
+            >
+              Continue
+            </button>
+          ) : (
+            <button
+              type="submit"
+              className="inline-flex h-10 flex-1 items-center justify-center rounded-lg bg-green-700 px-4 text-sm font-medium text-white hover:bg-green-800 sm:flex-none"
+            >
+              Finish sign up
+            </button>
+          )}
+        </div>
+      </div>
+    </form>
+  );
+}
