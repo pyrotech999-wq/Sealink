@@ -44,3 +44,4 @@ next-env.d.ts
 # local gear marketplace data (JSON store)
 /data/gear-listings.json
 /data/map-nearby-presence.json
+/data/map-broadcast-messages.json

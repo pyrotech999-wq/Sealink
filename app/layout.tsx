@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { BroadcastAwayToasts } from "@/components/BroadcastAwayToasts";
+import { BroadcastToastProvider } from "@/components/BroadcastToastProvider";
 import { BottomNav } from "@/components/BottomNav";
 import "./globals.css";
 
@@ -32,8 +34,11 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col pb-[calc(4.25rem+env(safe-area-inset-bottom))]">
-        {children}
-        <BottomNav />
+        <BroadcastToastProvider>
+          {children}
+          <BroadcastAwayToasts />
+          <BottomNav />
+        </BroadcastToastProvider>
       </body>
     </html>
   );
