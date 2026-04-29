@@ -3,14 +3,18 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { BillingPlan } from "@/lib/pricing";
-import { discountedRecurringGbp, MONTHLY_GBP, recurringPriceGbp, TRIAL_DAYS, YEARLY_GBP } from "@/lib/pricing";
+import { ANNUAL_GBP, discountedRecurringGbp, MONTHLY_GBP, recurringPriceGbp, TRIAL_DAYS } from "@/lib/pricing";
 
-export function PaymentClient() {
+type Props = { showCanceled?: boolean };
+
+export function PaymentClient({ showCanceled = false }: Props) {
   const [plan, setPlan] = useState<BillingPlan>("monthly");
   const [codeInput, setCodeInput] = useState("");
   const [applied, setApplied] = useState<{ code: string; discountPercent: number } | null>(null);
   const [voucherError, setVoucherError] = useState<string | null>(null);
   const [voucherLoading, setVoucherLoading] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   const base = recurringPriceGbp(plan);
   const finalPrice = useMemo(
@@ -56,13 +60,43 @@ export function PaymentClient() {
     }
   }
 
+  async function startCheckout() {
+    setCheckoutError(null);
+    setCheckoutLoading(true);
+    try {
+      const res = await fetch("/api/checkout/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan,
+          ...(applied ? { voucherCode: applied.code } : {}),
+        }),
+      });
+      const data = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok || !data.url) {
+        setCheckoutError(data.error ?? "Checkout could not be started");
+        return;
+      }
+      window.location.href = data.url;
+    } catch {
+      setCheckoutError("Network error. Try again.");
+    } finally {
+      setCheckoutLoading(false);
+    }
+  }
+
   return (
     <div className="mx-auto w-full max-w-lg px-4 py-8 sm:px-6 sm:py-10">
-      <Link href="/other" className="text-sm font-medium text-green-800 hover:underline dark:text-green-400">
-        ← Back to Other
+      <Link href="/" className="text-sm font-medium text-green-800 hover:underline dark:text-green-400">
+        ← Home
       </Link>
 
       <div className="mt-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 sm:p-8">
+        {showCanceled && (
+          <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
+            Checkout was canceled. You can try again when you&apos;re ready.
+          </p>
+        )}
         <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 dark:border-green-900/50 dark:bg-green-950/30">
           <p className="text-sm font-semibold text-green-900 dark:text-green-100">{TRIAL_DAYS}-day free trial</p>
           <p className="mt-1 text-xs leading-5 text-green-800/90 dark:text-green-200/90">
@@ -71,7 +105,11 @@ export function PaymentClient() {
         </div>
 
         <h1 className="mt-6 text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Choose your plan</h1>
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Prices after trial.</p>
+        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+          Monthly or annual — two billing options, each with its own price. Checkout opens with the Stripe subscription
+          price for the option you pick.
+        </p>
+        <p className="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">Figures below are after your trial.</p>
 
         <div className="mt-4 grid grid-cols-2 gap-3">
           <button
@@ -88,15 +126,15 @@ export function PaymentClient() {
           </button>
           <button
             type="button"
-            onClick={() => setPlan("yearly")}
+            onClick={() => setPlan("annual")}
             className={`rounded-xl border-2 px-3 py-3 text-left transition-colors ${
-              plan === "yearly"
+              plan === "annual"
                 ? "border-green-600 bg-green-50 dark:border-green-500 dark:bg-green-950/40"
                 : "border-zinc-200 bg-zinc-50 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900/50"
             }`}
           >
-            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Yearly</p>
-            <p className="mt-1 text-lg font-semibold text-zinc-900 dark:text-zinc-50">£{YEARLY_GBP}/yr</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Annual</p>
+            <p className="mt-1 text-lg font-semibold text-zinc-900 dark:text-zinc-50">£{ANNUAL_GBP}/yr</p>
             <p className="mt-0.5 text-[11px] text-green-800 dark:text-green-300">Save vs 12× monthly</p>
           </button>
         </div>
@@ -141,7 +179,7 @@ export function PaymentClient() {
 
         <div className="mt-8 rounded-xl bg-zinc-50 p-4 dark:bg-zinc-900/60">
           <div className="flex justify-between text-sm text-zinc-600 dark:text-zinc-400">
-            <span>After trial ({plan === "monthly" ? "per month" : "per year"})</span>
+            <span>After trial ({plan === "monthly" ? "per month" : "per year, annual billing"})</span>
             <span className="font-medium text-zinc-900 dark:text-zinc-50">£{base.toFixed(2)}</span>
           </div>
           {applied && applied.discountPercent > 0 && (
@@ -159,16 +197,14 @@ export function PaymentClient() {
           )}
         </div>
 
+        {checkoutError && <p className="mt-4 text-center text-sm text-red-600">{checkoutError}</p>}
         <button
           type="button"
-          onClick={() =>
-            alert(
-              "Connect Stripe (or your provider) here: create Checkout with trial period, plan, and server-validated coupon.",
-            )
-          }
-          className="mt-6 flex h-11 w-full items-center justify-center rounded-lg bg-green-600 text-sm font-medium text-white hover:bg-green-700"
+          disabled={checkoutLoading}
+          onClick={() => void startCheckout()}
+          className="mt-6 flex h-11 w-full items-center justify-center rounded-lg bg-green-600 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-60"
         >
-          Start {TRIAL_DAYS}-day free trial
+          {checkoutLoading ? "Redirecting to Stripe…" : `Start ${TRIAL_DAYS}-day free trial`}
         </button>
         <p className="mt-3 text-center text-[11px] text-zinc-500">
           You will not be charged until the trial ends. Cancel anytime during the trial.

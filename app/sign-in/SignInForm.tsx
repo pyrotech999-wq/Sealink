@@ -8,8 +8,9 @@ export function SignInForm() {
   const [password, setPassword] = useState("");
   const [agree, setAgree] = useState(false);
   const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
 
-  function onSubmit(ev: React.FormEvent) {
+  async function onSubmit(ev: React.FormEvent) {
     ev.preventDefault();
     if (!email.trim() || !password) {
       setError("Enter email and password");
@@ -20,7 +21,22 @@ export function SignInForm() {
       return;
     }
     setError("");
-    console.info("sign-in", { email });
+    setPending(true);
+    try {
+      // Sets httpOnly demo cookie so middleware can keep you off /sign-in after a full reload or Stripe return.
+      const res = await fetch("/api/demo/sign-in", { method: "POST" });
+      if (!res.ok) {
+        setError("Could not start session. Try again.");
+        setPending(false);
+        return;
+      }
+    } catch {
+      setError("Network error. Try again.");
+      setPending(false);
+      return;
+    }
+    // Full navigation so the new cookie is always sent on the next request (avoids flaky client-only redirects).
+    window.location.assign("/");
   }
 
   return (
@@ -91,9 +107,10 @@ export function SignInForm() {
       </div>
       <button
         type="submit"
-        className="mt-6 flex h-10 w-full items-center justify-center rounded-lg bg-green-600 text-sm font-medium text-white hover:bg-green-700"
+        disabled={pending}
+        className="mt-6 flex h-10 w-full items-center justify-center rounded-lg bg-green-600 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-60"
       >
-        Sign in
+        {pending ? "Signing in…" : "Sign in"}
       </button>
     </form>
   );

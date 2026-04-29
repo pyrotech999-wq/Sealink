@@ -3,13 +3,19 @@ import { PaymentClient } from "./PaymentClient";
 
 export const metadata: Metadata = {
   title: "Plans & payment",
-  description: "SeaLink — 14-day trial, then monthly or yearly. Voucher codes validated on the server.",
+  description:
+    "SeaLink — 14-day trial, then monthly or annual billing (two Stripe prices). Voucher codes validated on the server.",
 };
 
-export default function PaymentPage() {
+type Props = { searchParams: Promise<{ canceled?: string }> };
+
+export default async function PaymentPage({ searchParams }: Props) {
+  const { canceled } = await searchParams;
+  const showCanceled = canceled === "1";
+
   return (
     <div className="flex flex-1 flex-col bg-zinc-50 dark:bg-zinc-950">
-      <PaymentClient />
+      <PaymentClient showCanceled={showCanceled} />
     </div>
   );
 }

@@ -27,7 +27,10 @@ export default function SignInPage() {
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-4 py-10 sm:px-6">
         <div className="mb-8 text-center sm:text-left">
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Sign in</h1>
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">Use the email and password for your SeaLink account.</p>
+          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+            Auth is not wired to a server yet — after you agree to the policies, sign-in sends you home so you can test
+            the app. Use any email and password format for now.
+          </p>
         </div>
 
         <SignInForm />
