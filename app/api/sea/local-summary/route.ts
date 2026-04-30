@@ -21,9 +21,18 @@ type WorldTidesResp = {
   requestDatum?: string;
   responseDatum?: string;
   timezone?: string;
+  atlas?: string;
+  station?: string;
   copyright?: string;
   extremes?: WorldTidesExtreme[];
   callCount?: number;
+};
+
+type NoaaStation = {
+  id: string;
+  name: string;
+  lat: number;
+  lon: number;
 };
 
 function numAt(arr: unknown, idx: number): number | null {
@@ -61,6 +70,123 @@ type TideEventOut = {
 };
 
 type TideTableEvent = { kind: "high" | "low"; t: string; heightM: number };
+
+function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const R = 6371;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLon = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const s =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return 2 * R * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
+}
+
+let noaaStationsCache: { fetchedAtMs: number; stations: NoaaStation[] } | null = null;
+const NOAA_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+async function loadNoaaStations(): Promise<NoaaStation[]> {
+  const now = Date.now();
+  if (noaaStationsCache && now - noaaStationsCache.fetchedAtMs < NOAA_CACHE_TTL_MS) return noaaStationsCache.stations;
+
+  const url = new URL("https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json");
+  url.searchParams.set("type", "tidepredictions");
+
+  const r = await fetch(url.toString(), { cache: "no-store" });
+  if (!r.ok) return noaaStationsCache?.stations ?? [];
+  const j = (await r.json()) as unknown;
+  const stationsRaw = j && typeof j === "object" ? (j as Record<string, unknown>).stations : null;
+  const out: NoaaStation[] = [];
+  if (Array.isArray(stationsRaw)) {
+    for (const s of stationsRaw) {
+      if (!s || typeof s !== "object") continue;
+      const o = s as Record<string, unknown>;
+      const id = typeof o.id === "string" ? o.id : null;
+      const name = typeof o.name === "string" ? o.name : null;
+      const lat = typeof o.lat === "string" ? Number(o.lat) : typeof o.lat === "number" ? o.lat : NaN;
+      const lon = typeof o.lng === "string" ? Number(o.lng) : typeof o.lng === "number" ? o.lng : NaN;
+      if (!id || !name) continue;
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+      out.push({ id, name, lat, lon });
+    }
+  }
+
+  noaaStationsCache = { fetchedAtMs: now, stations: out };
+  return out;
+}
+
+async function noaaTideTable(coords: { lat: number; lng: number }): Promise<{
+  source: "noaa";
+  stationId: string;
+  stationName: string;
+  distanceKm: number;
+  datum: string;
+  timeZone: "lst_ldt";
+  events: TideTableEvent[];
+} | null> {
+  const stations = await loadNoaaStations();
+  if (!stations.length) return null;
+
+  let best: { st: NoaaStation; dKm: number } | null = null;
+  for (const st of stations) {
+    const dKm = haversineKm(coords, { lat: st.lat, lng: st.lon });
+    if (!best || dKm < best.dKm) best = { st, dKm };
+  }
+  if (!best) return null;
+  // NOAA coverage is mostly US; avoid showing nonsense if we're far away.
+  if (best.dKm > 250) return null;
+
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+  const ymd = (d: Date) => `${d.getUTCFullYear()}${pad2(d.getUTCMonth() + 1)}${pad2(d.getUTCDate())}`;
+  const now = new Date();
+  const begin = ymd(now);
+  const end = ymd(new Date(now.getTime() + 48 * 60 * 60 * 1000));
+
+  const api = new URL("https://api.tidesandcurrents.noaa.gov/api/prod/datagetter");
+  api.searchParams.set("product", "predictions");
+  api.searchParams.set("application", "sealink");
+  api.searchParams.set("begin_date", begin);
+  api.searchParams.set("end_date", end);
+  api.searchParams.set("datum", "MLLW");
+  api.searchParams.set("station", best.st.id);
+  api.searchParams.set("time_zone", "lst_ldt");
+  api.searchParams.set("units", "metric");
+  api.searchParams.set("interval", "hilo");
+  api.searchParams.set("format", "json");
+
+  const r = await fetch(api.toString(), { cache: "no-store" });
+  if (!r.ok) return null;
+  const j = (await r.json()) as any;
+  const preds = j?.predictions;
+  if (!Array.isArray(preds)) return null;
+
+  const events: TideTableEvent[] = preds
+    .map((p: any) => {
+      const t = typeof p?.t === "string" ? p.t : null;
+      const v = typeof p?.v === "string" ? Number(p.v) : typeof p?.v === "number" ? p.v : NaN;
+      const typ = typeof p?.type === "string" ? p.type : "";
+      if (!t || !Number.isFinite(v)) return null;
+      const kind: "high" | "low" | null = typ === "H" || typ.toLowerCase().includes("high") ? "high" : typ === "L" || typ.toLowerCase().includes("low") ? "low" : null;
+      if (!kind) return null;
+      // NOAA returns local time string without timezone, e.g. "2026-04-30 07:03"
+      const isoish = t.includes("T") ? t : t.replace(" ", "T");
+      return { kind, t: isoish, heightM: v };
+    })
+    .filter(Boolean) as TideTableEvent[];
+
+  if (!events.length) return null;
+  return {
+    source: "noaa",
+    stationId: best.st.id,
+    stationName: best.st.name,
+    distanceKm: best.dKm,
+    datum: "MLLW",
+    timeZone: "lst_ldt",
+    events,
+  };
+}
 
 function findNextTides(times: string[], sea: number[], nowMs: number, limit = 4): TideEvent[] {
   const out: TideEvent[] = [];
@@ -130,9 +256,17 @@ export async function GET(req: Request): Promise<Response> {
   api.searchParams.set("length_unit", "metric");
 
   try {
+    const noaa = await noaaTideTable(coords);
     const worldTidesKey = process.env.WORLD_TIDES_API_KEY;
-    let tideTable: { source: "worldtides"; datum: string; timezone: string | null; copyright: string | null; events: TideTableEvent[] } | null =
-      null;
+    let tideTable: {
+      source: "worldtides";
+      datum: string;
+      timezone: string | null;
+      atlas: string | null;
+      station: string | null;
+      copyright: string | null;
+      events: TideTableEvent[];
+    } | null = null;
 
     if (typeof worldTidesKey === "string" && worldTidesKey.trim()) {
       const wt = new URL("https://www.worldtides.info/api/v3");
@@ -141,6 +275,8 @@ export async function GET(req: Request): Promise<Response> {
       wt.searchParams.set("date", "today");
       wt.searchParams.set("days", "2");
       wt.searchParams.set("localtime", "");
+      // Prefer a real tidal gauge station when one is nearby.
+      wt.searchParams.set("stationDistance", "50");
       wt.searchParams.set("units", "meters");
       wt.searchParams.set("lat", String(coords.lat));
       wt.searchParams.set("lon", String(coords.lng));
@@ -172,6 +308,8 @@ export async function GET(req: Request): Promise<Response> {
               source: "worldtides",
               datum: typeof wj.responseDatum === "string" && wj.responseDatum ? wj.responseDatum : "CD",
               timezone: typeof wj.timezone === "string" ? wj.timezone : null,
+              atlas: typeof wj.atlas === "string" ? wj.atlas : null,
+              station: typeof wj.station === "string" ? wj.station : null,
               copyright: typeof wj.copyright === "string" ? wj.copyright : null,
               events,
             };
@@ -265,6 +403,7 @@ export async function GET(req: Request): Promise<Response> {
         datum: "msl",
       },
       tideTable,
+      noaaTideTable: noaa,
     });
   } catch (e: unknown) {
     return NextResponse.json({ error: "Network error" }, { status: 502 });

@@ -28,10 +28,21 @@ type ApiOk = {
     rangeM?: number | null;
     datum?: string;
   };
+  noaaTideTable?: {
+    source: "noaa";
+    stationId: string;
+    stationName: string;
+    distanceKm: number;
+    datum: string;
+    timeZone: "lst_ldt";
+    events: { kind: "high" | "low"; t: string; heightM: number }[];
+  } | null;
   tideTable?: {
     source: "worldtides";
     datum: string;
     timezone: string | null;
+    atlas: string | null;
+    station: string | null;
     copyright: string | null;
     events: { kind: "high" | "low"; t: string; heightM: number }[];
   } | null;
@@ -43,6 +54,7 @@ export function SeaStateSummaryBox() {
   const [tides, setTides] = useState<{ kind: "high" | "low"; t: string; vMsl: number; vRelMean: number; vAboveLow: number }[]>([]);
   const [tideRangeM, setTideRangeM] = useState<number | null>(null);
   const [tideTable, setTideTable] = useState<ApiOk["tideTable"]>(null);
+  const [noaaTideTable, setNoaaTideTable] = useState<ApiOk["noaaTideTable"]>(null);
   const [meteo, setMeteo] = useState<MeteoOk | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -83,6 +95,7 @@ export function SeaStateSummaryBox() {
       setTides(Array.isArray(ok.tide?.events) ? ok.tide!.events! : []);
       setTideRangeM(typeof ok.tide?.rangeM === "number" && Number.isFinite(ok.tide.rangeM) ? ok.tide.rangeM : null);
       setTideTable(ok.tideTable ?? null);
+      setNoaaTideTable(ok.noaaTideTable ?? null);
     } catch (e: unknown) {
       if (e instanceof DOMException && e.name === "AbortError") return;
       if (e instanceof Error && e.name === "AbortError") return;
@@ -92,6 +105,7 @@ export function SeaStateSummaryBox() {
       setTideRangeM(null);
       setTideTable(null);
       setMeteo(null);
+      setNoaaTideTable(null);
     } finally {
       setLoading(false);
     }
@@ -169,7 +183,57 @@ export function SeaStateSummaryBox() {
                 </div>
               </div>
             ) : null}
-            {tideTable?.events?.length ? (
+            {noaaTideTable?.events?.length ? (
+              <div className="mt-3 rounded-lg border border-sky-100 bg-sky-50/70 px-3 py-2 dark:border-sky-900/40 dark:bg-sky-950/20">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs font-semibold text-sky-950 dark:text-sky-100">
+                    Tide Times{bstOn ? "BST" : "UTC"}:{" "}
+                    <span className="font-normal text-zinc-600 dark:text-zinc-300">
+                      British Summer Time on/off
+                    </span>
+                  </p>
+                  <label className="flex select-none items-center gap-2 text-[11px] text-zinc-700 dark:text-zinc-200">
+                    <span>BST</span>
+                    <input
+                      type="checkbox"
+                      checked={bstOn}
+                      onChange={(e) => setBstOn(e.target.checked)}
+                      className="h-4 w-4 accent-sky-600"
+                    />
+                  </label>
+                </div>
+                <p className="mt-0.5 text-[10px] text-zinc-500 dark:text-zinc-400">
+                  Source: <span className="font-semibold">NOAA</span> · Datum:{" "}
+                  <span className="font-semibold">{noaaTideTable.datum}</span> · Station:{" "}
+                  <span className="font-semibold">{noaaTideTable.stationName}</span>{" "}
+                  <span className="text-zinc-400">(~{Math.round(noaaTideTable.distanceKm)}km)</span>
+                </p>
+                <div className="mt-2 overflow-hidden rounded-md border border-sky-100 bg-white/70 dark:border-sky-900/40 dark:bg-zinc-950/40">
+                  <div className="grid grid-cols-3 gap-2 border-b border-sky-100 px-2 py-1 text-[11px] font-semibold text-zinc-700 dark:border-sky-900/40 dark:text-zinc-200">
+                    <div>Hi/Lo</div>
+                    <div>Time</div>
+                    <div className="text-right">Height</div>
+                  </div>
+                  <div className="divide-y divide-sky-100 text-xs dark:divide-sky-900/40">
+                    {noaaTideTable.events.slice(0, 8).map((e) => {
+                      // NOAA times are local station time already (lst_ldt). We still let the user view as BST/UTC,
+                      // but without a timezone offset in the data we can only present the raw HH:MM for readability.
+                      const raw = e.t.includes("T") ? e.t.split("T")[1] ?? "" : e.t;
+                      const hhmm = raw.slice(0, 5);
+                      return (
+                        <div key={`${e.kind}:${e.t}:${e.heightM}`} className="grid grid-cols-3 gap-2 px-2 py-1 text-zinc-700 dark:text-zinc-200">
+                          <div className={`font-semibold ${e.kind === "high" ? "text-emerald-700 dark:text-emerald-300" : "text-amber-700 dark:text-amber-300"}`}>
+                            {e.kind === "high" ? "High" : "Low"}
+                          </div>
+                          <div className="tabular-nums">{hhmm || "—"}</div>
+                          <div className="text-right tabular-nums">{e.heightM.toFixed(2)}m</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            ) : tideTable?.events?.length ? (
               <div className="mt-3 rounded-lg border border-sky-100 bg-sky-50/70 px-3 py-2 dark:border-sky-900/40 dark:bg-sky-950/20">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-xs font-semibold text-sky-950 dark:text-sky-100">
@@ -191,6 +255,17 @@ export function SeaStateSummaryBox() {
                 <p className="mt-0.5 text-[10px] text-zinc-500 dark:text-zinc-400">
                   Source: <span className="font-semibold">WorldTides</span> · Datum:{" "}
                   <span className="font-semibold">{tideTable.datum || "CD"}</span>
+                  {tideTable.station ? (
+                    <>
+                      {" "}
+                      · Station: <span className="font-semibold">{tideTable.station}</span>
+                    </>
+                  ) : tideTable.atlas ? (
+                    <>
+                      {" "}
+                      · Atlas: <span className="font-semibold">{tideTable.atlas}</span>
+                    </>
+                  ) : null}
                 </p>
                 <div className="mt-2 overflow-hidden rounded-md border border-sky-100 bg-white/70 dark:border-sky-900/40 dark:bg-zinc-950/40">
                   <div className="grid grid-cols-3 gap-2 border-b border-sky-100 px-2 py-1 text-[11px] font-semibold text-zinc-700 dark:border-sky-900/40 dark:text-zinc-200">
