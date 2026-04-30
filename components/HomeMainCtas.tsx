@@ -10,7 +10,7 @@ export function HomeMainCtas({ signedIn }: Props) {
           href="/local-map"
           className="inline-flex h-11 items-center justify-center rounded-lg bg-green-600 px-5 text-sm font-medium text-white hover:bg-green-700"
         >
-          Open local map
+          Open weather & sea
         </Link>
         <Link
           href="/ifm"
