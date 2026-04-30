@@ -15,7 +15,7 @@ import {
 import { WindTimelineControls } from "@/components/home/WindTimelineControls";
 import { DEFAULT_MAP_CENTER } from "@/lib/map-constants";
 import { recordLastKnownPosition } from "@/lib/map-last-known";
-import { distanceMiles } from "@/lib/geo-haversine";
+import { angleDiffDeg, bearingDeg, distanceMiles } from "@/lib/geo-haversine";
 import { fetchWindSlotsEvery3h, nearestSlotIndex, type HourlyWindSlot } from "@/lib/open-meteo-hourly";
 import { buildWindArrowDivIcon } from "@/lib/wind-map-icon";
 import {
@@ -120,6 +120,10 @@ export default function HomeLocationMap() {
   const [anchorOpen, setAnchorOpen] = useState(false);
   const [anchorCfg, setAnchorCfg] = useState(() =>
     typeof window !== "undefined" ? getAnchorAlertConfig() : getAnchorAlertConfig(),
+  );
+  const [anchorAlerts, setAnchorAlerts] = useState<{ id: string; message: string; createdAt: string }[]>([]);
+  const [activeAnchorAlert, setActiveAnchorAlert] = useState<{ id: string; message: string; createdAt: string } | null>(
+    null,
   );
   const deviceId = useMemo(() => (typeof window !== "undefined" ? getOrCreateDeviceId() : "server"), []);
   const [shareNearby, setShareNearby] = useState(() =>
@@ -232,17 +236,48 @@ export default function HomeLocationMap() {
         ? { lat: monitoredFix.lat, lng: monitoredFix.lng }
         : { lat: pos.lat, lng: pos.lng };
     const m = distanceMiles(src.lat, src.lng, anchorCfg.lat, anchorCfg.lng) * 1609.344;
-    if (m <= anchorCfg.radiusM) return;
+    const brng = bearingDeg(anchorCfg.lat, anchorCfg.lng, src.lat, src.lng);
+
+    // Update last bearing so angle checks have a baseline even after reload.
+    if (anchorCfg.lastBearingDeg == null && Number.isFinite(brng)) {
+      const next = { ...anchorCfg, lastBearingDeg: brng };
+      queueMicrotask(() => setAnchorCfg(next));
+      setAnchorAlertConfig(next);
+      return;
+    }
+
+    const angleLimit = Math.max(0, Math.min(360, Math.round(anchorCfg.angleDeg ?? 360)));
+    const angleDelta =
+      anchorCfg.lastBearingDeg != null && angleLimit < 360 ? angleDiffDeg(brng, anchorCfg.lastBearingDeg) : 0;
+
+    const driftTriggered = m > anchorCfg.radiusM;
+    const angleTriggered = angleLimit < 360 && angleDelta > angleLimit;
+    if (!driftTriggered && !angleTriggered) return;
 
     const last = anchorCfg.lastAlertAt ? new Date(anchorCfg.lastAlertAt).getTime() : 0;
     const now = Date.now();
-    if (now - last < 5 * 60_000) return; // avoid spam
+    if (now - last < 2 * 60_000) return; // avoid spam
 
-    const next = { ...anchorCfg, lastAlertAt: new Date(now).toISOString() };
+    const next = { ...anchorCfg, lastAlertAt: new Date(now).toISOString(), lastBearingDeg: brng };
     queueMicrotask(() => setAnchorCfg(next));
     setAnchorAlertConfig(next);
 
-    const msg = `Anchor alert: drifted about ${Math.round(m)}m (limit ${anchorCfg.radiusM}m).`;
+    const parts: string[] = [];
+    if (driftTriggered) parts.push(`drifted ~${Math.round(m)}m (limit ${anchorCfg.radiusM}m)`);
+    if (angleTriggered) parts.push(`bearing changed ~${Math.round(angleDelta)}° (limit ${angleLimit}°)`);
+    const msg = `Anchor alert: ${parts.join(" and ")}.`;
+
+    try {
+      void fetch("/api/anchor/alerts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: msg }),
+        keepalive: true,
+      });
+    } catch {
+      /* ignore */
+    }
+
     try {
       if ("Notification" in window && Notification.permission === "granted") {
         new Notification("SeaLink anchor alert", { body: msg });
@@ -250,8 +285,31 @@ export default function HomeLocationMap() {
     } catch {
       /* ignore */
     }
-    window.alert(msg);
   }, [sharing, pos?.lat, pos?.lng, monitoredFix?.lat, monitoredFix?.lng, anchorCfg]);
+
+  // Anchor alert inbox poll (keeps alerts in sync across both devices).
+  useEffect(() => {
+    if (!sharing) return;
+    let disposed = false;
+    const load = async () => {
+      try {
+        const r = await fetch("/api/anchor/alerts", { cache: "no-store" });
+        const d = (await r.json()) as { alerts?: { id: string; message: string; createdAt: string }[] };
+        const list = Array.isArray(d.alerts) ? d.alerts : [];
+        if (disposed) return;
+        setAnchorAlerts(list);
+        if (!activeAnchorAlert && list.length) setActiveAnchorAlert(list[0]!);
+      } catch {
+        /* ignore */
+      }
+    };
+    void load();
+    const id = window.setInterval(() => void load(), 15_000);
+    return () => {
+      disposed = true;
+      window.clearInterval(id);
+    };
+  }, [sharing, activeAnchorAlert]);
 
   useEffect(() => {
     if (!sharing) {
@@ -806,6 +864,47 @@ export default function HomeLocationMap() {
         lng={pos?.lng ?? null}
       />
 
+      {activeAnchorAlert ? (
+        <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/50 px-4 py-8">
+          <div className="w-full max-w-md rounded-2xl border border-red-200 bg-white p-5 shadow-xl dark:border-red-900/50 dark:bg-zinc-950">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Anchor alert</h3>
+                <p className="mt-1 text-sm leading-5 text-zinc-700 dark:text-zinc-300">{activeAnchorAlert.message}</p>
+                <p className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-500">
+                  {new Date(activeAnchorAlert.createdAt).toLocaleString("en-GB")}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const id = activeAnchorAlert.id;
+                  void (async () => {
+                    try {
+                      await fetch("/api/anchor/alerts", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ seenId: id }),
+                      });
+                    } catch {
+                      /* ignore */
+                    }
+                    setActiveAnchorAlert(null);
+                    setAnchorAlerts((prev) => prev.filter((x) => x.id !== id));
+                  })();
+                }}
+                className="rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700"
+              >
+                Seen
+              </button>
+            </div>
+            <p className="mt-3 text-xs leading-5 text-zinc-600 dark:text-zinc-400">
+              This alert will show on every device signed into your account until you press “Seen”.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
       <AnchorAlertModal
         open={anchorOpen}
         onClose={() => setAnchorOpen(false)}
@@ -817,10 +916,17 @@ export default function HomeLocationMap() {
           lat: anchorCfg.lat,
           lng: anchorCfg.lng,
           radiusM: anchorCfg.radiusM,
+          angleDeg: anchorCfg.angleDeg ?? 360,
           monitorDeviceId: anchorCfg.monitorDeviceId,
         }}
         onUpdate={(next) => {
-          const merged = { ...anchorCfg, ...next, lastAlertAt: null };
+          const anchorChanged = next.lat !== anchorCfg.lat || next.lng !== anchorCfg.lng;
+          const merged = {
+            ...anchorCfg,
+            ...next,
+            lastAlertAt: null,
+            lastBearingDeg: anchorChanged ? null : anchorCfg.lastBearingDeg,
+          };
           setAnchorCfg(merged);
           setAnchorAlertConfig(merged);
         }}

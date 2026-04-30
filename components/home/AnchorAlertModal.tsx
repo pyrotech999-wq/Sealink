@@ -9,12 +9,27 @@ type Props = {
   sharing: boolean;
   hasFix: boolean;
   pos: { lat: number; lng: number } | null;
-  config: { armed: boolean; lat: number | null; lng: number | null; radiusM: number; monitorDeviceId: string };
-  onUpdate: (next: { armed: boolean; lat: number | null; lng: number | null; radiusM: number; monitorDeviceId: string }) => void;
+  config: {
+    armed: boolean;
+    lat: number | null;
+    lng: number | null;
+    radiusM: 10 | 20 | 40 | 50;
+    angleDeg: number;
+    monitorDeviceId: string;
+  };
+  onUpdate: (next: {
+    armed: boolean;
+    lat: number | null;
+    lng: number | null;
+    radiusM: 10 | 20 | 40 | 50;
+    angleDeg: number;
+    monitorDeviceId: string;
+  }) => void;
 };
 
 export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, config, onUpdate }: Props) {
-  const [radius, setRadius] = useState(String(config.radiusM));
+  const [radius, setRadius] = useState<string>(String(config.radiusM));
+  const [angleDeg, setAngleDeg] = useState<string>(String(config.angleDeg ?? 360));
   const [deviceLabel, setDeviceLabel] = useState(() => (typeof window !== "undefined" ? getDeviceName() : ""));
   const [devices, setDevices] = useState<{ deviceId: string; name: string; updatedAt: string; lastFixAt: string | null }[]>([]);
   const [monitorDeviceId, setMonitorDeviceId] = useState<string>(config.monitorDeviceId || "this");
@@ -105,15 +120,51 @@ export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, config, 
           </label>
 
           <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-            Drift radius (metres)
-            <input
-              inputMode="numeric"
+            Drift distance
+            <select
               value={radius}
-              onChange={(e) => setRadius(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setRadius(v);
+                onUpdate({ ...config, radiusM: Number(v) as 10 | 20 | 40 | 50, monitorDeviceId });
+              }}
               className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
-              placeholder="e.g. 60"
-            />
-            <span className="mt-1 block text-[11px] text-zinc-500">Min 20m, max 500m.</span>
+            >
+              <option value="10">10m</option>
+              <option value="20">20m</option>
+              <option value="40">40m</option>
+              <option value="50">50m</option>
+            </select>
+            <span className="mt-1 block text-[11px] text-zinc-500">Alert if the monitored device drifts beyond this distance.</span>
+          </label>
+
+          <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+            Angle change (degrees)
+            <select
+              value={angleDeg}
+              onChange={(e) => {
+                const v = e.target.value;
+                setAngleDeg(v);
+                onUpdate({ ...config, angleDeg: Number(v), monitorDeviceId });
+              }}
+              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+            >
+              <option value="360">Off (360°)</option>
+              <option value="0">0°</option>
+              <option value="10">10°</option>
+              <option value="20">20°</option>
+              <option value="30">30°</option>
+              <option value="45">45°</option>
+              <option value="60">60°</option>
+              <option value="90">90°</option>
+              <option value="120">120°</option>
+              <option value="180">180°</option>
+              <option value="270">270°</option>
+              <option value="360">360°</option>
+            </select>
+            <span className="mt-1 block text-[11px] text-zinc-500">
+              Alert if the bearing from the anchor point changes more than this amount (360° disables).
+            </span>
           </label>
 
           <div className="flex flex-wrap gap-2">
@@ -121,8 +172,17 @@ export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, config, 
               type="button"
               disabled={!canSet}
               onClick={() => {
-                const n = Math.max(20, Math.min(500, Math.round(Number(radius) || config.radiusM)));
-                onUpdate({ ...config, lat: pos!.lat, lng: pos!.lng, radiusM: n, armed: true, monitorDeviceId });
+                const n = (Number(radius) as 10 | 20 | 40 | 50) || config.radiusM;
+                const a = Math.max(0, Math.min(360, Math.round(Number(angleDeg) || config.angleDeg || 360)));
+                onUpdate({
+                  ...config,
+                  lat: pos!.lat,
+                  lng: pos!.lng,
+                  radiusM: n,
+                  angleDeg: a,
+                  armed: true,
+                  monitorDeviceId,
+                });
               }}
               className="h-9 rounded-lg bg-green-600 px-3 text-sm font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -141,7 +201,7 @@ export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, config, 
           <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-300">
             <p className="font-semibold text-zinc-900 dark:text-zinc-100">Status</p>
             <p className="mt-1">
-              {config.armed && hasAnchor ? "Armed" : "Not armed"} · Radius {config.radiusM}m
+              {config.armed && hasAnchor ? "Armed" : "Not armed"} · Distance {config.radiusM}m · Angle {config.angleDeg ?? 360}°
             </p>
             {hasAnchor ? (
               <p className="mt-1 text-[11px] opacity-80">
