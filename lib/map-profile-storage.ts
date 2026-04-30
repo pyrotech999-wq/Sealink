@@ -2,6 +2,7 @@
 export const MAP_PROFILE = {
   boat: "sealink_map_boat_name",
   fullName: "sealink_map_full_name",
+  phone: "sealink_profile_phone",
   avatar: "sealink_map_avatar_dataurl",
   showAvatar: "sealink_map_show_avatar",
   bgConsent: "sealink_map_bg_location_consent",
@@ -34,6 +35,18 @@ export function setFullName(name: string): void {
     return;
   }
   localStorage.setItem(MAP_PROFILE.fullName, next);
+}
+
+export function getProfilePhone(): string {
+  if (typeof window === "undefined") return "";
+  return localStorage.getItem(MAP_PROFILE.phone)?.trim() ?? "";
+}
+
+export function setProfilePhone(phone: string): void {
+  if (typeof window === "undefined") return;
+  const next = phone.replace(/[\r\n]+/g, " ").trim().slice(0, 40);
+  if (!next) localStorage.removeItem(MAP_PROFILE.phone);
+  else localStorage.setItem(MAP_PROFILE.phone, next);
 }
 
 export function getAvatarDataUrl(): string {

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { getBoatName, setAvatarDataUrl, setBoatName, setFullName } from "@/lib/map-profile-storage";
+import { getBoatName, setAvatarDataUrl, setBoatName, setFullName, setProfilePhone } from "@/lib/map-profile-storage";
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -238,6 +238,7 @@ export function SignUpForm() {
     setSubmitted(true);
     setBoatName(form.boatName);
     setFullName(form.contactName);
+    setProfilePhone(form.phone);
     const ageNum = parseInt(form.age, 10);
     console.info("sign-up", {
       ...form,

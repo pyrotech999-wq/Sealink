@@ -57,3 +57,5 @@ next-env.d.ts
 /data/anchor-devices.json
 /data/anchor-alerts.json
 /data/account-devices.json
+/data/ifm-presence.json
+/data/ifm-friends.json
