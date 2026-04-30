@@ -48,6 +48,12 @@ export function HomeHeader({ signedIn }: Props) {
           {signedIn ? (
             <>
               <span className="hidden text-xs text-zinc-500 sm:inline dark:text-zinc-400">Signed in</span>
+              <Link
+                href="/profile"
+                className="text-sm font-medium text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white"
+              >
+                Edit profile
+              </Link>
               <button
                 type="button"
                 disabled={busy}
