@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
+import { canUseKv, kvGetJson, kvSetJson } from "@/lib/kv-json";
 
 export type AccountDeviceRow = {
   deviceId: string;
@@ -12,6 +13,7 @@ export type AccountDeviceRow = {
 type StoreShape = Record<string, AccountDeviceRow[]>;
 
 const DATA_PATH = path.join(process.cwd(), "data", "account-devices.json");
+const KV_KEY = "sealink:account-devices:v1";
 let queue: Promise<unknown> = Promise.resolve();
 
 function enqueue<T>(fn: () => Promise<T>): Promise<T> {
@@ -46,7 +48,7 @@ function normaliseName(name: string): string {
 
 export async function listAccountDevices(uid: string): Promise<AccountDeviceRow[]> {
   return enqueue(async () => {
-    const store = readStore();
+    const store = canUseKv() ? await kvGetJson<StoreShape>(KV_KEY, {}) : readStore();
     const list = Array.isArray(store[uid]) ? store[uid]! : [];
     return list.slice().sort((a, b) => (a.activatedAt < b.activatedAt ? -1 : 1));
   });
@@ -64,7 +66,7 @@ export async function registerAccountDevice(
 ): Promise<RegisterResult> {
   return enqueue(async () => {
     const now = new Date().toISOString();
-    const store = readStore();
+    const store = canUseKv() ? await kvGetJson<StoreShape>(KV_KEY, {}) : readStore();
     const list = Array.isArray(store[uid]) ? store[uid]! : [];
 
     const safeId = deviceId.trim().slice(0, 100);
@@ -84,13 +86,15 @@ export async function registerAccountDevice(
 
     const activeCount = list.filter((d) => d.active).length;
     store[uid] = list;
-    writeStore(store);
+    if (canUseKv()) await kvSetJson(KV_KEY, store);
+    else writeStore(store);
 
     if (activeCount > maxActive) {
       // Roll back activation of this device (keep row but mark inactive).
       const cur = list.find((d) => d.deviceId === safeId);
       if (cur) cur.active = false;
-      writeStore(store);
+      if (canUseKv()) await kvSetJson(KV_KEY, store);
+      else writeStore(store);
       return { ok: false, error: "DEVICE_LIMIT", devices: list.filter((d) => d.active) };
     }
 
@@ -100,12 +104,13 @@ export async function registerAccountDevice(
 
 export async function deactivateAccountDevice(uid: string, deviceId: string): Promise<AccountDeviceRow[]> {
   return enqueue(async () => {
-    const store = readStore();
+    const store = canUseKv() ? await kvGetJson<StoreShape>(KV_KEY, {}) : readStore();
     const list = Array.isArray(store[uid]) ? store[uid]! : [];
     const idx = list.findIndex((d) => d.deviceId === deviceId);
     if (idx >= 0) list[idx]!.active = false;
     store[uid] = list;
-    writeStore(store);
+    if (canUseKv()) await kvSetJson(KV_KEY, store);
+    else writeStore(store);
     return list.filter((d) => d.active);
   });
 }

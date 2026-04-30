@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 import { normaliseEmail, uidFromEmail } from "@/lib/auth";
 import type { PasswordHash } from "@/lib/password-hash";
+import { canUseKv, kvGetJson, kvSetJson } from "@/lib/kv-json";
 
 export type UserRow = {
   uid: string;
@@ -14,6 +15,7 @@ export type UserRow = {
 type StoreShape = Record<string, UserRow>;
 
 const DATA_PATH = path.join(process.cwd(), "data", "users.json");
+const KV_KEY = "sealink:users:v1";
 let queue: Promise<unknown> = Promise.resolve();
 
 function enqueue<T>(fn: () => Promise<T>): Promise<T> {
@@ -44,7 +46,7 @@ function writeStore(store: StoreShape): void {
 
 export async function getUserByEmail(email: string): Promise<UserRow | null> {
   return enqueue(async () => {
-    const store = readStore();
+    const store = canUseKv() ? await kvGetJson<StoreShape>(KV_KEY, {}) : readStore();
     const key = normaliseEmail(email);
     const row = store[key];
     return row && typeof row === "object" ? row : null;
@@ -54,7 +56,7 @@ export async function getUserByEmail(email: string): Promise<UserRow | null> {
 export async function upsertUser(email: string, password: PasswordHash): Promise<UserRow> {
   return enqueue(async () => {
     const now = new Date().toISOString();
-    const store = readStore();
+    const store = canUseKv() ? await kvGetJson<StoreShape>(KV_KEY, {}) : readStore();
     const key = normaliseEmail(email);
     const prev = store[key];
     const uid = prev?.uid && typeof prev.uid === "string" ? prev.uid : uidFromEmail(key);
@@ -67,7 +69,8 @@ export async function upsertUser(email: string, password: PasswordHash): Promise
       updatedAt: now,
     };
     store[key] = next;
-    writeStore(store);
+    if (canUseKv()) await kvSetJson(KV_KEY, store);
+    else writeStore(store);
     return next;
   });
 }

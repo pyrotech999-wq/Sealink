@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
+import { canUseKv, kvGetJson, kvSetJson } from "@/lib/kv-json";
 
 export type ResetRow = {
   /** sha256(token) hex */
@@ -21,6 +22,7 @@ type StoreShape = {
 };
 
 const DATA_PATH = path.join(process.cwd(), "data", "password-resets.json");
+const KV_KEY = "sealink:password-resets:v1";
 let queue: Promise<unknown> = Promise.resolve();
 
 function enqueue<T>(fn: () => Promise<T>): Promise<T> {
@@ -79,7 +81,9 @@ export async function createResetToken(opts: {
     const now = new Date();
     const nowIso = now.toISOString();
     const nowMs = now.getTime();
-    const store = readStore();
+    const store = canUseKv()
+      ? await kvGetJson<StoreShape>(KV_KEY, { resets: [], lastRequestByEmail: {}, lastRequestByIp: {} })
+      : readStore();
 
     const emailKey = opts.email.toLowerCase();
     if (isTooSoon(store.lastRequestByEmail[emailKey], nowMs, 60_000)) return { ok: false, error: "THROTTLED" };
@@ -106,7 +110,8 @@ export async function createResetToken(opts: {
     const cutoff = nowMs - 7 * 24 * 60 * 60_000;
     store.resets = store.resets.filter((r) => new Date(r.createdAt).getTime() >= cutoff);
 
-    writeStore(store);
+    if (canUseKv()) await kvSetJson(KV_KEY, store);
+    else writeStore(store);
     return { ok: true, token };
   });
 }
@@ -117,7 +122,9 @@ export type ConsumeResult =
 
 export async function consumeResetToken(token: string): Promise<ConsumeResult> {
   return enqueue(async () => {
-    const store = readStore();
+    const store = canUseKv()
+      ? await kvGetJson<StoreShape>(KV_KEY, { resets: [], lastRequestByEmail: {}, lastRequestByIp: {} })
+      : readStore();
     const h = sha256Hex(token);
     const nowMs = Date.now();
     const row = store.resets
@@ -135,7 +142,8 @@ export async function consumeResetToken(token: string): Promise<ConsumeResult> {
     for (const r of store.resets) {
       if (r.tokenHash === h) r.usedAt = usedAt;
     }
-    writeStore(store);
+    if (canUseKv()) await kvSetJson(KV_KEY, store);
+    else writeStore(store);
     return { ok: true, email: row.email, uid: row.uid };
   });
 }
