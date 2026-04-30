@@ -32,6 +32,7 @@ function catLabel(id: VesselCategoryId): string {
 export function VesselClassifiedsClient() {
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [listings, setListings] = useState<PublicListing[]>([]);
+  const [mine, setMine] = useState<PublicListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
@@ -99,10 +100,28 @@ export function VesselClassifiedsClient() {
     }
   };
 
+  const loadMine = async () => {
+    try {
+      const r = await fetch("/api/vessels/classifieds?scope=mine");
+      const d = (await r.json()) as { listings?: PublicListing[] };
+      if (!r.ok) {
+        setMine([]);
+        return;
+      }
+      setMine(Array.isArray(d.listings) ? d.listings : []);
+    } catch {
+      setMine([]);
+    }
+  };
+
   useEffect(() => {
     queueMicrotask(() => void load());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qDebounced, category]);
+
+  useEffect(() => {
+    if (signedIn) queueMicrotask(() => void loadMine());
+  }, [signedIn]);
 
   async function createListing() {
     if (!signedIn) {
@@ -139,6 +158,7 @@ export function VesselClassifiedsClient() {
       setMakeModel("");
       setImages([]);
       await load();
+      await loadMine();
     } catch {
       setPostMsg("Network error");
     } finally {
@@ -159,7 +179,7 @@ export function VesselClassifiedsClient() {
         setErr(d.error || "Stripe checkout could not be started");
         return;
       }
-      window.location.href = d.url;
+      window.location.assign(d.url);
     } catch {
       setErr("Network error");
     }
@@ -178,7 +198,7 @@ export function VesselClassifiedsClient() {
         setErr(d.error || "PayPal checkout could not be started");
         return;
       }
-      window.location.href = d.approveUrl;
+      window.location.assign(d.approveUrl);
     } catch {
       setErr("Network error");
     }
@@ -213,6 +233,7 @@ export function VesselClassifiedsClient() {
         // Clean URL
         window.history.replaceState({}, "", "/vessels");
         await load();
+        await loadMine();
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -458,33 +479,37 @@ export function VesselClassifiedsClient() {
           Drafts don’t show publicly until paid. Choose Stripe or PayPal to publish for 6 months.
         </p>
         <div className="mt-4 space-y-3">
-          {(listings.filter((l) => l.isOwner && l.status !== "active") as PublicListing[]).length === 0 ? (
+          {signedIn === false ? (
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">Sign in to see your drafts.</p>
+          ) : mine.filter((l) => l.status !== "active").length === 0 ? (
             <p className="text-sm text-zinc-600 dark:text-zinc-400">No drafts yet.</p>
           ) : (
-            (listings.filter((l) => l.isOwner && l.status !== "active") as PublicListing[]).map((l) => (
-              <div key={l.id} className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-900/40">
-                <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">{l.title || "Untitled draft"}</p>
-                <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-                  Status: {l.status} · Payment: {l.paymentStatus}
-                </p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void payStripe(l.id)}
-                    className="h-9 rounded-lg bg-green-600 px-3 text-sm font-semibold text-white hover:bg-green-700"
-                  >
-                    Pay with Stripe (£30)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void payPayPal(l.id)}
-                    className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                  >
-                    Pay with PayPal (£30)
-                  </button>
+            mine
+              .filter((l) => l.status !== "active")
+              .map((l) => (
+                <div key={l.id} className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-900/40">
+                  <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">{l.title || "Untitled draft"}</p>
+                  <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+                    Status: {l.status} · Payment: {l.paymentStatus}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void payStripe(l.id)}
+                      className="h-9 rounded-lg bg-green-600 px-3 text-sm font-semibold text-white hover:bg-green-700"
+                    >
+                      Pay with Stripe (£30)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void payPayPal(l.id)}
+                      className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                    >
+                      Pay with PayPal (£30)
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))
+              ))
           )}
         </div>
       </section>

@@ -32,9 +32,15 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const q = (url.searchParams.get("q") ?? "").trim().toLowerCase();
   const cat = url.searchParams.get("category") ?? "";
+  const scope = url.searchParams.get("scope") ?? "";
 
   let rows = await loadVesselClassifieds();
-  rows = rows.filter((l) => l.status === "active");
+  if (scope === "mine") {
+    if (!viewerUid) return NextResponse.json({ error: "Sign-in required" }, { status: 401 });
+    rows = rows.filter((l) => l.ownerUid === viewerUid && l.status !== "removed");
+  } else {
+    rows = rows.filter((l) => l.status === "active");
+  }
 
   if (cat && isVesselCategoryId(cat)) rows = rows.filter((l) => l.categoryId === cat);
   if (q) rows = rows.filter((l) => l.title.toLowerCase().includes(q) || l.description.toLowerCase().includes(q));
