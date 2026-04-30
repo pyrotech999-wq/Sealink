@@ -5,6 +5,7 @@ import "leaflet/dist/leaflet.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Circle, MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import { LifeOnSeasDailyModal } from "@/components/home/LifeOnSeasDailyModal";
+import { AnchorAlertModal } from "@/components/home/AnchorAlertModal";
 import { MapBroadcastPanel } from "@/components/home/MapBroadcastPanel";
 import { WeatherForecast7Day } from "@/components/home/WeatherForecast7Day";
 import {
@@ -14,6 +15,7 @@ import {
 import { WindTimelineControls } from "@/components/home/WindTimelineControls";
 import { DEFAULT_MAP_CENTER } from "@/lib/map-constants";
 import { recordLastKnownPosition } from "@/lib/map-last-known";
+import { distanceMiles } from "@/lib/geo-haversine";
 import { fetchWindSlotsEvery3h, nearestSlotIndex, type HourlyWindSlot } from "@/lib/open-meteo-hourly";
 import { buildWindArrowDivIcon } from "@/lib/wind-map-icon";
 import {
@@ -30,6 +32,7 @@ import {
   setShowAvatar,
   setShareNearbyPeers,
 } from "@/lib/map-profile-storage";
+import { getAnchorAlertConfig, setAnchorAlertConfig } from "@/lib/anchor-alert-storage";
 
 const DEFAULT_CENTER: [number, number] = [DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng];
 const DEFAULT_ZOOM = 6;
@@ -113,6 +116,10 @@ export default function HomeLocationMap() {
   const [windLoading, setWindLoading] = useState(true);
   const [windErr, setWindErr] = useState<string | null>(null);
   const [lifeSeasOpen, setLifeSeasOpen] = useState(false);
+  const [anchorOpen, setAnchorOpen] = useState(false);
+  const [anchorCfg, setAnchorCfg] = useState(() =>
+    typeof window !== "undefined" ? getAnchorAlertConfig() : getAnchorAlertConfig(),
+  );
   const [shareNearby, setShareNearby] = useState(() =>
     typeof window !== "undefined" ? getShareNearbyPeers() : false,
   );
@@ -136,6 +143,32 @@ export default function HomeLocationMap() {
     pollTimer.current = null;
     polling.current = false;
   }, []);
+
+  // Anchor alert check (runs whenever position updates).
+  useEffect(() => {
+    if (!sharing || !pos) return;
+    if (!anchorCfg.armed || anchorCfg.lat == null || anchorCfg.lng == null) return;
+    const m = distanceMiles(pos.lat, pos.lng, anchorCfg.lat, anchorCfg.lng) * 1609.344;
+    if (m <= anchorCfg.radiusM) return;
+
+    const last = anchorCfg.lastAlertAt ? new Date(anchorCfg.lastAlertAt).getTime() : 0;
+    const now = Date.now();
+    if (now - last < 5 * 60_000) return; // avoid spam
+
+    const next = { ...anchorCfg, lastAlertAt: new Date(now).toISOString() };
+    queueMicrotask(() => setAnchorCfg(next));
+    setAnchorAlertConfig(next);
+
+    const msg = `Anchor alert: drifted about ${Math.round(m)}m (limit ${anchorCfg.radiusM}m).`;
+    try {
+      if ("Notification" in window && Notification.permission === "granted") {
+        new Notification("SeaLink anchor alert", { body: msg });
+      }
+    } catch {
+      /* ignore */
+    }
+    window.alert(msg);
+  }, [sharing, pos?.lat, pos?.lng, anchorCfg]);
 
   useEffect(() => {
     if (!sharing) {
@@ -434,13 +467,22 @@ export default function HomeLocationMap() {
             or leave a tab open.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setLifeSeasOpen(true)}
-          className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-teal-300 bg-teal-50 px-4 text-sm font-semibold text-teal-900 shadow-sm hover:bg-teal-100 dark:border-teal-800 dark:bg-teal-950/60 dark:text-teal-100 dark:hover:bg-teal-900/70"
-        >
-          Life on the seas
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setAnchorOpen(true)}
+            className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-indigo-300 bg-indigo-50 px-4 text-sm font-semibold text-indigo-900 shadow-sm hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-100 dark:hover:bg-indigo-900/70"
+          >
+            Anchor alert
+          </button>
+          <button
+            type="button"
+            onClick={() => setLifeSeasOpen(true)}
+            className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-teal-300 bg-teal-50 px-4 text-sm font-semibold text-teal-900 shadow-sm hover:bg-teal-100 dark:border-teal-800 dark:bg-teal-950/60 dark:text-teal-100 dark:hover:bg-teal-900/70"
+          >
+            Life on the seas
+          </button>
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
@@ -677,6 +719,25 @@ export default function HomeLocationMap() {
         pinLive={Boolean(sharing && pos)}
         lat={pos?.lat ?? null}
         lng={pos?.lng ?? null}
+      />
+
+      <AnchorAlertModal
+        open={anchorOpen}
+        onClose={() => setAnchorOpen(false)}
+        sharing={sharing}
+        hasFix={Boolean(pos)}
+        pos={pos ? { lat: pos.lat, lng: pos.lng } : null}
+        config={{
+          armed: anchorCfg.armed,
+          lat: anchorCfg.lat,
+          lng: anchorCfg.lng,
+          radiusM: anchorCfg.radiusM,
+        }}
+        onUpdate={(next) => {
+          const merged = { ...anchorCfg, ...next, lastAlertAt: null };
+          setAnchorCfg(merged);
+          setAnchorAlertConfig(merged);
+        }}
       />
     </section>
   );
