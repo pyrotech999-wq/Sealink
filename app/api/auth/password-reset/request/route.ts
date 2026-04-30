@@ -45,6 +45,17 @@ export async function POST(req: Request) {
 
   const sent = await sendMail({ to: email, subject: "Reset your SeaLink password", text: msg });
 
+  if (!sent.ok) {
+    console.error("[password-reset] mail failed", {
+      email,
+      error: sent.error,
+      hint:
+        sent.error === "SMTP_NOT_CONFIGURED"
+          ? "Add SMTP_HOST, SMTP_PORT, SMTP_FROM, SMTP_USER, SMTP_PASS on the server (e.g. Vercel env)."
+          : "Check SMTP credentials, port (587 vs 465), and that the sender is allowed for your provider.",
+    });
+  }
+
   // In dev/non-configured SMTP, allow quick setup by returning the link.
   const isProd = process.env.NODE_ENV === "production";
   if (!isProd && !sent.ok) {
