@@ -14,6 +14,7 @@ type PostBody = {
   lat?: unknown;
   lng?: unknown;
   label?: unknown;
+  avatarDataUrl?: unknown;
   shareNearby?: unknown;
 };
 
@@ -51,6 +52,7 @@ export async function POST(req: Request) {
       lat: 0,
       lng: 0,
       label: "",
+      avatarDataUrl: "",
       shareNearby: false,
     });
     const res = NextResponse.json({ ok: true as const, removed: true as const });
@@ -67,11 +69,14 @@ export async function POST(req: Request) {
 
   const labelRaw = typeof body.label === "string" ? body.label : "";
   const label = labelRaw.replace(/[\r\n]+/g, " ").trim().slice(0, 48) || "Nearby boat";
+  const avatarRaw = typeof body.avatarDataUrl === "string" ? body.avatarDataUrl : "";
+  const avatarDataUrl = avatarRaw.trim().slice(0, 450_000);
 
   await upsertPresence(id, {
     lat: coords.lat,
     lng: coords.lng,
     label,
+    avatarDataUrl,
     shareNearby: true,
   });
 

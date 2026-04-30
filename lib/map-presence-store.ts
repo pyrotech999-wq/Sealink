@@ -10,6 +10,7 @@ export type MapPresenceRecord = {
   lat: number;
   lng: number;
   label: string;
+  avatarDataUrl: string;
   updatedAt: string;
   shareNearby: boolean;
 };
@@ -65,7 +66,7 @@ function pruneStale(list: MapPresenceRecord[], now: Date): MapPresenceRecord[] {
 
 export async function upsertPresence(
   sessionId: string,
-  patch: { lat: number; lng: number; label: string; shareNearby: boolean },
+  patch: { lat: number; lng: number; label: string; avatarDataUrl: string; shareNearby: boolean },
 ): Promise<void> {
   return enqueue(async () => {
     let list = pruneStale(readRaw(), new Date());
@@ -79,6 +80,7 @@ export async function upsertPresence(
       lat: patch.lat,
       lng: patch.lng,
       label: patch.label,
+      avatarDataUrl: patch.avatarDataUrl,
       updatedAt: new Date().toISOString(),
       shareNearby: true,
     };
@@ -95,6 +97,7 @@ export type NearbyPeer = {
   lat: number;
   lng: number;
   label: string;
+  avatarDataUrl: string;
 };
 
 function opaqueId(sessionId: string): string {
@@ -124,6 +127,7 @@ export async function findNearbyPeers(
           lat: r.lat,
           lng: r.lng,
           label: r.label,
+          avatarDataUrl: r.avatarDataUrl || "",
         });
       }
     }

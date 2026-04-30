@@ -1,7 +1,9 @@
 /** Browser-only keys for map identity shown at your GPS pin. */
 export const MAP_PROFILE = {
   boat: "sealink_map_boat_name",
+  fullName: "sealink_map_full_name",
   avatar: "sealink_map_avatar_dataurl",
+  showAvatar: "sealink_map_show_avatar",
   bgConsent: "sealink_map_bg_location_consent",
   /** Opt in to appear on other members’ maps when within ~5 mi and sharing GPS. */
   shareNearby: "sealink_map_share_nearby",
@@ -19,6 +21,21 @@ export function setBoatName(name: string): void {
   localStorage.setItem(MAP_PROFILE.boat, name.trim().slice(0, 80));
 }
 
+export function getFullName(): string {
+  if (typeof window === "undefined") return "";
+  return localStorage.getItem(MAP_PROFILE.fullName)?.trim() ?? "";
+}
+
+export function setFullName(name: string): void {
+  if (typeof window === "undefined") return;
+  const next = name.replace(/[\r\n]+/g, " ").trim().slice(0, 80);
+  if (!next) {
+    localStorage.removeItem(MAP_PROFILE.fullName);
+    return;
+  }
+  localStorage.setItem(MAP_PROFILE.fullName, next);
+}
+
 export function getAvatarDataUrl(): string {
   if (typeof window === "undefined") return "";
   return localStorage.getItem(MAP_PROFILE.avatar) ?? "";
@@ -34,6 +51,18 @@ export function setAvatarDataUrl(dataUrl: string | null): void {
     throw new Error("Photo is too large. Try a smaller image (under ~300KB).");
   }
   localStorage.setItem(MAP_PROFILE.avatar, dataUrl);
+}
+
+/** Whether to show the stored profile image on the map pin (defaults on). */
+export function getShowAvatar(): boolean {
+  if (typeof window === "undefined") return true;
+  return localStorage.getItem(MAP_PROFILE.showAvatar) !== "0";
+}
+
+export function setShowAvatar(on: boolean): void {
+  if (typeof window === "undefined") return;
+  if (on) localStorage.removeItem(MAP_PROFILE.showAvatar);
+  else localStorage.setItem(MAP_PROFILE.showAvatar, "0");
 }
 
 /** Background-friendly GPS cadence is on unless the user explicitly pauses (`"0"` in storage). */

@@ -24,8 +24,12 @@ export function buildWindArrowDivIcon(mph: number, dirFromDeg: number): L.DivIco
   const knR = Math.round(kn);
 
   const html = `
-<div class="sealink-wind-pin" style="width:104px;height:138px;margin-left:-52px;margin-top:-132px;pointer-events:none;font-family:system-ui,sans-serif;">
-  <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:12px;padding-bottom:2px;box-sizing:border-box;">
+<div class="sealink-wind-pin" style="width:104px;height:138px;pointer-events:none;font-family:system-ui,sans-serif;">
+  <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:10px;padding-bottom:2px;box-sizing:border-box;">
+    <div style="flex:0 0 auto;position:relative;z-index:2;margin-top:0;text-align:center;line-height:1.1;padding:4px 7px;border-radius:8px;background:rgba(255,255,255,.98);box-shadow:0 1px 6px rgba(0,0,0,.2);border:1px solid rgba(0,0,0,.1);">
+      <div style="font-size:14px;font-weight:800;color:#18181b;letter-spacing:-0.02em">${mphR} mph</div>
+      <div style="font-size:11px;font-weight:700;color:#3f3f46">${knR} kn</div>
+    </div>
     <div style="flex:0 0 auto;display:flex;align-items:flex-start;justify-content:center;width:76px;height:78px;transform:rotate(${downwind}deg);transform-origin:50% 88%;">
       <svg width="56" height="64" viewBox="0 0 56 64" aria-hidden="true" style="display:block;">
         <defs>
@@ -43,10 +47,6 @@ export function buildWindArrowDivIcon(mph: number, dirFromDeg: number): L.DivIco
           filter="url(#wshadow)"
         />
       </svg>
-    </div>
-    <div style="flex:0 0 auto;position:relative;z-index:2;margin-top:0;text-align:center;line-height:1.1;padding:4px 7px;border-radius:8px;background:rgba(255,255,255,.98);box-shadow:0 1px 6px rgba(0,0,0,.2);border:1px solid rgba(0,0,0,.1);">
-      <div style="font-size:14px;font-weight:800;color:#18181b;letter-spacing:-0.02em">${mphR} mph</div>
-      <div style="font-size:11px;font-weight:700;color:#3f3f46">${knR} kn</div>
     </div>
   </div>
 </div>`;

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { getBoatName, setAvatarDataUrl, setBoatName, setFullName } from "@/lib/map-profile-storage";
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -12,6 +13,7 @@ const initial = {
   companyNumber: "",
   contactName: "",
   jobTitle: "",
+  boatName: "",
   email: "",
   phone: "",
   line1: "",
@@ -33,7 +35,10 @@ const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 
 export function SignUpForm() {
   const [step, setStep] = useState<Step>(1);
-  const [form, setForm] = useState(initial);
+  const [form, setForm] = useState(() => ({
+    ...initial,
+    boatName: typeof window !== "undefined" ? getBoatName() : "",
+  }));
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -86,11 +91,24 @@ export function SignUpForm() {
       if (prev) URL.revokeObjectURL(prev);
       return URL.createObjectURL(file);
     });
+
+    // Also store a small-ish data URL for the map pin (local only).
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const url = String(reader.result || "");
+        setAvatarDataUrl(url);
+      } catch {
+        setErrors((e) => ({ ...e, profilePhoto: "That photo is too large for map storage. Choose a smaller image." }));
+      }
+    };
+    reader.readAsDataURL(file);
   }
 
   function removePhoto() {
     clearPhotoError();
     setPhotoFile(null);
+    setAvatarDataUrl(null);
     setPhotoPreview((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       return null;
@@ -106,6 +124,8 @@ export function SignUpForm() {
       if (!form.age.trim()) e.age = "Enter your age";
       else if (Number.isNaN(ageNum) || ageNum < 13 || ageNum > 120) e.age = "Enter a valid age (13–120)";
       if (!form.contactName.trim()) e.contactName = "Enter your name";
+      if (!form.boatName.trim()) e.boatName = "Enter your boat name";
+      else if (form.boatName.trim().length < 2 || form.boatName.trim().length > 80) e.boatName = "Boat name must be 2–80 characters.";
       if (!form.email.trim()) e.email = "Enter your email";
       else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = "Enter a valid email";
     }
@@ -216,6 +236,8 @@ export function SignUpForm() {
     ev.preventDefault();
     if (!validateStep(4)) return;
     setSubmitted(true);
+    setBoatName(form.boatName);
+    setFullName(form.contactName);
     const ageNum = parseInt(form.age, 10);
     console.info("sign-up", {
       ...form,
@@ -337,6 +359,20 @@ export function SignUpForm() {
               />
               {errors.contactName && <p className="mt-1 text-xs text-red-600">{errors.contactName}</p>}
             </div>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="boatName">
+              Boat name
+            </label>
+            <input
+              id="boatName"
+              className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 placeholder:text-zinc-400 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+              value={form.boatName}
+              onChange={(ev) => set("boatName", ev.target.value)}
+              placeholder="e.g. Wavy"
+            />
+            {errors.boatName && <p className="mt-1 text-xs text-red-600">{errors.boatName}</p>}
           </div>
 
           <div>

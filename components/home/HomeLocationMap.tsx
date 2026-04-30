@@ -3,7 +3,7 @@
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Circle, MapContainer, Marker, TileLayer, useMap } from "react-leaflet";
+import { Circle, MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import { LifeOnSeasDailyModal } from "@/components/home/LifeOnSeasDailyModal";
 import { MapBroadcastPanel } from "@/components/home/MapBroadcastPanel";
 import { WeatherForecast7Day } from "@/components/home/WeatherForecast7Day";
@@ -21,10 +21,13 @@ import {
   getAvatarDataUrl,
   getBackgroundLocationConsent,
   getBoatName,
+  getFullName,
+  getShowAvatar,
   getShareNearbyPeers,
-  setAvatarDataUrl,
   setBackgroundLocationConsent,
   setBoatName,
+  setFullName,
+  setShowAvatar,
   setShareNearbyPeers,
 } from "@/lib/map-profile-storage";
 
@@ -43,20 +46,23 @@ function clearMapPresence(keepalive = false) {
   });
 }
 
-function buildNearbyPinIcon(label: string): L.DivIcon {
-  const safe = escapeHtml(label.trim() || "Nearby");
-  const html = `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;padding-bottom:4px"><div style="width:36px;height:36px;border-radius:9999px;background:#2563eb;border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff">⌖</div><span style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:2px 8px;border-radius:9999px;background:rgba(255,255,255,.95);font-size:11px;font-weight:600;color:#1e3a8a;box-shadow:0 1px 4px rgba(0,0,0,.15)">${safe}</span></div>`;
+function buildNearbyPinIcon(avatarDataUrl: string): L.DivIcon {
+  const safeAvatar = avatarDataUrl.replace(/'/g, "");
+  const inner = avatarDataUrl
+    ? `<img src='${safeAvatar}' alt="" width="36" height="36" style="border-radius:9999px;object-fit:cover;display:block;"/>`
+    : `<div style="width:36px;height:36px;border-radius:9999px;background:#2563eb;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff">⌖</div>`;
+  const html = `<div style="width:40px;height:40px;border-radius:9999px;background:#fff;border:2px solid #fff;box-shadow:0 2px 10px rgba(0,0,0,.25);overflow:hidden;display:flex;align-items:center;justify-content:center">${inner}</div>`;
   return L.divIcon({
     className: "sealink-nearby-pin",
     html,
-    iconSize: [120, 84],
-    iconAnchor: [60, 84],
+    iconSize: [40, 40],
+    iconAnchor: [20, 20],
   });
 }
 
 type LatLngAcc = { lat: number; lng: number; accuracyM: number };
 
-type NearbyPeer = { id: string; lat: number; lng: number; label: string };
+type NearbyPeer = { id: string; lat: number; lng: number; label: string; avatarDataUrl?: string };
 
 function MapRecenter({ lat, lng, zoom }: { lat: number; lng: number; zoom: number }) {
   const map = useMap();
@@ -90,7 +96,11 @@ function buildPinIcon(boat: string, avatarUrl: string): L.DivIcon {
 
 export default function HomeLocationMap() {
   const [boatInput, setBoatInput] = useState(() => (typeof window !== "undefined" ? getBoatName() : ""));
-  const [avatarUrl, setAvatarUrlState] = useState(() => (typeof window !== "undefined" ? getAvatarDataUrl() : ""));
+  const [avatarUrl] = useState(() => (typeof window !== "undefined" ? getAvatarDataUrl() : ""));
+  const [showAvatar, setShowAvatarState] = useState(() =>
+    typeof window !== "undefined" ? getShowAvatar() : true,
+  );
+  const [fullName, setFullNameState] = useState(() => (typeof window !== "undefined" ? getFullName() : ""));
   const [sharing, setSharing] = useState(false);
   const [bgConsent, setBgConsentState] = useState(() =>
     typeof window !== "undefined" ? getBackgroundLocationConsent() : true,
@@ -331,12 +341,15 @@ export default function HomeLocationMap() {
     setSharing(true);
   }
 
-  const pinIcon = useMemo(() => buildPinIcon(boatInput.trim(), avatarUrl), [boatInput, avatarUrl]);
+  const pinIconVisible = useMemo(
+    () => buildPinIcon(boatInput.trim(), showAvatar ? avatarUrl : ""),
+    [boatInput, avatarUrl, showAvatar],
+  );
 
   const baseLat = pos?.lat ?? DEFAULT_MAP_CENTER.lat;
   const baseLng = pos?.lng ?? DEFAULT_MAP_CENTER.lng;
-  /** Tiny offset north (~2 m) so the arrow label clears the boat pin; stays visually on your position. */
-  const windMarkerLat = pos ? baseLat + 0.000018 : baseLat;
+  /** Tiny offset north (~1 m) so the wind readout clears labels. */
+  const windMarkerLat = pos ? baseLat + 0.000009 : baseLat;
   const windMarkerLng = baseLng;
 
   const activeWind = windSlots.length ? windSlots[Math.min(windSlotIdx, windSlots.length - 1)] : null;
@@ -351,7 +364,8 @@ export default function HomeLocationMap() {
 
   useEffect(() => {
     if (!sharing || !pos || !shareNearby) return;
-    const label = boatInput.trim() || "Boat";
+    const label = fullName.trim() || boatInput.trim() || "Boat";
+    const avatarDataUrl = showAvatar ? (avatarUrl || "") : "";
     const pulse = () => {
       void fetch("/api/map/presence", {
         method: "POST",
@@ -361,13 +375,14 @@ export default function HomeLocationMap() {
           lat: pos.lat,
           lng: pos.lng,
           label,
+          avatarDataUrl,
         }),
       });
     };
     pulse();
     const id = window.setInterval(pulse, 45_000);
     return () => window.clearInterval(id);
-  }, [sharing, pos?.lat, pos?.lng, shareNearby, boatInput]);
+  }, [sharing, pos?.lat, pos?.lng, shareNearby, boatInput, fullName, avatarUrl, showAvatar]);
 
   useEffect(() => {
     if (!sharing || !pos || !shareNearby) {
@@ -394,30 +409,13 @@ export default function HomeLocationMap() {
     setBoatName(boatInput);
   }
 
-  function onAvatarPick(ev: React.ChangeEvent<HTMLInputElement>) {
-    const file = ev.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      setGeoError("Choose an image file.");
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const url = String(reader.result || "");
-        setAvatarDataUrl(url);
-        setAvatarUrlState(url);
-        setGeoError(null);
-      } catch {
-        setGeoError("That image is too large for browser storage. Try a smaller photo.");
-      }
-    };
-    reader.readAsDataURL(file);
+  function persistFullName() {
+    setFullName(fullName);
   }
 
-  function clearAvatar() {
-    setAvatarDataUrl(null);
-    setAvatarUrlState("");
+  function persistShowAvatar(on: boolean) {
+    setShowAvatar(on);
+    setShowAvatarState(on);
   }
 
   const center: [number, number] = pos ? [pos.lat, pos.lng] : DEFAULT_CENTER;
@@ -498,14 +496,18 @@ export default function HomeLocationMap() {
                       <Marker
                         key={`nearby-${p.id}`}
                         position={[p.lat, p.lng]}
-                        icon={buildNearbyPinIcon(p.label)}
+                        icon={buildNearbyPinIcon(p.avatarDataUrl || "")}
                         zIndexOffset={620}
-                      />
+                      >
+                        <Popup>
+                          <p className="m-0 text-sm font-semibold text-zinc-900">{p.label || "Nearby boat"}</p>
+                        </Popup>
+                      </Marker>
                     ))}
                     <Marker
-                      key={`${boatInput}:${avatarUrl.slice(0, 40)}`}
+                      key={`${boatInput}:${showAvatar ? avatarUrl.slice(0, 40) : "no-avatar"}`}
                       position={[pos.lat, pos.lng]}
-                      icon={pinIcon}
+                      icon={pinIconVisible}
                       zIndexOffset={750}
                     />
                   </>
@@ -535,6 +537,16 @@ export default function HomeLocationMap() {
         <div className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
           <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">On your pin</p>
           <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+            Your name (nearby users see this on tap)
+            <input
+              value={fullName}
+              onChange={(e) => setFullNameState(e.target.value)}
+              onBlur={persistFullName}
+              placeholder="e.g. Colin"
+              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 outline-none focus:border-green-600 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+            />
+          </label>
+          <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
             Boat name
             <input
               value={boatInput}
@@ -544,24 +556,27 @@ export default function HomeLocationMap() {
               className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 outline-none focus:border-green-600 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
             />
           </label>
-          <div>
-            <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Profile photo</p>
-            <div className="mt-1 flex flex-wrap items-center gap-2">
-              <label className="inline-flex cursor-pointer rounded-lg border border-zinc-300 bg-zinc-50 px-2 py-1 text-xs font-medium text-zinc-800 hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800">
-                Upload
-                <input type="file" accept="image/*" className="sr-only" onChange={onAvatarPick} />
-              </label>
-              {avatarUrl ? (
-                <button
-                  type="button"
-                  onClick={clearAvatar}
-                  className="text-xs font-medium text-red-700 underline dark:text-red-400"
-                >
-                  Remove photo
-                </button>
-              ) : null}
-            </div>
-          </div>
+          <label
+            className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 text-[11px] leading-snug ${
+              sharing
+                ? "border-zinc-200 bg-zinc-50 text-zinc-800 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-200"
+                : "cursor-not-allowed border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-500"
+            }`}
+          >
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-400 text-green-600 disabled:opacity-50"
+              checked={showAvatar}
+              disabled={!sharing}
+              onChange={(e) => persistShowAvatar(e.target.checked)}
+            />
+            <span>
+              <span className="font-semibold">Show profile image on map pin</span>
+              <span className="mt-1 block opacity-90">
+                Uses the profile photo you added on sign-up/profile. Turn off if you prefer a plain “You” marker.
+              </span>
+            </span>
+          </label>
 
           <hr className="border-zinc-200 dark:border-zinc-800" />
 
