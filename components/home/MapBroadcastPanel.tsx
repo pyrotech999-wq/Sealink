@@ -5,6 +5,50 @@ import { useBroadcastToast } from "@/components/BroadcastToastProvider";
 import { MAP_BROADCAST_RETENTION_HOURS } from "@/lib/map-broadcast-constants";
 
 const WATERLINE_KEY = "sealink_broadcast_toast_waterline_v1";
+const SOUND_KEY = "sealink_broadcast_sound_v1";
+
+function readSoundOn(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    return localStorage.getItem(SOUND_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+function writeSoundOn(on: boolean): void {
+  try {
+    if (on) localStorage.removeItem(SOUND_KEY);
+    else localStorage.setItem(SOUND_KEY, "0");
+  } catch {
+    /* */
+  }
+}
+
+async function beepOnce(): Promise<void> {
+  try {
+    const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext | undefined;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    if (ctx.state === "suspended") await ctx.resume();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = "sine";
+    o.frequency.value = 880;
+    g.gain.value = 0.0001;
+    o.connect(g);
+    g.connect(ctx.destination);
+    o.start();
+    const now = ctx.currentTime;
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(0.2, now + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+    o.stop(now + 0.21);
+    window.setTimeout(() => void ctx.close().catch(() => undefined), 500);
+  } catch {
+    /* ignore */
+  }
+}
 
 function readWaterline(): string | null {
   if (typeof window === "undefined") return null;
@@ -46,6 +90,7 @@ export function MapBroadcastPanel({ readLat, readLng, canSend, sendLat, sendLng 
   const [loading, setLoading] = useState(true);
   const [posting, setPosting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [soundOn, setSoundOn] = useState(() => (typeof window !== "undefined" ? readSoundOn() : true));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -72,12 +117,15 @@ export function MapBroadcastPanel({ readLat, readLng, canSend, sendLat, sendLng 
         return;
       }
 
+      let shouldBeep = false;
       if (toast) {
         for (const m of msgs) {
           if (new Date(m.createdAt) <= new Date(wl)) break;
           if (!m.isMine) toast.pushToast(m.body);
+          if (!m.isMine) shouldBeep = true;
         }
       }
+      if (shouldBeep && soundOn) void beepOnce();
       writeWaterline(newest);
     } catch {
       setErr("Network error");
@@ -85,7 +133,7 @@ export function MapBroadcastPanel({ readLat, readLng, canSend, sendLat, sendLng 
     } finally {
       setLoading(false);
     }
-  }, [readLat, readLng, toast]);
+  }, [readLat, readLng, toast, soundOn]);
 
   useEffect(() => {
     queueMicrotask(() => void load());
@@ -158,6 +206,21 @@ export function MapBroadcastPanel({ readLat, readLng, canSend, sendLat, sendLng 
         The last {MAP_BROADCAST_RETENTION_HOURS} hours stay here; new ones also pop up as a banner across the app when
         we have a recent position saved from the map.
       </p>
+
+      <label className="mt-2 inline-flex cursor-pointer items-center gap-2 text-xs font-medium text-indigo-900 dark:text-indigo-200">
+        <input
+          type="checkbox"
+          checked={soundOn}
+          onChange={(e) => {
+            const on = e.target.checked;
+            setSoundOn(on);
+            writeSoundOn(on);
+          }}
+          className="size-4 rounded border-indigo-300 text-indigo-700 focus:ring-indigo-600"
+        />
+        Message alert sound
+        <span className="font-normal text-indigo-800/70 dark:text-indigo-200/70">(defaults on)</span>
+      </label>
 
       {err ? (
         <p className="mt-2 rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
