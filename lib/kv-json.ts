@@ -6,13 +6,18 @@ export function canUseKv(): boolean {
 }
 
 export async function kvGetJson<T>(key: string, fallback: T): Promise<T> {
-  const raw = (await kv.get<string>(key)) ?? null;
-  if (!raw || typeof raw !== "string") return fallback;
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
+  // @upstash/redis deserializes string values with JSON.parse by default, so GET often returns an object, not a string.
+  const raw = (await kv.get<unknown>(key)) ?? null;
+  if (raw == null) return fallback;
+  if (typeof raw === "object") return raw as T;
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw) as T;
+    } catch {
+      return fallback;
+    }
   }
+  return fallback;
 }
 
 export async function kvSetJson(key: string, value: unknown): Promise<void> {
