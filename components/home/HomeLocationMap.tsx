@@ -83,24 +83,30 @@ function MapRecenter({ lat, lng, zoom }: { lat: number; lng: number; zoom: numbe
   return null;
 }
 
-function buildPinIcon(boat: string, avatarUrl: string): L.DivIcon {
+function buildPinIcon(boat: string, avatarUrl: string, peekAvatar: boolean): L.DivIcon {
   const label = escapeHtml(boat || "Your boat");
   const safeAvatar = avatarUrl.replace(/'/g, "");
-  const img = avatarUrl
-    ? `<img src='${safeAvatar}' alt="" width="40" height="40" style="border-radius:9999px;object-fit:cover;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.25)"/>`
-    : `<div style="width:40px;height:40px;border-radius:9999px;background:#71717a;border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#fff">You</div>`;
-  const html = `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;padding-bottom:4px">${img}<span style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:2px 8px;border-radius:9999px;background:rgba(255,255,255,.95);font-size:11px;font-weight:600;color:#18181b;box-shadow:0 1px 4px rgba(0,0,0,.15)">${label}</span></div>`;
+  const initial = escapeHtml((boat || "You").trim().slice(0, 1).toUpperCase() || "Y");
+
+  const showPhoto = Boolean(avatarUrl) && peekAvatar;
+  const head = showPhoto
+    ? `<div style="width:40px;height:40px;border-radius:9999px;background:#fff;border:2px solid #fff;box-shadow:0 2px 10px rgba(0,0,0,.25);overflow:hidden;display:flex;align-items:center;justify-content:center"><img src='${safeAvatar}' alt="" width="40" height="40" style="display:block;object-fit:cover"/></div>`
+    : `<div style="width:40px;height:40px;border-radius:9999px;background:#71717a;border:2px solid #fff;box-shadow:0 2px 10px rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff">${initial}</div>`;
+
+  const html = `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;padding-bottom:4px">${head}<span style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:2px 8px;border-radius:9999px;background:rgba(255,255,255,.95);font-size:11px;font-weight:600;color:#18181b;box-shadow:0 1px 4px rgba(0,0,0,.15)">${label}</span></div>`;
   return L.divIcon({
     className: "sealink-map-pin",
     html,
-    iconSize: [120, 88],
-    iconAnchor: [60, 88],
+    iconSize: [120, 72],
+    iconAnchor: [60, 72],
   });
 }
 
 export default function HomeLocationMap() {
   const [boatInput, setBoatInput] = useState(() => (typeof window !== "undefined" ? getBoatName() : ""));
   const [avatarUrl] = useState(() => (typeof window !== "undefined" ? getAvatarDataUrl() : ""));
+  const [pinAvatarPeek, setPinAvatarPeek] = useState(false);
+  const pinPeekTimer = useRef<number | null>(null);
   const [showAvatar, setShowAvatarState] = useState(() =>
     typeof window !== "undefined" ? getShowAvatar() : true,
   );
@@ -707,9 +713,25 @@ export default function HomeLocationMap() {
   }
 
   const pinIconVisible = useMemo(
-    () => buildPinIcon(boatInput.trim(), showAvatar ? avatarUrl : ""),
-    [boatInput, avatarUrl, showAvatar],
+    () => buildPinIcon(boatInput.trim(), avatarUrl, pinAvatarPeek),
+    [boatInput, avatarUrl, pinAvatarPeek],
   );
+
+  useEffect(() => {
+    return () => {
+      if (pinPeekTimer.current != null) window.clearTimeout(pinPeekTimer.current);
+    };
+  }, []);
+
+  function peekMyAvatarOnPin() {
+    if (!avatarUrl) return;
+    if (pinPeekTimer.current != null) window.clearTimeout(pinPeekTimer.current);
+    setPinAvatarPeek(true);
+    pinPeekTimer.current = window.setTimeout(() => {
+      setPinAvatarPeek(false);
+      pinPeekTimer.current = null;
+    }, 2000);
+  }
 
   const baseLat = pos?.lat ?? DEFAULT_MAP_CENTER.lat;
   const baseLng = pos?.lng ?? DEFAULT_MAP_CENTER.lng;
@@ -906,10 +928,13 @@ export default function HomeLocationMap() {
                       </Marker>
                     ))}
                     <Marker
-                      key={`${boatInput}:${showAvatar ? avatarUrl.slice(0, 40) : "no-avatar"}`}
+                      key={`${boatInput}:${pinAvatarPeek ? "peek" : "circle"}:${avatarUrl ? avatarUrl.slice(0, 24) : "no-avatar"}`}
                       position={[pos.lat, pos.lng]}
                       icon={pinIconVisible}
                       zIndexOffset={750}
+                      eventHandlers={{
+                        click: () => peekMyAvatarOnPin(),
+                      }}
                     />
                   </>
                 ) : null}
