@@ -3,6 +3,22 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getLastKnownPosition } from "@/lib/map-last-known";
 
+type MeteoOk = {
+  ok: true;
+  source: "meteostat" | "open-meteo-model";
+  station: { id: string; name: string | null; country: string | null; distanceM: number | null };
+  reading: {
+    timeIso: string | null;
+    tempC: number | null;
+    windKph: number | null;
+    windDirDeg: number | null;
+    gustKph: number | null;
+    pressureHpa: number | null;
+    precipMm: number | null;
+  };
+};
+type MeteoFail = { error: string };
+
 type ApiOk = {
   ok: true;
   text: string;
@@ -27,6 +43,7 @@ export function SeaStateSummaryBox() {
   const [tides, setTides] = useState<{ kind: "high" | "low"; t: string; vMsl: number; vRelMean: number; vAboveLow: number }[]>([]);
   const [tideRangeM, setTideRangeM] = useState<number | null>(null);
   const [tideTable, setTideTable] = useState<ApiOk["tideTable"]>(null);
+  const [meteo, setMeteo] = useState<MeteoOk | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [bstOn, setBstOn] = useState(true);
@@ -39,12 +56,23 @@ export function SeaStateSummaryBox() {
     setLoading(true);
     setErr(null);
     try {
-      const r = await fetch(`/api/sea/local-summary?lat=${encodeURIComponent(String(loc.lat))}&lng=${encodeURIComponent(String(loc.lng))}`, {
-        cache: "no-store",
-        signal,
-      });
-      const d = (await r.json()) as ApiOk | ApiFail;
-      if (!r.ok) {
+      const [seaR, meteoR] = await Promise.all([
+        fetch(`/api/sea/local-summary?lat=${encodeURIComponent(String(loc.lat))}&lng=${encodeURIComponent(String(loc.lng))}`, {
+          cache: "no-store",
+          signal,
+        }),
+        fetch(`/api/meteo/nearest?lat=${encodeURIComponent(String(loc.lat))}&lng=${encodeURIComponent(String(loc.lng))}`, {
+          cache: "no-store",
+          signal,
+        }),
+      ]);
+
+      const meteoJson = (await meteoR.json()) as MeteoOk | MeteoFail;
+      if (meteoR.ok && (meteoJson as MeteoOk).ok) setMeteo(meteoJson as MeteoOk);
+      else setMeteo(null);
+
+      const d = (await seaR.json()) as ApiOk | ApiFail;
+      if (!seaR.ok) {
         const f = d as ApiFail;
         setErr(f.error || "Could not load sea state");
         setText(null);
@@ -63,6 +91,7 @@ export function SeaStateSummaryBox() {
       setTides([]);
       setTideRangeM(null);
       setTideTable(null);
+      setMeteo(null);
     } finally {
       setLoading(false);
     }
@@ -105,6 +134,41 @@ export function SeaStateSummaryBox() {
         {text ? (
           <div className="rounded-lg border border-sky-200/80 bg-white/90 px-4 py-3 text-sm leading-7 text-zinc-800 dark:border-sky-800/60 dark:bg-zinc-950/80 dark:text-zinc-200">
             <p>{text}</p>
+            {meteo ? (
+              <div className="mt-3 rounded-lg border border-sky-100 bg-sky-50/70 px-3 py-2 dark:border-sky-900/40 dark:bg-sky-950/20">
+                <p className="text-xs font-semibold text-sky-950 dark:text-sky-100">Nearest meteo station</p>
+                <p className="mt-0.5 text-[10px] text-zinc-500 dark:text-zinc-400">
+                  {meteo.station.name ?? "Station"}{meteo.station.country ? ` (${meteo.station.country})` : ""} ·{" "}
+                  {meteo.source === "meteostat" ? "Observed" : "Modelled"}{meteo.station.distanceM != null ? ` · ~${Math.round(meteo.station.distanceM / 1000)}km away` : ""}
+                </p>
+                <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-zinc-700 dark:text-zinc-200">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-zinc-500 dark:text-zinc-400">Temp</span>
+                    <span className="tabular-nums">{meteo.reading.tempC != null ? `${meteo.reading.tempC.toFixed(1)}°C` : "—"}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-zinc-500 dark:text-zinc-400">Pressure</span>
+                    <span className="tabular-nums">{meteo.reading.pressureHpa != null ? `${Math.round(meteo.reading.pressureHpa)} hPa` : "—"}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-zinc-500 dark:text-zinc-400">Wind</span>
+                    <span className="tabular-nums">{meteo.reading.windKph != null ? `${Math.round(meteo.reading.windKph)} km/h` : "—"}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-zinc-500 dark:text-zinc-400">Gust</span>
+                    <span className="tabular-nums">{meteo.reading.gustKph != null ? `${Math.round(meteo.reading.gustKph)} km/h` : "—"}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-zinc-500 dark:text-zinc-400">Wind dir</span>
+                    <span className="tabular-nums">{meteo.reading.windDirDeg != null ? `${Math.round(meteo.reading.windDirDeg)}°` : "—"}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-zinc-500 dark:text-zinc-400">Rain</span>
+                    <span className="tabular-nums">{meteo.reading.precipMm != null ? `${meteo.reading.precipMm.toFixed(1)} mm` : "—"}</span>
+                  </div>
+                </div>
+              </div>
+            ) : null}
             {tideTable?.events?.length ? (
               <div className="mt-3 rounded-lg border border-sky-100 bg-sky-50/70 px-3 py-2 dark:border-sky-900/40 dark:bg-sky-950/20">
                 <div className="flex items-center justify-between gap-3">
