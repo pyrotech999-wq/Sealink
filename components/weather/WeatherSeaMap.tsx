@@ -292,6 +292,54 @@ function WindParticlesOverlay({
         const v = spd * Math.cos(rad);
         next.push({ lat: usedLat, lng: usedLng, u, v });
       }
+
+      // If the multi-point request produced no usable samples (can happen due to API hiccups),
+      // fall back to a single-point forecast at map center so the layer remains visible.
+      if (!next.length) {
+        const c = map.getCenter();
+        const one = new URL("https://api.open-meteo.com/v1/forecast");
+        one.searchParams.set("latitude", String(c.lat));
+        one.searchParams.set("longitude", String(c.lng));
+        one.searchParams.set("hourly", "wind_speed_10m,wind_direction_10m");
+        one.searchParams.set("models", "ecmwf_ifs");
+        one.searchParams.set("forecast_days", "5");
+        one.searchParams.set("timezone", "GMT");
+        one.searchParams.set("wind_speed_unit", "ms");
+        one.searchParams.set("cell_selection", "nearest");
+        try {
+          const r1 = await fetch(one.toString(), { cache: "no-store" });
+          if (r1.ok) {
+            const d1 = (await r1.json()) as any;
+            const t1 = d1?.hourly?.time as string[] | undefined;
+            const spdArr1 = d1?.hourly?.wind_speed_10m as number[] | undefined;
+            const dirArr1 = d1?.hourly?.wind_direction_10m as number[] | undefined;
+            if (t1?.length && spdArr1?.length && dirArr1?.length) {
+              const targetMs1 = new Date(timeIso).getTime();
+              let idx1 = 0;
+              let best1 = Number.POSITIVE_INFINITY;
+              for (let i = 0; i < t1.length; i++) {
+                const ms = new Date(t1[i]!).getTime();
+                const dist = Math.abs(ms - targetMs1);
+                if (dist < best1) {
+                  best1 = dist;
+                  idx1 = i;
+                }
+              }
+              const spd = typeof spdArr1[idx1] === "number" ? spdArr1[idx1] : NaN;
+              const dir = typeof dirArr1[idx1] === "number" ? dirArr1[idx1] : NaN;
+              if (Number.isFinite(spd) && Number.isFinite(dir)) {
+                const rad = ((dir + 180) * Math.PI) / 180;
+                const u = spd * Math.sin(rad);
+                const v = spd * Math.cos(rad);
+                next.push({ lat: c.lat, lng: c.lng, u, v });
+              }
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+
       field = next;
       rebuildFieldPx();
     };
@@ -329,7 +377,7 @@ function WindParticlesOverlay({
       ctx.fillRect(0, 0, size.x, size.y);
       ctx.globalCompositeOperation = "source-over";
 
-      ctx.lineWidth = 1.05;
+      ctx.lineWidth = 1.35;
 
       // Convert m/s to px/s using local map scale (improves realism + fixes “too fast” feel).
       const mid = map.containerPointToLatLng(L.point(size.x * 0.5, size.y * 0.5));
@@ -357,7 +405,7 @@ function WindParticlesOverlay({
         const y2 = p.y - ((w.v * dt) / mPerPxY) * timeScale * ms;
 
         // Slightly more transparent at low speeds, more vivid at high speeds.
-        const a = clamp(0.22 + (speed / 30) * 0.38, 0.18, 0.65) * clamp(opacity, 0.2, 0.95);
+        const a = clamp(0.35 + (speed / 30) * 0.45, 0.25, 0.9) * clamp(opacity, 0.2, 0.95);
         ctx.strokeStyle = windColor(speed, a);
         ctx.beginPath();
         ctx.moveTo(p.x, p.y);
@@ -637,6 +685,32 @@ function WmsOverlay({ mode, opacity, timeIso }: { mode: LayerMode; opacity: numb
   return null;
 }
 
+function WmsWindBarbsOverlay({ enabled, opacity, timeIso }: { enabled: boolean; opacity: number; timeIso: string }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!enabled) return;
+    const windUrl =
+      "https://pae-paha.pacioos.hawaii.edu/thredds/wms/ncep_global/NCEP_Global_Atmospheric_Model_best.ncd";
+    const layer = L.tileLayer.wms(windUrl, {
+      layers: "wind",
+      styles: "barb/jet",
+      format: "image/png",
+      transparent: true,
+      opacity,
+      version: "1.3.0",
+      time: timeIso,
+    } as any);
+    layer.setZIndex(450);
+    layer.addTo(map);
+    return () => {
+      map.removeLayer(layer);
+    };
+  }, [map, enabled, opacity, timeIso]);
+
+  return null;
+}
+
 function roundTo3hUtc(d: Date): Date {
   const ms = d.getTime();
   const threeH = 3 * 60 * 60 * 1000;
@@ -863,7 +937,8 @@ export function WeatherSeaMap() {
           )}
           {/* Use Open-Meteo raster for waves to ensure coverage in enclosed seas like the Mediterranean. */}
           <OpenMeteoWavesOverlay enabled={mode === "waves"} timeIso={timeIso} opacity={opacity} />
-          <WindParticlesOverlay enabled={mode === "wind"} timeIso={timeIso} opacity={opacity} motionScale={playing ? 1 : 0.25} />
+          {/* Wind: fall back to reliable WMS wind barbs (avoids client fetch/CORS issues). */}
+          <WmsWindBarbsOverlay enabled={mode === "wind"} timeIso={timeIso} opacity={opacity} />
           <WmsOverlay mode={mode} opacity={opacity} timeIso={timeIso} />
         </MapContainer>
       </div>
