@@ -32,7 +32,10 @@ export async function paypalAccessToken(): Promise<string> {
     },
     body: "grant_type=client_credentials",
   });
-  if (!res.ok) throw new Error(`PAYPAL_TOKEN_${res.status}`);
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(`PAYPAL_TOKEN_${res.status}:${t.slice(0, 300)}`);
+  }
   const data = (await res.json()) as { access_token?: string };
   if (!data.access_token) throw new Error("PAYPAL_TOKEN_EMPTY");
   return data.access_token;

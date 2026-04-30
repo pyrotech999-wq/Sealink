@@ -34,7 +34,6 @@ export function ShareAppLink({ className }: Props) {
     }
   }
 
-  const encodedUrl = encodeURIComponent(url);
   const encodedText = encodeURIComponent(`${text} ${url}`.trim());
 
   return (

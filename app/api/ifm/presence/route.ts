@@ -12,6 +12,11 @@ import { friendTargets, listIfmFriends } from "@/lib/ifm-friends-store";
 
 export const runtime = "nodejs";
 
+function asObject(v: unknown): Record<string, unknown> | null {
+  if (typeof v !== "object" || v === null) return null;
+  return v as Record<string, unknown>;
+}
+
 function clampLatLng(lat: number, lng: number): { lat: number; lng: number } | null {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
   if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
@@ -51,7 +56,8 @@ export async function POST(req: Request): Promise<Response> {
   } catch {
     body = null;
   }
-  const share = Boolean(body && typeof body === "object" && "share" in body ? (body as any).share === true : false);
+  const obj = asObject(body);
+  const share = obj?.share === true;
 
   if (!share) {
     await upsertIfmPresence(user.uid, {
@@ -66,16 +72,16 @@ export async function POST(req: Request): Promise<Response> {
     return NextResponse.json({ ok: true, removed: true });
   }
 
-  const lat = body && typeof body === "object" ? Number((body as any).lat) : NaN;
-  const lng = body && typeof body === "object" ? Number((body as any).lng) : NaN;
+  const lat = typeof obj?.lat === "number" || typeof obj?.lat === "string" ? Number(obj.lat) : NaN;
+  const lng = typeof obj?.lng === "number" || typeof obj?.lng === "string" ? Number(obj.lng) : NaN;
   const coords = clampLatLng(lat, lng);
   if (!coords) return NextResponse.json({ error: "Invalid lat/lng" }, { status: 400 });
 
   // Use client-provided display fields if present; fall back to browser profile storage (best-effort).
-  const fullNameRaw = body && typeof body === "object" && typeof (body as any).fullName === "string" ? (body as any).fullName : getFullName();
-  const boatRaw = body && typeof body === "object" && typeof (body as any).boatName === "string" ? (body as any).boatName : getBoatName();
-  const avatarRaw = body && typeof body === "object" && typeof (body as any).avatarDataUrl === "string" ? (body as any).avatarDataUrl : getAvatarDataUrl();
-  const phoneRaw = body && typeof body === "object" && typeof (body as any).phone === "string" ? (body as any).phone : getProfilePhone();
+  const fullNameRaw = typeof obj?.fullName === "string" ? obj.fullName : getFullName();
+  const boatRaw = typeof obj?.boatName === "string" ? obj.boatName : getBoatName();
+  const avatarRaw = typeof obj?.avatarDataUrl === "string" ? obj.avatarDataUrl : getAvatarDataUrl();
+  const phoneRaw = typeof obj?.phone === "string" ? obj.phone : getProfilePhone();
 
   const fullName = String(fullNameRaw || "").replace(/[\r\n]+/g, " ").trim().slice(0, 80) || "SeaLink user";
   const boatName = String(boatRaw || "").replace(/[\r\n]+/g, " ").trim().slice(0, 80) || "";

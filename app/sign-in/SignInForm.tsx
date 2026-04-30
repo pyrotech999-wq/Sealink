@@ -6,6 +6,19 @@ import { getDeviceName, getOrCreateDeviceId } from "@/lib/device-id";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+type DeviceRow = { deviceId: string; name: string; activatedAt: string; lastSeenAt: string };
+
+function isDeviceRow(v: unknown): v is DeviceRow {
+  if (typeof v !== "object" || v === null) return false;
+  const o = v as Record<string, unknown>;
+  return (
+    typeof o.deviceId === "string" &&
+    typeof o.name === "string" &&
+    typeof o.activatedAt === "string" &&
+    typeof o.lastSeenAt === "string"
+  );
+}
+
 async function startDemoSession(
   email: string,
   opts?: { deactivateDeviceId?: string },
@@ -27,7 +40,7 @@ async function startDemoSession(
       return {
         ok: false,
         message: data.error || "Could not start session. Try again.",
-        devices: Array.isArray(data.devices) ? (data.devices as any) : undefined,
+        devices: Array.isArray(data.devices) ? data.devices.filter(isDeviceRow) : undefined,
       };
     }
   } catch {

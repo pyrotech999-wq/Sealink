@@ -30,8 +30,12 @@ export async function POST(req: Request) {
   if (listing.status === "removed") return NextResponse.json({ error: "Listing is not payable" }, { status: 400 });
   // Allow renewals: if expired or already paid, we still allow creating a new order to extend.
 
-  const token = await paypalAccessToken().catch(() => null);
-  if (!token) return NextResponse.json({ error: "PayPal auth failed." }, { status: 503 });
+  let token: string;
+  try {
+    token = await paypalAccessToken();
+  } catch (e: unknown) {
+    return NextResponse.json({ error: "PayPal auth failed.", detail: e instanceof Error ? e.message : String(e) }, { status: 503 });
+  }
 
   const base = getAppBaseUrl();
   const returnUrl = `${base}/vessels?paid=1&provider=paypal&listing=${encodeURIComponent(id)}`;

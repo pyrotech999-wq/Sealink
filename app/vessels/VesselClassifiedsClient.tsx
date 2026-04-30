@@ -125,7 +125,19 @@ export function VesselClassifiedsClient() {
         setReminderMsg(null);
         return;
       }
-      setReminders(Array.isArray(d.items) ? (d.items as any) : []);
+      setReminders(
+        Array.isArray(d.items)
+          ? d.items.filter(
+              (x): x is { id: string; title: string; expiresAt: string; daysLeft: number } =>
+                typeof x === "object" &&
+                x !== null &&
+                typeof (x as Record<string, unknown>).id === "string" &&
+                typeof (x as Record<string, unknown>).title === "string" &&
+                typeof (x as Record<string, unknown>).expiresAt === "string" &&
+                typeof (x as Record<string, unknown>).daysLeft === "number",
+            )
+          : [],
+      );
       setReminderMsg(typeof d.message === "string" ? d.message : null);
     } catch {
       setReminders([]);

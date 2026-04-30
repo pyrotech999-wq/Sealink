@@ -46,7 +46,9 @@ export function IfmMapClient() {
   const [peers, setPeers] = useState<IfmPeer[]>([]);
   const [friends, setFriends] = useState<FriendRow[]>([]);
   const [contact, setContact] = useState("");
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(() =>
+    typeof navigator === "undefined" || !navigator.geolocation ? "Geolocation not supported in this browser." : null,
+  );
   const [sharing, setSharing] = useState(true);
   const [map, setMap] = useState<L.Map | null>(null);
 
@@ -64,7 +66,6 @@ export function IfmMapClient() {
 
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
-      setErr("Geolocation not supported in this browser.");
       return;
     }
     let disposed = false;
@@ -151,6 +152,7 @@ export function IfmMapClient() {
   }, [mode, pos?.lat, pos?.lng]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadPeers();
     const id = window.setInterval(() => void loadPeers(), 20_000);
     return () => window.clearInterval(id);
@@ -199,7 +201,7 @@ export function IfmMapClient() {
       );
   }, [peers, mode, pos?.lat, pos?.lng]);
 
-  const center = initialCenter ?? [51.505, -0.09];
+  const center: [number, number] = initialCenter ?? [51.505, -0.09];
   const friendsPeersSorted = useMemo(() => {
     if (mode !== "friends") return [];
     return peers
@@ -303,7 +305,7 @@ export function IfmMapClient() {
           <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
             <div className="h-[min(68vh,560px)] w-full bg-zinc-100 dark:bg-zinc-900">
               <MapContainer
-                center={center as any}
+                center={center}
                 zoom={pos ? 4 : 2}
                 className="h-full w-full"
                 scrollWheelZoom

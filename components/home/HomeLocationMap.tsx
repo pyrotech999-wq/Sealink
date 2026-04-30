@@ -409,11 +409,13 @@ export default function HomeLocationMap() {
   // Display label for which device is being monitored.
   useEffect(() => {
     if (!anchorCfg.armed) {
-      setMonitorDeviceLabel("");
+      queueMicrotask(() => setMonitorDeviceLabel(""));
       return;
     }
     if (!anchorCfg.monitorDeviceId || anchorCfg.monitorDeviceId === "this") {
-      setMonitorDeviceLabel(localDeviceName?.trim() ? `This device (${localDeviceName.trim()})` : "This device");
+      queueMicrotask(() =>
+        setMonitorDeviceLabel(localDeviceName?.trim() ? `This device (${localDeviceName.trim()})` : "This device"),
+      );
       return;
     }
     let disposed = false;
@@ -447,7 +449,9 @@ export default function HomeLocationMap() {
 
   async function beepOnce(): Promise<boolean> {
     try {
-      const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext | undefined;
+      const AudioCtx =
+        window.AudioContext ||
+        (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!AudioCtx) return false;
       const ctx = new AudioCtx();
       if (ctx.state === "suspended") await ctx.resume();
@@ -488,10 +492,10 @@ export default function HomeLocationMap() {
   useEffect(() => {
     if (!activeAnchorAlert) {
       stopAlarm();
-      setAlarmBlocked(false);
+      queueMicrotask(() => setAlarmBlocked(false));
       return;
     }
-    void startAlarm();
+    queueMicrotask(() => void startAlarm());
     return () => stopAlarm();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeAnchorAlert?.id]);

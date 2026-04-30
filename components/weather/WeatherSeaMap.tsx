@@ -8,6 +8,17 @@ import { MapContainer, TileLayer, useMap } from "react-leaflet";
 type LayerMode = "wind" | "waves" | "rain" | "pressure";
 type BaseMapMode = "streets" | "light" | "satellite";
 
+type OpenMeteoBlock = {
+  latitude?: number;
+  longitude?: number;
+  hourly?: {
+    time?: string[];
+    wind_speed_10m?: number[];
+    wind_direction_10m?: number[];
+    wave_height?: number[];
+  };
+};
+
 function clamp(n: number, a: number, b: number): number {
   return Math.max(a, Math.min(b, n));
 }
@@ -259,8 +270,12 @@ function WindParticlesOverlay({
 
       const r = await fetch(api.toString(), { cache: "no-store" });
       if (!r.ok) return;
-      const d = (await r.json()) as any;
-      const blocks = Array.isArray(d) ? d : Array.isArray(d?.hourly?.time) ? [d] : [];
+      const d: unknown = await r.json();
+      const blocks: OpenMeteoBlock[] = Array.isArray(d)
+        ? (d as OpenMeteoBlock[])
+        : typeof d === "object" && d !== null && Array.isArray((d as OpenMeteoBlock).hourly?.time)
+          ? [d as OpenMeteoBlock]
+          : [];
       if (!blocks.length) return;
       const times = blocks[0]?.hourly?.time as string[] | undefined;
       if (!times?.length) return;
@@ -309,10 +324,11 @@ function WindParticlesOverlay({
         try {
           const r1 = await fetch(one.toString(), { cache: "no-store" });
           if (r1.ok) {
-            const d1 = (await r1.json()) as any;
-            const t1 = d1?.hourly?.time as string[] | undefined;
-            const spdArr1 = d1?.hourly?.wind_speed_10m as number[] | undefined;
-            const dirArr1 = d1?.hourly?.wind_direction_10m as number[] | undefined;
+            const d1: unknown = await r1.json();
+            const b1 = d1 as OpenMeteoBlock;
+            const t1 = b1?.hourly?.time as string[] | undefined;
+            const spdArr1 = b1?.hourly?.wind_speed_10m as number[] | undefined;
+            const dirArr1 = b1?.hourly?.wind_direction_10m as number[] | undefined;
             if (t1?.length && spdArr1?.length && dirArr1?.length) {
               const targetMs1 = new Date(timeIso).getTime();
               let idx1 = 0;
@@ -514,8 +530,12 @@ function OpenMeteoWavesOverlay({ enabled, timeIso, opacity }: { enabled: boolean
 
         const r = await fetch(api.toString(), { cache: "no-store" });
         if (!r.ok) return;
-        const d = (await r.json()) as any;
-        const blocks = Array.isArray(d) ? d : Array.isArray(d?.hourly?.time) ? [d] : [];
+        const d: unknown = await r.json();
+        const blocks: OpenMeteoBlock[] = Array.isArray(d)
+          ? (d as OpenMeteoBlock[])
+          : typeof d === "object" && d !== null && Array.isArray((d as OpenMeteoBlock).hourly?.time)
+            ? [d as OpenMeteoBlock]
+            : [];
         if (!blocks.length) return;
 
         const times = blocks[0]?.hourly?.time as string[] | undefined;
@@ -571,14 +591,15 @@ function OpenMeteoWavesOverlay({ enabled, timeIso, opacity }: { enabled: boolean
         smooth.height = canvas.height;
         const sctx = smooth.getContext("2d");
         if (sctx) {
+          const sctx2 = sctx as CanvasRenderingContext2D & { filter?: string };
           sctx.imageSmoothingEnabled = true;
           sctx.clearRect(0, 0, smooth.width, smooth.height);
           // blur slightly while upscaling to mimic shaded field
-          (sctx as any).filter = "blur(10px)";
+          sctx2.filter = "blur(10px)";
           sctx.drawImage(canvas, 0, 0, smooth.width, smooth.height);
           // copy back
           ctx.clearRect(0, 0, canvas.width, canvas.height);
-          (ctx as any).filter = "none";
+          (ctx as CanvasRenderingContext2D & { filter?: string }).filter = "none";
           ctx.imageSmoothingEnabled = true;
           ctx.drawImage(smooth, 0, 0);
         }
@@ -639,7 +660,7 @@ function WmsOverlay({ mode, opacity, timeIso }: { mode: LayerMode; opacity: numb
       opacity,
       version: "1.3.0",
       time: timeIso,
-    } as any);
+    } as L.WMSOptions & { time: string });
 
     const waves = L.tileLayer.wms(wavesUrl, {
       layers: "Thgt",
@@ -649,7 +670,7 @@ function WmsOverlay({ mode, opacity, timeIso }: { mode: LayerMode; opacity: numb
       opacity,
       version: "1.3.0",
       time: timeIso,
-    } as any);
+    } as L.WMSOptions & { time: string });
 
     const rain = L.tileLayer.wms(windUrl, {
       layers: "pratesfc",
@@ -659,7 +680,7 @@ function WmsOverlay({ mode, opacity, timeIso }: { mode: LayerMode; opacity: numb
       opacity,
       version: "1.3.0",
       time: timeIso,
-    } as any);
+    } as L.WMSOptions & { time: string });
 
     const pressure = L.tileLayer.wms(windUrl, {
       layers: "prmslmsl",
@@ -669,7 +690,7 @@ function WmsOverlay({ mode, opacity, timeIso }: { mode: LayerMode; opacity: numb
       opacity,
       version: "1.3.0",
       time: timeIso,
-    } as any);
+    } as L.WMSOptions & { time: string });
 
     const layer = mode === "rain" ? rain : pressure;
     layer.addTo(map);
@@ -700,7 +721,7 @@ function WmsWindBarbsOverlay({ enabled, opacity, timeIso }: { enabled: boolean; 
       opacity,
       version: "1.3.0",
       time: timeIso,
-    } as any);
+    } as L.WMSOptions & { time: string });
     layer.setZIndex(450);
     layer.addTo(map);
     return () => {

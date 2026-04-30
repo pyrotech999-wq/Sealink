@@ -26,8 +26,12 @@ export async function POST(req: Request) {
   if (!listing) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (!u.isAdmin && listing.ownerUid !== u.uid) return NextResponse.json({ error: "Not allowed" }, { status: 403 });
 
-  const token = await paypalAccessToken().catch(() => null);
-  if (!token) return NextResponse.json({ error: "PayPal auth failed." }, { status: 503 });
+  let token: string;
+  try {
+    token = await paypalAccessToken();
+  } catch (e: unknown) {
+    return NextResponse.json({ error: "PayPal auth failed.", detail: e instanceof Error ? e.message : String(e) }, { status: 503 });
+  }
 
   const res = await fetch(`${paypalBaseUrl()}/v2/checkout/orders/${encodeURIComponent(orderId)}/capture`, {
     method: "POST",

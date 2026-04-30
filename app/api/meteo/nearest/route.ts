@@ -132,17 +132,18 @@ async function openMeteoFallback(
 
   const r = await fetch(api.toString(), { cache: "no-store" });
   if (!r.ok) return null;
-  const j = (await r.json()) as any;
-  const c = j?.current ?? null;
+  const j: unknown = await r.json();
+  const obj = typeof j === "object" && j !== null ? (j as Record<string, unknown>) : null;
+  const c = obj && typeof obj.current === "object" && obj.current !== null ? (obj.current as Record<string, unknown>) : null;
   const t = typeof c?.time === "string" ? c.time : null;
   const reading: MeteoReading = {
     timeIso: t,
-    tempC: num(c?.temperature_2m),
-    windKph: num(c?.wind_speed_10m),
-    windDirDeg: num(c?.wind_direction_10m),
-    gustKph: num(c?.wind_gusts_10m),
-    pressureHpa: num(c?.pressure_msl),
-    precipMm: num(c?.precipitation),
+    tempC: num(c?.["temperature_2m"]),
+    windKph: num(c?.["wind_speed_10m"]),
+    windDirDeg: num(c?.["wind_direction_10m"]),
+    gustKph: num(c?.["wind_gusts_10m"]),
+    pressureHpa: num(c?.["pressure_msl"]),
+    precipMm: num(c?.["precipitation"]),
   };
 
   const station: MeteoStation = {

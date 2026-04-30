@@ -158,15 +158,17 @@ async function noaaTideTable(coords: { lat: number; lng: number }): Promise<{
 
   const r = await fetch(api.toString(), { cache: "no-store" });
   if (!r.ok) return null;
-  const j = (await r.json()) as any;
-  const preds = j?.predictions;
+  const j: unknown = await r.json();
+  const obj = typeof j === "object" && j !== null ? (j as Record<string, unknown>) : null;
+  const preds = obj?.predictions;
   if (!Array.isArray(preds)) return null;
 
   const events: TideTableEvent[] = preds
-    .map((p: any) => {
-      const t = typeof p?.t === "string" ? p.t : null;
-      const v = typeof p?.v === "string" ? Number(p.v) : typeof p?.v === "number" ? p.v : NaN;
-      const typ = typeof p?.type === "string" ? p.type : "";
+    .map((p: unknown) => {
+      const row = typeof p === "object" && p !== null ? (p as Record<string, unknown>) : null;
+      const t = typeof row?.t === "string" ? row.t : null;
+      const v = typeof row?.v === "string" ? Number(row.v) : typeof row?.v === "number" ? row.v : NaN;
+      const typ = typeof row?.type === "string" ? row.type : "";
       if (!t || !Number.isFinite(v)) return null;
       const kind: "high" | "low" | null = typ === "H" || typ.toLowerCase().includes("high") ? "high" : typ === "L" || typ.toLowerCase().includes("low") ? "low" : null;
       if (!kind) return null;

@@ -19,8 +19,12 @@ export async function POST(req: Request) {
       : "";
   if (!id) return NextResponse.json({ error: "subscriptionId required" }, { status: 400 });
 
-  const token = await paypalAccessToken().catch(() => null);
-  if (!token) return NextResponse.json({ error: "PayPal auth failed." }, { status: 503 });
+  let token: string;
+  try {
+    token = await paypalAccessToken();
+  } catch (e: unknown) {
+    return NextResponse.json({ error: "PayPal auth failed.", detail: e instanceof Error ? e.message : String(e) }, { status: 503 });
+  }
 
   const res = await fetch(`${paypalBaseUrl()}/v1/billing/subscriptions/${encodeURIComponent(id)}`, {
     headers: { Authorization: `Bearer ${token}` },

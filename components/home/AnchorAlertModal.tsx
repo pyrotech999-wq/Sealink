@@ -69,19 +69,21 @@ export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, deviceId
     const ids = monitor?.alertDeviceIds ?? [];
     const hasThis = ids.includes(deviceId);
     const other = ids.find((x) => x !== deviceId) ?? "";
-    if (hasThis && other) {
-      setAlertMode("both");
-      setAlertOtherId(other);
-    } else if (hasThis && !other) {
-      setAlertMode("this");
-      setAlertOtherId("");
-    } else if (!hasThis && other) {
-      setAlertMode("other");
-      setAlertOtherId(other);
-    } else {
-      setAlertMode("both");
-      setAlertOtherId("");
-    }
+    queueMicrotask(() => {
+      if (hasThis && other) {
+        setAlertMode("both");
+        setAlertOtherId(other);
+      } else if (hasThis && !other) {
+        setAlertMode("this");
+        setAlertOtherId("");
+      } else if (!hasThis && other) {
+        setAlertMode("other");
+        setAlertOtherId(other);
+      } else {
+        setAlertMode("both");
+        setAlertOtherId("");
+      }
+    });
   }, [open, monitor?.alertDeviceIds, deviceId]);
 
   if (!open) return null;

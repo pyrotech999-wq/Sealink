@@ -27,7 +27,9 @@ function writeSoundOn(on: boolean): void {
 
 async function beepOnce(): Promise<void> {
   try {
-    const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext | undefined;
+    const AudioCtx =
+      window.AudioContext ||
+      (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AudioCtx) return;
     const ctx = new AudioCtx();
     if (ctx.state === "suspended") await ctx.resume();

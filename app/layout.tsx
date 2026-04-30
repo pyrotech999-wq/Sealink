@@ -6,6 +6,11 @@ import { BottomNav } from "@/components/BottomNav";
 import { TopNav } from "@/components/TopNav";
 import "./globals.css";
 
+function getMetadataBase(): URL {
+  const raw = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/+$/, "");
+  return new URL(raw && raw.length > 0 ? raw : "http://localhost:3000");
+}
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -17,6 +22,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: getMetadataBase(),
   title: {
     default: "SeaLink",
     template: "%s | SeaLink",

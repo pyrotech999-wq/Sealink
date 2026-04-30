@@ -1,15 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { BillingPlan } from "@/lib/pricing";
-import { ANNUAL_GBP, discountedRecurringGbp, MONTHLY_GBP, recurringPriceGbp, TRIAL_DAYS } from "@/lib/pricing";
+import { ANNUAL_GBP, MONTHLY_GBP, recurringPriceGbp, TRIAL_DAYS } from "@/lib/pricing";
 
 type Props = { showCanceled?: boolean };
 
 export function PaymentClient({ showCanceled = false }: Props) {
   const [plan, setPlan] = useState<BillingPlan>("monthly");
-  const provider: "paypal" = "paypal";
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
 

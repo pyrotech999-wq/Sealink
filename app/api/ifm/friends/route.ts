@@ -18,7 +18,10 @@ export async function POST(req: Request): Promise<Response> {
   } catch {
     body = null;
   }
-  const contact = body && typeof body === "object" && "contact" in body ? (body as any).contact : "";
+  const contact =
+    body && typeof body === "object" && body !== null && "contact" in body
+      ? (body as { contact?: unknown }).contact
+      : "";
   if (typeof contact !== "string") return NextResponse.json({ ok: false, error: "Enter a contact." }, { status: 400 });
   const res = await addIfmFriend(user.uid, contact);
   if (!res.ok) return NextResponse.json(res, { status: 400 });

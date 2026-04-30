@@ -38,8 +38,12 @@ export async function POST(req: Request) {
 
   // Vouchers: not supported in PayPal-only beta (ignore if sent by older clients).
 
-  const token = await paypalAccessToken().catch(() => null);
-  if (!token) return NextResponse.json({ error: "PayPal auth failed." }, { status: 503 });
+  let token: string;
+  try {
+    token = await paypalAccessToken();
+  } catch (e: unknown) {
+    return NextResponse.json({ error: "PayPal auth failed.", detail: e instanceof Error ? e.message : String(e) }, { status: 503 });
+  }
 
   const base = getAppBaseUrl();
   const planId = plan === "monthly" ? planMonthly : planAnnual;
