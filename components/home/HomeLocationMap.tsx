@@ -128,6 +128,7 @@ export default function HomeLocationMap() {
   const [nearbyPeers, setNearbyPeers] = useState<NearbyPeer[]>([]);
   const pollTimer = useRef<number | null>(null);
   const polling = useRef(false);
+  const lastAnchorReportAt = useRef<number>(0);
 
   const forecastLat = useMemo(
     () => Number((pos?.lat ?? DEFAULT_MAP_CENTER.lat).toFixed(2)),
@@ -149,6 +150,9 @@ export default function HomeLocationMap() {
   // Report this device's last fix (for cross-device monitoring).
   useEffect(() => {
     if (!sharing || !pos) return;
+    const now = Date.now();
+    if (now - lastAnchorReportAt.current < 180_000) return; // 3 minutes
+    lastAnchorReportAt.current = now;
     const name = getDeviceName() || "This device";
     const payload = { deviceId, name, lat: pos.lat, lng: pos.lng };
     void fetch("/api/anchor/devices", {
@@ -187,6 +191,37 @@ export default function HomeLocationMap() {
       window.clearInterval(id);
     };
   }, [sharing, anchorCfg.monitorDeviceId]);
+
+  // Best-effort: keep screen awake on the "boat device" when anchor monitoring is armed.
+  useEffect(() => {
+    const nav = navigator as Navigator & { wakeLock?: { request: (t: "screen") => Promise<{ release: () => Promise<void> }> } };
+    if (!nav.wakeLock?.request) return;
+    if (!sharing) return;
+    if (!anchorCfg.armed) return;
+    if (anchorCfg.monitorDeviceId && anchorCfg.monitorDeviceId !== "this") return;
+
+    let lock: { release: () => Promise<void> } | null = null;
+    let disposed = false;
+    const request = async () => {
+      try {
+        lock = await nav.wakeLock!.request("screen");
+      } catch {
+        lock = null;
+      }
+    };
+    void request();
+
+    const onVis = () => {
+      if (disposed) return;
+      if (document.visibilityState === "visible") void request();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      disposed = true;
+      document.removeEventListener("visibilitychange", onVis);
+      if (lock) void lock.release();
+    };
+  }, [sharing, anchorCfg.armed, anchorCfg.monitorDeviceId]);
 
   // Anchor alert check (runs whenever position updates).
   useEffect(() => {
@@ -258,6 +293,8 @@ export default function HomeLocationMap() {
     const calcIntervalMs = () => {
       if (typeof document !== "undefined" && document.hidden) {
         if (!bgConsent) return null;
+        // Anchor monitoring: tighter background interval (battery trade-off).
+        if (anchorCfg.armed) return 180_000;
         return batteryLow || saveData ? 15 * 60_000 : 4 * 60_000;
       }
       return 60_000;
@@ -359,7 +396,7 @@ export default function HomeLocationMap() {
         battery.removeEventListener("chargingchange", onBattery);
       }
     };
-  }, [sharing, bgConsent, stopPolling]);
+  }, [sharing, bgConsent, stopPolling, anchorCfg.armed]);
 
   useEffect(() => {
     const ac = new AbortController();
