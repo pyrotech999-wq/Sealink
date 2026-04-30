@@ -5,6 +5,7 @@ import { AiForecast48hBox } from "@/components/home/AiForecast48hBox";
 import { DEFAULT_MAP_CENTER } from "@/lib/map-constants";
 import { type DailyForecastRow, fetchSevenDayDailyForecast } from "@/lib/open-meteo-forecast";
 import { wmoWeatherEmoji, wmoWeatherLabel } from "@/lib/wmo-weather";
+import { windFromCompass16 } from "@/lib/wind-compass";
 import { mphToKnots, seaStateForMaxWindMph } from "@/lib/wind-tiers";
 
 type Props = {
@@ -143,7 +144,7 @@ export function WeatherForecast7Day({ lat, lng }: Props) {
             7-day wind forecast
           </h3>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Daily maximum wind at 10 m (above: 3-hour steps with direction + speed on the map). Sea state is a guide
+            Daily maximum wind at 10 m with dominant direction (3-hour steps with direction + speed on the map). Sea state is a guide
             only. Data:{" "}
             <a
               href="https://open-meteo.com/"
@@ -186,6 +187,9 @@ export function WeatherForecast7Day({ lat, lng }: Props) {
               const kn = mphToKnots(mph);
               const tier = seaStateForMaxWindMph(mph);
               const { dow, dayMonth } = formatDayLabel(day.date);
+              const dirDeg = day.windDirDominantDeg;
+              const dirNorm = dirDeg != null ? Math.round(((dirDeg % 360) + 360) % 360) : null;
+              const dirLabel = dirDeg != null ? windFromCompass16(dirDeg) : null;
               return (
                 <article
                   key={day.date}
@@ -202,6 +206,18 @@ export function WeatherForecast7Day({ lat, lng }: Props) {
                   </div>
                   <p className="mt-3 text-xl font-bold tabular-nums">{Math.round(mph)} mph</p>
                   <p className="text-sm font-semibold tabular-nums opacity-90">{Math.round(kn)} kn</p>
+                  <p className="mt-1.5 text-[11px] font-medium leading-snug opacity-95">
+                    {dirLabel != null && dirNorm != null ? (
+                      <>
+                        Wind from{" "}
+                        <span className="font-semibold text-green-950 dark:text-green-200">
+                          {dirLabel} ({String(dirNorm).padStart(3, "0")}°)
+                        </span>
+                      </>
+                    ) : (
+                      <span className="opacity-80">Direction —</span>
+                    )}
+                  </p>
                   <p className="mt-2 flex-1 text-[11px] font-medium leading-snug opacity-95">{tier.sea}</p>
                 </article>
               );
