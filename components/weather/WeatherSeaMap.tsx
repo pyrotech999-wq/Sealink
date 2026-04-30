@@ -349,11 +349,12 @@ function WindParticlesOverlay({
         const w = windAtPx(p.x, p.y);
         if (!w) continue;
         const speed = clamp(w.s, 0, 30);
-        // Windy-like motion: speed scales with real wind + a mild artistic boost.
+        // Windy-like motion: accelerate “simulation time” so motion is visible at normal map scales.
+        // (Real m/s would barely move a pixel per frame at typical zoom levels.)
         const ms = clamp(motionScale, 0.05, 1);
-        const boost = 1.35;
-        const x2 = p.x + ((w.u * dt) / mPerPxX) * boost * ms;
-        const y2 = p.y - ((w.v * dt) / mPerPxY) * boost * ms;
+        const timeScale = 3200; // seconds of simulated time per real second (tuned for visibility)
+        const x2 = p.x + ((w.u * dt) / mPerPxX) * timeScale * ms;
+        const y2 = p.y - ((w.v * dt) / mPerPxY) * timeScale * ms;
 
         // Slightly more transparent at low speeds, more vivid at high speeds.
         const a = clamp(0.22 + (speed / 30) * 0.38, 0.18, 0.65) * clamp(opacity, 0.2, 0.95);
