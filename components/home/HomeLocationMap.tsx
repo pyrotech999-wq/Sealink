@@ -297,16 +297,27 @@ export default function HomeLocationMap() {
     if (angleTriggered) parts.push(`bearing changed ~${Math.round(angleDelta)}° (limit ${angleLimit}°)`);
     const msg = `Anchor alert: ${parts.join(" and ")}.`;
 
-    try {
-      void fetch("/api/anchor/alerts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: msg }),
-        keepalive: true,
-      });
-    } catch {
-      /* ignore */
-    }
+    // Prefer server inbox (syncs across devices), but fall back to local overlay if the request fails
+    // (e.g. signed out / network issues) so the user can always press “Seen”.
+    void (async () => {
+      try {
+        const r = await fetch("/api/anchor/alerts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: msg }),
+          keepalive: true,
+        });
+        if (!r.ok) {
+          if (!activeAnchorAlert) {
+            setActiveAnchorAlert({ id: `local-${now}`, message: msg, createdAt: new Date(now).toISOString() });
+          }
+        }
+      } catch {
+        if (!activeAnchorAlert) {
+          setActiveAnchorAlert({ id: `local-${now}`, message: msg, createdAt: new Date(now).toISOString() });
+        }
+      }
+    })();
 
     try {
       if ("Notification" in window && Notification.permission === "granted") {
@@ -346,6 +357,7 @@ export default function HomeLocationMap() {
     const load = async () => {
       try {
         const r = await fetch("/api/anchor/alerts", { cache: "no-store" });
+        if (!r.ok) return;
         const d = (await r.json()) as { alerts?: { id: string; message: string; createdAt: string }[] };
         const list = Array.isArray(d.alerts) ? d.alerts : [];
         if (disposed) return;
