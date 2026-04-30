@@ -16,6 +16,52 @@ function stripHtml(s: string): string {
     .trim();
 }
 
+function normalizeForCompare(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[“”"']/g, "")
+    .replace(/\s*([—–-])\s*/g, "$1")
+    .trim();
+}
+
+function dedupeAdjacentSentences(s: string): string {
+  const parts = s
+    .split(/(?<=[.!?])\s+/g)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  const out: string[] = [];
+  let lastNorm = "";
+  for (const p of parts) {
+    const n = normalizeForCompare(p);
+    if (n && n === lastNorm) continue;
+    out.push(p);
+    lastNorm = n;
+  }
+  return out.join(" ");
+}
+
+function cleanSummary(title: string, desc: string): string {
+  let s = stripHtml(desc);
+  const t = stripHtml(title);
+  const sNorm = normalizeForCompare(s);
+  const tNorm = normalizeForCompare(t);
+
+  // If the description begins by repeating the title, drop that prefix.
+  if (tNorm && sNorm.startsWith(tNorm)) {
+    s = s.slice(t.length).replace(/^[\s—–:\-]+/, "").trim();
+  }
+
+  // If content is duplicated with a separator (e.g. "X — X"), collapse.
+  const sepDup = s.match(/^([\s\S]{12,}?)\s*[—–-]\s*\1\s*$/);
+  if (sepDup?.[1]) s = sepDup[1].trim();
+
+  // Remove adjacent duplicate sentences.
+  s = dedupeAdjacentSentences(s);
+
+  return s.slice(0, 220).trim();
+}
+
 function parseFirstStorm(xml: string, basin: StormAlert["basin"]): StormAlert | null {
   // Very small "good enough" RSS parse: find first item whose title mentions tropical cyclone wording.
   const items = xml.split(/<item>/i).slice(1);
@@ -36,7 +82,7 @@ function parseFirstStorm(xml: string, basin: StormAlert["basin"]): StormAlert | 
       hay.includes("potential tropical cyclone");
     if (!isStorm) continue;
 
-    const summary = stripHtml(desc).slice(0, 220);
+    const summary = cleanSummary(title, desc);
     if (!title || !link) continue;
     return { basin, title: stripHtml(title), summary, link };
   }
