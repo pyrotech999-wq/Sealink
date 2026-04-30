@@ -33,6 +33,28 @@ function wavesColor(m: number): string {
   return `rgba(${r},${g},${bl},0.68)`;
 }
 
+function windColor(ms: number, alpha = 0.55): string {
+  // Windy-ish scale: low=blue -> cyan -> green -> yellow -> orange -> red -> magenta.
+  const t = clamp(ms / 30, 0, 1);
+  const stops = [
+    [40, 90, 255],
+    [0, 200, 255],
+    [60, 220, 140],
+    [240, 220, 80],
+    [245, 160, 60],
+    [235, 80, 70],
+    [190, 70, 210],
+  ] as const;
+  const idx = Math.min(stops.length - 2, Math.floor(t * (stops.length - 1)));
+  const localT = t * (stops.length - 1) - idx;
+  const a = stops[idx]!;
+  const b = stops[idx + 1]!;
+  const r = Math.round(a[0] + (b[0] - a[0]) * localT);
+  const g = Math.round(a[1] + (b[1] - a[1]) * localT);
+  const bl = Math.round(a[2] + (b[2] - a[2]) * localT);
+  return `rgba(${r},${g},${bl},${alpha})`;
+}
+
 function Legend({ mode }: { mode: LayerMode }) {
   const windBase =
     "https://pae-paha.pacioos.hawaii.edu/thredds/wms/ncep_global/NCEP_Global_Atmospheric_Model_best.ncd";
@@ -79,9 +101,26 @@ function Legend({ mode }: { mode: LayerMode }) {
     return (
       <div className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-700 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
         <p className="font-semibold text-zinc-900 dark:text-zinc-100">Legend · Wind (ECMWF IFS)</p>
-        <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
-          Particles show wind direction; faster particle motion indicates stronger wind.
-        </p>
+        <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">Particles show direction; colour shows speed.</p>
+        <div className="mt-2 flex items-center gap-2">
+          <div
+            className="h-3 w-full rounded-full border border-zinc-200 dark:border-zinc-800"
+            style={{
+              background:
+                "linear-gradient(90deg, rgba(40,90,255,0.75), rgba(0,200,255,0.75), rgba(60,220,140,0.75), rgba(240,220,80,0.75), rgba(245,160,60,0.75), rgba(235,80,70,0.75), rgba(190,70,210,0.75))",
+            }}
+          />
+          <span className="w-10 text-right">30</span>
+        </div>
+        <div className="mt-1 flex justify-between text-[10px] text-zinc-500 dark:text-zinc-400">
+          <span>0</span>
+          <span>5</span>
+          <span>10</span>
+          <span>15</span>
+          <span>20</span>
+          <span>25</span>
+          <span>30m/s</span>
+        </div>
       </div>
     );
   }
@@ -258,7 +297,6 @@ function WindParticlesOverlay({ enabled, timeIso, opacity }: { enabled: boolean;
       ctx.globalCompositeOperation = "source-over";
 
       ctx.lineWidth = 1;
-      ctx.strokeStyle = `rgba(255,255,255,${0.45 * clamp(opacity, 0.2, 0.95)})`;
 
       for (const p of particles) {
         p.age += 1;
@@ -275,6 +313,7 @@ function WindParticlesOverlay({ enabled, timeIso, opacity }: { enabled: boolean;
         const x2 = p.x + w.u * k;
         const y2 = p.y - w.v * k;
 
+        ctx.strokeStyle = windColor(speed, 0.5 * clamp(opacity, 0.2, 0.95));
         ctx.beginPath();
         ctx.moveTo(p.x, p.y);
         ctx.lineTo(x2, y2);
