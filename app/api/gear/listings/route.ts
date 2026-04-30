@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireGearUser } from "@/lib/gear-api-helpers";
+import { getLegacyGearUid, requireGearUser } from "@/lib/gear-api-helpers";
 import { GEAR_LISTING_TTL_DAYS, GEAR_REMINDER_DAYS_BEFORE } from "@/lib/gear-constants";
 import { toPublicListing } from "@/lib/gear-public";
 import type { GearCategoryId, GearListing, GearListingKind } from "@/lib/gear-types";
@@ -41,11 +41,14 @@ function isTruthyFlag(v: unknown): boolean {
 
 export async function GET(req: Request) {
   let uid = "";
+  let legacyUid: string | null = null;
   try {
     uid = (await requireGearUser()).uid;
   } catch {
     uid = "";
   }
+  legacyUid = await getLegacyGearUid();
+  const viewerUids = [uid, legacyUid ?? ""].filter(Boolean);
   const url = new URL(req.url);
   const q = (url.searchParams.get("q") ?? "").trim().toLowerCase();
   const cat = url.searchParams.get("category") ?? "";
@@ -56,7 +59,7 @@ export async function GET(req: Request) {
   rows = rows.filter((l) => !l.soldAt);
 
   if (scope === "mine") {
-    rows = rows.filter((l) => l.sellerUid === uid);
+    rows = rows.filter((l) => viewerUids.includes(l.sellerUid));
   }
 
   if (kind && isGearListingKind(kind)) {
@@ -75,7 +78,7 @@ export async function GET(req: Request) {
 
   rows.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-  const listings = rows.map((l) => toPublicListing(l, uid));
+  const listings = rows.map((l) => toPublicListing(l, viewerUids));
 
   const res = NextResponse.json({
     listings,
@@ -188,5 +191,5 @@ export async function POST(req: Request) {
 
   await appendListing(row);
 
-  return NextResponse.json({ listing: toPublicListing(row, uid) });
+  return NextResponse.json({ listing: toPublicListing(row, [uid]) });
 }
