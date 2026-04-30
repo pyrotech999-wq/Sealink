@@ -33,6 +33,64 @@ function wavesColor(m: number): string {
   return `rgba(${r},${g},${bl},0.68)`;
 }
 
+function Legend({ mode }: { mode: LayerMode }) {
+  const windBase =
+    "https://pae-paha.pacioos.hawaii.edu/thredds/wms/ncep_global/NCEP_Global_Atmospheric_Model_best.ncd";
+  const legendImg =
+    mode === "wind"
+      ? `${windBase}?REQUEST=GetLegendGraphic&LAYER=wind&STYLE=${encodeURIComponent("barb/jet")}`
+      : mode === "rain"
+        ? `${windBase}?REQUEST=GetLegendGraphic&LAYER=pratesfc&PALETTE=occam`
+        : mode === "pressure"
+          ? `${windBase}?REQUEST=GetLegendGraphic&LAYER=prmslmsl&PALETTE=jet`
+          : null;
+
+  if (mode === "waves") {
+    return (
+      <div className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-700 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
+        <p className="font-semibold text-zinc-900 dark:text-zinc-100">Legend · Wave height (m)</p>
+        <div className="mt-2 flex items-center gap-2">
+          <div
+            className="h-3 w-full rounded-full border border-zinc-200 dark:border-zinc-800"
+            style={{
+              background:
+                "linear-gradient(90deg, rgba(0,80,220,0.68), rgba(0,200,255,0.68), rgba(60,220,140,0.68), rgba(240,220,80,0.68), rgba(245,160,60,0.68), rgba(220,60,60,0.68))",
+            }}
+          />
+          <span className="w-8 text-right">6+</span>
+        </div>
+        <div className="mt-1 flex justify-between text-[10px] text-zinc-500 dark:text-zinc-400">
+          <span>0</span>
+          <span>1</span>
+          <span>2</span>
+          <span>3</span>
+          <span>4</span>
+          <span>5</span>
+          <span>6m+</span>
+        </div>
+        <p className="mt-2 text-[10px] text-zinc-500 dark:text-zinc-400">
+          Waves layer is derived from Open‑Meteo Marine API (sampled across the viewport).
+        </p>
+      </div>
+    );
+  }
+
+  if (!legendImg) return null;
+
+  return (
+    <div className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-700 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
+      <p className="font-semibold text-zinc-900 dark:text-zinc-100">
+        Legend · {mode === "wind" ? "Wind" : mode === "rain" ? "Rain" : "Pressure"}
+      </p>
+      <img
+        src={legendImg}
+        alt=""
+        className="mt-2 max-w-full rounded-lg border border-zinc-200 bg-white dark:border-zinc-800"
+      />
+    </div>
+  );
+}
+
 function OpenMeteoWavesOverlay({ enabled, timeIso, opacity }: { enabled: boolean; timeIso: string; opacity: number }) {
   const map = useMap();
 
@@ -446,9 +504,12 @@ export function WeatherSeaMap() {
           <WmsOverlay mode={mode} opacity={opacity} timeIso={timeIso} />
         </MapContainer>
       </div>
-      <div className="border-t border-zinc-200 px-3 py-2 text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
-        <span className="font-semibold text-zinc-800 dark:text-zinc-200">Tip:</span> drag/zoom anywhere in the world —
-        this map won’t snap back to you. Use Play to step through the next 4 days of model frames.
+      <div className="grid gap-2 border-t border-zinc-200 px-3 py-2 dark:border-zinc-800">
+        <Legend mode={mode} />
+        <p className="text-xs text-zinc-600 dark:text-zinc-400">
+          <span className="font-semibold text-zinc-800 dark:text-zinc-200">Tip:</span> drag/zoom anywhere in the world —
+          this map won’t snap back to you. Use Play to step through the next 4 days of model frames.
+        </p>
       </div>
     </div>
   );
