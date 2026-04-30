@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireGearUser } from "@/lib/gear-api-helpers";
+import { getLegacyGearUid, requireGearUser } from "@/lib/gear-api-helpers";
 import { extendExpiresFromCurrent, isInReminderWindow, loadGearListings, updateListing } from "@/lib/gear-store";
 import { toPublicListing } from "@/lib/gear-public";
 
@@ -10,6 +10,7 @@ type Ctx = { params: Promise<{ id: string }> };
 export async function POST(_req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
   let uid: string;
+  let legacyUid: string | null = null;
   let isAdmin = false;
   try {
     const u = await requireGearUser();
@@ -18,11 +19,13 @@ export async function POST(_req: Request, ctx: Ctx) {
   } catch {
     return NextResponse.json({ error: "Sign-in required" }, { status: 401 });
   }
+  legacyUid = await getLegacyGearUid();
+  const viewerUids = [uid, legacyUid ?? ""].filter(Boolean);
 
   const allBefore = await loadGearListings();
   const rowBefore = allBefore.find((l) => l.id === id);
   if (!rowBefore) return NextResponse.json({ error: "Listing not found" }, { status: 404 });
-  if (!isAdmin && rowBefore.sellerUid !== uid) return NextResponse.json({ error: "Not allowed" }, { status: 403 });
+  if (!isAdmin && !viewerUids.includes(rowBefore.sellerUid)) return NextResponse.json({ error: "Not allowed" }, { status: 403 });
 
   const out = await updateListing(id, rowBefore.sellerUid, (l) => {
     if (l.soldAt) return null;
@@ -45,5 +48,5 @@ export async function POST(_req: Request, ctx: Ctx) {
     return NextResponse.json({ error: "Listing not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ listing: toPublicListing(row, uid) });
+  return NextResponse.json({ listing: toPublicListing(row, viewerUids) });
 }

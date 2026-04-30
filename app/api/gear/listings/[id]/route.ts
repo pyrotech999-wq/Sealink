@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireGearUser } from "@/lib/gear-api-helpers";
+import { getLegacyGearUid, requireGearUser } from "@/lib/gear-api-helpers";
 import { deleteListing, loadGearListings, updateListing } from "@/lib/gear-store";
 import { toPublicListing } from "@/lib/gear-public";
 import { isGearCategoryId, isGearListingKind, type GearCategoryId, type GearListingKind } from "@/lib/gear-types";
@@ -21,6 +21,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
 
   let uid: string;
+  let legacyUid: string | null = null;
   let isAdmin = false;
   try {
     const u = await requireGearUser();
@@ -29,6 +30,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
   } catch {
     return NextResponse.json({ error: "Sign-in required" }, { status: 401 });
   }
+  legacyUid = await getLegacyGearUid();
+  const viewerUids = [uid, legacyUid ?? ""].filter(Boolean);
 
   let body: PatchBody;
   try {
@@ -40,7 +43,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   const allBefore = await loadGearListings();
   const rowBefore = allBefore.find((l) => l.id === id);
   if (!rowBefore) return NextResponse.json({ error: "Listing not found" }, { status: 404 });
-  if (!isAdmin && rowBefore.sellerUid !== uid) return NextResponse.json({ error: "Not allowed" }, { status: 403 });
+  if (!isAdmin && !viewerUids.includes(rowBefore.sellerUid)) return NextResponse.json({ error: "Not allowed" }, { status: 403 });
 
   const title = typeof body.title === "string" ? body.title : rowBefore.title;
   const description = typeof body.description === "string" ? body.description : rowBefore.description;
@@ -73,13 +76,14 @@ export async function PATCH(req: Request, ctx: Ctx) {
   const all = await loadGearListings();
   const row = all.find((l) => l.id === id);
   if (!row) return NextResponse.json({ error: "Listing not found" }, { status: 404 });
-  return NextResponse.json({ listing: toPublicListing(row, uid) });
+  return NextResponse.json({ listing: toPublicListing(row, viewerUids) });
 }
 
 export async function DELETE(_req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
 
   let uid: string;
+  let legacyUid: string | null = null;
   let isAdmin = false;
   try {
     const u = await requireGearUser();
@@ -88,11 +92,13 @@ export async function DELETE(_req: Request, ctx: Ctx) {
   } catch {
     return NextResponse.json({ error: "Sign-in required" }, { status: 401 });
   }
+  legacyUid = await getLegacyGearUid();
+  const viewerUids = [uid, legacyUid ?? ""].filter(Boolean);
 
   const allBefore = await loadGearListings();
   const rowBefore = allBefore.find((l) => l.id === id);
   if (!rowBefore) return NextResponse.json({ error: "Listing not found" }, { status: 404 });
-  if (!isAdmin && rowBefore.sellerUid !== uid) return NextResponse.json({ error: "Not allowed" }, { status: 403 });
+  if (!isAdmin && !viewerUids.includes(rowBefore.sellerUid)) return NextResponse.json({ error: "Not allowed" }, { status: 403 });
 
   const out = await deleteListing(id, rowBefore.sellerUid);
   if (!out.ok) return NextResponse.json({ error: out.error ?? "Could not delete" }, { status: out.error === "Not allowed" ? 403 : 404 });
