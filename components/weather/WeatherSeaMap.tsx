@@ -143,7 +143,18 @@ function Legend({ mode }: { mode: LayerMode }) {
 
 type WindPoint = { lat: number; lng: number; u: number; v: number };
 
-function WindParticlesOverlay({ enabled, timeIso, opacity }: { enabled: boolean; timeIso: string; opacity: number }) {
+function WindParticlesOverlay({
+  enabled,
+  timeIso,
+  opacity,
+  motionScale,
+}: {
+  enabled: boolean;
+  timeIso: string;
+  opacity: number;
+  /** 1 = normal speed, <1 = slower motion while timeline paused */
+  motionScale: number;
+}) {
   const map = useMap();
 
   useEffect(() => {
@@ -309,7 +320,9 @@ function WindParticlesOverlay({ enabled, timeIso, opacity }: { enabled: boolean;
         const w = windAtPx(p.x, p.y);
         if (!w) continue;
         const speed = clamp(w.s, 0, 30);
-        const k = 0.6 + speed * 0.08;
+        // Tune motion to feel more "Windy-like": not too frantic when paused.
+        const ms = clamp(motionScale, 0.05, 1);
+        const k = ms * (0.22 + speed * 0.045);
         const x2 = p.x + w.u * k;
         const y2 = p.y - w.v * k;
 
@@ -353,7 +366,7 @@ function WindParticlesOverlay({ enabled, timeIso, opacity }: { enabled: boolean;
       if (raf) window.cancelAnimationFrame(raf);
       canvas.remove();
     };
-  }, [map, enabled, timeIso, opacity]);
+  }, [map, enabled, timeIso, opacity, motionScale]);
 
   return null;
 }
@@ -386,14 +399,18 @@ function OpenMeteoWavesOverlay({ enabled, timeIso, opacity }: { enabled: boolean
         }
         const lats: number[] = [];
         const lngs: number[] = [];
+        const req: { lat: number; lng: number }[] = [];
         for (let y = 0; y < rows; y++) {
           const fy = rows === 1 ? 0.5 : y / (rows - 1);
           const lat = sw.lat + (ne.lat - sw.lat) * fy;
           for (let x = 0; x < cols; x++) {
             const fx = cols === 1 ? 0.5 : x / (cols - 1);
             const lng = sw.lng + (ne.lng - sw.lng) * fx;
-            lats.push(Number(lat.toFixed(4)));
-            lngs.push(Number(lng.toFixed(4)));
+            const rlat = Number(lat.toFixed(4));
+            const rlng = Number(lng.toFixed(4));
+            lats.push(rlat);
+            lngs.push(rlng);
+            req.push({ lat: rlat, lng: rlng });
           }
         }
 
@@ -426,50 +443,55 @@ function OpenMeteoWavesOverlay({ enabled, timeIso, opacity }: { enabled: boolean
           }
         }
 
+        // Render a smooth raster: write colors into a low-res grid then upscale with smoothing.
         const canvas = document.createElement("canvas");
-        canvas.width = cols * 22;
-        canvas.height = rows * 22;
+        canvas.width = cols * 24;
+        canvas.height = rows * 24;
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
 
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.globalAlpha = 1;
 
-        // Render smooth "shaded field" blobs at the *actual sea grid-cell* returned by the API
-        // to avoid waves appearing on land.
-        const latSpan = ne.lat - sw.lat;
-        const lngSpan = ne.lng - sw.lng;
-        const pxW = canvas.width;
-        const pxH = canvas.height;
+        const cell = 24;
+        const alpha = clamp(opacity, 0.2, 0.95);
+        // If Open-Meteo had to "snap" a request far away to find sea, treat it as land and do not paint it.
+        const SNAP_DEG = 0.12; // ~13km latitude; avoids big inland smearing
 
-        ctx.save();
-        ctx.globalAlpha = clamp(opacity, 0.2, 0.95);
-        ctx.globalCompositeOperation = "source-over";
-
-        const blobR = Math.max(10, Math.round(Math.min(pxW / cols, pxH / rows) * 0.9));
-        ctx.shadowBlur = Math.round(blobR * 0.9);
-        ctx.shadowColor = "rgba(0,0,0,0)";
-
-        for (const b of blocks) {
+        for (let i = 0; i < blocks.length; i++) {
+          const b = blocks[i];
           const usedLat = typeof b?.latitude === "number" ? b.latitude : null;
           const usedLng = typeof b?.longitude === "number" ? b.longitude : null;
           const arr = b?.hourly?.wave_height as number[] | undefined;
           const v = typeof arr?.[idx] === "number" ? arr[idx] : NaN;
           if (!Number.isFinite(v) || usedLat == null || usedLng == null) continue;
-          // Convert lat/lng into overlay pixel coordinates (linear within current bounds).
-          const x = lngSpan === 0 ? pxW / 2 : ((usedLng - sw.lng) / lngSpan) * pxW;
-          const y = latSpan === 0 ? pxH / 2 : (1 - (usedLat - sw.lat) / latSpan) * pxH;
-          if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-          if (x < -blobR || x > pxW + blobR || y < -blobR || y > pxH + blobR) continue;
 
-          const c = wavesColor(v);
-          ctx.fillStyle = c;
-          ctx.shadowColor = c;
-          ctx.beginPath();
-          ctx.arc(x, y, blobR, 0, Math.PI * 2);
-          ctx.fill();
+          const r = req[i];
+          if (r && (Math.abs(usedLat - r.lat) > SNAP_DEG || Math.abs(usedLng - r.lng) > SNAP_DEG)) continue;
+
+          const x = i % (cols as number);
+          const y = Math.floor(i / (cols as number));
+          ctx.fillStyle = wavesColor(v).replace(/,0\.68\)$/, `,${alpha})`);
+          ctx.fillRect(x * cell, y * cell, cell, cell);
         }
-        ctx.restore();
+
+        // Smooth upscale to reduce blockiness.
+        const smooth = document.createElement("canvas");
+        smooth.width = canvas.width;
+        smooth.height = canvas.height;
+        const sctx = smooth.getContext("2d");
+        if (sctx) {
+          sctx.imageSmoothingEnabled = true;
+          sctx.clearRect(0, 0, smooth.width, smooth.height);
+          // blur slightly while upscaling to mimic shaded field
+          (sctx as any).filter = "blur(10px)";
+          sctx.drawImage(canvas, 0, 0, smooth.width, smooth.height);
+          // copy back
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          (ctx as any).filter = "none";
+          ctx.imageSmoothingEnabled = true;
+          ctx.drawImage(smooth, 0, 0);
+        }
 
         const url = canvas.toDataURL("image/png");
         const imgBounds = L.latLngBounds([sw.lat, sw.lng], [ne.lat, ne.lng]);
@@ -799,7 +821,7 @@ export function WeatherSeaMap() {
           )}
           {/* Use Open-Meteo raster for waves to ensure coverage in enclosed seas like the Mediterranean. */}
           <OpenMeteoWavesOverlay enabled={mode === "waves"} timeIso={timeIso} opacity={opacity} />
-          <WindParticlesOverlay enabled={mode === "wind"} timeIso={timeIso} opacity={opacity} />
+          <WindParticlesOverlay enabled={mode === "wind"} timeIso={timeIso} opacity={opacity} motionScale={playing ? 1 : 0.25} />
           <WmsOverlay mode={mode} opacity={opacity} timeIso={timeIso} />
         </MapContainer>
       </div>
