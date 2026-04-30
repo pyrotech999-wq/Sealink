@@ -89,6 +89,12 @@ export function ForgotPasswordForm() {
       }}
       className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950"
     >
+      {smtpConfigured === false ? (
+        <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
+          Email is not configured on this deployment. Password reset messages cannot be sent until SMTP environment
+          variables are added in hosting settings.
+        </p>
+      ) : null}
       <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="fp-email">
         Email address
       </label>
