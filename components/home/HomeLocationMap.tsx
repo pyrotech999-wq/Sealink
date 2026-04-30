@@ -122,7 +122,7 @@ export default function HomeLocationMap() {
     typeof window !== "undefined" ? getAnchorAlertConfig() : getAnchorAlertConfig(),
   );
   const anchorCfgRef = useRef(anchorCfg);
-  const [activeAnchorAlert, setActiveAnchorAlert] = useState<{ id: string; message: string; createdAt: string } | null>(
+  const [activeAnchorAlert, setActiveAnchorAlert] = useState<{ id: string; message: string; createdAt: string; kind?: string } | null>(
     null,
   );
   const [alarmBlocked, setAlarmBlocked] = useState(false);
@@ -130,6 +130,7 @@ export default function HomeLocationMap() {
   const deviceId = useMemo(() => (typeof window !== "undefined" ? getOrCreateDeviceId() : "server"), []);
   const localDeviceName = useMemo(() => (typeof window !== "undefined" ? getDeviceName() : ""), []);
   const [monitorDeviceLabel, setMonitorDeviceLabel] = useState<string>("");
+  const [anchorMonitor, setAnchorMonitor] = useState<{ monitorDeviceId: string | null; alertDeviceIds: string[] } | null>(null);
   const [shareNearby, setShareNearby] = useState(() =>
     typeof window !== "undefined" ? getShareNearbyPeers() : false,
   );
@@ -179,7 +180,9 @@ export default function HomeLocationMap() {
   // If monitoring another device, pull its latest fix periodically.
   useEffect(() => {
     if (!sharing) return;
-    if (!anchorCfg.monitorDeviceId || anchorCfg.monitorDeviceId === "this") {
+    const serverMonitor = anchorMonitor?.monitorDeviceId;
+    const effectiveMonitor = serverMonitor ? serverMonitor : anchorCfg.monitorDeviceId === "this" ? deviceId : anchorCfg.monitorDeviceId;
+    if (!effectiveMonitor || effectiveMonitor === deviceId) {
       queueMicrotask(() => setMonitoredFix(null));
       return;
     }
@@ -188,7 +191,7 @@ export default function HomeLocationMap() {
       try {
         const r = await fetch("/api/anchor/devices");
         const d = (await r.json()) as { devices?: { deviceId: string; lastLat: number | null; lastLng: number | null; lastFixAt: string | null }[] };
-        const row = d.devices?.find((x) => x.deviceId === anchorCfg.monitorDeviceId);
+        const row = d.devices?.find((x) => x.deviceId === effectiveMonitor);
         if (!row || row.lastLat == null || row.lastLng == null || !row.lastFixAt) return;
         if (disposed) return;
         setMonitoredFix({ lat: row.lastLat, lng: row.lastLng, at: row.lastFixAt });
@@ -202,7 +205,30 @@ export default function HomeLocationMap() {
       disposed = true;
       window.clearInterval(id);
     };
-  }, [sharing, anchorCfg.monitorDeviceId]);
+  }, [sharing, anchorCfg.monitorDeviceId, anchorMonitor?.monitorDeviceId, deviceId]);
+
+  // Load server-backed monitor config (single monitor device + alert recipients).
+  useEffect(() => {
+    if (!sharing) return;
+    let disposed = false;
+    const load = async () => {
+      try {
+        const r = await fetch("/api/anchor/monitor", { cache: "no-store" });
+        if (!r.ok) return;
+        const d = (await r.json()) as { config?: { monitorDeviceId: string | null; alertDeviceIds: string[] } };
+        if (disposed) return;
+        if (d?.config) setAnchorMonitor(d.config);
+      } catch {
+        /* ignore */
+      }
+    };
+    void load();
+    const id = window.setInterval(() => void load(), 30_000);
+    return () => {
+      disposed = true;
+      window.clearInterval(id);
+    };
+  }, [sharing]);
 
   // Best-effort: keep screen awake on the "boat device" when anchor monitoring is armed.
   useEffect(() => {
@@ -240,6 +266,10 @@ export default function HomeLocationMap() {
     if (!sharing || !pos) return;
     const anchorCfg = anchorCfgRef.current;
     if (!anchorCfg.armed || anchorCfg.lat == null || anchorCfg.lng == null) return;
+    // Enforce single-device monitoring: only the selected monitor device performs drift checks.
+    const serverMonitor = anchorMonitor?.monitorDeviceId;
+    const effectiveMonitor = serverMonitor ? serverMonitor : anchorCfg.monitorDeviceId === "this" ? deviceId : anchorCfg.monitorDeviceId;
+    if (effectiveMonitor && effectiveMonitor !== deviceId) return;
     const src =
       anchorCfg.monitorDeviceId && anchorCfg.monitorDeviceId !== "this" && monitoredFix
         ? { lat: monitoredFix.lat, lng: monitoredFix.lng }
@@ -304,7 +334,7 @@ export default function HomeLocationMap() {
         const r = await fetch("/api/anchor/alerts", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: msg }),
+          body: JSON.stringify({ message: msg, kind: "alert" }),
           keepalive: true,
         });
         if (!r.ok) {
@@ -358,9 +388,11 @@ export default function HomeLocationMap() {
       try {
         const r = await fetch("/api/anchor/alerts", { cache: "no-store" });
         if (!r.ok) return;
-        const d = (await r.json()) as { alerts?: { id: string; message: string; createdAt: string }[] };
+        const d = (await r.json()) as { alerts?: { id: string; message: string; createdAt: string; kind?: string }[] };
         const list = Array.isArray(d.alerts) ? d.alerts : [];
         if (disposed) return;
+        const allowed = anchorMonitor?.alertDeviceIds?.length ? anchorMonitor.alertDeviceIds.includes(deviceId) : true;
+        if (!allowed) return;
         if (!activeAnchorAlert && list.length) setActiveAnchorAlert(list[0]!);
       } catch {
         /* ignore */
@@ -372,7 +404,7 @@ export default function HomeLocationMap() {
       disposed = true;
       window.clearInterval(id);
     };
-  }, [sharing, activeAnchorAlert]);
+  }, [sharing, activeAnchorAlert, anchorMonitor?.alertDeviceIds, deviceId]);
 
   // Display label for which device is being monitored.
   useEffect(() => {
@@ -448,6 +480,8 @@ export default function HomeLocationMap() {
     }
     setAlarmBlocked(false);
     alarmTimer.current = window.setInterval(() => void beepOnce(), 2500);
+    // Stop sound after 15 minutes even if not seen.
+    window.setTimeout(() => stopAlarm(), 15 * 60_000);
   }
 
   // In-app urgent alarm while alert is visible (until Seen).
@@ -1097,6 +1131,8 @@ export default function HomeLocationMap() {
         sharing={sharing}
         hasFix={Boolean(pos)}
         pos={pos ? { lat: pos.lat, lng: pos.lng } : null}
+        deviceId={deviceId}
+        monitor={anchorMonitor}
         config={{
           armed: anchorCfg.armed,
           lat: anchorCfg.lat,

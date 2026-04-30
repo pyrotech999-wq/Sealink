@@ -9,6 +9,7 @@ type Props = {
   sharing: boolean;
   hasFix: boolean;
   pos: { lat: number; lng: number } | null;
+  deviceId: string;
   config: {
     armed: boolean;
     lat: number | null;
@@ -17,6 +18,10 @@ type Props = {
     angleDeg: number;
     monitorDeviceId: string;
   };
+  monitor: {
+    monitorDeviceId: string | null;
+    alertDeviceIds: string[];
+  } | null;
   onUpdate: (next: {
     armed: boolean;
     lat: number | null;
@@ -27,12 +32,14 @@ type Props = {
   }) => void;
 };
 
-export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, config, onUpdate }: Props) {
+export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, deviceId, config, monitor, onUpdate }: Props) {
   const [radius, setRadius] = useState<string>(String(config.radiusM));
   const [angleDeg, setAngleDeg] = useState<string>(String(config.angleDeg ?? 360));
   const [deviceLabel, setDeviceLabel] = useState(() => (typeof window !== "undefined" ? getDeviceName() : ""));
   const [devices, setDevices] = useState<{ deviceId: string; name: string; updatedAt: string; lastFixAt: string | null }[]>([]);
   const [monitorDeviceId, setMonitorDeviceId] = useState<string>(config.monitorDeviceId || "this");
+  const [alertMode, setAlertMode] = useState<"this" | "other" | "both">("both");
+  const [alertOtherId, setAlertOtherId] = useState<string>("");
 
   const canSet = sharing && hasFix && pos != null;
   const hasAnchor = config.lat != null && config.lng != null;
@@ -55,6 +62,27 @@ export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, config, 
       }
     })();
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    // Initialise alert target UI from server config when available.
+    const ids = monitor?.alertDeviceIds ?? [];
+    const hasThis = ids.includes(deviceId);
+    const other = ids.find((x) => x !== deviceId) ?? "";
+    if (hasThis && other) {
+      setAlertMode("both");
+      setAlertOtherId(other);
+    } else if (hasThis && !other) {
+      setAlertMode("this");
+      setAlertOtherId("");
+    } else if (!hasThis && other) {
+      setAlertMode("other");
+      setAlertOtherId(other);
+    } else {
+      setAlertMode("both");
+      setAlertOtherId("");
+    }
+  }, [open, monitor?.alertDeviceIds, deviceId]);
 
   if (!open) return null;
 
@@ -101,6 +129,14 @@ export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, config, 
               value={monitorDeviceId}
               onChange={(e) => {
                 const v = e.target.value;
+                const cur = monitor?.monitorDeviceId;
+                // Switching monitor halts monitoring on the other device — confirm.
+                if (cur && cur !== "this" && v !== cur) {
+                  const ok = window.confirm(
+                    "Monitoring is currently active on another device. Switching will halt monitoring on the other device. Continue?",
+                  );
+                  if (!ok) return;
+                }
                 setMonitorDeviceId(v);
                 onUpdate({ ...config, monitorDeviceId: v });
               }}
@@ -118,6 +154,65 @@ export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, config, 
               Leave a device on the boat with the app open to keep sending location. Select it here to monitor.
             </span>
           </label>
+
+          <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-300">
+            <p className="font-semibold text-zinc-900 dark:text-zinc-100">Alert delivery</p>
+            <p className="mt-1 text-[11px] opacity-80">
+              Choose which signed-in device(s) should show the alert pop-up. Only one device monitors movement.
+            </p>
+            <div className="mt-2 grid gap-2">
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                Send alerts to
+                <select
+                  value={alertMode}
+                  onChange={(e) => setAlertMode(e.target.value as "this" | "other" | "both")}
+                  className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+                >
+                  <option value="this">This device</option>
+                  <option value="other">Other device</option>
+                  <option value="both">Both devices</option>
+                </select>
+              </label>
+              {alertMode !== "this" ? (
+                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                  Other device
+                  <select
+                    value={alertOtherId}
+                    onChange={(e) => setAlertOtherId(e.target.value)}
+                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+                  >
+                    <option value="">Select…</option>
+                    {devices
+                      .filter((d) => d.deviceId !== deviceId)
+                      .map((d) => (
+                        <option key={`alert-${d.deviceId}`} value={d.deviceId}>
+                          {d.name || d.deviceId.slice(0, 8)}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => {
+                  const ids: string[] = [];
+                  if (alertMode === "this" || alertMode === "both") ids.push(deviceId);
+                  if ((alertMode === "other" || alertMode === "both") && alertOtherId) ids.push(alertOtherId);
+                  void fetch("/api/anchor/monitor", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ alertDeviceIds: ids }),
+                  });
+                }}
+                className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              >
+                Save alert delivery
+              </button>
+              <p className="text-[10px] opacity-75">
+                Note: If “Other device” isn’t listed, open SeaLink on that device while signed in once so it registers.
+              </p>
+            </div>
+          </div>
 
           <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
             Drift distance
@@ -174,6 +269,16 @@ export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, config, 
               onClick={() => {
                 const n = (Number(radius) as 10 | 20 | 40 | 50) || config.radiusM;
                 const a = Math.max(0, Math.min(360, Math.round(Number(angleDeg) || config.angleDeg || 360)));
+                // Persist monitor + alert targets to server so it applies across both devices.
+                const chosenMonitor = monitorDeviceId === "this" ? deviceId : monitorDeviceId;
+                const ids: string[] = [];
+                if (alertMode === "this" || alertMode === "both") ids.push(deviceId);
+                if ((alertMode === "other" || alertMode === "both") && alertOtherId) ids.push(alertOtherId);
+                void fetch("/api/anchor/monitor", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ monitorDeviceId: chosenMonitor, alertDeviceIds: ids }),
+                });
                 onUpdate({
                   ...config,
                   lat: pos!.lat,
