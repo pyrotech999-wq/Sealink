@@ -53,6 +53,8 @@ export function VesselClassifiedsClient() {
 
   const [posting, setPosting] = useState(false);
   const [postMsg, setPostMsg] = useState<string | null>(null);
+  const [reminders, setReminders] = useState<{ id: string; title: string; expiresAt: string; daysLeft: number }[]>([]);
+  const [reminderMsg, setReminderMsg] = useState<string | null>(null);
 
   useEffect(() => {
     return () => {
@@ -114,6 +116,23 @@ export function VesselClassifiedsClient() {
     }
   };
 
+  const loadReminders = async () => {
+    try {
+      const r = await fetch("/api/vessels/classifieds/reminders", { cache: "no-store" });
+      const d = (await r.json()) as { items?: unknown; message?: string | null };
+      if (!r.ok) {
+        setReminders([]);
+        setReminderMsg(null);
+        return;
+      }
+      setReminders(Array.isArray(d.items) ? (d.items as any) : []);
+      setReminderMsg(typeof d.message === "string" ? d.message : null);
+    } catch {
+      setReminders([]);
+      setReminderMsg(null);
+    }
+  };
+
   useEffect(() => {
     queueMicrotask(() => void load());
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -121,6 +140,14 @@ export function VesselClassifiedsClient() {
 
   useEffect(() => {
     if (signedIn) queueMicrotask(() => void loadMine());
+  }, [signedIn]);
+
+  useEffect(() => {
+    if (!signedIn) return;
+    queueMicrotask(() => void loadReminders());
+    const id = window.setInterval(() => void loadReminders(), 60_000);
+    return () => window.clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signedIn]);
 
   async function createListing() {
@@ -221,6 +248,33 @@ export function VesselClassifiedsClient() {
           Paid vessel adverts run for <strong>6 months</strong>. Price: <strong>£30</strong> per listing (PayPal).
         </p>
       </div>
+
+      {signedIn && reminders.length ? (
+        <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-sm dark:border-amber-900/50 dark:bg-amber-950/30">
+          <p className="text-sm font-semibold text-amber-950 dark:text-amber-100">Renewal reminders</p>
+          {reminderMsg ? <p className="mt-1 text-xs text-amber-900/90 dark:text-amber-100/80">{reminderMsg}</p> : null}
+          <div className="mt-3 space-y-2">
+            {reminders.slice(0, 3).map((x) => (
+              <div key={`rem-${x.id}`} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-white/70 px-3 py-2 dark:border-amber-900/40 dark:bg-zinc-950/30">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">{x.title || "Vessel advert"}</p>
+                  <p className="text-[11px] text-zinc-600 dark:text-zinc-300">
+                    Expires in <span className="font-semibold">{x.daysLeft}</span> day{x.daysLeft === 1 ? "" : "s"} ·{" "}
+                    {new Date(x.expiresAt).toLocaleString("en-GB")}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void payPayPal(x.id)}
+                  className="h-9 shrink-0 rounded-lg bg-green-600 px-3 text-sm font-semibold text-white hover:bg-green-700"
+                >
+                  Renew 6 months (£30)
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
         <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Post a vessel advert</h2>
