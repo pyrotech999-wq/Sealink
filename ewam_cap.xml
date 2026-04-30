@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?><WMS_Capabilities xmlns:inspire_vs="http://inspire.ec.europa.eu/schemas/inspire_vs/1.0" xmlns:inspire_common="http://inspire.ec.europa.eu/schemas/common/1.0" version="1.3.0" updateSequence="26300" xmlns="http://www.opengis.net/wms" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/wms https://maps.dwd.de/geoserver/schemas/wms/1.3.0/capabilities_1_3_0.xsd http://inspire.ec.europa.eu/schemas/inspire_vs/1.0 https://inspire.ec.europa.eu/schemas/inspire_vs/1.0/inspire_vs.xsd">
+  <Service>
+    <Name>WMS</Name>
+    <Title>DWD GeoServer WMS</Title>
+    <Abstract>This is the Web Map Server of DWD.</Abstract>
+    <KeywordList>
+      <Keyword>meteorology</Keyword>
+      <Keyword>climatology</Keyword>
+    </KeywordList>
+    <OnlineResource xlink:type="simple" xlink:href="https://maps.dwd.de/geoserver/"/>
+    <ContactInformation>
+      <ContactPersonPrimary>
+        <ContactPerson/>
+        <ContactOrganization>Deutscher Wetterdienst</ContactOrganization>
+      </ContactPersonPrimary>
+      <ContactPosition/>
+      <ContactAddress>
+        <AddressType>postal</AddressType>
+        <Address>Frankfurter Strasse 135</Address>
+        <City>Offenbach</City>
+        <StateOrProvince>Hessen</StateOrProvince>
+        <PostCode>63067</PostCode>
+        <Country>Germany</Country>
+      </ContactAddress>
+      <ContactVoiceTelephone/>
+      <ContactFacsimileTelephone/>
+      <ContactElectronicMailAddress>info@dwd.de</ContactElectronicMailAddress>
+    </ContactInformation>
+    <Fees>none</Fees>
+    <AccessConstraints>https://www.dwd.de/copyright</AccessConstraints>
+  </Service>
+  <Capability>
+    <Request>
+      <GetCapabilities>
+        <Format>text/xml</Format>
+        <DCPType>
+          <HTTP>
+            <Get>
+              <OnlineResource xlink:type="simple" xlink:href="https://maps.dwd.de/geoserver/dwd/EWAM/ows?SERVICE=WMS&amp;"/>
+            </Get>
+            <Post>
+              <OnlineResource xlink:type="simple" xlink:href="https://maps.dwd.de/geoserver/dwd/EWAM/ows?SERVICE=WMS&amp;"/>
+            </Post>
+          </HTTP>
+        </DCPType>
+      </GetCapabilities>
+      <GetMap>
+        <Format>image/png</Format>
+        <Format>application/atom+xml</Format>
+        <Format>application/json;type=utfgrid</Format>
+        <Format>application/pdf</Format>
+        <Format>application/rss+xml</Format>
+        <Format>application/vnd.google-earth.kml+xml</Format>
+        <Format>application/vnd.google-earth.kml+xml;mode=networklink</Format>
+        <Format>application/vnd.google-earth.kmz</Format>
+        <Format>image/geotiff</Format>
+        <Format>image/geotiff8</Format>
+        <Format>image/gif</Format>
+        <Format>image/jpeg</Format>
+        <Format>image/png; mode=8bit</Format>
+        <Format>image/svg+xml</Format>
+        <Format>image/tiff</Format>
+        <Format>image/tiff8</Format>
+        <Format>image/vnd.jpeg-png</Format>
+        <Format>image/vnd.jpeg-png8</Format>
+        <Format>text/html; subtype=openlayers</Format>
+        <Format>text/html; subtype=openlayers2</Format>
+        <Format>text/html; subtype=openlayers3</Format>
+        <DCPType>
+          <HTTP>
+            <Get>
+              <OnlineResource xlink:type="simple" xlink:href="https://maps.dwd.de/geoserver/dwd/EWAM/ows?SERVICE=WMS&amp;"/>
+            </Get>
+          </HTTP>
+        </DCPType>
+      </GetMap>
+      <GetFeatureInfo>
+        <Format>text/plain</Format>
+        <Format>application/vnd.ogc.gml</Format>
+        <Format>text/xml</Format>
+        <Format>application/vnd.ogc.gml/3.1.1</Format>
+        <Format>text/xml; subtype=gml/3.1.1</Format>
+        <Format>text/html</Format>
+        <Format>text/javascript</Format>
+        <Format>application/json</Format>
+        <DCPType>
+          <HTTP>
+            <Get>
+              <OnlineResource xlink:type="simple" xlink:href="https://maps.dwd.de/geoserver/dwd/EWAM/ows?SERVICE=WMS&amp;"/>
+            </Get>
+          </HTTP>
+        </DCPType>
+      </GetFeatureInfo>
+    </Request>
+    <Exception>
+      <Format>XML</Format>
+      <Format>INIMAGE</Format>
+      <Format>BLANK</Format>
+      <Format>JSON</Format>
+      <Format>JSONP</Format>
+    </Exception>
+    <inspire_vs:ExtendedCapabilities>
+      <inspire_common:MetadataUrl>
+        <inspire_common:URL>https://gdk.gdi-de.org/gdi-de/srv/eng/csw?request=GetRecordById&amp;version=2.0.2&amp;service=CSW&amp;outputSchema=http://www.isotc211.org/2005/gmd&amp;elementSetName=full&amp;id=de.dwd.services.wms</inspire_common:URL>
+        <inspire_common:MediaType>application/vnd.iso.19139+xml</inspire_common:MediaType>
+      </inspire_common:MetadataUrl>
+      <inspire_common:SupportedLanguages>
+        <inspire_common:DefaultLanguage>
+          <inspire_common:Language>ger</inspire_common:Language>
+        </inspire_common:DefaultLanguage>
+      </inspire_common:SupportedLanguages>
+      <inspire_common:ResponseLanguage>
+        <inspire_common:Language>ger</inspire_common:Language>
+      </inspire_common:ResponseLanguage>
+    </inspire_vs:ExtendedCapabilities>
+    <Layer>
+      <Title>DWD GeoServer WMS</Title>
+      <Abstract>This is the Web Map Server of DWD.</Abstract>
+      <!--Limited list of EPSG projections:-->
+      <CRS>EPSG:3044</CRS>
+      <CRS>EPSG:3045</CRS>
+      <CRS>EPSG:3413</CRS>
+      <CRS>EPSG:3857</CRS>
+      <CRS>EPSG:4258</CRS>
+      <CRS>EPSG:4326</CRS>
+      <CRS>EPSG:4839</CRS>
+      <CRS>EPSG:25832</CRS>
+      <CRS>EPSG:25833</CRS>
+      <CRS>EPSG:31467</CRS>
+      <CRS>EPSG:31468</CRS>
+      <CRS>EPSG:900913</CRS>
+      <CRS>EPSG:1000001</CRS>
+      <EX_GeographicBoundingBox>
+        <westBoundLongitude>0.0</westBoundLongitude>
+        <eastBoundLongitude>-1.0</eastBoundLongitude>
+        <southBoundLatitude>0.0</southBoundLatitude>
+        <northBoundLatitude>-1.0</northBoundLatitude>
+      </EX_GeographicBoundingBox>
+      <BoundingBox CRS="EPSG:3044" minx="-112246.66895189701" miny="-618481.3010258547" maxx="0.0" maxy="-505492.1781573865"/>
+      <BoundingBox CRS="EPSG:3045" minx="-115015.35771495027" miny="-1304165.0832200008" maxx="0.0" maxy="-1188391.2275827061"/>
+      <BoundingBox CRS="EPSG:3413" minx="8565408.05796338" miny="-9024858.222420722" maxx="8871382.405528735" maxy="-8718901.806961386"/>
+      <BoundingBox CRS="EPSG:3857" minx="-111319.49079327357" miny="-111325.14286638597" maxx="0.0" maxy="-7.081154551613622E-10"/>
+      <BoundingBox CRS="EPSG:4258" minx="-1.0000000000347453" miny="-1.0" maxx="0.0" maxy="0.0"/>
+      <BoundingBox CRS="EPSG:4326" minx="-1.0" miny="-1.0" maxx="0.0" maxy="0.0"/>
+      <BoundingBox CRS="EPSG:4839" minx="-6413676.783006558" miny="-1820775.7950938852" maxx="-6235039.729245084" maxy="-1641253.7494692865"/>
+      <BoundingBox CRS="EPSG:25832" minx="-618481.3010258547" miny="-112246.66895189701" maxx="-505492.1781573865" maxy="0.0"/>
+      <BoundingBox CRS="EPSG:25833" minx="-1304165.0832200008" miny="-115015.35771495027" maxx="-1188391.2275827061" maxy="0.0"/>
+      <BoundingBox CRS="EPSG:31467" minx="-112734.46643880004" miny="2381199.8258370087" maxx="-443.93117614781534" maxy="2494233.101527377"/>
+      <BoundingBox CRS="EPSG:31468" minx="-113950.34913181466" miny="3040349.442198082" maxx="-448.2914642536954" maxy="3154601.246083407"/>
+      <BoundingBox CRS="EPSG:900913" minx="-111319.49079327357" miny="-111325.14286638597" maxx="0.0" maxy="-7.081154551613622E-10"/>
+      <BoundingBox CRS="EPSG:1000001" minx="-2308.015971188884" miny="-11912.184842320157" maxx="-2064.0962333741527" maxy="-11668.265104505426"/>
+    </Layer>
+  </Capability>
+</WMS_Capabilities>
