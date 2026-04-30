@@ -127,6 +127,8 @@ export default function HomeLocationMap() {
   const [alarmBlocked, setAlarmBlocked] = useState(false);
   const alarmTimer = useRef<number | null>(null);
   const deviceId = useMemo(() => (typeof window !== "undefined" ? getOrCreateDeviceId() : "server"), []);
+  const localDeviceName = useMemo(() => (typeof window !== "undefined" ? getDeviceName() : ""), []);
+  const [monitorDeviceLabel, setMonitorDeviceLabel] = useState<string>("");
   const [shareNearby, setShareNearby] = useState(() =>
     typeof window !== "undefined" ? getShareNearbyPeers() : false,
   );
@@ -238,6 +240,10 @@ export default function HomeLocationMap() {
         : { lat: pos.lat, lng: pos.lng };
     const m = distanceMiles(src.lat, src.lng, anchorCfg.lat, anchorCfg.lng) * 1609.344;
     const brng = bearingDeg(anchorCfg.lat, anchorCfg.lng, src.lat, src.lng);
+    const gpsBufferM =
+      anchorCfg.monitorDeviceId && anchorCfg.monitorDeviceId !== "this"
+        ? 12 // we don't have accuracy for remote fixes; be conservative
+        : Math.max(8, Math.round(pos.accuracyM || 0));
 
     // Update last bearing so angle checks have a baseline even after reload.
     if (anchorCfg.lastBearingDeg == null && Number.isFinite(brng)) {
@@ -251,8 +257,22 @@ export default function HomeLocationMap() {
     const angleDelta =
       anchorCfg.lastBearingDeg != null && angleLimit < 360 ? angleDiffDeg(brng, anchorCfg.lastBearingDeg) : 0;
 
-    const driftTriggered = m > anchorCfg.radiusM;
-    const angleTriggered = angleLimit < 360 && angleDelta > angleLimit;
+    // Avoid false positives from GPS jitter by requiring the drift to exceed the radius + a buffer based on accuracy.
+    const driftTriggered = m > anchorCfg.radiusM + gpsBufferM;
+
+    // Bearing is very noisy when very close to the anchor point; only allow angle alerts once "meaningfully away".
+    const meaningfulDistM = Math.max(12, Math.round(anchorCfg.radiusM * 0.6));
+    const angleTriggered =
+      angleLimit < 360 && m >= meaningfulDistM && Number.isFinite(brng) && angleDelta > angleLimit;
+
+    // If we're safely inside the zone, keep updating lastBearingDeg to track natural jitter.
+    if (!driftTriggered && !angleTriggered && angleLimit < 360 && Number.isFinite(brng) && m <= anchorCfg.radiusM) {
+      const next = { ...anchorCfg, lastBearingDeg: brng };
+      queueMicrotask(() => setAnchorCfg(next));
+      setAnchorAlertConfig(next);
+      return;
+    }
+
     if (!driftTriggered && !angleTriggered) return;
 
     const last = anchorCfg.lastAlertAt ? new Date(anchorCfg.lastAlertAt).getTime() : 0;
@@ -319,6 +339,40 @@ export default function HomeLocationMap() {
       window.clearInterval(id);
     };
   }, [sharing, activeAnchorAlert]);
+
+  // Display label for which device is being monitored.
+  useEffect(() => {
+    if (!anchorCfg.armed) {
+      setMonitorDeviceLabel("");
+      return;
+    }
+    if (!anchorCfg.monitorDeviceId || anchorCfg.monitorDeviceId === "this") {
+      setMonitorDeviceLabel(localDeviceName?.trim() ? `This device (${localDeviceName.trim()})` : "This device");
+      return;
+    }
+    let disposed = false;
+    const load = async () => {
+      try {
+        const r = await fetch("/api/anchor/devices", { cache: "no-store" });
+        const d = (await r.json()) as {
+          devices?: { deviceId: string; name: string; updatedAt: string; lastFixAt: string | null }[];
+        };
+        if (disposed) return;
+        const row = d.devices?.find((x) => x.deviceId === anchorCfg.monitorDeviceId);
+        if (row) {
+          setMonitorDeviceLabel(row.name?.trim() ? row.name.trim() : row.deviceId.slice(0, 8));
+        } else {
+          setMonitorDeviceLabel(anchorCfg.monitorDeviceId.slice(0, 8));
+        }
+      } catch {
+        if (!disposed) setMonitorDeviceLabel(anchorCfg.monitorDeviceId.slice(0, 8));
+      }
+    };
+    void load();
+    return () => {
+      disposed = true;
+    };
+  }, [anchorCfg.armed, anchorCfg.monitorDeviceId, localDeviceName]);
 
   function stopAlarm() {
     if (alarmTimer.current != null) window.clearInterval(alarmTimer.current);
@@ -674,13 +728,32 @@ export default function HomeLocationMap() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setAnchorOpen(true)}
-            className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-indigo-300 bg-indigo-50 px-4 text-sm font-semibold text-indigo-900 shadow-sm hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-100 dark:hover:bg-indigo-900/70"
-          >
-            Anchor alert
-          </button>
+          <div className="flex flex-col items-start gap-1">
+            <button
+              type="button"
+              onClick={() => setAnchorOpen(true)}
+              className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-indigo-300 bg-indigo-50 px-4 text-sm font-semibold text-indigo-900 shadow-sm hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-100 dark:hover:bg-indigo-900/70"
+            >
+              Anchor alert
+            </button>
+            <button
+              type="button"
+              onClick={() => setAnchorOpen(true)}
+              className={`inline-flex h-6 items-center gap-1 rounded-full border px-2 text-[11px] font-semibold ${
+                anchorCfg.armed
+                  ? "border-green-300 bg-green-50 text-green-900 hover:bg-green-100 dark:border-green-900/50 dark:bg-green-950/40 dark:text-green-100 dark:hover:bg-green-950/60"
+                  : "border-red-300 bg-red-50 text-red-900 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100 dark:hover:bg-red-950/60"
+              }`}
+              title="Open anchor alert settings"
+            >
+              {anchorCfg.armed ? "ON" : "OFF"}
+              {anchorCfg.armed ? (
+                <span className="max-w-[200px] truncate font-normal opacity-80">
+                  · {monitorDeviceLabel ? `Monitoring ${monitorDeviceLabel}` : "Monitoring…"}
+                </span>
+              ) : null}
+            </button>
+          </div>
           <button
             type="button"
             onClick={() => setLifeSeasOpen(true)}
