@@ -5,7 +5,8 @@ import "leaflet/dist/leaflet.css";
 import { useEffect, useMemo, useState } from "react";
 import { MapContainer, TileLayer, useMap } from "react-leaflet";
 
-type LayerMode = "wind" | "waves";
+type LayerMode = "wind" | "waves" | "rain" | "pressure";
+type BaseMapMode = "streets" | "light" | "satellite";
 
 function WmsOverlay({ mode, opacity }: { mode: LayerMode; opacity: number }) {
   const map = useMap();
@@ -35,12 +36,33 @@ function WmsOverlay({ mode, opacity }: { mode: LayerMode; opacity: number }) {
       version: "1.3.0",
     } as any);
 
-    const layer = mode === "wind" ? wind : waves;
+    const rain = L.tileLayer.wms(windUrl, {
+      layers: "pratesfc",
+      styles: "boxfill/occam",
+      format: "image/png",
+      transparent: true,
+      opacity,
+      version: "1.3.0",
+    } as any);
+
+    const pressure = L.tileLayer.wms(windUrl, {
+      layers: "prmslmsl",
+      styles: "boxfill/jet",
+      format: "image/png",
+      transparent: true,
+      opacity,
+      version: "1.3.0",
+    } as any);
+
+    const layer =
+      mode === "wind" ? wind : mode === "waves" ? waves : mode === "rain" ? rain : pressure;
     layer.addTo(map);
     return () => {
       map.removeLayer(layer);
       map.removeLayer(wind);
       map.removeLayer(waves);
+      map.removeLayer(rain);
+      map.removeLayer(pressure);
     };
   }, [map, mode, opacity]);
 
@@ -49,6 +71,7 @@ function WmsOverlay({ mode, opacity }: { mode: LayerMode; opacity: number }) {
 
 export function WeatherSeaMap() {
   const [mode, setMode] = useState<LayerMode>("wind");
+  const [base, setBase] = useState<BaseMapMode>("satellite");
   const [opacity, setOpacity] = useState(0.75);
   const [pos, setPos] = useState<{ lat: number; lng: number } | null>(null);
   const [initialCenter, setInitialCenter] = useState<[number, number] | null>(null);
@@ -78,7 +101,44 @@ export function WeatherSeaMap() {
   return (
     <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-950">
-        <div className="inline-flex overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+            <button
+              type="button"
+              onClick={() => setBase("satellite")}
+              className={`h-9 px-3 text-sm font-semibold ${
+                base === "satellite"
+                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950"
+                  : "text-zinc-700 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-900"
+              }`}
+            >
+              Satellite
+            </button>
+            <button
+              type="button"
+              onClick={() => setBase("streets")}
+              className={`h-9 px-3 text-sm font-semibold ${
+                base === "streets"
+                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950"
+                  : "text-zinc-700 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-900"
+              }`}
+            >
+              Streets
+            </button>
+            <button
+              type="button"
+              onClick={() => setBase("light")}
+              className={`h-9 px-3 text-sm font-semibold ${
+                base === "light"
+                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950"
+                  : "text-zinc-700 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-900"
+              }`}
+            >
+              Light
+            </button>
+          </div>
+
+          <div className="inline-flex overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
           <button
             type="button"
             onClick={() => setMode("wind")}
@@ -101,6 +161,29 @@ export function WeatherSeaMap() {
           >
             Waves
           </button>
+          <button
+            type="button"
+            onClick={() => setMode("rain")}
+            className={`h-9 px-3 text-sm font-semibold ${
+              mode === "rain"
+                ? "bg-indigo-600 text-white"
+                : "text-zinc-700 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-900"
+            }`}
+          >
+            Rain
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("pressure")}
+            className={`h-9 px-3 text-sm font-semibold ${
+              mode === "pressure"
+                ? "bg-indigo-600 text-white"
+                : "text-zinc-700 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-900"
+            }`}
+          >
+            Pressure
+          </button>
+        </div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -118,17 +201,42 @@ export function WeatherSeaMap() {
       </div>
 
       <div className="h-[min(70vh,620px)] w-full bg-zinc-100 dark:bg-zinc-900">
-        <MapContainer center={center} zoom={pos ? 6 : 2} className="h-full w-full" scrollWheelZoom attributionControl>
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
+        <MapContainer
+          center={center}
+          zoom={pos ? 7 : 2}
+          maxZoom={18}
+          className="h-full w-full"
+          scrollWheelZoom
+          attributionControl
+        >
+          {base === "satellite" ? (
+            <TileLayer
+              attribution='Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics'
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              maxZoom={19}
+            />
+          ) : base === "light" ? (
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; CARTO'
+              url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+              subdomains="abcd"
+              maxZoom={19}
+              detectRetina
+            />
+          ) : (
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              maxZoom={19}
+              detectRetina
+            />
+          )}
           <WmsOverlay mode={mode} opacity={opacity} />
         </MapContainer>
       </div>
       <div className="border-t border-zinc-200 px-3 py-2 text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
         <span className="font-semibold text-zinc-800 dark:text-zinc-200">Tip:</span> drag/zoom anywhere in the world —
-        this map won’t snap back to you. Wind and waves overlays are global model layers.
+        this map won’t snap back to you. Wind and sea overlays are global model layers.
       </div>
     </div>
   );
