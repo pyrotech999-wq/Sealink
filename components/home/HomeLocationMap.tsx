@@ -121,6 +121,7 @@ export default function HomeLocationMap() {
   const [anchorCfg, setAnchorCfg] = useState(() =>
     typeof window !== "undefined" ? getAnchorAlertConfig() : getAnchorAlertConfig(),
   );
+  const anchorCfgRef = useRef(anchorCfg);
   const [activeAnchorAlert, setActiveAnchorAlert] = useState<{ id: string; message: string; createdAt: string } | null>(
     null,
   );
@@ -170,6 +171,10 @@ export default function HomeLocationMap() {
   }, [sharing, pos?.lat, pos?.lng, deviceId]);
 
   const [monitoredFix, setMonitoredFix] = useState<{ lat: number; lng: number; at: string } | null>(null);
+
+  useEffect(() => {
+    anchorCfgRef.current = anchorCfg;
+  }, [anchorCfg]);
 
   // If monitoring another device, pull its latest fix periodically.
   useEffect(() => {
@@ -233,6 +238,7 @@ export default function HomeLocationMap() {
   // Anchor alert check (runs whenever position updates).
   useEffect(() => {
     if (!sharing || !pos) return;
+    const anchorCfg = anchorCfgRef.current;
     if (!anchorCfg.armed || anchorCfg.lat == null || anchorCfg.lng == null) return;
     const src =
       anchorCfg.monitorDeviceId && anchorCfg.monitorDeviceId !== "this" && monitoredFix
@@ -267,6 +273,9 @@ export default function HomeLocationMap() {
 
     // If we're safely inside the zone, keep updating lastBearingDeg to track natural jitter.
     if (!driftTriggered && !angleTriggered && angleLimit < 360 && Number.isFinite(brng) && m <= anchorCfg.radiusM) {
+      // Only update if bearing actually changed enough to matter (avoid churn).
+      const delta = anchorCfg.lastBearingDeg != null ? angleDiffDeg(brng, anchorCfg.lastBearingDeg) : 999;
+      if (delta < 3) return;
       const next = { ...anchorCfg, lastBearingDeg: brng };
       queueMicrotask(() => setAnchorCfg(next));
       setAnchorAlertConfig(next);
@@ -315,7 +324,20 @@ export default function HomeLocationMap() {
     } catch {
       /* ignore */
     }
-  }, [sharing, pos?.lat, pos?.lng, monitoredFix?.lat, monitoredFix?.lng, anchorCfg]);
+  }, [
+    sharing,
+    pos?.lat,
+    pos?.lng,
+    pos?.accuracyM,
+    monitoredFix?.lat,
+    monitoredFix?.lng,
+    anchorCfg.armed,
+    anchorCfg.lat,
+    anchorCfg.lng,
+    anchorCfg.radiusM,
+    anchorCfg.angleDeg,
+    anchorCfg.monitorDeviceId,
+  ]);
 
   // Anchor alert inbox poll (keeps alerts in sync across both devices).
   useEffect(() => {
