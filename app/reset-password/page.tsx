@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 import { ResetPasswordForm } from "./ui";
 
 export const metadata: Metadata = {
@@ -28,7 +29,15 @@ export default function ResetPasswordPage() {
             Choose a new password. Your reset link expires after 30 minutes.
           </p>
         </div>
-        <ResetPasswordForm />
+        <Suspense
+          fallback={
+            <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">Loading…</p>
+            </div>
+          }
+        >
+          <ResetPasswordForm />
+        </Suspense>
       </main>
     </div>
   );
