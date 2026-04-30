@@ -450,7 +450,7 @@ export function VesselClassifiedsClient() {
       <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
         <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Your drafts (pay to publish)</h2>
         <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-          Drafts don’t show publicly until paid. Choose Stripe or PayPal to publish for 6 months.
+          Drafts don’t show publicly until paid. Use PayPal to publish for 6 months.
         </p>
         <div className="mt-4 space-y-3">
           {signedIn === false ? (
@@ -469,15 +469,8 @@ export function VesselClassifiedsClient() {
                   <div className="mt-2 flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={() => void payStripe(l.id)}
-                      className="h-9 rounded-lg bg-green-600 px-3 text-sm font-semibold text-white hover:bg-green-700"
-                    >
-                      Pay with Stripe (£30)
-                    </button>
-                    <button
-                      type="button"
                       onClick={() => void payPayPal(l.id)}
-                      className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                      className="h-9 rounded-lg bg-green-600 px-3 text-sm font-semibold text-white hover:bg-green-700"
                     >
                       Pay with PayPal (£30)
                     </button>
