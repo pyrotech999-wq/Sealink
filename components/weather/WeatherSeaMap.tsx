@@ -49,8 +49,8 @@ function OpenMeteoWavesOverlay({ enabled, timeIso, opacity }: { enabled: boolean
         const ne = bounds.getNorthEast();
 
         // Sample a small grid across the viewport.
-        const cols = 16;
-        const rows = 10;
+        const cols: number = 16;
+        const rows: number = 10;
         const lats: number[] = [];
         const lngs: number[] = [];
         for (let y = 0; y < rows; y++) {
@@ -156,6 +156,7 @@ function WmsOverlay({ mode, opacity, timeIso }: { mode: LayerMode; opacity: numb
   const map = useMap();
 
   useEffect(() => {
+    if (mode === "waves") return;
     const windUrl =
       "https://pae-paha.pacioos.hawaii.edu/thredds/wms/ncep_global/NCEP_Global_Atmospheric_Model_best.ncd";
     const wavesUrl =
@@ -202,8 +203,7 @@ function WmsOverlay({ mode, opacity, timeIso }: { mode: LayerMode; opacity: numb
       time: timeIso,
     } as any);
 
-    const layer =
-      mode === "wind" ? wind : mode === "waves" ? waves : mode === "rain" ? rain : pressure;
+    const layer = mode === "wind" ? wind : mode === "rain" ? rain : pressure;
     layer.addTo(map);
     return () => {
       map.removeLayer(layer);
@@ -443,7 +443,7 @@ export function WeatherSeaMap() {
           )}
           {/* Use Open-Meteo raster for waves to ensure coverage in enclosed seas like the Mediterranean. */}
           <OpenMeteoWavesOverlay enabled={mode === "waves"} timeIso={timeIso} opacity={opacity} />
-          <WmsOverlay mode={mode === "waves" ? "wind" : mode} opacity={opacity} timeIso={timeIso} />
+          <WmsOverlay mode={mode} opacity={opacity} timeIso={timeIso} />
         </MapContainer>
       </div>
       <div className="border-t border-zinc-200 px-3 py-2 text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
