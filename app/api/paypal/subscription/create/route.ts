@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { TRIAL_DAYS, type BillingPlan } from "@/lib/pricing";
-import { getAppBaseUrl } from "@/lib/stripe-server";
+import { getAppBaseUrl } from "@/lib/app-base-url";
 import { paypalAccessToken, paypalBaseUrl, paypalClientId } from "@/app/api/vessels/classifieds/paypal/_paypal";
 
 /** Accept legacy clients that still send `yearly`. */

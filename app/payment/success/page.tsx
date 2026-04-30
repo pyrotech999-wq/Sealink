@@ -6,10 +6,10 @@ export const metadata: Metadata = {
   description: "Your SeaLink trial is active.",
 };
 
-type Props = { searchParams: Promise<{ session_id?: string; provider?: string; subscription_id?: string }> };
+type Props = { searchParams: Promise<{ provider?: string; subscription_id?: string }> };
 
 export default async function PaymentSuccessPage({ searchParams }: Props) {
-  const { session_id: sessionId, provider, subscription_id: subId } = await searchParams;
+  const { provider, subscription_id: subId } = await searchParams;
   const isPayPal = provider === "paypal";
 
   return (
@@ -22,11 +22,8 @@ export default async function PaymentSuccessPage({ searchParams }: Props) {
         <p className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
           {isPayPal
             ? "PayPal has recorded your subscription. You won’t be charged until the trial ends. You can manage billing from your PayPal account."
-            : "Stripe has recorded your checkout. You won’t be charged until the trial ends. You can manage billing from the link in your receipt email."}
+            : "Your subscription is active. You won’t be charged until the trial ends."}
         </p>
-        {sessionId ? (
-          <p className="mt-4 break-all font-mono text-[11px] text-zinc-400 dark:text-zinc-500">Stripe session {sessionId}</p>
-        ) : null}
         {subId ? (
           <p className="mt-2 break-all font-mono text-[11px] text-zinc-400 dark:text-zinc-500">PayPal subscription {subId}</p>
         ) : null}

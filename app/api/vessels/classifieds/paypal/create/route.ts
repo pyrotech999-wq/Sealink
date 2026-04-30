@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAuthUser } from "@/lib/auth";
-import { getAppBaseUrl } from "@/lib/stripe-server";
+import { getAppBaseUrl } from "@/lib/app-base-url";
 import { loadVesselClassifieds, updateVesselListing, adminUpdateVesselListing } from "@/lib/vessel-classifieds-store";
 import { paypalAccessToken, paypalBaseUrl, paypalClientId } from "../_paypal";
 

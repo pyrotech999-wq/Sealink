@@ -8,7 +8,7 @@ type PublicListing = {
   id: string;
   status: "draft" | "active" | "expired" | "removed";
   paymentStatus: "unpaid" | "pending" | "paid";
-  paymentProvider: "stripe" | "paypal" | null;
+  paymentProvider: "paypal" | null;
   paymentRef: string | null;
   categoryId: VesselCategoryId;
   title: string;
@@ -166,25 +166,6 @@ export function VesselClassifiedsClient() {
     }
   }
 
-  async function payStripe(id: string) {
-    setErr(null);
-    try {
-      const r = await fetch("/api/vessels/classifieds/stripe/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id }),
-      });
-      const d = (await r.json()) as { url?: string; error?: string };
-      if (!r.ok || !d.url) {
-        setErr(d.error || "Stripe checkout could not be started");
-        return;
-      }
-      window.location.assign(d.url);
-    } catch {
-      setErr("Network error");
-    }
-  }
-
   async function payPayPal(id: string) {
     setErr(null);
     try {
@@ -204,14 +185,13 @@ export function VesselClassifiedsClient() {
     }
   }
 
-  // Handle PayPal return + Stripe verify (best effort, no webhook yet).
+  // Handle PayPal return (best effort, no webhook yet).
   useEffect(() => {
     const url = new URL(window.location.href);
     const provider = url.searchParams.get("provider") ?? "";
     const listingId = url.searchParams.get("listing") ?? "";
     const paid = url.searchParams.get("paid") === "1";
     const token = url.searchParams.get("token") ?? ""; // PayPal order id
-    const sessionId = url.searchParams.get("session_id") ?? ""; // Stripe checkout session
     if (!paid || !listingId) return;
 
     void (async () => {
@@ -221,12 +201,6 @@ export function VesselClassifiedsClient() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ listingId, orderId: token }),
-          });
-        } else if (provider === "stripe" && sessionId) {
-          await fetch("/api/vessels/classifieds/stripe/verify", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ listingId, sessionId }),
           });
         }
       } finally {
@@ -244,7 +218,7 @@ export function VesselClassifiedsClient() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Vessel classifieds</h1>
         <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-          Paid vessel adverts run for <strong>6 months</strong>. Price: <strong>£30</strong> per listing (Stripe or PayPal).
+          Paid vessel adverts run for <strong>6 months</strong>. Price: <strong>£30</strong> per listing (PayPal).
         </p>
       </div>
 
