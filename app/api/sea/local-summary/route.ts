@@ -37,6 +37,16 @@ function dirText(deg: number | null): string | null {
 }
 
 type TideEvent = { kind: "high" | "low"; t: string; v: number };
+type TideEventOut = {
+  kind: "high" | "low";
+  t: string;
+  // Raw model output: sea level relative to global mean sea level (can be negative).
+  vMsl: number;
+  // Relative to local mean (centred around 0).
+  vRelMean: number;
+  // Relative to local modelled low over the returned window (positive, “tide-table-ish”).
+  vAboveLow: number;
+};
 
 function findNextTides(times: string[], sea: number[], nowMs: number, limit = 4): TideEvent[] {
   const out: TideEvent[] = [];
@@ -54,6 +64,31 @@ function findNextTides(times: string[], sea: number[], nowMs: number, limit = 4)
     if (out.length >= limit) break;
   }
   return out;
+}
+
+function meanFinite(vals: number[]): number | null {
+  let sum = 0;
+  let n = 0;
+  for (const v of vals) {
+    if (!Number.isFinite(v)) continue;
+    sum += v;
+    n += 1;
+  }
+  if (!n) return null;
+  return sum / n;
+}
+
+function minMaxFinite(vals: number[]): { min: number; max: number } | null {
+  let min = Number.POSITIVE_INFINITY;
+  let max = Number.NEGATIVE_INFINITY;
+  let ok = false;
+  for (const v of vals) {
+    if (!Number.isFinite(v)) continue;
+    ok = true;
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
+  return ok ? { min, max } : null;
 }
 
 export async function GET(req: Request): Promise<Response> {
@@ -110,6 +145,20 @@ export async function GET(req: Request): Promise<Response> {
 
     const tides =
       Array.isArray(sea) && sea.length === seaTimes.length ? findNextTides(seaTimes, sea, now, 4) : [];
+    const seaStats =
+      Array.isArray(sea) && sea.length === seaTimes.length
+        ? { mean: meanFinite(sea), mm: minMaxFinite(sea) }
+        : { mean: null, mm: null };
+    const relMean0 = seaStats.mean ?? 0;
+    const relLow0 = seaStats.mm?.min ?? 0;
+    const tideEvents: TideEventOut[] = tides.map((e) => ({
+      kind: e.kind,
+      t: e.t,
+      vMsl: e.v,
+      vRelMean: e.v - relMean0,
+      vAboveLow: e.v - relLow0,
+    }));
+    const rangeM = seaStats.mm ? seaStats.mm.max - seaStats.mm.min : null;
 
     const parts: string[] = [];
     if (waveM != null) {
@@ -126,7 +175,8 @@ export async function GET(req: Request): Promise<Response> {
       const tideBits = tides
         .slice(0, 2)
         .map((e) => `${e.kind === "high" ? "High" : "Low"} tide ~${fmt(e.t)}`);
-      parts.push(`${tideBits.join(" · ")} (modelled).`);
+      const rangeTxt = rangeM != null ? ` Range ~${rangeM.toFixed(1)}m.` : "";
+      parts.push(`${tideBits.join(" · ")} (modelled).${rangeTxt}`);
     } else {
       parts.push("Tide estimate unavailable for this area.");
     }
@@ -144,7 +194,9 @@ export async function GET(req: Request): Promise<Response> {
         sea_surface_temp_c: sst,
       },
       tide: {
-        events: tides,
+        events: tideEvents,
+        rangeM,
+        datum: "msl",
       },
     });
   } catch (e: unknown) {

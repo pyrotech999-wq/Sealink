@@ -7,15 +7,21 @@ type ApiOk = {
   ok: true;
   text: string;
   snapshot?: { wave_height_m: number | null; sea_surface_temp_c: number | null };
-  tide?: { events?: { kind: "high" | "low"; t: string; v: number }[] };
+  tide?: {
+    events?: { kind: "high" | "low"; t: string; vMsl: number; vRelMean: number; vAboveLow: number }[];
+    rangeM?: number | null;
+    datum?: string;
+  };
 };
 type ApiFail = { error: string };
 
 export function SeaStateSummaryBox() {
   const [text, setText] = useState<string | null>(null);
-  const [tides, setTides] = useState<{ kind: "high" | "low"; t: string; v: number }[]>([]);
+  const [tides, setTides] = useState<{ kind: "high" | "low"; t: string; vMsl: number; vRelMean: number; vAboveLow: number }[]>([]);
+  const [tideRangeM, setTideRangeM] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [bstOn, setBstOn] = useState(true);
 
   const loc = useMemo(() => (typeof window !== "undefined" ? getLastKnownPosition() : null), []);
   const hasLoc = Boolean(loc && Number.isFinite(loc.lat) && Number.isFinite(loc.lng));
@@ -39,12 +45,14 @@ export function SeaStateSummaryBox() {
       const ok = d as ApiOk;
       setText(ok.text);
       setTides(Array.isArray(ok.tide?.events) ? ok.tide!.events! : []);
+      setTideRangeM(typeof ok.tide?.rangeM === "number" && Number.isFinite(ok.tide.rangeM) ? ok.tide.rangeM : null);
     } catch (e: unknown) {
       if (e instanceof DOMException && e.name === "AbortError") return;
       if (e instanceof Error && e.name === "AbortError") return;
       setErr("Network error");
       setText(null);
       setTides([]);
+      setTideRangeM(null);
     } finally {
       setLoading(false);
     }
@@ -89,18 +97,53 @@ export function SeaStateSummaryBox() {
             <p>{text}</p>
             {tides.length ? (
               <div className="mt-3 rounded-lg border border-sky-100 bg-sky-50/70 px-3 py-2 dark:border-sky-900/40 dark:bg-sky-950/20">
-                <p className="text-xs font-semibold text-sky-950 dark:text-sky-100">Next tides (modelled)</p>
-                <ul className="mt-1 space-y-1 text-xs text-zinc-700 dark:text-zinc-200">
-                  {tides.slice(0, 4).map((e) => (
-                    <li key={`${e.kind}:${e.t}`}>
-                      <span className={`font-semibold ${e.kind === "high" ? "text-emerald-700 dark:text-emerald-300" : "text-amber-700 dark:text-amber-300"}`}>
-                        {e.kind === "high" ? "High" : "Low"}
-                      </span>{" "}
-                      {new Date(e.t).toLocaleString("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit" })} ·{" "}
-                      {e.v.toFixed(2)}m
-                    </li>
-                  ))}
-                </ul>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs font-semibold text-sky-950 dark:text-sky-100">
+                    Tide Times{bstOn ? "BST" : "UTC"}:{" "}
+                    <span className="font-normal text-zinc-600 dark:text-zinc-300">
+                      British Summer Time on/off
+                    </span>
+                  </p>
+                  <label className="flex select-none items-center gap-2 text-[11px] text-zinc-700 dark:text-zinc-200">
+                    <span>BST</span>
+                    <input
+                      type="checkbox"
+                      checked={bstOn}
+                      onChange={(e) => setBstOn(e.target.checked)}
+                      className="h-4 w-4 accent-sky-600"
+                    />
+                  </label>
+                </div>
+                <p className="mt-0.5 text-[10px] text-zinc-500 dark:text-zinc-400">
+                  Heights are <span className="font-semibold">modelled</span> and shown as meters above the local modelled low (so they’re positive like a tide table).
+                  {tideRangeM != null ? ` Estimated range ~${tideRangeM.toFixed(1)}m.` : ""}
+                </p>
+                <div className="mt-2 overflow-hidden rounded-md border border-sky-100 bg-white/70 dark:border-sky-900/40 dark:bg-zinc-950/40">
+                  <div className="grid grid-cols-3 gap-2 border-b border-sky-100 px-2 py-1 text-[11px] font-semibold text-zinc-700 dark:border-sky-900/40 dark:text-zinc-200">
+                    <div>Hi/Lo</div>
+                    <div>Time</div>
+                    <div className="text-right">Height</div>
+                  </div>
+                  <div className="divide-y divide-sky-100 text-xs dark:divide-sky-900/40">
+                    {tides.slice(0, 4).map((e) => {
+                      const tz = bstOn ? "Europe/London" : "UTC";
+                      const time = new Date(e.t).toLocaleTimeString("en-GB", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        timeZone: tz,
+                      });
+                      return (
+                        <div key={`${e.kind}:${e.t}`} className="grid grid-cols-3 gap-2 px-2 py-1 text-zinc-700 dark:text-zinc-200">
+                          <div className={`font-semibold ${e.kind === "high" ? "text-emerald-700 dark:text-emerald-300" : "text-amber-700 dark:text-amber-300"}`}>
+                            {e.kind === "high" ? "High" : "Low"}
+                          </div>
+                          <div className="tabular-nums">{time}</div>
+                          <div className="text-right tabular-nums">{e.vAboveLow.toFixed(2)}m</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             ) : null}
           </div>
