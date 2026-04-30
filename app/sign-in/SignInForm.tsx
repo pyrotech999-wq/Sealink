@@ -24,11 +24,12 @@ function isDeviceRow(v: unknown): v is DeviceRow {
 async function startDemoSession(
   email: string,
   password: string,
-  opts?: { deactivateDeviceId?: string; rememberMe?: boolean },
+  opts?: { deactivateDeviceId?: string; rememberMe?: boolean; redirect?: boolean },
 ): Promise<
   | { ok: true }
   | { ok: false; message: string; devices?: { deviceId: string; name: string; activatedAt: string; lastSeenAt: string }[] }
 > {
+  const shouldRedirect = opts?.redirect ?? !opts?.deactivateDeviceId;
   try {
     const deviceId = getOrCreateDeviceId();
     const deviceName = getDeviceName();
@@ -53,10 +54,23 @@ async function startDemoSession(
         devices: Array.isArray(data.devices) ? data.devices.filter(isDeviceRow) : undefined,
       };
     }
+    if (opts?.deactivateDeviceId) {
+      return { ok: true };
+    }
   } catch {
     return { ok: false, message: "Network error. Try again." };
   }
-  window.location.assign("/");
+  if (shouldRedirect) {
+    try {
+      const trimmed = email.trim();
+      const remember = opts?.rememberMe ?? true;
+      if (remember) localStorage.setItem(REMEMBER_EMAIL_KEY, trimmed);
+      else localStorage.removeItem(REMEMBER_EMAIL_KEY);
+    } catch {
+      /* */
+    }
+    window.location.assign("/");
+  }
   return { ok: true };
 }
 
@@ -104,13 +118,6 @@ export function SignInForm() {
       setError(result.message);
       setDeviceLimit(Array.isArray(result.devices) ? result.devices : []);
       setPending(false);
-    } else {
-      try {
-        if (rememberMe) localStorage.setItem(REMEMBER_EMAIL_KEY, trimmed);
-        else localStorage.removeItem(REMEMBER_EMAIL_KEY);
-      } catch {
-        /* */
-      }
     }
   }
 
@@ -155,7 +162,11 @@ export function SignInForm() {
                     }
                     setPending(true);
                     void (async () => {
-                      const res = await startDemoSession(trimmed, password, { deactivateDeviceId: d.deviceId, rememberMe });
+                      const res = await startDemoSession(trimmed, password, {
+                        deactivateDeviceId: d.deviceId,
+                        rememberMe,
+                        redirect: false,
+                      });
                       if (!res.ok) {
                         setError(res.message);
                         setPending(false);
