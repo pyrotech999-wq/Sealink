@@ -112,7 +112,7 @@ Write 2–4 short paragraphs for a small-boat / coastal reader: trends, rain ris
       return NextResponse.json({ error: "Empty model response" }, { status: 502 });
     }
 
-    return NextResponse.json({ configured: true as const, text, model });
+    return NextResponse.json({ configured: true as const, text, model, openAi: true as const });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "OpenAI request failed";
     return NextResponse.json({ error: msg }, { status: 502 });

@@ -23,10 +23,9 @@ export function AiForecast48hBox({ lat, lng }: Props) {
   const useLng = lng ?? DEFAULT_MAP_CENTER.lng;
   const atPin = lat != null && lng != null;
 
-  const generate = useCallback(async () => {
+  const generate = useCallback(async (opts?: GenerateOpts) => {
     setLoading(true);
     setErr(null);
-    setNotConfigured(null);
     setText(null);
     setModel(null);
     try {
@@ -34,6 +33,7 @@ export function AiForecast48hBox({ lat, lng }: Props) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ lat: useLat, lng: useLng }),
+        signal: opts?.signal,
       });
       const data = (await res.json()) as ApiSuccess | ApiFail;
       if (!res.ok) {
@@ -45,10 +45,19 @@ export function AiForecast48hBox({ lat, lng }: Props) {
       if (ok.configured === true && ok.text) {
         setText(ok.text);
         setModel(ok.model ?? null);
+        if (opts?.persistAutoKey && typeof window !== "undefined") {
+          try {
+            sessionStorage.setItem(opts.persistAutoKey, "1");
+          } catch {
+            /* quota / private mode */
+          }
+        }
         return;
       }
       setErr("Unexpected response");
-    } catch {
+    } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
+      if (e instanceof Error && e.name === "AbortError") return;
       setErr("Network error");
     } finally {
       setLoading(false);
@@ -56,17 +65,11 @@ export function AiForecast48hBox({ lat, lng }: Props) {
   }, [useLat, useLng]);
 
   useEffect(() => {
-    let cancelled = false;
+    const ac = new AbortController();
     const storageKey = `sealink_ai48_auto_${useLat.toFixed(3)}_${useLng.toFixed(3)}`;
     if (typeof window !== "undefined" && sessionStorage.getItem(storageKey)) return;
-    if (typeof window !== "undefined") sessionStorage.setItem(storageKey, "1");
-    void (async () => {
-      await generate();
-      if (cancelled) return;
-    })();
-    return () => {
-      cancelled = true;
-    };
+    void generate({ signal: ac.signal, persistAutoKey: storageKey });
+    return () => ac.abort();
   }, [useLat, useLng, generate]);
 
   return (
@@ -103,10 +106,6 @@ export function AiForecast48hBox({ lat, lng }: Props) {
             <span className="text-[11px] text-violet-900/80 dark:text-violet-200/90">Model: {model}</span>
           ) : null}
         </div>
-
-        {notConfigured && (
-          <p className="mt-3 text-sm leading-6 text-violet-950 dark:text-violet-100">{notConfigured}</p>
-        )}
 
         {err && (
           <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
