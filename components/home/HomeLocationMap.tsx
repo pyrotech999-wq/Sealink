@@ -716,7 +716,7 @@ export default function HomeLocationMap() {
 
   return (
     <section className="mt-8 w-full space-y-4" aria-labelledby="map-heading">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div className="relative z-50 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 id="map-heading" className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
             Your map
@@ -727,24 +727,32 @@ export default function HomeLocationMap() {
             or leave a tab open.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 pointer-events-auto">
           <div className="flex flex-col items-start gap-1">
             <button
               type="button"
               onClick={() => setAnchorOpen(true)}
-              className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-indigo-300 bg-indigo-50 px-4 text-sm font-semibold text-indigo-900 shadow-sm hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-100 dark:hover:bg-indigo-900/70"
+              className="relative z-50 inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-indigo-300 bg-indigo-50 px-4 text-sm font-semibold text-indigo-900 shadow-sm hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-100 dark:hover:bg-indigo-900/70"
             >
               Anchor alert
             </button>
             <button
               type="button"
-              onClick={() => setAnchorOpen(true)}
-              className={`inline-flex h-6 items-center gap-1 rounded-full border px-2 text-[11px] font-semibold ${
+              onClick={() => {
+                if (anchorCfg.armed) {
+                  const merged = { ...anchorCfg, armed: false, lastAlertAt: null };
+                  setAnchorCfg(merged);
+                  setAnchorAlertConfig(merged);
+                } else {
+                  setAnchorOpen(true);
+                }
+              }}
+              className={`relative z-50 inline-flex h-6 items-center gap-1 rounded-full border px-2 text-[11px] font-semibold ${
                 anchorCfg.armed
                   ? "border-green-300 bg-green-50 text-green-900 hover:bg-green-100 dark:border-green-900/50 dark:bg-green-950/40 dark:text-green-100 dark:hover:bg-green-950/60"
                   : "border-red-300 bg-red-50 text-red-900 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100 dark:hover:bg-red-950/60"
               }`}
-              title="Open anchor alert settings"
+              title={anchorCfg.armed ? "Turn anchor alert off" : "Open anchor alert settings"}
             >
               {anchorCfg.armed ? "ON" : "OFF"}
               {anchorCfg.armed ? (
