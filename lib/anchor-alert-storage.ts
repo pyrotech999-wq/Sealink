@@ -2,8 +2,12 @@ export type AnchorAlertConfig = {
   armed: boolean;
   lat: number | null;
   lng: number | null;
-  radiusM: number;
+  radiusM: 10 | 20 | 40 | 50;
+  /** Allowed bearing change (0..360). 360 = off. */
+  angleDeg: number;
   monitorDeviceId: string; // "this" or a registered device id
+  /** Bearing from anchor to last checked fix (for angle-change logic). */
+  lastBearingDeg: number | null;
   lastAlertAt: string | null;
 };
 
@@ -13,8 +17,10 @@ const DEFAULTS: AnchorAlertConfig = {
   armed: false,
   lat: null,
   lng: null,
-  radiusM: 60,
+  radiusM: 20,
+  angleDeg: 360,
   monitorDeviceId: "this",
+  lastBearingDeg: null,
   lastAlertAt: null,
 };
 
@@ -25,16 +31,20 @@ export function getAnchorAlertConfig(): AnchorAlertConfig {
     if (!raw) return DEFAULTS;
     const parsed = JSON.parse(raw) as Partial<AnchorAlertConfig> | null;
     if (!parsed || typeof parsed !== "object") return DEFAULTS;
-    const radiusM =
-      typeof parsed.radiusM === "number" && Number.isFinite(parsed.radiusM)
-        ? Math.max(20, Math.min(500, Math.round(parsed.radiusM)))
-        : DEFAULTS.radiusM;
+    const radiusPick = typeof parsed.radiusM === "number" ? Math.round(parsed.radiusM) : DEFAULTS.radiusM;
+    const radiusM = (radiusPick === 10 || radiusPick === 20 || radiusPick === 40 || radiusPick === 50
+      ? radiusPick
+      : DEFAULTS.radiusM) as AnchorAlertConfig["radiusM"];
+    const angleRaw = typeof parsed.angleDeg === "number" && Number.isFinite(parsed.angleDeg) ? Math.round(parsed.angleDeg) : DEFAULTS.angleDeg;
+    const angleDeg = Math.max(0, Math.min(360, angleRaw));
     return {
       armed: parsed.armed === true,
       lat: typeof parsed.lat === "number" && Number.isFinite(parsed.lat) ? parsed.lat : null,
       lng: typeof parsed.lng === "number" && Number.isFinite(parsed.lng) ? parsed.lng : null,
       radiusM,
+      angleDeg,
       monitorDeviceId: typeof parsed.monitorDeviceId === "string" ? parsed.monitorDeviceId : "this",
+      lastBearingDeg: typeof parsed.lastBearingDeg === "number" && Number.isFinite(parsed.lastBearingDeg) ? parsed.lastBearingDeg : null,
       lastAlertAt: typeof parsed.lastAlertAt === "string" ? parsed.lastAlertAt : null,
     };
   } catch {
