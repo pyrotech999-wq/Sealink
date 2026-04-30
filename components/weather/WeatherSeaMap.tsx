@@ -38,7 +38,7 @@ function Legend({ mode }: { mode: LayerMode }) {
     "https://pae-paha.pacioos.hawaii.edu/thredds/wms/ncep_global/NCEP_Global_Atmospheric_Model_best.ncd";
   const legendImg =
     mode === "wind"
-      ? `${windBase}?REQUEST=GetLegendGraphic&LAYER=wind&STYLE=${encodeURIComponent("barb/jet")}`
+      ? null
       : mode === "rain"
         ? `${windBase}?REQUEST=GetLegendGraphic&LAYER=pratesfc&PALETTE=occam`
         : mode === "pressure"
@@ -75,6 +75,17 @@ function Legend({ mode }: { mode: LayerMode }) {
     );
   }
 
+  if (mode === "wind") {
+    return (
+      <div className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-700 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
+        <p className="font-semibold text-zinc-900 dark:text-zinc-100">Legend · Wind (ECMWF IFS)</p>
+        <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+          Particles show wind direction; faster particle motion indicates stronger wind.
+        </p>
+      </div>
+    );
+  }
+
   if (!legendImg) return null;
 
   return (
@@ -89,6 +100,223 @@ function Legend({ mode }: { mode: LayerMode }) {
       />
     </div>
   );
+}
+
+type WindPoint = { lat: number; lng: number; u: number; v: number };
+
+function WindParticlesOverlay({ enabled, timeIso, opacity }: { enabled: boolean; timeIso: string; opacity: number }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!enabled) return;
+
+    const pane = map.getPanes().overlayPane;
+    const canvas = document.createElement("canvas");
+    canvas.style.position = "absolute";
+    canvas.style.top = "0";
+    canvas.style.left = "0";
+    canvas.style.pointerEvents = "none";
+    canvas.style.zIndex = "400";
+    pane.appendChild(canvas);
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return () => canvas.remove();
+
+    let disposed = false;
+    let raf = 0;
+    let particles: { x: number; y: number; age: number }[] = [];
+    let field: WindPoint[] = [];
+    let lastFetchKey = "";
+
+    const sizeCanvas = () => {
+      const size = map.getSize();
+      canvas.width = Math.max(1, Math.floor(size.x * (window.devicePixelRatio || 1)));
+      canvas.height = Math.max(1, Math.floor(size.y * (window.devicePixelRatio || 1)));
+      canvas.style.width = `${size.x}px`;
+      canvas.style.height = `${size.y}px`;
+      ctx.setTransform(window.devicePixelRatio || 1, 0, 0, window.devicePixelRatio || 1, 0, 0);
+    };
+
+    const reseed = () => {
+      const size = map.getSize();
+      const count = clamp(Math.round((size.x * size.y) / 9000), 900, 2200);
+      particles = Array.from({ length: count }, () => ({
+        x: Math.random() * size.x,
+        y: Math.random() * size.y,
+        age: Math.random() * 80,
+      }));
+    };
+
+    const fetchField = async () => {
+      const b = map.getBounds();
+      const sw = b.getSouthWest();
+      const ne = b.getNorthEast();
+      const size = map.getSize();
+
+      // Sample grid in view, cap to keep query string reasonable.
+      let cols: number = clamp(Math.round(size.x / 80), 10, 24);
+      let rows: number = clamp(Math.round(size.y / 80), 8, 20);
+      const MAX_SAMPLES = 180;
+      while (cols * rows > MAX_SAMPLES) {
+        if (cols >= rows) cols -= 1;
+        else rows -= 1;
+      }
+
+      const lats: number[] = [];
+      const lngs: number[] = [];
+      for (let y = 0; y < rows; y++) {
+        const fy = rows === 1 ? 0.5 : y / (rows - 1);
+        const lat = sw.lat + (ne.lat - sw.lat) * fy;
+        for (let x = 0; x < cols; x++) {
+          const fx = cols === 1 ? 0.5 : x / (cols - 1);
+          const lng = sw.lng + (ne.lng - sw.lng) * fx;
+          lats.push(Number(lat.toFixed(4)));
+          lngs.push(Number(lng.toFixed(4)));
+        }
+      }
+
+      const key = `${sw.lat.toFixed(2)},${sw.lng.toFixed(2)},${ne.lat.toFixed(2)},${ne.lng.toFixed(2)}|${timeIso}|${cols}x${rows}`;
+      if (key === lastFetchKey) return;
+      lastFetchKey = key;
+
+      const api = new URL("https://api.open-meteo.com/v1/forecast");
+      api.searchParams.set("latitude", lats.join(","));
+      api.searchParams.set("longitude", lngs.join(","));
+      api.searchParams.set("hourly", "wind_speed_10m,wind_direction_10m");
+      api.searchParams.set("models", "ecmwf_ifs");
+      api.searchParams.set("forecast_days", "5");
+      api.searchParams.set("timezone", "GMT");
+      api.searchParams.set("wind_speed_unit", "ms");
+      api.searchParams.set("cell_selection", "nearest");
+
+      const r = await fetch(api.toString(), { cache: "no-store" });
+      if (!r.ok) return;
+      const d = (await r.json()) as any;
+      const blocks = Array.isArray(d) ? d : Array.isArray(d?.hourly?.time) ? [d] : [];
+      if (!blocks.length) return;
+      const times = blocks[0]?.hourly?.time as string[] | undefined;
+      if (!times?.length) return;
+
+      const targetMs = new Date(timeIso).getTime();
+      let idx = 0;
+      let best = Number.POSITIVE_INFINITY;
+      for (let i = 0; i < times.length; i++) {
+        const ms = new Date(times[i]!).getTime();
+        const dist = Math.abs(ms - targetMs);
+        if (dist < best) {
+          best = dist;
+          idx = i;
+        }
+      }
+
+      const next: WindPoint[] = [];
+      for (const b of blocks) {
+        const usedLat = typeof b?.latitude === "number" ? b.latitude : null;
+        const usedLng = typeof b?.longitude === "number" ? b.longitude : null;
+        const spdArr = b?.hourly?.wind_speed_10m as number[] | undefined;
+        const dirArr = b?.hourly?.wind_direction_10m as number[] | undefined;
+        const spd = typeof spdArr?.[idx] === "number" ? spdArr[idx] : NaN;
+        const dir = typeof dirArr?.[idx] === "number" ? dirArr[idx] : NaN;
+        if (!Number.isFinite(spd) || !Number.isFinite(dir) || usedLat == null || usedLng == null) continue;
+        // Direction is "from" degrees; convert to math heading.
+        const rad = ((dir + 180) * Math.PI) / 180;
+        const u = spd * Math.sin(rad);
+        const v = spd * Math.cos(rad);
+        next.push({ lat: usedLat, lng: usedLng, u, v });
+      }
+      field = next;
+    };
+
+    const windAtPx = (x: number, y: number): { u: number; v: number; s: number } | null => {
+      if (!field.length) return null;
+      const ll = map.containerPointToLatLng(L.point(x, y));
+      // Find nearest field point (cheap + good enough for particles).
+      let best = Number.POSITIVE_INFINITY;
+      let pick: WindPoint | null = null;
+      for (const p of field) {
+        const dLat = ll.lat - p.lat;
+        const dLng = ll.lng - p.lng;
+        const d = dLat * dLat + dLng * dLng;
+        if (d < best) {
+          best = d;
+          pick = p;
+        }
+      }
+      if (!pick) return null;
+      const s = Math.sqrt(pick.u * pick.u + pick.v * pick.v);
+      return { u: pick.u, v: pick.v, s };
+    };
+
+    const step = () => {
+      if (disposed) return;
+      const size = map.getSize();
+
+      // Fade previous frame.
+      ctx.fillStyle = `rgba(0,0,0,${0.08 * clamp(opacity, 0.2, 0.95)})`;
+      ctx.globalCompositeOperation = "destination-in";
+      ctx.fillRect(0, 0, size.x, size.y);
+      ctx.globalCompositeOperation = "source-over";
+
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = `rgba(255,255,255,${0.45 * clamp(opacity, 0.2, 0.95)})`;
+
+      for (const p of particles) {
+        p.age += 1;
+        if (p.age > 120) {
+          p.x = Math.random() * size.x;
+          p.y = Math.random() * size.y;
+          p.age = 0;
+          continue;
+        }
+        const w = windAtPx(p.x, p.y);
+        if (!w) continue;
+        const speed = clamp(w.s, 0, 30);
+        const k = 0.6 + speed * 0.08;
+        const x2 = p.x + w.u * k;
+        const y2 = p.y - w.v * k;
+
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+
+        p.x = x2;
+        p.y = y2;
+        if (p.x < 0 || p.x > size.x || p.y < 0 || p.y > size.y) {
+          p.x = Math.random() * size.x;
+          p.y = Math.random() * size.y;
+          p.age = 0;
+        }
+      }
+
+      raf = window.requestAnimationFrame(step);
+    };
+
+    const scheduleFetch = () => {
+      window.setTimeout(() => void fetchField(), 250);
+    };
+
+    sizeCanvas();
+    reseed();
+    void fetchField().then(() => {
+      if (!disposed) raf = window.requestAnimationFrame(step);
+    });
+
+    map.on("moveend", scheduleFetch);
+    map.on("zoomend", scheduleFetch);
+    window.addEventListener("resize", sizeCanvas);
+
+    return () => {
+      disposed = true;
+      map.off("moveend", scheduleFetch);
+      map.off("zoomend", scheduleFetch);
+      window.removeEventListener("resize", sizeCanvas);
+      if (raf) window.cancelAnimationFrame(raf);
+      canvas.remove();
+    };
+  }, [map, enabled, timeIso, opacity]);
+
+  return null;
 }
 
 function OpenMeteoWavesOverlay({ enabled, timeIso, opacity }: { enabled: boolean; timeIso: string; opacity: number }) {
@@ -106,9 +334,17 @@ function OpenMeteoWavesOverlay({ enabled, timeIso, opacity }: { enabled: boolean
         const sw = bounds.getSouthWest();
         const ne = bounds.getNorthEast();
 
-        // Sample a small grid across the viewport.
-        const cols: number = 28;
-        const rows: number = 18;
+        // Sample a grid across the viewport, but cap total samples to avoid URL-length failures.
+        // (Open-Meteo multi-point API is GET-only, so we must keep the query string reasonable.)
+        const size = map.getSize();
+        let cols: number = clamp(Math.round(size.x / 70), 10, 22);
+        let rows: number = clamp(Math.round(size.y / 70), 8, 18);
+        const MAX_SAMPLES = 160;
+        while (cols * rows > MAX_SAMPLES) {
+          if (cols >= rows) cols -= 1;
+          else rows -= 1;
+          if (cols < 8 || rows < 6) break;
+        }
         const lats: number[] = [];
         const lngs: number[] = [];
         for (let y = 0; y < rows; y++) {
@@ -152,8 +388,8 @@ function OpenMeteoWavesOverlay({ enabled, timeIso, opacity }: { enabled: boolean
         }
 
         const canvas = document.createElement("canvas");
-        canvas.width = cols * 20;
-        canvas.height = rows * 20;
+        canvas.width = cols * 22;
+        canvas.height = rows * 22;
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
 
@@ -171,7 +407,7 @@ function OpenMeteoWavesOverlay({ enabled, timeIso, opacity }: { enabled: boolean
         ctx.globalAlpha = clamp(opacity, 0.2, 0.95);
         ctx.globalCompositeOperation = "source-over";
 
-        const blobR = Math.max(10, Math.round(Math.min(pxW / cols, pxH / rows) * 0.95));
+        const blobR = Math.max(10, Math.round(Math.min(pxW / cols, pxH / rows) * 0.9));
         ctx.shadowBlur = Math.round(blobR * 0.9);
         ctx.shadowColor = "rgba(0,0,0,0)";
 
@@ -237,7 +473,7 @@ function WmsOverlay({ mode, opacity, timeIso }: { mode: LayerMode; opacity: numb
   const map = useMap();
 
   useEffect(() => {
-    if (mode === "waves") return;
+    if (mode === "waves" || mode === "wind") return;
     const windUrl =
       "https://pae-paha.pacioos.hawaii.edu/thredds/wms/ncep_global/NCEP_Global_Atmospheric_Model_best.ncd";
     const wavesUrl =
@@ -524,6 +760,7 @@ export function WeatherSeaMap() {
           )}
           {/* Use Open-Meteo raster for waves to ensure coverage in enclosed seas like the Mediterranean. */}
           <OpenMeteoWavesOverlay enabled={mode === "waves"} timeIso={timeIso} opacity={opacity} />
+          <WindParticlesOverlay enabled={mode === "wind"} timeIso={timeIso} opacity={opacity} />
           <WmsOverlay mode={mode} opacity={opacity} timeIso={timeIso} />
         </MapContainer>
       </div>
