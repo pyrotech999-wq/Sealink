@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAuthUser } from "@/lib/auth";
-import { loadVesselClassifieds, updateVesselListing, adminUpdateVesselListing } from "@/lib/vessel-classifieds-store";
+import { loadVesselClassifieds, updateVesselListing, adminUpdateVesselListing, nextExpiryFrom } from "@/lib/vessel-classifieds-store";
 import { paypalAccessToken, paypalBaseUrl } from "../_paypal";
 
 export const runtime = "nodejs";
@@ -43,12 +43,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: `PayPal status ${data.status ?? "unknown"}` }, { status: 400 });
   }
 
+  const now = new Date();
   const apply = (l: typeof listing) => ({
     ...l,
     paymentStatus: "paid" as const,
     paymentProvider: "paypal" as const,
     paymentRef: orderId,
     status: "active" as const,
+    expiresAt: nextExpiryFrom(now, l.expiresAt),
   });
 
   const out = u.isAdmin ? await adminUpdateVesselListing(listingId, apply) : await updateVesselListing(listingId, u.uid, apply);

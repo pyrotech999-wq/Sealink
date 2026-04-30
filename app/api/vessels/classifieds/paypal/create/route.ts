@@ -27,8 +27,8 @@ export async function POST(req: Request) {
   const listing = all.find((l) => l.id === id);
   if (!listing) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (!u.isAdmin && listing.ownerUid !== u.uid) return NextResponse.json({ error: "Not allowed" }, { status: 403 });
-  if (listing.status === "removed" || listing.status === "expired") return NextResponse.json({ error: "Listing is not payable" }, { status: 400 });
-  if (listing.paymentStatus === "paid") return NextResponse.json({ error: "Already paid" }, { status: 400 });
+  if (listing.status === "removed") return NextResponse.json({ error: "Listing is not payable" }, { status: 400 });
+  // Allow renewals: if expired or already paid, we still allow creating a new order to extend.
 
   const token = await paypalAccessToken().catch(() => null);
   if (!token) return NextResponse.json({ error: "PayPal auth failed." }, { status: 503 });
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
       purchase_units: [
         {
           reference_id: id,
-          description: "SeaLink vessel classified (6 months)",
+          description: listing.status === "expired" || listing.paymentStatus === "paid" ? "SeaLink vessel classified renewal (6 months)" : "SeaLink vessel classified (6 months)",
           amount: { currency_code: "GBP", value: PRICE_GBP },
         },
       ],

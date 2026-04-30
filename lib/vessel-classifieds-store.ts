@@ -8,6 +8,7 @@ const DATA_PATH = path.join(process.cwd(), "data", "vessel-classifieds.json");
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const TTL_DAYS = 180; // ~6 months
+export const VESSEL_REMINDER_DAYS_BEFORE = 7;
 
 let queue: Promise<unknown> = Promise.resolve();
 
@@ -41,6 +42,22 @@ function writeRaw(list: VesselClassifiedListing[]): void {
 
 function defaultExpiresAt(created: Date): string {
   return new Date(created.getTime() + TTL_DAYS * DAY_MS).toISOString();
+}
+
+export function nextExpiryFrom(now: Date, prevExpiresAt?: string | null): string {
+  const baseMs = prevExpiresAt ? new Date(prevExpiresAt).getTime() : NaN;
+  const startMs = Number.isFinite(baseMs) && baseMs > now.getTime() ? baseMs : now.getTime();
+  return new Date(startMs + TTL_DAYS * DAY_MS).toISOString();
+}
+
+export function daysUntilExpiry(expiresAt: string, now: Date): number {
+  const ms = new Date(expiresAt).getTime() - now.getTime();
+  return Math.ceil(ms / DAY_MS);
+}
+
+export function isInReminderWindow(expiresAt: string, now: Date, daysBefore = VESSEL_REMINDER_DAYS_BEFORE): boolean {
+  const d = daysUntilExpiry(expiresAt, now);
+  return d >= 0 && d <= daysBefore;
 }
 
 function normalise(row: unknown): VesselClassifiedListing | null {
