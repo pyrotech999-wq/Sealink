@@ -48,3 +48,7 @@ next-env.d.ts
 
 # user-uploaded gear listing images
 /public/uploads/gear/
+
+# local vessel classifieds data + uploads
+/data/vessel-classifieds.json
+/public/uploads/vessels/

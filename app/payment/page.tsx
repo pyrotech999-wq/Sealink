@@ -4,7 +4,7 @@ import { PaymentClient } from "./PaymentClient";
 export const metadata: Metadata = {
   title: "Plans & payment",
   description:
-    "SeaLink — 14-day trial, then monthly or annual billing (two Stripe prices). Voucher codes validated on the server.",
+    "SeaLink — 14-day trial, then monthly or annual billing. Voucher codes validated on the server.",
 };
 
 type Props = { searchParams: Promise<{ canceled?: string }> };

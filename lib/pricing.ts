@@ -1,5 +1,5 @@
 export const TRIAL_DAYS = 14;
-export const MONTHLY_GBP = 5;
+export const MONTHLY_GBP = 3.49;
 /** Display price for the annual billing option (must match your Stripe annual Price). */
 export const ANNUAL_GBP = 25;
 
