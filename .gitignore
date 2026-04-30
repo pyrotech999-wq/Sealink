@@ -52,3 +52,6 @@ next-env.d.ts
 # local vessel classifieds data + uploads
 /data/vessel-classifieds.json
 /public/uploads/vessels/
+
+# anchor alert device registry
+/data/anchor-devices.json
