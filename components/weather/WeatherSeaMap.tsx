@@ -142,6 +142,7 @@ function Legend({ mode }: { mode: LayerMode }) {
 }
 
 type WindPoint = { lat: number; lng: number; u: number; v: number };
+type WindSamplePx = { x: number; y: number; u: number; v: number; s: number };
 
 function WindParticlesOverlay({
   enabled,
@@ -176,7 +177,9 @@ function WindParticlesOverlay({
     let raf = 0;
     let particles: { x: number; y: number; age: number }[] = [];
     let field: WindPoint[] = [];
+    let fieldPx: WindSamplePx[] = [];
     let lastFetchKey = "";
+    let lastT = 0;
 
     const sizeCanvas = () => {
       const size = map.getSize();
@@ -189,12 +192,27 @@ function WindParticlesOverlay({
 
     const reseed = () => {
       const size = map.getSize();
-      const count = clamp(Math.round((size.x * size.y) / 9000), 900, 2200);
+      // Lower density than before (less clutter), but still “Windy-like” at typical viewport sizes.
+      const count = clamp(Math.round((size.x * size.y) / 14000), 520, 1700);
       particles = Array.from({ length: count }, () => ({
         x: Math.random() * size.x,
         y: Math.random() * size.y,
         age: Math.random() * 80,
       }));
+    };
+
+    const rebuildFieldPx = () => {
+      if (!field.length) {
+        fieldPx = [];
+        return;
+      }
+      fieldPx = field
+        .map((p) => {
+          const pt = map.latLngToContainerPoint(L.latLng(p.lat, p.lng));
+          const s = Math.sqrt(p.u * p.u + p.v * p.v);
+          return { x: pt.x, y: pt.y, u: p.u, v: p.v, s };
+        })
+        .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
     };
 
     const fetchField = async () => {
@@ -275,39 +293,50 @@ function WindParticlesOverlay({
         next.push({ lat: usedLat, lng: usedLng, u, v });
       }
       field = next;
+      rebuildFieldPx();
     };
 
     const windAtPx = (x: number, y: number): { u: number; v: number; s: number } | null => {
-      if (!field.length) return null;
-      const ll = map.containerPointToLatLng(L.point(x, y));
-      // Find nearest field point (cheap + good enough for particles).
+      if (!fieldPx.length) return null;
+      // Nearest neighbour in pixel space (fast + stable under pan/zoom).
       let best = Number.POSITIVE_INFINITY;
-      let pick: WindPoint | null = null;
-      for (const p of field) {
-        const dLat = ll.lat - p.lat;
-        const dLng = ll.lng - p.lng;
-        const d = dLat * dLat + dLng * dLng;
+      let pick: WindSamplePx | null = null;
+      for (const p of fieldPx) {
+        const dx = x - p.x;
+        const dy = y - p.y;
+        const d = dx * dx + dy * dy;
         if (d < best) {
           best = d;
           pick = p;
         }
       }
       if (!pick) return null;
-      const s = Math.sqrt(pick.u * pick.u + pick.v * pick.v);
-      return { u: pick.u, v: pick.v, s };
+      return { u: pick.u, v: pick.v, s: pick.s };
     };
 
     const step = () => {
       if (disposed) return;
       const size = map.getSize();
 
-      // Fade previous frame.
-      ctx.fillStyle = `rgba(0,0,0,${0.08 * clamp(opacity, 0.2, 0.95)})`;
+      const now = performance.now();
+      const dt = lastT ? clamp((now - lastT) / 1000, 0.008, 0.05) : 1 / 60;
+      lastT = now;
+
+      // Fade previous frame by scaling alpha (no “black wash”).
+      const keep = clamp(0.86 + clamp(opacity, 0.2, 0.95) * 0.10, 0.84, 0.95);
       ctx.globalCompositeOperation = "destination-in";
+      ctx.fillStyle = `rgba(0,0,0,${keep})`;
       ctx.fillRect(0, 0, size.x, size.y);
       ctx.globalCompositeOperation = "source-over";
 
-      ctx.lineWidth = 1;
+      ctx.lineWidth = 1.05;
+
+      // Convert m/s to px/s using local map scale (improves realism + fixes “too fast” feel).
+      const mid = map.containerPointToLatLng(L.point(size.x * 0.5, size.y * 0.5));
+      const mX = map.distance(mid, map.containerPointToLatLng(L.point(size.x * 0.5 + 120, size.y * 0.5))) / 120;
+      const mY = map.distance(mid, map.containerPointToLatLng(L.point(size.x * 0.5, size.y * 0.5 + 120))) / 120;
+      const mPerPxX = Number.isFinite(mX) && mX > 0 ? mX : 1;
+      const mPerPxY = Number.isFinite(mY) && mY > 0 ? mY : 1;
 
       for (const p of particles) {
         p.age += 1;
@@ -320,13 +349,15 @@ function WindParticlesOverlay({
         const w = windAtPx(p.x, p.y);
         if (!w) continue;
         const speed = clamp(w.s, 0, 30);
-        // Tune motion to feel more "Windy-like": not too frantic when paused.
+        // Windy-like motion: speed scales with real wind + a mild artistic boost.
         const ms = clamp(motionScale, 0.05, 1);
-        const k = ms * (0.22 + speed * 0.045);
-        const x2 = p.x + w.u * k;
-        const y2 = p.y - w.v * k;
+        const boost = 1.35;
+        const x2 = p.x + ((w.u * dt) / mPerPxX) * boost * ms;
+        const y2 = p.y - ((w.v * dt) / mPerPxY) * boost * ms;
 
-        ctx.strokeStyle = windColor(speed, 0.5 * clamp(opacity, 0.2, 0.95));
+        // Slightly more transparent at low speeds, more vivid at high speeds.
+        const a = clamp(0.22 + (speed / 30) * 0.38, 0.18, 0.65) * clamp(opacity, 0.2, 0.95);
+        ctx.strokeStyle = windColor(speed, a);
         ctx.beginPath();
         ctx.moveTo(p.x, p.y);
         ctx.lineTo(x2, y2);
@@ -354,15 +385,23 @@ function WindParticlesOverlay({
       if (!disposed) raf = window.requestAnimationFrame(step);
     });
 
-    map.on("moveend", scheduleFetch);
-    map.on("zoomend", scheduleFetch);
-    window.addEventListener("resize", sizeCanvas);
+    const onMove = () => {
+      rebuildFieldPx();
+      scheduleFetch();
+    };
+    map.on("moveend", onMove);
+    map.on("zoomend", onMove);
+    window.addEventListener("resize", () => {
+      sizeCanvas();
+      reseed();
+      rebuildFieldPx();
+      scheduleFetch();
+    });
 
     return () => {
       disposed = true;
-      map.off("moveend", scheduleFetch);
-      map.off("zoomend", scheduleFetch);
-      window.removeEventListener("resize", sizeCanvas);
+      map.off("moveend", onMove);
+      map.off("zoomend", onMove);
       if (raf) window.cancelAnimationFrame(raf);
       canvas.remove();
     };
