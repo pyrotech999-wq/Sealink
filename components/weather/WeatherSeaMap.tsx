@@ -389,19 +389,21 @@ function WindParticlesOverlay({
       rebuildFieldPx();
       scheduleFetch();
     };
-    map.on("moveend", onMove);
-    map.on("zoomend", onMove);
-    window.addEventListener("resize", () => {
+    const onResize = () => {
       sizeCanvas();
       reseed();
       rebuildFieldPx();
       scheduleFetch();
-    });
+    };
+    map.on("moveend", onMove);
+    map.on("zoomend", onMove);
+    window.addEventListener("resize", onResize);
 
     return () => {
       disposed = true;
       map.off("moveend", onMove);
       map.off("zoomend", onMove);
+      window.removeEventListener("resize", onResize);
       if (raf) window.cancelAnimationFrame(raf);
       canvas.remove();
     };
