@@ -107,8 +107,8 @@ function OpenMeteoWavesOverlay({ enabled, timeIso, opacity }: { enabled: boolean
         const ne = bounds.getNorthEast();
 
         // Sample a small grid across the viewport.
-        const cols: number = 16;
-        const rows: number = 10;
+        const cols: number = 28;
+        const rows: number = 18;
         const lats: number[] = [];
         const lngs: number[] = [];
         for (let y = 0; y < rows; y++) {
@@ -128,6 +128,7 @@ function OpenMeteoWavesOverlay({ enabled, timeIso, opacity }: { enabled: boolean
         api.searchParams.set("hourly", "wave_height");
         api.searchParams.set("forecast_days", "5");
         api.searchParams.set("timezone", "GMT");
+        api.searchParams.set("cell_selection", "sea");
 
         const r = await fetch(api.toString(), { cache: "no-store" });
         if (!r.ok) return;
@@ -150,28 +151,50 @@ function OpenMeteoWavesOverlay({ enabled, timeIso, opacity }: { enabled: boolean
           }
         }
 
-        const vals: number[] = [];
-        for (const b of blocks) {
-          const arr = b?.hourly?.wave_height as number[] | undefined;
-          vals.push(typeof arr?.[idx] === "number" ? arr[idx] : NaN);
-        }
-
         const canvas = document.createElement("canvas");
-        canvas.width = cols * 24;
-        canvas.height = rows * 24;
+        canvas.width = cols * 20;
+        canvas.height = rows * 20;
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
 
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.globalAlpha = 1;
+
+        // Render smooth "shaded field" blobs at the *actual sea grid-cell* returned by the API
+        // to avoid waves appearing on land.
+        const latSpan = ne.lat - sw.lat;
+        const lngSpan = ne.lng - sw.lng;
+        const pxW = canvas.width;
+        const pxH = canvas.height;
+
+        ctx.save();
         ctx.globalAlpha = clamp(opacity, 0.2, 0.95);
-        for (let y = 0; y < rows; y++) {
-          for (let x = 0; x < cols; x++) {
-            const v = vals[y * cols + x]!;
-            if (!Number.isFinite(v)) continue;
-            ctx.fillStyle = wavesColor(v);
-            ctx.fillRect(x * 24, y * 24, 24, 24);
-          }
+        ctx.globalCompositeOperation = "source-over";
+
+        const blobR = Math.max(10, Math.round(Math.min(pxW / cols, pxH / rows) * 0.95));
+        ctx.shadowBlur = Math.round(blobR * 0.9);
+        ctx.shadowColor = "rgba(0,0,0,0)";
+
+        for (const b of blocks) {
+          const usedLat = typeof b?.latitude === "number" ? b.latitude : null;
+          const usedLng = typeof b?.longitude === "number" ? b.longitude : null;
+          const arr = b?.hourly?.wave_height as number[] | undefined;
+          const v = typeof arr?.[idx] === "number" ? arr[idx] : NaN;
+          if (!Number.isFinite(v) || usedLat == null || usedLng == null) continue;
+          // Convert lat/lng into overlay pixel coordinates (linear within current bounds).
+          const x = lngSpan === 0 ? pxW / 2 : ((usedLng - sw.lng) / lngSpan) * pxW;
+          const y = latSpan === 0 ? pxH / 2 : (1 - (usedLat - sw.lat) / latSpan) * pxH;
+          if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+          if (x < -blobR || x > pxW + blobR || y < -blobR || y > pxH + blobR) continue;
+
+          const c = wavesColor(v);
+          ctx.fillStyle = c;
+          ctx.shadowColor = c;
+          ctx.beginPath();
+          ctx.arc(x, y, blobR, 0, Math.PI * 2);
+          ctx.fill();
         }
+        ctx.restore();
 
         const url = canvas.toDataURL("image/png");
         const imgBounds = L.latLngBounds([sw.lat, sw.lng], [ne.lat, ne.lng]);
