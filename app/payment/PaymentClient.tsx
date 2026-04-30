@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { BillingPlan } from "@/lib/pricing";
 import { ANNUAL_GBP, discountedRecurringGbp, MONTHLY_GBP, recurringPriceGbp, TRIAL_DAYS } from "@/lib/pricing";
@@ -9,6 +9,7 @@ type Props = { showCanceled?: boolean };
 
 export function PaymentClient({ showCanceled = false }: Props) {
   const [plan, setPlan] = useState<BillingPlan>("monthly");
+  const [provider, setProvider] = useState<"stripe" | "paypal">("stripe");
   const [codeInput, setCodeInput] = useState("");
   const [applied, setApplied] = useState<{ code: string; discountPercent: number } | null>(null);
   const [voucherError, setVoucherError] = useState<string | null>(null);
@@ -21,6 +22,14 @@ export function PaymentClient({ showCanceled = false }: Props) {
     () => (applied ? discountedRecurringGbp(plan, applied.discountPercent) : base),
     [plan, applied, base],
   );
+  useEffect(() => {
+    if (provider === "stripe") return;
+    queueMicrotask(() => {
+      setApplied(null);
+      setVoucherError(null);
+      setCodeInput("");
+    });
+  }, [provider]);
 
   async function applyVoucher() {
     setVoucherError(null);
@@ -64,20 +73,39 @@ export function PaymentClient({ showCanceled = false }: Props) {
     setCheckoutError(null);
     setCheckoutLoading(true);
     try {
-      const res = await fetch("/api/checkout/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          plan,
-          ...(applied ? { voucherCode: applied.code } : {}),
-        }),
-      });
-      const data = (await res.json()) as { url?: string; error?: string };
-      if (!res.ok || !data.url) {
-        setCheckoutError(data.error ?? "Checkout could not be started");
-        return;
+      if (provider === "stripe") {
+        const res = await fetch("/api/checkout/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            plan,
+            ...(applied ? { voucherCode: applied.code } : {}),
+          }),
+        });
+        const data = (await res.json()) as { url?: string; error?: string };
+        if (!res.ok || !data.url) {
+          setCheckoutError(data.error ?? "Checkout could not be started");
+          return;
+        }
+        window.location.assign(data.url);
+      } else {
+        // PayPal subscriptions: voucher codes are currently Stripe-only.
+        if (applied) {
+          setCheckoutError("Voucher codes are currently available for Stripe checkout only.");
+          return;
+        }
+        const res = await fetch("/api/paypal/subscription/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ plan }),
+        });
+        const data = (await res.json()) as { approveUrl?: string; error?: string };
+        if (!res.ok || !data.approveUrl) {
+          setCheckoutError(data.error ?? "PayPal checkout could not be started");
+          return;
+        }
+        window.location.assign(data.approveUrl);
       }
-      window.location.href = data.url;
     } catch {
       setCheckoutError("Network error. Try again.");
     } finally {
@@ -106,10 +134,38 @@ export function PaymentClient({ showCanceled = false }: Props) {
 
         <h1 className="mt-6 text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Choose your plan</h1>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          Monthly or annual — two billing options, each with its own price. Checkout opens with the Stripe subscription
-          price for the option you pick.
+          Monthly or annual — two billing options, each with its own price. Checkout opens with your chosen provider.
         </p>
         <p className="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">Figures below are after your trial.</p>
+
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => setProvider("stripe")}
+            className={`rounded-xl border-2 px-3 py-3 text-left transition-colors ${
+              provider === "stripe"
+                ? "border-green-600 bg-green-50 dark:border-green-500 dark:bg-green-950/40"
+                : "border-zinc-200 bg-zinc-50 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900/50"
+            }`}
+          >
+            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Stripe</p>
+            <p className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-50">Card / Apple Pay / Google Pay</p>
+            <p className="mt-1 text-[11px] text-zinc-500">Best for cards + receipts</p>
+          </button>
+          <button
+            type="button"
+            onClick={() => setProvider("paypal")}
+            className={`rounded-xl border-2 px-3 py-3 text-left transition-colors ${
+              provider === "paypal"
+                ? "border-green-600 bg-green-50 dark:border-green-500 dark:bg-green-950/40"
+                : "border-zinc-200 bg-zinc-50 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900/50"
+            }`}
+          >
+            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">PayPal</p>
+            <p className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-50">PayPal balance / linked card</p>
+            <p className="mt-1 text-[11px] text-zinc-500">Popular for fast sign-up</p>
+          </button>
+        </div>
 
         <div className="mt-4 grid grid-cols-2 gap-3">
           <button
@@ -154,17 +210,21 @@ export function PaymentClient({ showCanceled = false }: Props) {
               value={codeInput}
               onChange={(e) => onCodeChange(e.target.value)}
               placeholder="e.g. LAUNCH100"
+              disabled={provider !== "stripe"}
               className="min-h-10 flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm uppercase text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
             />
             <button
               type="button"
-              disabled={voucherLoading || !codeInput.trim()}
+              disabled={provider !== "stripe" || voucherLoading || !codeInput.trim()}
               onClick={applyVoucher}
               className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg bg-zinc-900 px-4 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
             >
               {voucherLoading ? "Checking…" : "Apply"}
             </button>
           </div>
+          {provider !== "stripe" ? (
+            <p className="mt-2 text-xs text-zinc-500">Voucher codes are currently available for Stripe checkout only.</p>
+          ) : null}
           {voucherError && <p className="mt-2 text-xs text-red-600">{voucherError}</p>}
           {applied && (
             <p className="mt-2 text-xs font-medium text-green-800 dark:text-green-300">
@@ -204,7 +264,7 @@ export function PaymentClient({ showCanceled = false }: Props) {
           onClick={() => void startCheckout()}
           className="mt-6 flex h-11 w-full items-center justify-center rounded-lg bg-green-600 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-60"
         >
-          {checkoutLoading ? "Redirecting to Stripe…" : `Start ${TRIAL_DAYS}-day free trial`}
+          {checkoutLoading ? "Redirecting…" : `Start ${TRIAL_DAYS}-day free trial`}
         </button>
         <p className="mt-3 text-center text-[11px] text-zinc-500">
           You will not be charged until the trial ends. Cancel anytime during the trial.

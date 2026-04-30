@@ -6,10 +6,11 @@ export const metadata: Metadata = {
   description: "Your SeaLink trial is active.",
 };
 
-type Props = { searchParams: Promise<{ session_id?: string }> };
+type Props = { searchParams: Promise<{ session_id?: string; provider?: string; subscription_id?: string }> };
 
 export default async function PaymentSuccessPage({ searchParams }: Props) {
-  const { session_id: sessionId } = await searchParams;
+  const { session_id: sessionId, provider, subscription_id: subId } = await searchParams;
+  const isPayPal = provider === "paypal";
 
   return (
     <div className="mx-auto flex min-h-[60vh] w-full max-w-lg flex-col justify-center px-4 py-12 sm:px-6">
@@ -19,12 +20,16 @@ export default async function PaymentSuccessPage({ searchParams }: Props) {
           Trial subscription confirmed
         </h1>
         <p className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-          Stripe has recorded your checkout. You won&apos;t be charged until the trial ends. You can manage billing from
-          the link in your receipt email.
+          {isPayPal
+            ? "PayPal has recorded your subscription. You won’t be charged until the trial ends. You can manage billing from your PayPal account."
+            : "Stripe has recorded your checkout. You won’t be charged until the trial ends. You can manage billing from the link in your receipt email."}
         </p>
-        {sessionId && (
-          <p className="mt-4 break-all font-mono text-[11px] text-zinc-400 dark:text-zinc-500">Session {sessionId}</p>
-        )}
+        {sessionId ? (
+          <p className="mt-4 break-all font-mono text-[11px] text-zinc-400 dark:text-zinc-500">Stripe session {sessionId}</p>
+        ) : null}
+        {subId ? (
+          <p className="mt-2 break-all font-mono text-[11px] text-zinc-400 dark:text-zinc-500">PayPal subscription {subId}</p>
+        ) : null}
         <Link
           href="/"
           className="mt-8 inline-flex h-11 items-center justify-center rounded-lg bg-green-600 px-6 text-sm font-medium text-white hover:bg-green-700"
