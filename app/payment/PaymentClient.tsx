@@ -53,7 +53,7 @@ export function PaymentClient({ showCanceled = false }: Props) {
         <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 dark:border-green-900/50 dark:bg-green-950/30">
           <p className="text-sm font-semibold text-green-900 dark:text-green-100">{TRIAL_DAYS}-day free trial</p>
           <p className="mt-1 text-xs leading-5 text-green-800/90 dark:text-green-200/90">
-            Try everything free for two weeks. After that, your plan renews at the rate below unless you cancel.
+            Try everything free for {TRIAL_DAYS === 7 ? "one week" : `${TRIAL_DAYS} days`}. After that, your plan renews at the rate below unless you cancel.
           </p>
         </div>
 
