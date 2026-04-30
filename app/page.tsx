@@ -6,6 +6,8 @@ import { HomeMainCtas } from "@/components/HomeMainCtas";
 import { ShareAppLink } from "@/components/home/ShareAppLink";
 import { DEMO_SESSION_COOKIE, DEMO_SESSION_VALUE } from "@/lib/demo-session";
 
+export const dynamic = "force-dynamic";
+
 export default async function Home() {
   const jar = await cookies();
   const signedIn = jar.get(DEMO_SESSION_COOKIE)?.value === DEMO_SESSION_VALUE;

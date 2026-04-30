@@ -57,19 +57,36 @@ async function startDemoSession(
     if (opts?.deactivateDeviceId) {
       return { ok: true };
     }
+
+    if (shouldRedirect) {
+      async function readSignedIn(): Promise<boolean> {
+        const r = await fetch("/api/demo/me", { credentials: "same-origin", cache: "no-store" });
+        const j = (await r.json()) as { signedIn?: boolean };
+        return j.signedIn === true;
+      }
+      let okCookie = await readSignedIn();
+      if (!okCookie) {
+        await new Promise((r) => setTimeout(r, 120));
+        okCookie = await readSignedIn();
+      }
+      if (!okCookie) {
+        return {
+          ok: false,
+          message:
+            "Your details were accepted, but this browser did not keep the sign-in cookie. Try turning off strict tracking prevention for this site, avoid private/incognito mode, or ask the host to fix COOKIE_DOMAIN (must be the bare hostname like sealinkapp.com — never https://…).",
+        };
+      }
+      try {
+        localStorage.setItem(LAST_SIGNIN_EMAIL_STORAGE_KEY, normaliseEmail(email));
+      } catch {
+        /* */
+      }
+      window.location.assign("/");
+    }
+    return { ok: true };
   } catch {
     return { ok: false, message: "Network error. Try again." };
   }
-  if (shouldRedirect) {
-    try {
-      // Always remember last successful sign-in email in this browser (not your password).
-      localStorage.setItem(LAST_SIGNIN_EMAIL_STORAGE_KEY, normaliseEmail(email));
-    } catch {
-      /* */
-    }
-    window.location.assign("/");
-  }
-  return { ok: true };
 }
 
 export function SignInForm() {
