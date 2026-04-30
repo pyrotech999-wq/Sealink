@@ -8,6 +8,150 @@ import { MapContainer, TileLayer, useMap } from "react-leaflet";
 type LayerMode = "wind" | "waves" | "rain" | "pressure";
 type BaseMapMode = "streets" | "light" | "satellite";
 
+function clamp(n: number, a: number, b: number): number {
+  return Math.max(a, Math.min(b, n));
+}
+
+function wavesColor(m: number): string {
+  // 0..6m -> blue->cyan->green->yellow->orange->red
+  const t = clamp(m / 6, 0, 1);
+  const stops = [
+    [0, 80, 220],
+    [0, 200, 255],
+    [60, 220, 140],
+    [240, 220, 80],
+    [245, 160, 60],
+    [220, 60, 60],
+  ] as const;
+  const idx = Math.min(stops.length - 2, Math.floor(t * (stops.length - 1)));
+  const localT = t * (stops.length - 1) - idx;
+  const a = stops[idx]!;
+  const b = stops[idx + 1]!;
+  const r = Math.round(a[0] + (b[0] - a[0]) * localT);
+  const g = Math.round(a[1] + (b[1] - a[1]) * localT);
+  const bl = Math.round(a[2] + (b[2] - a[2]) * localT);
+  return `rgba(${r},${g},${bl},0.68)`;
+}
+
+function OpenMeteoWavesOverlay({ enabled, timeIso, opacity }: { enabled: boolean; timeIso: string; opacity: number }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!enabled) return;
+    let disposed = false;
+    let overlay: L.ImageOverlay | null = null;
+    let timer: number | null = null;
+
+    const render = async () => {
+      try {
+        const bounds = map.getBounds();
+        const sw = bounds.getSouthWest();
+        const ne = bounds.getNorthEast();
+
+        // Sample a small grid across the viewport.
+        const cols = 16;
+        const rows = 10;
+        const lats: number[] = [];
+        const lngs: number[] = [];
+        for (let y = 0; y < rows; y++) {
+          const fy = rows === 1 ? 0.5 : y / (rows - 1);
+          const lat = sw.lat + (ne.lat - sw.lat) * fy;
+          for (let x = 0; x < cols; x++) {
+            const fx = cols === 1 ? 0.5 : x / (cols - 1);
+            const lng = sw.lng + (ne.lng - sw.lng) * fx;
+            lats.push(Number(lat.toFixed(4)));
+            lngs.push(Number(lng.toFixed(4)));
+          }
+        }
+
+        const api = new URL("https://marine-api.open-meteo.com/v1/marine");
+        api.searchParams.set("latitude", lats.join(","));
+        api.searchParams.set("longitude", lngs.join(","));
+        api.searchParams.set("hourly", "wave_height");
+        api.searchParams.set("forecast_days", "5");
+        api.searchParams.set("timezone", "GMT");
+
+        const r = await fetch(api.toString(), { cache: "no-store" });
+        if (!r.ok) return;
+        const d = (await r.json()) as any;
+        const blocks = Array.isArray(d) ? d : Array.isArray(d?.hourly?.time) ? [d] : [];
+        if (!blocks.length) return;
+
+        const times = blocks[0]?.hourly?.time as string[] | undefined;
+        if (!times?.length) return;
+
+        const targetMs = new Date(timeIso).getTime();
+        let idx = 0;
+        let best = Number.POSITIVE_INFINITY;
+        for (let i = 0; i < times.length; i++) {
+          const ms = new Date(times[i]!).getTime();
+          const dist = Math.abs(ms - targetMs);
+          if (dist < best) {
+            best = dist;
+            idx = i;
+          }
+        }
+
+        const vals: number[] = [];
+        for (const b of blocks) {
+          const arr = b?.hourly?.wave_height as number[] | undefined;
+          vals.push(typeof arr?.[idx] === "number" ? arr[idx] : NaN);
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = cols * 24;
+        canvas.height = rows * 24;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.globalAlpha = clamp(opacity, 0.2, 0.95);
+        for (let y = 0; y < rows; y++) {
+          for (let x = 0; x < cols; x++) {
+            const v = vals[y * cols + x]!;
+            if (!Number.isFinite(v)) continue;
+            ctx.fillStyle = wavesColor(v);
+            ctx.fillRect(x * 24, y * 24, 24, 24);
+          }
+        }
+
+        const url = canvas.toDataURL("image/png");
+        const imgBounds = L.latLngBounds([sw.lat, sw.lng], [ne.lat, ne.lng]);
+
+        if (overlay) {
+          overlay.setUrl(url);
+          overlay.setBounds(imgBounds);
+        } else {
+          overlay = L.imageOverlay(url, imgBounds, { opacity: 1 });
+          overlay.addTo(map);
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+
+    const schedule = () => {
+      if (timer != null) window.clearTimeout(timer);
+      timer = window.setTimeout(() => void render(), 300);
+    };
+
+    schedule();
+    const onMove = () => schedule();
+    map.on("moveend", onMove);
+
+    return () => {
+      disposed = true;
+      if (timer != null) window.clearTimeout(timer);
+      map.off("moveend", onMove);
+      if (overlay) map.removeLayer(overlay);
+      overlay = null;
+      void disposed;
+    };
+  }, [map, enabled, timeIso, opacity]);
+
+  return null;
+}
+
 function WmsOverlay({ mode, opacity, timeIso }: { mode: LayerMode; opacity: number; timeIso: string }) {
   const map = useMap();
 
@@ -297,7 +441,9 @@ export function WeatherSeaMap() {
               detectRetina
             />
           )}
-          <WmsOverlay mode={mode} opacity={opacity} timeIso={timeIso} />
+          {/* Use Open-Meteo raster for waves to ensure coverage in enclosed seas like the Mediterranean. */}
+          <OpenMeteoWavesOverlay enabled={mode === "waves"} timeIso={timeIso} opacity={opacity} />
+          <WmsOverlay mode={mode === "waves" ? "wind" : mode} opacity={opacity} timeIso={timeIso} />
         </MapContainer>
       </div>
       <div className="border-t border-zinc-200 px-3 py-2 text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
