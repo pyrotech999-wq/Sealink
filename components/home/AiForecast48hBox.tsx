@@ -10,7 +10,7 @@ type Props = {
 type ApiSuccess = { configured: true; text: string; model?: string; openAi?: boolean };
 type ApiFail = { error: string; detail?: string };
 
-type GenerateOpts = { signal?: AbortSignal; persistAutoKey?: string };
+type GenerateOpts = { signal?: AbortSignal };
 
 export function AiForecast48hBox({ lat, lng }: Props) {
   const [text, setText] = useState<string | null>(null);
@@ -41,13 +41,6 @@ export function AiForecast48hBox({ lat, lng }: Props) {
         const ok = data as ApiSuccess;
         if (ok.configured === true && ok.text) {
           setText(ok.text);
-          if (opts?.persistAutoKey && typeof window !== "undefined") {
-            try {
-              sessionStorage.setItem(opts.persistAutoKey, "1");
-            } catch {
-              /* quota / private mode */
-            }
-          }
           return;
         }
         setErr("Unexpected response");
@@ -71,10 +64,7 @@ export function AiForecast48hBox({ lat, lng }: Props) {
     }
 
     const ac = new AbortController();
-    const storageKey = `sealink_ai48_auto_${lat.toFixed(3)}_${lng.toFixed(3)}`;
-    if (typeof window !== "undefined" && sessionStorage.getItem(storageKey)) return;
-
-    void generate({ signal: ac.signal, persistAutoKey: storageKey });
+    void generate({ signal: ac.signal });
     return () => ac.abort();
   }, [hasLocation, lat, lng, generate]);
 
