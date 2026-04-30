@@ -2,20 +2,33 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { getDeviceName, getOrCreateDeviceId } from "@/lib/device-id";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-async function startDemoSession(email: string): Promise<{ ok: true } | { ok: false; message: string }> {
+async function startDemoSession(
+  email: string,
+  opts?: { deactivateDeviceId?: string },
+): Promise<
+  | { ok: true }
+  | { ok: false; message: string; devices?: { deviceId: string; name: string; activatedAt: string; lastSeenAt: string }[] }
+> {
   try {
+    const deviceId = getOrCreateDeviceId();
+    const deviceName = getDeviceName();
     const res = await fetch("/api/demo/sign-in", {
       method: "POST",
       credentials: "same-origin",
       headers: { Accept: "application/json", "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email, deviceId, deviceName, deactivateDeviceId: opts?.deactivateDeviceId }),
     });
     if (!res.ok) {
-      const data = (await res.json()) as { error?: string };
-      return { ok: false, message: data.error || "Could not start session. Try again." };
+      const data = (await res.json()) as { error?: string; devices?: unknown };
+      return {
+        ok: false,
+        message: data.error || "Could not start session. Try again.",
+        devices: Array.isArray(data.devices) ? (data.devices as any) : undefined,
+      };
     }
   } catch {
     return { ok: false, message: "Network error. Try again." };
@@ -29,6 +42,9 @@ export function SignInForm() {
   const [password, setPassword] = useState("");
   const [agree, setAgree] = useState(false);
   const [error, setError] = useState("");
+  const [deviceLimit, setDeviceLimit] = useState<
+    { deviceId: string; name: string; activatedAt: string; lastSeenAt: string }[]
+  >([]);
   const [pending, setPending] = useState(false);
 
   async function onSubmit(ev: React.FormEvent) {
@@ -47,10 +63,12 @@ export function SignInForm() {
       return;
     }
     setError("");
+    setDeviceLimit([]);
     setPending(true);
     const result = await startDemoSession(trimmed);
     if (!result.ok) {
       setError(result.message);
+      setDeviceLimit(Array.isArray(result.devices) ? result.devices : []);
       setPending(false);
     }
   }
@@ -70,6 +88,56 @@ export function SignInForm() {
           {error}
         </p>
       )}
+      {deviceLimit.length ? (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+          <p className="font-semibold">Active devices</p>
+          <p className="mt-1 text-xs opacity-80">
+            You’re already signed in on 2 devices. Deactivate one to sign in here.
+          </p>
+          <div className="mt-2 space-y-2">
+            {deviceLimit.map((d) => (
+              <div key={d.deviceId} className="flex items-center justify-between gap-3 rounded-md bg-white/60 px-2 py-1 dark:bg-zinc-950/30">
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-semibold">{d.name || d.deviceId.slice(0, 8)}</p>
+                  <p className="truncate text-[11px] opacity-70">
+                    last seen {new Date(d.lastSeenAt).toLocaleString("en-GB")}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => {
+                    const trimmed = email.trim();
+                    if (!EMAIL_RE.test(trimmed)) {
+                      setError("Enter your email above first.");
+                      return;
+                    }
+                    setPending(true);
+                    void (async () => {
+                      const res = await startDemoSession(trimmed, { deactivateDeviceId: d.deviceId });
+                      if (!res.ok) {
+                        setError(res.message);
+                        setPending(false);
+                        return;
+                      }
+                      // After deactivating, try sign-in again.
+                      const res2 = await startDemoSession(trimmed);
+                      if (!res2.ok) {
+                        setError(res2.message);
+                        setDeviceLimit(Array.isArray(res2.devices) ? res2.devices : []);
+                        setPending(false);
+                      }
+                    })();
+                  }}
+                  className="shrink-0 rounded-md bg-amber-700 px-2 py-1 text-xs font-semibold text-white hover:bg-amber-800 disabled:opacity-60"
+                >
+                  Deactivate
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
       <div className="space-y-4">
         <div>
           <label htmlFor="signin-email" className="text-sm font-medium text-zinc-800 dark:text-zinc-200">

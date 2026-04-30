@@ -121,7 +121,6 @@ export default function HomeLocationMap() {
   const [anchorCfg, setAnchorCfg] = useState(() =>
     typeof window !== "undefined" ? getAnchorAlertConfig() : getAnchorAlertConfig(),
   );
-  const [anchorAlerts, setAnchorAlerts] = useState<{ id: string; message: string; createdAt: string }[]>([]);
   const [activeAnchorAlert, setActiveAnchorAlert] = useState<{ id: string; message: string; createdAt: string } | null>(
     null,
   );
@@ -297,7 +296,6 @@ export default function HomeLocationMap() {
         const d = (await r.json()) as { alerts?: { id: string; message: string; createdAt: string }[] };
         const list = Array.isArray(d.alerts) ? d.alerts : [];
         if (disposed) return;
-        setAnchorAlerts(list);
         if (!activeAnchorAlert && list.length) setActiveAnchorAlert(list[0]!);
       } catch {
         /* ignore */
@@ -890,7 +888,6 @@ export default function HomeLocationMap() {
                       /* ignore */
                     }
                     setActiveAnchorAlert(null);
-                    setAnchorAlerts((prev) => prev.filter((x) => x.id !== id));
                   })();
                 }}
                 className="rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700"

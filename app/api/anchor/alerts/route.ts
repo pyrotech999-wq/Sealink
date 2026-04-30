@@ -4,13 +4,13 @@ import { createAnchorAlert, listUnseenAnchorAlerts, markAnchorAlertSeen } from "
 import { isWhatsAppConfigured, sendWhatsAppMessage } from "@/lib/whatsapp";
 
 export async function GET(): Promise<Response> {
-  const user = requireAuthUser();
+  const user = await requireAuthUser();
   const alerts = await listUnseenAnchorAlerts(user.uid);
   return NextResponse.json({ alerts });
 }
 
 export async function POST(req: Request): Promise<Response> {
-  const user = requireAuthUser();
+  const user = await requireAuthUser();
   let body: unknown = null;
   try {
     body = (await req.json()) as unknown;

@@ -56,3 +56,4 @@ next-env.d.ts
 # anchor alert device registry
 /data/anchor-devices.json
 /data/anchor-alerts.json
+/data/account-devices.json
