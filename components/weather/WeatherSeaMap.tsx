@@ -8,7 +8,7 @@ import { MapContainer, TileLayer, useMap } from "react-leaflet";
 type LayerMode = "wind" | "waves" | "rain" | "pressure";
 type BaseMapMode = "streets" | "light" | "satellite";
 
-function WmsOverlay({ mode, opacity }: { mode: LayerMode; opacity: number }) {
+function WmsOverlay({ mode, opacity, timeIso }: { mode: LayerMode; opacity: number; timeIso: string }) {
   const map = useMap();
 
   useEffect(() => {
@@ -17,14 +17,15 @@ function WmsOverlay({ mode, opacity }: { mode: LayerMode; opacity: number }) {
     const wavesUrl =
       "https://pae-paha.pacioos.hawaii.edu/thredds/wms/ww3_global/WaveWatch_III_Global_Wave_Model_fmrc.ncd";
 
-    // ncWMS supports vector styling when two layers are provided.
+    // PacIOOS exposes a combined vector field layer "wind" with barb/vector styles and a time dimension.
     const wind = L.tileLayer.wms(windUrl, {
-      layers: "ugrd10m,vgrd10m",
-      styles: "vector",
+      layers: "wind",
+      styles: "barb/jet",
       format: "image/png",
       transparent: true,
       opacity,
       version: "1.3.0",
+      time: timeIso,
     } as any);
 
     const waves = L.tileLayer.wms(wavesUrl, {
@@ -34,6 +35,7 @@ function WmsOverlay({ mode, opacity }: { mode: LayerMode; opacity: number }) {
       transparent: true,
       opacity,
       version: "1.3.0",
+      time: timeIso,
     } as any);
 
     const rain = L.tileLayer.wms(windUrl, {
@@ -43,6 +45,7 @@ function WmsOverlay({ mode, opacity }: { mode: LayerMode; opacity: number }) {
       transparent: true,
       opacity,
       version: "1.3.0",
+      time: timeIso,
     } as any);
 
     const pressure = L.tileLayer.wms(windUrl, {
@@ -52,6 +55,7 @@ function WmsOverlay({ mode, opacity }: { mode: LayerMode; opacity: number }) {
       transparent: true,
       opacity,
       version: "1.3.0",
+      time: timeIso,
     } as any);
 
     const layer =
@@ -64,9 +68,26 @@ function WmsOverlay({ mode, opacity }: { mode: LayerMode; opacity: number }) {
       map.removeLayer(rain);
       map.removeLayer(pressure);
     };
-  }, [map, mode, opacity]);
+  }, [map, mode, opacity, timeIso]);
 
   return null;
+}
+
+function roundTo3hUtc(d: Date): Date {
+  const ms = d.getTime();
+  const threeH = 3 * 60 * 60 * 1000;
+  return new Date(Math.floor(ms / threeH) * threeH);
+}
+
+function buildFrames4d(): string[] {
+  const start = roundTo3hUtc(new Date());
+  const out: string[] = [];
+  const step = 3 * 60 * 60 * 1000;
+  const end = start.getTime() + 4 * 24 * 60 * 60 * 1000;
+  for (let t = start.getTime(); t <= end; t += step) {
+    out.push(new Date(t).toISOString().replace(/\.\d{3}Z$/, ".000Z"));
+  }
+  return out;
 }
 
 export function WeatherSeaMap() {
@@ -75,6 +96,9 @@ export function WeatherSeaMap() {
   const [opacity, setOpacity] = useState(0.75);
   const [pos, setPos] = useState<{ lat: number; lng: number } | null>(null);
   const [initialCenter, setInitialCenter] = useState<[number, number] | null>(null);
+  const frames = useMemo(() => buildFrames4d(), []);
+  const [frameIdx, setFrameIdx] = useState(0);
+  const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
@@ -97,6 +121,19 @@ export function WeatherSeaMap() {
   }, [initialCenter]);
 
   const center = useMemo<[number, number]>(() => initialCenter ?? [20, 0], [initialCenter]);
+  const timeIso = frames[Math.min(Math.max(frameIdx, 0), frames.length - 1)] ?? new Date().toISOString();
+
+  useEffect(() => {
+    if (!playing) return;
+    const id = window.setInterval(() => {
+      setFrameIdx((i) => {
+        const next = i + 1;
+        if (next >= frames.length) return 0;
+        return next;
+      });
+    }, 900);
+    return () => window.clearInterval(id);
+  }, [playing, frames.length]);
 
   return (
     <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
@@ -186,7 +223,36 @@ export function WeatherSeaMap() {
         </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">Time</span>
+            <button
+              type="button"
+              onClick={() => setPlaying((p) => !p)}
+              className="h-8 rounded-lg border border-zinc-200 bg-white px-3 text-xs font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
+              title="Play/pause forecast animation"
+            >
+              {playing ? "Pause" : "Play"}
+            </button>
+            <span className="text-[11px] text-zinc-500">
+              {new Date(timeIso).toLocaleString("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit" })}
+            </span>
+          </div>
+
+          <input
+            type="range"
+            min={0}
+            max={Math.max(0, frames.length - 1)}
+            step={1}
+            value={frameIdx}
+            onChange={(e) => {
+              setPlaying(false);
+              setFrameIdx(Number(e.target.value));
+            }}
+            className="w-48"
+            aria-label="Forecast time"
+          />
+
           <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">Overlay</span>
           <input
             type="range"
@@ -231,12 +297,12 @@ export function WeatherSeaMap() {
               detectRetina
             />
           )}
-          <WmsOverlay mode={mode} opacity={opacity} />
+          <WmsOverlay mode={mode} opacity={opacity} timeIso={timeIso} />
         </MapContainer>
       </div>
       <div className="border-t border-zinc-200 px-3 py-2 text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
         <span className="font-semibold text-zinc-800 dark:text-zinc-200">Tip:</span> drag/zoom anywhere in the world —
-        this map won’t snap back to you. Wind and sea overlays are global model layers.
+        this map won’t snap back to you. Use Play to step through the next 4 days of model frames.
       </div>
     </div>
   );
