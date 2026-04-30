@@ -33,6 +33,7 @@ import {
   setShareNearbyPeers,
 } from "@/lib/map-profile-storage";
 import { getAnchorAlertConfig, setAnchorAlertConfig } from "@/lib/anchor-alert-storage";
+import { getDeviceName, getOrCreateDeviceId } from "@/lib/device-id";
 
 const DEFAULT_CENTER: [number, number] = [DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng];
 const DEFAULT_ZOOM = 6;
@@ -120,6 +121,7 @@ export default function HomeLocationMap() {
   const [anchorCfg, setAnchorCfg] = useState(() =>
     typeof window !== "undefined" ? getAnchorAlertConfig() : getAnchorAlertConfig(),
   );
+  const deviceId = useMemo(() => (typeof window !== "undefined" ? getOrCreateDeviceId() : "server"), []);
   const [shareNearby, setShareNearby] = useState(() =>
     typeof window !== "undefined" ? getShareNearbyPeers() : false,
   );
@@ -144,11 +146,57 @@ export default function HomeLocationMap() {
     polling.current = false;
   }, []);
 
+  // Report this device's last fix (for cross-device monitoring).
+  useEffect(() => {
+    if (!sharing || !pos) return;
+    const name = getDeviceName() || "This device";
+    const payload = { deviceId, name, lat: pos.lat, lng: pos.lng };
+    void fetch("/api/anchor/devices", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  }, [sharing, pos?.lat, pos?.lng, deviceId]);
+
+  const [monitoredFix, setMonitoredFix] = useState<{ lat: number; lng: number; at: string } | null>(null);
+
+  // If monitoring another device, pull its latest fix periodically.
+  useEffect(() => {
+    if (!sharing) return;
+    if (!anchorCfg.monitorDeviceId || anchorCfg.monitorDeviceId === "this") {
+      queueMicrotask(() => setMonitoredFix(null));
+      return;
+    }
+    let disposed = false;
+    const load = async () => {
+      try {
+        const r = await fetch("/api/anchor/devices");
+        const d = (await r.json()) as { devices?: { deviceId: string; lastLat: number | null; lastLng: number | null; lastFixAt: string | null }[] };
+        const row = d.devices?.find((x) => x.deviceId === anchorCfg.monitorDeviceId);
+        if (!row || row.lastLat == null || row.lastLng == null || !row.lastFixAt) return;
+        if (disposed) return;
+        setMonitoredFix({ lat: row.lastLat, lng: row.lastLng, at: row.lastFixAt });
+      } catch {
+        /* ignore */
+      }
+    };
+    void load();
+    const id = window.setInterval(() => void load(), 60_000);
+    return () => {
+      disposed = true;
+      window.clearInterval(id);
+    };
+  }, [sharing, anchorCfg.monitorDeviceId]);
+
   // Anchor alert check (runs whenever position updates).
   useEffect(() => {
     if (!sharing || !pos) return;
     if (!anchorCfg.armed || anchorCfg.lat == null || anchorCfg.lng == null) return;
-    const m = distanceMiles(pos.lat, pos.lng, anchorCfg.lat, anchorCfg.lng) * 1609.344;
+    const src =
+      anchorCfg.monitorDeviceId && anchorCfg.monitorDeviceId !== "this" && monitoredFix
+        ? { lat: monitoredFix.lat, lng: monitoredFix.lng }
+        : { lat: pos.lat, lng: pos.lng };
+    const m = distanceMiles(src.lat, src.lng, anchorCfg.lat, anchorCfg.lng) * 1609.344;
     if (m <= anchorCfg.radiusM) return;
 
     const last = anchorCfg.lastAlertAt ? new Date(anchorCfg.lastAlertAt).getTime() : 0;
@@ -168,7 +216,7 @@ export default function HomeLocationMap() {
       /* ignore */
     }
     window.alert(msg);
-  }, [sharing, pos?.lat, pos?.lng, anchorCfg]);
+  }, [sharing, pos?.lat, pos?.lng, monitoredFix?.lat, monitoredFix?.lng, anchorCfg]);
 
   useEffect(() => {
     if (!sharing) {
@@ -732,6 +780,7 @@ export default function HomeLocationMap() {
           lat: anchorCfg.lat,
           lng: anchorCfg.lng,
           radiusM: anchorCfg.radiusM,
+          monitorDeviceId: anchorCfg.monitorDeviceId,
         }}
         onUpdate={(next) => {
           const merged = { ...anchorCfg, ...next, lastAlertAt: null };

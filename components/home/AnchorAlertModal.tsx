@@ -9,15 +9,15 @@ type Props = {
   sharing: boolean;
   hasFix: boolean;
   pos: { lat: number; lng: number } | null;
-  config: { armed: boolean; lat: number | null; lng: number | null; radiusM: number };
-  onUpdate: (next: { armed: boolean; lat: number | null; lng: number | null; radiusM: number }) => void;
+  config: { armed: boolean; lat: number | null; lng: number | null; radiusM: number; monitorDeviceId: string };
+  onUpdate: (next: { armed: boolean; lat: number | null; lng: number | null; radiusM: number; monitorDeviceId: string }) => void;
 };
 
 export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, config, onUpdate }: Props) {
   const [radius, setRadius] = useState(String(config.radiusM));
   const [deviceLabel, setDeviceLabel] = useState(() => (typeof window !== "undefined" ? getDeviceName() : ""));
   const [devices, setDevices] = useState<{ deviceId: string; name: string; updatedAt: string; lastFixAt: string | null }[]>([]);
-  const [monitorDeviceId, setMonitorDeviceId] = useState<string>("this");
+  const [monitorDeviceId, setMonitorDeviceId] = useState<string>(config.monitorDeviceId || "this");
 
   const canSet = sharing && hasFix && pos != null;
   const hasAnchor = config.lat != null && config.lng != null;
@@ -27,8 +27,6 @@ export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, config, 
     if (!hasFix) return "Waiting for a GPS fix…";
     return null;
   }, [sharing, hasFix]);
-
-  if (!open) return null;
 
   useEffect(() => {
     if (!open) return;
@@ -42,6 +40,8 @@ export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, config, 
       }
     })();
   }, [open]);
+
+  if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 px-4 py-8">
@@ -84,7 +84,11 @@ export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, config, 
             Device to monitor
             <select
               value={monitorDeviceId}
-              onChange={(e) => setMonitorDeviceId(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setMonitorDeviceId(v);
+                onUpdate({ ...config, monitorDeviceId: v });
+              }}
               className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
             >
               <option value="this">This device (current browser)</option>
@@ -118,7 +122,7 @@ export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, config, 
               disabled={!canSet}
               onClick={() => {
                 const n = Math.max(20, Math.min(500, Math.round(Number(radius) || config.radiusM)));
-                onUpdate({ ...config, lat: pos!.lat, lng: pos!.lng, radiusM: n, armed: true });
+                onUpdate({ ...config, lat: pos!.lat, lng: pos!.lng, radiusM: n, armed: true, monitorDeviceId });
               }}
               className="h-9 rounded-lg bg-green-600 px-3 text-sm font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -127,7 +131,7 @@ export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, config, 
             <button
               type="button"
               disabled={!hasAnchor}
-              onClick={() => onUpdate({ ...config, armed: false })}
+              onClick={() => onUpdate({ ...config, armed: false, monitorDeviceId })}
               className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
             >
               Disarm
