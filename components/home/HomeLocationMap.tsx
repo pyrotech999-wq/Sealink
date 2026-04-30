@@ -335,8 +335,8 @@ export default function HomeLocationMap() {
 
   const baseLat = pos?.lat ?? DEFAULT_MAP_CENTER.lat;
   const baseLng = pos?.lng ?? DEFAULT_MAP_CENTER.lng;
-  /** Tiny offset north (~4 m) so the arrow label clears the boat pin; stays visually on your position. */
-  const windMarkerLat = pos ? baseLat + 0.000035 : baseLat;
+  /** Tiny offset north (~2 m) so the arrow label clears the boat pin; stays visually on your position. */
+  const windMarkerLat = pos ? baseLat + 0.000018 : baseLat;
   const windMarkerLng = baseLng;
 
   const activeWind = windSlots.length ? windSlots[Math.min(windSlotIdx, windSlots.length - 1)] : null;
