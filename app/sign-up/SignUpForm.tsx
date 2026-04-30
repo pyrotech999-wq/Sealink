@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { getBoatName, setAvatarDataUrl, setBoatName, setFullName, setProfilePhone } from "@/lib/map-profile-storage";
 import { normalisePhone } from "@/lib/phone-normalise";
+import { getDeviceName, getOrCreateDeviceId } from "@/lib/device-id";
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -167,6 +168,9 @@ export function SignUpForm() {
       if (!form.agreeTerms) e.agreeTerms = "You need to accept the terms";
       if (!form.agreePrivacy) e.agreePrivacy = "You need to accept the privacy policy";
     }
+    if (s === 4) {
+      // no additional fields; step 4 is preferences/share
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -258,10 +262,9 @@ export function SignUpForm() {
     }
   }
 
-  function onSubmit(ev: React.FormEvent) {
+  async function onSubmit(ev: React.FormEvent) {
     ev.preventDefault();
     if (!validateStep(4)) return;
-    setSubmitted(true);
     setBoatName(form.boatName);
     setFullName(form.contactName);
     const national = form.phone.replace(/^0+/, "").replace(/\D/g, "");
@@ -278,6 +281,24 @@ export function SignUpForm() {
         .map((s) => s.trim())
         .filter(Boolean),
     });
+
+    try {
+      const deviceId = getOrCreateDeviceId();
+      const deviceName = getDeviceName();
+      const r = await fetch("/api/auth/sign-up", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: form.email.trim(), password: form.password, deviceId, deviceName }),
+      });
+      const d = (await r.json()) as { ok?: boolean; error?: string };
+      if (!r.ok || !d.ok) {
+        setErrors((e) => ({ ...e, submit: d.error || "Could not create account." }));
+        return;
+      }
+      setSubmitted(true);
+    } catch {
+      setErrors((e) => ({ ...e, submit: "Network error. Try again." }));
+    }
   }
 
   if (submitted) {
@@ -308,6 +329,11 @@ export function SignUpForm() {
 
   return (
     <form onSubmit={onSubmit} className="rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+      {errors.submit ? (
+        <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-200">
+          {errors.submit}
+        </p>
+      ) : null}
       <div className="mb-6">
         <div className="flex items-center justify-between gap-4">
           <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Step {step} of 4</p>
