@@ -36,12 +36,7 @@ export async function POST(req: Request) {
   const plan = normalisePlan(rawPlan);
   if (!plan) return NextResponse.json({ error: "Invalid or missing plan (use monthly or annual)" }, { status: 400 });
 
-  // Vouchers: currently Stripe-only in this build.
-  const hasVoucher =
-    typeof body === "object" && body !== null && "voucherCode" in body && String((body as { voucherCode?: unknown }).voucherCode ?? "").trim();
-  if (hasVoucher) {
-    return NextResponse.json({ error: "Voucher codes are currently available for Stripe checkout only." }, { status: 400 });
-  }
+  // Vouchers: not supported in PayPal-only beta (ignore if sent by older clients).
 
   const token = await paypalAccessToken().catch(() => null);
   if (!token) return NextResponse.json({ error: "PayPal auth failed." }, { status: 503 });
