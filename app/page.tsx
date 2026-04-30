@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { HomeHeader } from "@/components/HomeHeader";
 import { HomeLocationMapLoader } from "@/components/home/HomeLocationMapLoader";
+import { SeaStateSummaryBox } from "@/components/home/SeaStateSummaryBox";
 import { HomeMainCtas } from "@/components/HomeMainCtas";
 import { DEMO_SESSION_COOKIE, DEMO_SESSION_VALUE } from "@/lib/demo-session";
 
@@ -28,6 +29,8 @@ export default async function Home() {
         <HomeLocationMapLoader />
 
         <HomeMainCtas signedIn={signedIn} />
+
+        <SeaStateSummaryBox />
       </main>
     </div>
   );
