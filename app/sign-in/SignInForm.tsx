@@ -63,7 +63,7 @@ async function startDemoSession(
   if (shouldRedirect) {
     try {
       // Always remember last successful sign-in email in this browser (not your password).
-      localStorage.setItem(REMEMBER_EMAIL_KEY, normaliseEmail(email));
+      localStorage.setItem(LAST_SIGNIN_EMAIL_STORAGE_KEY, normaliseEmail(email));
     } catch {
       /* */
     }
@@ -86,7 +86,7 @@ export function SignInForm() {
 
   useEffect(() => {
     try {
-      const v = localStorage.getItem(REMEMBER_EMAIL_KEY);
+      const v = localStorage.getItem(LAST_SIGNIN_EMAIL_STORAGE_KEY);
       if (v && EMAIL_RE.test(v)) setEmail(normaliseEmail(v));
     } catch {
       /* */

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { LAST_SIGNIN_EMAIL_STORAGE_KEY, normaliseEmail } from "@/lib/email-normalise";
 import { getBoatName, setAvatarDataUrl, setBoatName, setFullName, setProfilePhone } from "@/lib/map-profile-storage";
 import { normalisePhone } from "@/lib/phone-normalise";
 import { getDeviceName, getOrCreateDeviceId } from "@/lib/device-id";
@@ -294,6 +295,11 @@ export function SignUpForm() {
       if (!r.ok || !d.ok) {
         setErrors((e) => ({ ...e, submit: d.error || "Could not create account." }));
         return;
+      }
+      try {
+        localStorage.setItem(LAST_SIGNIN_EMAIL_STORAGE_KEY, normaliseEmail(form.email.trim()));
+      } catch {
+        /* */
       }
       setSubmitted(true);
     } catch {
