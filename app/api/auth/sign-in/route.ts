@@ -29,7 +29,9 @@ export async function POST(req: Request) {
     deviceId = typeof body.deviceId === "string" ? body.deviceId : "";
     deviceName = typeof body.deviceName === "string" ? body.deviceName : "";
     deactivateDeviceId = typeof body.deactivateDeviceId === "string" ? body.deactivateDeviceId : "";
-    rememberMe = body.rememberMe === true;
+    // Default long session when omitted; only opt out on explicit false (incl. JSON quirks).
+    const rawRemember = body.rememberMe;
+    rememberMe = !(rawRemember === false || rawRemember === "false" || rawRemember === 0);
   } catch {
     /* */
   }

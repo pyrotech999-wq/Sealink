@@ -1,7 +1,9 @@
 import { cookies } from "next/headers";
 import { createHash } from "crypto";
 import { DEMO_SESSION_COOKIE, DEMO_SESSION_VALUE } from "@/lib/demo-session";
+import { normaliseEmail } from "@/lib/email-normalise";
 
+export { normaliseEmail };
 export const AUTH_EMAIL_COOKIE = "sealink_email";
 
 const DEFAULT_ADMIN = "pyrotech999@hotmail.co.uk";
@@ -11,10 +13,6 @@ export type AuthUser = {
   uid: string;
   isAdmin: boolean;
 };
-
-export function normaliseEmail(email: string): string {
-  return email.trim().toLowerCase();
-}
 
 export function uidFromEmail(email: string): string {
   // Stable opaque id for ownership checks; not intended as a secure identifier.

@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { getDeviceName, getOrCreateDeviceId } from "@/lib/device-id";
+import { LAST_SIGNIN_EMAIL_STORAGE_KEY, normaliseEmail } from "@/lib/email-normalise";
 import { useRouter } from "next/navigation";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const REMEMBER_EMAIL_KEY = "sealink_last_email_v1";
 
 type DeviceRow = { deviceId: string; name: string; activatedAt: string; lastSeenAt: string };
 
@@ -62,10 +62,8 @@ async function startDemoSession(
   }
   if (shouldRedirect) {
     try {
-      const trimmed = email.trim();
-      const remember = opts?.rememberMe ?? true;
-      if (remember) localStorage.setItem(REMEMBER_EMAIL_KEY, trimmed);
-      else localStorage.removeItem(REMEMBER_EMAIL_KEY);
+      // Always remember last successful sign-in email in this browser (not your password).
+      localStorage.setItem(REMEMBER_EMAIL_KEY, normaliseEmail(email));
     } catch {
       /* */
     }
@@ -89,7 +87,7 @@ export function SignInForm() {
   useEffect(() => {
     try {
       const v = localStorage.getItem(REMEMBER_EMAIL_KEY);
-      if (v && EMAIL_RE.test(v)) setEmail(v);
+      if (v && EMAIL_RE.test(v)) setEmail(normaliseEmail(v));
     } catch {
       /* */
     }
@@ -129,6 +127,7 @@ export function SignInForm() {
     <form
       noValidate
       onSubmit={onSubmit}
+      autoComplete="on"
       className="rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-950"
     >
       {error && (
@@ -197,8 +196,10 @@ export function SignInForm() {
           </label>
           <input
             id="signin-email"
+            name="username"
             type="email"
-            autoComplete="email"
+            autoComplete="username"
+            inputMode="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
@@ -219,6 +220,7 @@ export function SignInForm() {
           </div>
           <input
             id="signin-password"
+            name="password"
             type="password"
             autoComplete="current-password"
             value={password}
@@ -236,7 +238,9 @@ export function SignInForm() {
           <span className="text-sm text-zinc-700 dark:text-zinc-300">
             <span className="font-medium text-zinc-900 dark:text-zinc-50">Keep me signed in</span>
             <span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">
-              Uses a longer-lived session cookie (still sign out anytime).
+              Longer-lived session cookie (still sign out anytime). Your email is saved on this device after a successful
+              sign-in; passwords are never stored here — use your browser or phone password manager to save the password
+              if you want.
             </span>
           </span>
         </label>
