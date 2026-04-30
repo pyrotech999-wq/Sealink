@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireGearUser } from "@/lib/gear-api-helpers";
-import { extendExpiresFromCurrent, loadGearListings, updateListing } from "@/lib/gear-store";
+import { extendExpiresFromCurrent, isInReminderWindow, loadGearListings, updateListing } from "@/lib/gear-store";
 import { toPublicListing } from "@/lib/gear-public";
 
 export const runtime = "nodejs";
@@ -27,6 +27,7 @@ export async function POST(_req: Request, ctx: Ctx) {
   const out = await updateListing(id, rowBefore.sellerUid, (l) => {
     if (l.soldAt) return null;
     if (new Date(l.expiresAt).getTime() <= Date.now()) return null;
+    if (!isInReminderWindow(l.expiresAt, new Date())) return null;
     return {
       ...l,
       expiresAt: extendExpiresFromCurrent(l.expiresAt),

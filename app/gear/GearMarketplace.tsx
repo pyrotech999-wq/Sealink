@@ -533,15 +533,17 @@ export function GearMarketplace() {
                 </p>
                 {l.isOwner || isAdmin ? (
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => void extend(l.id)}
-                      className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                    >
-                      Extend {listingTtl}
-                      {" "}
-                      days
-                    </button>
+                    {l.daysUntilExpiry > 0 && l.daysUntilExpiry <= reminderDays ? (
+                      <button
+                        type="button"
+                        onClick={() => void extend(l.id)}
+                        className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                      >
+                        Extend {listingTtl}
+                        {" "}
+                        days
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => void markSold(l.id)}

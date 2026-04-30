@@ -95,6 +95,7 @@ export default function HomeLocationMap() {
   const [bgConsent, setBgConsentState] = useState(() =>
     typeof window !== "undefined" ? getBackgroundLocationConsent() : true,
   );
+  const [locMode, setLocMode] = useState<string | null>(null);
   const [pos, setPos] = useState<LatLngAcc | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
   const [windSlots, setWindSlots] = useState<HourlyWindSlot[]>([]);
@@ -106,7 +107,8 @@ export default function HomeLocationMap() {
     typeof window !== "undefined" ? getShareNearbyPeers() : false,
   );
   const [nearbyPeers, setNearbyPeers] = useState<NearbyPeer[]>([]);
-  const watchId = useRef<number | null>(null);
+  const pollTimer = useRef<number | null>(null);
+  const polling = useRef(false);
 
   const forecastLat = useMemo(
     () => Number((pos?.lat ?? DEFAULT_MAP_CENTER.lat).toFixed(2)),
@@ -117,46 +119,156 @@ export default function HomeLocationMap() {
     [pos?.lng],
   );
 
-  const stopWatch = useCallback(() => {
-    if (watchId.current != null && typeof navigator !== "undefined" && navigator.geolocation) {
-      navigator.geolocation.clearWatch(watchId.current);
+  const stopPolling = useCallback(() => {
+    if (pollTimer.current != null && typeof window !== "undefined") {
+      window.clearTimeout(pollTimer.current);
     }
-    watchId.current = null;
+    pollTimer.current = null;
+    polling.current = false;
   }, []);
 
   useEffect(() => {
     if (!sharing) {
-      stopWatch();
+      stopPolling();
+      queueMicrotask(() => setLocMode(null));
       return;
     }
     if (typeof navigator === "undefined" || !navigator.geolocation) {
       return;
     }
 
-    const opts: PositionOptions = {
-      enableHighAccuracy: true,
-      maximumAge: bgConsent ? 45_000 : 15_000,
-      timeout: 25_000,
+    let disposed = false;
+
+    const nav = navigator as Navigator & {
+      getBattery?: () => Promise<{ level: number; charging: boolean; addEventListener: (k: string, fn: () => void) => void; removeEventListener: (k: string, fn: () => void) => void }>;
+      connection?: { saveData?: boolean };
     };
 
-    watchId.current = navigator.geolocation.watchPosition(
-      (p) => {
-        setGeoError(null);
-        setPos({
-          lat: p.coords.latitude,
-          lng: p.coords.longitude,
-          accuracyM: Math.min(Math.max(p.coords.accuracy || 0, 8), 1200),
-        });
-      },
-      (e) => {
-        setGeoError(e.message || "Location error");
-        setPos(null);
-      },
-      opts,
-    );
+    let batteryLow = false;
+    let saveData = Boolean(nav.connection?.saveData);
+    let battery: Awaited<ReturnType<NonNullable<typeof nav.getBattery>>> | null = null;
 
-    return stopWatch;
-  }, [sharing, bgConsent, stopWatch]);
+    const setMode = (intervalMs: number | null) => {
+      let next: string;
+      if (intervalMs == null) {
+        next = "Background updates paused (disabled).";
+      } else if (intervalMs >= 15 * 60_000) {
+        next = "Low power mode: updating about every 15 minutes.";
+      } else if (intervalMs >= 4 * 60_000) {
+        next = "Background mode: updating about every 4 minutes.";
+      } else {
+        next = "Active mode: updating about every minute.";
+      }
+      if (batteryLow) next += " (Battery low)";
+      else if (saveData) next += " (Data saver)";
+      queueMicrotask(() => setLocMode(next));
+    };
+
+    const calcIntervalMs = () => {
+      if (typeof document !== "undefined" && document.hidden) {
+        if (!bgConsent) return null;
+        return batteryLow || saveData ? 15 * 60_000 : 4 * 60_000;
+      }
+      return 60_000;
+    };
+
+    const optsFor = (intervalMs: number | null): PositionOptions => {
+      const maxAge = intervalMs == null ? 60_000 : Math.min(intervalMs, 15 * 60_000);
+      return {
+        // Low-power hint: let the browser use Wi‑Fi/cell when it can.
+        enableHighAccuracy: false,
+        maximumAge: maxAge,
+        timeout: 8_000,
+      };
+    };
+
+    const tick = () => {
+      if (disposed) return;
+      const intervalMs = calcIntervalMs();
+      setMode(intervalMs);
+      if (intervalMs == null) {
+        stopPolling();
+        return;
+      }
+      if (polling.current) {
+        pollTimer.current = window.setTimeout(tick, intervalMs);
+        return;
+      }
+      polling.current = true;
+      navigator.geolocation.getCurrentPosition(
+        (p) => {
+          polling.current = false;
+          if (disposed) return;
+          setGeoError(null);
+          setPos({
+            lat: p.coords.latitude,
+            lng: p.coords.longitude,
+            accuracyM: Math.min(Math.max(p.coords.accuracy || 0, 8), 1200),
+          });
+          pollTimer.current = window.setTimeout(tick, intervalMs);
+        },
+        (e) => {
+          polling.current = false;
+          if (disposed) return;
+          setGeoError(e.message || "Location error");
+          pollTimer.current = window.setTimeout(tick, intervalMs);
+        },
+        optsFor(intervalMs),
+      );
+    };
+
+    const onVisibility = () => {
+      const intervalMs = calcIntervalMs();
+      setMode(intervalMs);
+      if (intervalMs == null) {
+        stopPolling();
+        return;
+      }
+      if (pollTimer.current != null) window.clearTimeout(pollTimer.current);
+      pollTimer.current = window.setTimeout(tick, 250);
+    };
+
+    const onBattery = () => {
+      if (!battery) return;
+      batteryLow = !battery.charging && battery.level <= 0.2;
+      onVisibility();
+    };
+
+    void (async () => {
+      if (!nav.getBattery) {
+        batteryLow = false;
+        saveData = Boolean(nav.connection?.saveData);
+        return;
+      }
+      try {
+        battery = await nav.getBattery();
+        if (disposed) return;
+        onBattery();
+        battery.addEventListener("levelchange", onBattery);
+        battery.addEventListener("chargingchange", onBattery);
+      } catch {
+        battery = null;
+      }
+    })();
+
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", onVisibility);
+    }
+
+    // Start quickly when sharing begins.
+    pollTimer.current = window.setTimeout(tick, 250);
+    setMode(calcIntervalMs());
+
+    return () => {
+      disposed = true;
+      stopPolling();
+      if (typeof document !== "undefined") document.removeEventListener("visibilitychange", onVisibility);
+      if (battery) {
+        battery.removeEventListener("levelchange", onBattery);
+        battery.removeEventListener("chargingchange", onBattery);
+      }
+    };
+  }, [sharing, bgConsent, stopPolling]);
 
   useEffect(() => {
     const ac = new AbortController();
@@ -467,6 +579,12 @@ export default function HomeLocationMap() {
           >
             {sharing ? "Stop sharing location on map" : "Share my location on this map"}
           </button>
+
+          {sharing && locMode ? (
+            <p className="mt-2 text-[11px] text-zinc-600 dark:text-zinc-400">
+              {locMode}
+            </p>
+          ) : null}
 
           <label
             className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 text-[11px] leading-snug ${
