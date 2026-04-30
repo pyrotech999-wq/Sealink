@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { getBoatName, setAvatarDataUrl, setBoatName, setFullName, setProfilePhone } from "@/lib/map-profile-storage";
+import { normalisePhone } from "@/lib/phone-normalise";
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -15,6 +16,9 @@ const initial = {
   jobTitle: "",
   boatName: "",
   email: "",
+  /** E.164 dial prefix, e.g. +44 */
+  phoneDial: "+44",
+  /** National number (no country code) */
   phone: "",
   line1: "",
   line2: "",
@@ -32,6 +36,23 @@ const initial = {
 };
 
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+
+const PHONE_DIAL_OPTIONS: { dial: string; label: string }[] = [
+  { dial: "+44", label: "United Kingdom (+44)" },
+  { dial: "+353", label: "Ireland (+353)" },
+  { dial: "+1", label: "United States / Canada (+1)" },
+  { dial: "+33", label: "France (+33)" },
+  { dial: "+34", label: "Spain (+34)" },
+  { dial: "+39", label: "Italy (+39)" },
+  { dial: "+49", label: "Germany (+49)" },
+  { dial: "+31", label: "Netherlands (+31)" },
+  { dial: "+32", label: "Belgium (+32)" },
+  { dial: "+351", label: "Portugal (+351)" },
+  { dial: "+30", label: "Greece (+30)" },
+  { dial: "+61", label: "Australia (+61)" },
+  { dial: "+64", label: "New Zealand (+64)" },
+  { dial: "+27", label: "South Africa (+27)" },
+];
 
 export function SignUpForm() {
   const [step, setStep] = useState<Step>(1);
@@ -133,7 +154,12 @@ export function SignUpForm() {
       if (!form.line1.trim()) e.line1 = "Enter the first line of your address";
       if (!form.city.trim()) e.city = "Enter town or city";
       if (!form.postcode.trim()) e.postcode = "Enter postcode";
-      if (!form.phone.trim()) e.phone = "Enter a phone number";
+      const dialOk = /^\+[1-9]\d{0,3}$/.test(form.phoneDial.trim());
+      if (!dialOk) e.phoneDial = "Choose a valid country code";
+      const nationalDigits = form.phone.replace(/\D/g, "");
+      if (!nationalDigits) e.phone = "Enter your phone number";
+      else if (nationalDigits.length < 6) e.phone = "Phone number looks too short";
+      else if (nationalDigits.length > 14) e.phone = "Phone number looks too long";
     }
     if (s === 3) {
       if (form.password.length < 10) e.password = "Use at least 10 characters";
@@ -238,10 +264,13 @@ export function SignUpForm() {
     setSubmitted(true);
     setBoatName(form.boatName);
     setFullName(form.contactName);
-    setProfilePhone(form.phone);
+    const national = form.phone.replace(/^0+/, "").replace(/\D/g, "");
+    const fullPhone = normalisePhone(`${form.phoneDial.trim()}${national}`);
+    setProfilePhone(fullPhone);
     const ageNum = parseInt(form.age, 10);
     console.info("sign-up", {
       ...form,
+      phone: fullPhone,
       age: ageNum,
       profilePhoto: photoFile ? { name: photoFile.name, size: photoFile.size, type: photoFile.type } : null,
       invitedEmails: form.invitedEmails
@@ -494,17 +523,47 @@ export function SignUpForm() {
             </div>
           </div>
           <div>
-            <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="phone">
-              Phone
-            </label>
-            <input
-              id="phone"
-              type="tel"
-              autoComplete="tel"
-              className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-              value={form.phone}
-              onChange={(ev) => set("phone", ev.target.value)}
-            />
+            <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200" id="phone-label">
+              Mobile phone <span className="font-normal text-zinc-500">(with country code)</span>
+            </span>
+            <div className="mt-1.5 flex flex-col gap-2 sm:flex-row">
+              <label className="sr-only" htmlFor="phoneDial">
+                Country calling code
+              </label>
+              <select
+                id="phoneDial"
+                aria-labelledby="phone-label"
+                className="w-full shrink-0 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 sm:max-w-[220px]"
+                value={form.phoneDial}
+                onChange={(ev) => set("phoneDial", ev.target.value)}
+              >
+                {PHONE_DIAL_OPTIONS.map((o) => (
+                  <option key={o.dial} value={o.dial}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+              <div className="min-w-0 flex-1">
+                <label className="sr-only" htmlFor="phone">
+                  Phone number
+                </label>
+                <input
+                  id="phone"
+                  type="tel"
+                  autoComplete="tel-national"
+                  inputMode="tel"
+                  aria-labelledby="phone-label"
+                  placeholder="e.g. 7700 900123"
+                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                  value={form.phone}
+                  onChange={(ev) => set("phone", ev.target.value)}
+                />
+              </div>
+            </div>
+            <p className="mt-1 text-xs text-zinc-500">
+              We store this as an international number (e.g. +44…) for matching and alerts.
+            </p>
+            {errors.phoneDial && <p className="mt-1 text-xs text-red-600">{errors.phoneDial}</p>}
             {errors.phone && <p className="mt-1 text-xs text-red-600">{errors.phone}</p>}
           </div>
         </div>

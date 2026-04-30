@@ -3,13 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const NAV: readonly { href: string; label: string; short: string; sub?: string }[] = [
-  { href: "/", label: "Home", short: "Home" },
-  { href: "/ifm", label: "IFM", short: "IFM", sub: "International Friends Map" },
-  { href: "/local-map", label: "Weather & sea", short: "Weather", sub: "Weather & sea" },
-  { href: "/gear", label: "Boat gear", short: "Gear", sub: "Buy & sell kit" },
-  { href: "/vessels", label: "Vessels for sale", short: "Vessels", sub: "For sale" },
-];
+import { NAV_ITEMS } from "@/components/nav-items";
 
 export function BottomNav() {
   const pathname = usePathname();
@@ -20,7 +14,7 @@ export function BottomNav() {
       aria-label="Main"
     >
       <ul className="mx-auto flex max-w-2xl">
-        {NAV.map((item) => {
+        {NAV_ITEMS.map((item) => {
           const active =
             item.href === "/"
               ? pathname === "/" || pathname === ""

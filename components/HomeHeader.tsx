@@ -21,7 +21,23 @@ export function HomeHeader({ signedIn }: Props) {
   return (
     <header className="border-b border-zinc-200 bg-white/90 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90">
       <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4 sm:px-6">
-        <span className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">SeaLink</span>
+        <Link href="/" className="flex items-center gap-2 text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+          <span
+            aria-hidden
+            className="inline-flex size-8 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-emerald-500 shadow-sm"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M12 3c3.9 0 7 3.1 7 7 0 5-7 11-7 11S5 15 5 10c0-3.9 3.1-7 7-7Z"
+                stroke="white"
+                strokeWidth="2"
+                strokeLinejoin="round"
+              />
+              <path d="M9.5 10.5l1.7 1.7 3.8-3.8" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </span>
+          <span className="text-base">SeaLink</span>
+        </Link>
         <div className="flex items-center gap-3">
           <Link
             href="/payment"

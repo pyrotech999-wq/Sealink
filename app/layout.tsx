@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { BroadcastAwayToasts } from "@/components/BroadcastAwayToasts";
 import { BroadcastToastProvider } from "@/components/BroadcastToastProvider";
 import { BottomNav } from "@/components/BottomNav";
+import { TopNav } from "@/components/TopNav";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -35,6 +36,7 @@ export default function RootLayout({
     >
       <body className="flex min-h-full flex-col pb-[calc(4.25rem+env(safe-area-inset-bottom))]">
         <BroadcastToastProvider>
+          <TopNav />
           {children}
           <BroadcastAwayToasts />
           <BottomNav />
