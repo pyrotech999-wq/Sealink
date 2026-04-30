@@ -130,14 +130,14 @@ export function SignInForm() {
                     }
                     setPending(true);
                     void (async () => {
-                      const res = await startDemoSession(trimmed, { deactivateDeviceId: d.deviceId });
+                      const res = await startDemoSession(trimmed, password, { deactivateDeviceId: d.deviceId });
                       if (!res.ok) {
                         setError(res.message);
                         setPending(false);
                         return;
                       }
                       // After deactivating, try sign-in again.
-                      const res2 = await startDemoSession(trimmed);
+                      const res2 = await startDemoSession(trimmed, password);
                       if (!res2.ok) {
                         setError(res2.message);
                         setDeviceLimit(Array.isArray(res2.devices) ? res2.devices : []);
