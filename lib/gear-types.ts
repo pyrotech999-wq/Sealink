@@ -33,13 +33,22 @@ export function isGearCategoryId(v: string): v is GearCategoryId {
   return GEAR_CATEGORIES.some((c) => c.id === v);
 }
 
+export type GearListingKind = "sale" | "wanted";
+
+export function isGearListingKind(v: string): v is GearListingKind {
+  return v === "sale" || v === "wanted";
+}
+
 export type GearListing = {
   id: string;
   sellerUid: string;
+  kind: GearListingKind;
   title: string;
   description: string;
   categoryId: GearCategoryId;
   priceLabel: string | null;
+  /** Public paths under /public (e.g. `/uploads/gear/<id>/<file>.jpg`). Max 3. */
+  imageUrls: string[];
   createdAt: string;
   expiresAt: string;
   soldAt: string | null;

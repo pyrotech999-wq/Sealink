@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { applyPresenceCookie, resolvePresenceSession } from "@/lib/map-presence-api-helpers";
-import { appendBroadcast, listBroadcastsNear } from "@/lib/map-broadcast-store";
+import { appendBroadcast, deleteBroadcast, listBroadcastsNear } from "@/lib/map-broadcast-store";
+import { getAuthUser, requireAuthUser } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
@@ -16,6 +17,7 @@ function sanitizeBody(text: string): string {
 
 export async function GET(req: Request) {
   const { id: viewerId, cookieFresh } = await resolvePresenceSession();
+  const viewer = await getAuthUser();
   const url = new URL(req.url);
   const lat = Number(url.searchParams.get("lat"));
   const lng = Number(url.searchParams.get("lng"));
@@ -24,7 +26,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "lat and lng required" }, { status: 400 });
   }
 
-  const messages = await listBroadcastsNear(coords.lat, coords.lng, viewerId);
+  const messages = await listBroadcastsNear(coords.lat, coords.lng, viewer?.uid ?? null, viewer?.isAdmin ?? false);
 
   const res = NextResponse.json({ messages });
   if (cookieFresh) applyPresenceCookie(res, viewerId);
@@ -34,7 +36,13 @@ export async function GET(req: Request) {
 type PostBody = { lat?: unknown; lng?: unknown; text?: unknown };
 
 export async function POST(req: Request) {
-  const { id: authorId, cookieFresh } = await resolvePresenceSession();
+  const { id: presenceId, cookieFresh } = await resolvePresenceSession();
+  let authorUid: string;
+  try {
+    authorUid = (await requireAuthUser()).uid;
+  } catch {
+    return NextResponse.json({ error: "Sign-in required" }, { status: 401 });
+  }
 
   let body: PostBody;
   try {
@@ -56,12 +64,38 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Message cannot be empty." }, { status: 400 });
   }
 
-  const out = await appendBroadcast(authorId, coords.lat, coords.lng, text);
+  const out = await appendBroadcast(authorUid, coords.lat, coords.lng, text);
   if (!out.ok) {
     return NextResponse.json({ error: out.error }, { status: 429 });
   }
 
   const res = NextResponse.json({ ok: true as const, id: out.id });
-  if (cookieFresh) applyPresenceCookie(res, authorId);
+  if (cookieFresh) applyPresenceCookie(res, presenceId);
   return res;
+}
+
+type DeleteBody = { id?: unknown };
+
+export async function DELETE(req: Request) {
+  let u: { uid: string; isAdmin: boolean };
+  try {
+    const au = await requireAuthUser();
+    u = { uid: au.uid, isAdmin: au.isAdmin };
+  } catch {
+    return NextResponse.json({ error: "Sign-in required" }, { status: 401 });
+  }
+
+  let body: DeleteBody;
+  try {
+    body = (await req.json()) as DeleteBody;
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const id = typeof body.id === "string" ? body.id : "";
+  if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+
+  const out = await deleteBroadcast(id, u.uid, u.isAdmin);
+  if (!out.ok) return NextResponse.json({ error: out.error }, { status: out.error === "Not allowed" ? 403 : 404 });
+  return NextResponse.json({ ok: true as const });
 }

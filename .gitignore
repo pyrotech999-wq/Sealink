@@ -45,3 +45,6 @@ next-env.d.ts
 /data/gear-listings.json
 /data/map-nearby-presence.json
 /data/map-broadcast-messages.json
+
+# user-uploaded gear listing images
+/public/uploads/gear/

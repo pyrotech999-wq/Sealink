@@ -21,7 +21,7 @@ export default async function Home() {
         </p>
         {signedIn ? (
           <p className="mt-4 text-sm text-green-800 dark:text-green-300">
-            You&apos;re in a <strong>demo session</strong> (no real auth yet). Use the bottom tabs or the buttons below.
+            You&apos;re signed in. Posting adverts and broadcasts is tied to your account email.
           </p>
         ) : null}
 

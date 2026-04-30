@@ -56,15 +56,9 @@ export function AiForecast48hBox({ lat, lng }: Props) {
   );
 
   useEffect(() => {
-    if (!hasLocation) {
-      setText(null);
-      setErr(null);
-      setLoading(false);
-      return;
-    }
-
+    if (!hasLocation) return;
     const ac = new AbortController();
-    void generate({ signal: ac.signal });
+    queueMicrotask(() => void generate({ signal: ac.signal }));
     return () => ac.abort();
   }, [hasLocation, lat, lng, generate]);
 

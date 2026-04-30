@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { GEAR_CATEGORIES, type GearCategoryId, type GearListingPublic } from "@/lib/gear-types";
+import { GEAR_CATEGORIES, type GearCategoryId, type GearListingKind, type GearListingPublic } from "@/lib/gear-types";
 
 type Policy = {
   listingTtlDays: number;
@@ -16,6 +16,8 @@ function categoryLabel(id: GearCategoryId): string {
 }
 
 export function GearMarketplace() {
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [listings, setListings] = useState<GearListingPublic[]>([]);
   const [policy, setPolicy] = useState<Policy | null>(null);
   const [reminders, setReminders] = useState<ReminderItem[]>([]);
@@ -23,14 +25,17 @@ export function GearMarketplace() {
   const [q, setQ] = useState("");
   const [qDebounced, setQDebounced] = useState("");
   const [category, setCategory] = useState<string>("");
+  const [kind, setKind] = useState<"" | GearListingKind>("");
   const [scope, setScope] = useState<"all" | "mine">("all");
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
+  const [postKind, setPostKind] = useState<GearListingKind>("sale");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [catPick, setCatPick] = useState<GearCategoryId>("accessories");
   const [priceLabel, setPriceLabel] = useState("");
+  const [images, setImages] = useState<File[]>([]);
   const [confirmNotVessel, setConfirmNotVessel] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formMsg, setFormMsg] = useState<string | null>(null);
@@ -39,6 +44,20 @@ export function GearMarketplace() {
     const t = window.setTimeout(() => setQDebounced(q.trim()), 320);
     return () => window.clearTimeout(t);
   }, [q]);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const r = await fetch("/api/demo/me");
+        const d = (await r.json()) as { signedIn?: boolean; isAdmin?: boolean };
+        setSignedIn(Boolean(d.signedIn));
+        setIsAdmin(Boolean(d.isAdmin));
+      } catch {
+        setSignedIn(false);
+        setIsAdmin(false);
+      }
+    })();
+  }, []);
 
   const loadReminders = useCallback(async () => {
     try {
@@ -58,10 +77,10 @@ export function GearMarketplace() {
     setLoading(true);
     setErr(null);
     try {
-      await fetch("/api/gear/session");
       const params = new URLSearchParams();
       if (qDebounced) params.set("q", qDebounced);
       if (category) params.set("category", category);
+      if (kind) params.set("kind", kind);
       if (scope === "mine") params.set("scope", "mine");
       const res = await fetch(`/api/gear/listings?${params.toString()}`);
       const data = (await res.json()) as {
@@ -82,41 +101,48 @@ export function GearMarketplace() {
     } finally {
       setLoading(false);
     }
-  }, [qDebounced, category, scope]);
+  }, [qDebounced, category, kind, scope]);
 
   useEffect(() => {
-    void loadListings();
+    queueMicrotask(() => void loadListings());
   }, [loadListings]);
 
   useEffect(() => {
-    void loadReminders();
+    queueMicrotask(() => void loadReminders());
   }, [loadReminders]);
 
   const onSubmit = async (ev: React.FormEvent) => {
     ev.preventDefault();
+    if (!signedIn) {
+      setFormMsg("Sign in to post an advert.");
+      return;
+    }
     setFormMsg(null);
     setSubmitting(true);
     try {
+      const fd = new FormData();
+      fd.set("kind", postKind);
+      fd.set("title", title);
+      fd.set("description", description);
+      fd.set("categoryId", catPick);
+      fd.set("priceLabel", priceLabel.trim() || "");
+      fd.set("confirmNotVessel", confirmNotVessel ? "true" : "false");
+      for (const f of images.slice(0, 3)) fd.append("images", f);
+
       const res = await fetch("/api/gear/listings", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title,
-          description,
-          categoryId: catPick,
-          priceLabel: priceLabel.trim() || null,
-          confirmNotVessel,
-        }),
+        body: fd,
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) {
         setFormMsg(data.error || "Could not post");
         return;
       }
-      setFormMsg("Listed — thank you.");
+      setFormMsg(postKind === "wanted" ? "Wanted posted — thank you." : "Listed — thank you.");
       setTitle("");
       setDescription("");
       setPriceLabel("");
+      setImages([]);
       setConfirmNotVessel(false);
       await loadListings();
       await loadReminders();
@@ -126,6 +152,17 @@ export function GearMarketplace() {
       setSubmitting(false);
     }
   };
+
+  const previews = useMemo(() => {
+    const urls = images.map((f) => URL.createObjectURL(f));
+    return urls;
+  }, [images]);
+
+  useEffect(() => {
+    return () => {
+      for (const u of previews) URL.revokeObjectURL(u);
+    };
+  }, [previews]);
 
   const extend = async (id: string) => {
     setErr(null);
@@ -159,6 +196,66 @@ export function GearMarketplace() {
       setErr("Network error");
     }
   };
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editCategory, setEditCategory] = useState<GearCategoryId>("accessories");
+  const [editPrice, setEditPrice] = useState("");
+  const [editKind, setEditKind] = useState<GearListingKind>("sale");
+
+  function startEdit(l: GearListingPublic) {
+    setEditingId(l.id);
+    setEditTitle(l.title);
+    setEditDescription(l.description);
+    setEditCategory(l.categoryId);
+    setEditPrice(l.priceLabel ?? "");
+    setEditKind(l.kind);
+  }
+
+  async function saveEdit(id: string) {
+    setErr(null);
+    try {
+      const res = await fetch(`/api/gear/listings/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: editKind,
+          title: editTitle,
+          description: editDescription,
+          categoryId: editCategory,
+          priceLabel: editPrice,
+        }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        setErr(data.error || "Could not update");
+        return;
+      }
+      setEditingId(null);
+      await loadListings();
+      await loadReminders();
+    } catch {
+      setErr("Network error");
+    }
+  }
+
+  async function removeListing(id: string) {
+    if (!window.confirm("Delete this advert? This cannot be undone.")) return;
+    setErr(null);
+    try {
+      const res = await fetch(`/api/gear/listings/${id}`, { method: "DELETE" });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        setErr(data.error || "Could not delete");
+        return;
+      }
+      await loadListings();
+      await loadReminders();
+    } catch {
+      setErr("Network error");
+    }
+  }
 
   const fmtDate = useMemo(
     () => (iso: string) =>
@@ -254,6 +351,29 @@ export function GearMarketplace() {
           <div className="flex gap-2">
             <button
               type="button"
+              onClick={() => setKind("")}
+              className={`h-9 rounded-lg px-3 text-sm font-medium ${kind === "" ? "bg-green-600 text-white" : "border border-zinc-300 bg-zinc-50 text-zinc-800 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200"}`}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              onClick={() => setKind("sale")}
+              className={`h-9 rounded-lg px-3 text-sm font-medium ${kind === "sale" ? "bg-green-600 text-white" : "border border-zinc-300 bg-zinc-50 text-zinc-800 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200"}`}
+            >
+              For sale
+            </button>
+            <button
+              type="button"
+              onClick={() => setKind("wanted")}
+              className={`h-9 rounded-lg px-3 text-sm font-medium ${kind === "wanted" ? "bg-green-600 text-white" : "border border-zinc-300 bg-zinc-50 text-zinc-800 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200"}`}
+            >
+              Wanted
+            </button>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
               onClick={() => setScope("all")}
               className={`h-9 rounded-lg px-3 text-sm font-medium ${scope === "all" ? "bg-green-600 text-white" : "border border-zinc-300 bg-zinc-50 text-zinc-800 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200"}`}
             >
@@ -296,19 +416,122 @@ export function GearMarketplace() {
                     </p>
                     <h3 className="mt-1 text-lg font-semibold text-zinc-900 dark:text-zinc-50">{l.title}</h3>
                   </div>
-                  {l.priceLabel ? (
-                    <span className="rounded-lg bg-zinc-100 px-2 py-1 text-sm font-semibold text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200">
-                      {l.priceLabel}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`rounded-lg px-2 py-1 text-xs font-semibold ${l.kind === "wanted" ? "bg-indigo-100 text-indigo-900 dark:bg-indigo-900/50 dark:text-indigo-100" : "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/50 dark:text-emerald-100"}`}>
+                      {l.kind === "wanted" ? "Wanted" : "For sale"}
                     </span>
-                  ) : null}
+                    {l.priceLabel ? (
+                      <span className="rounded-lg bg-zinc-100 px-2 py-1 text-sm font-semibold text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200">
+                        {l.priceLabel}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
-                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-zinc-700 dark:text-zinc-300">{l.description}</p>
+                {editingId === l.id ? (
+                  <div className="mt-3 space-y-3">
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditKind("sale")}
+                        className={`h-9 rounded-lg px-3 text-sm font-semibold ${editKind === "sale" ? "bg-emerald-700 text-white hover:bg-emerald-800 dark:bg-emerald-600 dark:hover:bg-emerald-500" : "border border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"}`}
+                      >
+                        For sale
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditKind("wanted")}
+                        className={`h-9 rounded-lg px-3 text-sm font-semibold ${editKind === "wanted" ? "bg-indigo-700 text-white hover:bg-indigo-800 dark:bg-indigo-600 dark:hover:bg-indigo-500" : "border border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"}`}
+                      >
+                        Wanted
+                      </button>
+                    </div>
+                    <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                      Title
+                      <input
+                        value={editTitle}
+                        onChange={(e) => setEditTitle(e.target.value)}
+                        className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+                      />
+                    </label>
+                    <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                      Description
+                      <textarea
+                        rows={4}
+                        value={editDescription}
+                        onChange={(e) => setEditDescription(e.target.value)}
+                        className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+                      />
+                    </label>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                        Category
+                        <select
+                          value={editCategory}
+                          onChange={(e) => setEditCategory(e.target.value as GearCategoryId)}
+                          className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+                        >
+                          {GEAR_CATEGORIES.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                        Price
+                        <input
+                          value={editPrice}
+                          onChange={(e) => setEditPrice(e.target.value)}
+                          className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+                        />
+                      </label>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void saveEdit(l.id)}
+                        className="h-9 rounded-lg bg-green-600 px-3 text-sm font-semibold text-white hover:bg-green-700"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingId(null)}
+                        className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-zinc-700 dark:text-zinc-300">{l.description}</p>
+                )}
+                {Array.isArray(l.imageUrls) && l.imageUrls.length > 0 ? (
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    {l.imageUrls.slice(0, 3).map((src) => (
+                      <a
+                        key={src}
+                        href={src}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="group block overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900"
+                      >
+                        <img
+                          src={src}
+                          alt=""
+                          className="h-24 w-full object-cover transition group-hover:scale-[1.01]"
+                          loading="lazy"
+                        />
+                      </a>
+                    ))}
+                  </div>
+                ) : null}
                 <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
                   Listed {fmtDate(l.createdAt)} · removes on or after {fmtDate(l.expiresAt)} ({l.daysUntilExpiry}
                   {" "}
                   day{l.daysUntilExpiry === 1 ? "" : "s"} left)
                 </p>
-                {l.isOwner ? (
+                {l.isOwner || isAdmin ? (
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
                       type="button"
@@ -326,6 +549,20 @@ export function GearMarketplace() {
                     >
                       Mark as sold
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => startEdit(l)}
+                      className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void removeListing(l.id)}
+                      className="h-9 rounded-lg border border-red-200 bg-red-50 px-3 text-sm font-semibold text-red-800 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950/55"
+                    >
+                      Delete
+                    </button>
                   </div>
                 ) : null}
               </li>
@@ -337,6 +574,27 @@ export function GearMarketplace() {
       <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
         <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Post equipment</h2>
         <form onSubmit={(e) => void onSubmit(e)} className="mt-4 space-y-4">
+          {signedIn === false ? (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+              Sign in to post or manage adverts.
+            </p>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setPostKind("sale")}
+              className={`h-9 rounded-lg px-3 text-sm font-semibold ${postKind === "sale" ? "bg-emerald-700 text-white hover:bg-emerald-800 dark:bg-emerald-600 dark:hover:bg-emerald-500" : "border border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"}`}
+            >
+              For sale
+            </button>
+            <button
+              type="button"
+              onClick={() => setPostKind("wanted")}
+              className={`h-9 rounded-lg px-3 text-sm font-semibold ${postKind === "wanted" ? "bg-indigo-700 text-white hover:bg-indigo-800 dark:bg-indigo-600 dark:hover:bg-indigo-500" : "border border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"}`}
+            >
+              Wanted
+            </button>
+          </div>
           <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
             Title
             <input
@@ -384,6 +642,46 @@ export function GearMarketplace() {
               />
             </label>
           </div>
+          <div>
+            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+              Photos (up to 3)
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(e) => {
+                  const files = Array.from(e.target.files ?? []);
+                  if (!files.length) return;
+                  setImages((prev) => [...prev, ...files].slice(0, 3));
+                  e.target.value = "";
+                }}
+                className="mt-1 block w-full text-sm text-zinc-700 file:mr-4 file:rounded-lg file:border-0 file:bg-zinc-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-zinc-800 hover:file:bg-zinc-200 dark:text-zinc-200 dark:file:bg-zinc-800 dark:file:text-zinc-100 dark:hover:file:bg-zinc-700"
+              />
+            </label>
+            {previews.length ? (
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                {previews.map((src, i) => (
+                  <div
+                    key={src}
+                    className="relative overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900"
+                  >
+                    <img src={src} alt="" className="h-24 w-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setImages((prev) => prev.filter((_, idx) => idx !== i))}
+                      className="absolute right-1 top-1 rounded-md bg-black/60 px-2 py-1 text-[11px] font-semibold text-white hover:bg-black/70"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+                Optional — add clear shots of labels, condition, and any damage.
+              </p>
+            )}
+          </div>
           <label className="flex cursor-pointer items-start gap-2 text-sm text-zinc-800 dark:text-zinc-200">
             <input
               type="checkbox"
@@ -395,7 +693,7 @@ export function GearMarketplace() {
           </label>
           <button
             type="submit"
-            disabled={submitting || !confirmNotVessel}
+            disabled={submitting || !confirmNotVessel || signedIn === false}
             className="h-10 rounded-lg bg-green-600 px-4 text-sm font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {submitting ? "Posting…" : "Post listing"}

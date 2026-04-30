@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { applySellerCookie, resolveSellerUid } from "@/lib/gear-api-helpers";
+import { requireGearUser } from "@/lib/gear-api-helpers";
 import { loadGearListings, updateListing } from "@/lib/gear-store";
 import { toPublicListing } from "@/lib/gear-public";
 
@@ -9,9 +9,22 @@ type Ctx = { params: Promise<{ id: string }> };
 
 export async function POST(_req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
-  const { uid, cookieFresh } = await resolveSellerUid();
+  let uid: string;
+  let isAdmin = false;
+  try {
+    const u = await requireGearUser();
+    uid = u.uid;
+    isAdmin = u.isAdmin;
+  } catch {
+    return NextResponse.json({ error: "Sign-in required" }, { status: 401 });
+  }
 
-  const out = await updateListing(id, uid, (l) => {
+  const allBefore = await loadGearListings();
+  const rowBefore = allBefore.find((l) => l.id === id);
+  if (!rowBefore) return NextResponse.json({ error: "Listing not found" }, { status: 404 });
+  if (!isAdmin && rowBefore.sellerUid !== uid) return NextResponse.json({ error: "Not allowed" }, { status: 403 });
+
+  const out = await updateListing(id, rowBefore.sellerUid, (l) => {
     if (l.soldAt) return null;
     return { ...l, soldAt: new Date().toISOString() };
   });
@@ -22,9 +35,7 @@ export async function POST(_req: Request, ctx: Ctx) {
 
   const all = await loadGearListings();
   const row = all.find((l) => l.id === id);
-  const res = NextResponse.json({
+  return NextResponse.json({
     listing: row ? toPublicListing(row, uid) : { id, soldAt: new Date().toISOString(), isOwner: true },
   });
-  if (cookieFresh) applySellerCookie(res, uid);
-  return res;
 }

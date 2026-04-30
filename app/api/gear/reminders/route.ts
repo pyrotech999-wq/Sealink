@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { applySellerCookie, resolveSellerUid } from "@/lib/gear-api-helpers";
+import { requireGearUser } from "@/lib/gear-api-helpers";
 import { GEAR_REMINDER_DAYS_BEFORE } from "@/lib/gear-constants";
 import { daysUntilExpiry, isInReminderWindow, loadGearListings } from "@/lib/gear-store";
 
@@ -7,7 +7,12 @@ export const runtime = "nodejs";
 
 /** In-app reminders for your listings nearing auto-deletion (email can be wired later). */
 export async function GET() {
-  const { uid, cookieFresh } = await resolveSellerUid();
+  let uid: string;
+  try {
+    uid = (await requireGearUser()).uid;
+  } catch {
+    return NextResponse.json({ error: "Sign-in required" }, { status: 401 });
+  }
   const now = new Date();
   const all = await loadGearListings();
 
@@ -29,6 +34,5 @@ export async function GET() {
         ? `These listings will be removed automatically in up to ${GEAR_REMINDER_DAYS_BEFORE} days unless you extend them.`
         : null,
   });
-  if (cookieFresh) applySellerCookie(res, uid);
   return res;
 }

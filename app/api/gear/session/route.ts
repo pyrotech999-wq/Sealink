@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
-import { applySellerCookie, resolveSellerUid } from "@/lib/gear-api-helpers";
+import { requireGearUser } from "@/lib/gear-api-helpers";
 
 export const runtime = "nodejs";
 
-/** Ensures the anonymous member cookie exists (used by the gear marketplace). */
+/** Ensures you are signed in (required for classifieds actions). */
 export async function GET() {
-  const { uid, cookieFresh } = await resolveSellerUid();
-  const res = NextResponse.json({ ok: true as const });
-  if (cookieFresh) applySellerCookie(res, uid);
-  return res;
+  try {
+    const u = await requireGearUser();
+    return NextResponse.json({ ok: true as const, uid: u.uid, email: u.email, isAdmin: u.isAdmin });
+  } catch {
+    return NextResponse.json({ ok: false as const, error: "Sign-in required" }, { status: 401 });
+  }
 }

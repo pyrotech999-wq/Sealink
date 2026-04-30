@@ -3,6 +3,7 @@ import path from "path";
 import { randomUUID } from "crypto";
 import type { GearListing } from "@/lib/gear-types";
 import { GEAR_LISTING_TTL_DAYS, GEAR_REMINDER_DAYS_BEFORE } from "@/lib/gear-constants";
+import { isGearCategoryId, isGearListingKind } from "@/lib/gear-types";
 
 const DATA_PATH = path.join(process.cwd(), "data", "gear-listings.json");
 
@@ -33,7 +34,9 @@ function readRaw(): GearListing[] {
     const raw = readFileSync(DATA_PATH, "utf-8");
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
-    return parsed as GearListing[];
+    return parsed
+      .map((row) => normaliseListing(row))
+      .filter((row): row is GearListing => row != null);
   } catch {
     return [];
   }
@@ -45,6 +48,36 @@ function writeRaw(list: GearListing[]): void {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+function normaliseListing(row: unknown): GearListing | null {
+  if (!row || typeof row !== "object") return null;
+  const r = row as Partial<GearListing> & { [k: string]: unknown };
+
+  if (typeof r.id !== "string" || typeof r.sellerUid !== "string") return null;
+  if (typeof r.title !== "string" || typeof r.description !== "string") return null;
+  if (typeof r.categoryId !== "string" || !isGearCategoryId(r.categoryId)) return null;
+  if (typeof r.createdAt !== "string" || typeof r.expiresAt !== "string") return null;
+
+  const kind = typeof r.kind === "string" && isGearListingKind(r.kind) ? r.kind : "sale";
+
+  const imageUrls =
+    Array.isArray(r.imageUrls) ? r.imageUrls.filter((u) => typeof u === "string").slice(0, 3) : [];
+
+  return {
+    id: r.id,
+    sellerUid: r.sellerUid,
+    kind,
+    title: r.title,
+    description: r.description,
+    categoryId: r.categoryId,
+    priceLabel: typeof r.priceLabel === "string" ? r.priceLabel : null,
+    imageUrls,
+    createdAt: r.createdAt,
+    expiresAt: r.expiresAt,
+    soldAt: typeof r.soldAt === "string" ? r.soldAt : null,
+    reminderSentAt: typeof r.reminderSentAt === "string" ? r.reminderSentAt : null,
+  };
+}
 
 function applyPruneAndReminders(list: GearListing[], now: Date): { next: GearListing[]; changed: boolean } {
   const nowMs = now.getTime();
@@ -113,6 +146,24 @@ export async function updateListing(
     const updated = mutator(row);
     if (updated === null) return { ok: false, error: "Update rejected" };
     const merged = [...list.slice(0, idx), updated, ...list.slice(idx + 1)];
+    const { next } = applyPruneAndReminders(merged, new Date());
+    writeRaw(next);
+    return { ok: true };
+  });
+}
+
+export async function deleteListing(
+  id: string,
+  sellerUid: string,
+): Promise<{ ok: boolean; error?: string }> {
+  return enqueue(async () => {
+    const raw = readRaw();
+    const { next: list } = applyPruneAndReminders(raw, new Date());
+    const idx = list.findIndex((l) => l.id === id);
+    if (idx < 0) return { ok: false, error: "Listing not found" };
+    const row = list[idx];
+    if (!row || row.sellerUid !== sellerUid) return { ok: false, error: "Not allowed" };
+    const merged = [...list.slice(0, idx), ...list.slice(idx + 1)];
     const { next } = applyPruneAndReminders(merged, new Date());
     writeRaw(next);
     return { ok: true };

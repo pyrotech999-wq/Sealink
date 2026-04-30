@@ -9,7 +9,7 @@ const DATA_PATH = path.join(process.cwd(), "data", "map-broadcast-messages.json"
 
 export type BroadcastMessageRow = {
   id: string;
-  authorSessionId: string;
+  authorUid: string;
   lat: number;
   lng: number;
   body: string;
@@ -44,7 +44,9 @@ function readRaw(): BroadcastMessageRow[] {
     const raw = readFileSync(DATA_PATH, "utf-8");
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
-    return parsed as BroadcastMessageRow[];
+    return parsed
+      .map((r) => normaliseRow(r))
+      .filter((r): r is BroadcastMessageRow => r != null);
   } catch {
     return [];
   }
@@ -60,6 +62,25 @@ function pruneOld(list: BroadcastMessageRow[], now: Date): BroadcastMessageRow[]
   return list.filter((m) => new Date(m.createdAt).getTime() >= cutoff);
 }
 
+function normaliseRow(row: unknown): BroadcastMessageRow | null {
+  if (!row || typeof row !== "object") return null;
+  const r = row as Partial<BroadcastMessageRow> & { authorSessionId?: unknown };
+  const id = typeof r.id === "string" ? r.id : "";
+  const body = typeof r.body === "string" ? r.body : "";
+  const createdAt = typeof r.createdAt === "string" ? r.createdAt : "";
+  const lat = typeof r.lat === "number" ? r.lat : Number(r.lat);
+  const lng = typeof r.lng === "number" ? r.lng : Number(r.lng);
+  const authorUid =
+    typeof r.authorUid === "string"
+      ? r.authorUid
+      : typeof r.authorSessionId === "string"
+        ? r.authorSessionId
+        : "";
+
+  if (!id || !authorUid || !Number.isFinite(lat) || !Number.isFinite(lng) || !createdAt) return null;
+  return { id, authorUid, lat, lng, body, createdAt };
+}
+
 export type BroadcastMessagePublic = {
   id: string;
   lat: number;
@@ -67,12 +88,14 @@ export type BroadcastMessagePublic = {
   body: string;
   createdAt: string;
   isMine: boolean;
+  canDelete: boolean;
 };
 
 export async function listBroadcastsNear(
   lat: number,
   lng: number,
-  viewerSessionId: string | null,
+  viewerUid: string | null,
+  viewerIsAdmin = false,
   now = new Date(),
 ): Promise<BroadcastMessagePublic[]> {
   return enqueue(async () => {
@@ -90,7 +113,8 @@ export async function listBroadcastsNear(
         lng: m.lng,
         body: m.body,
         createdAt: m.createdAt,
-        isMine: viewerSessionId != null && m.authorSessionId === viewerSessionId,
+        isMine: viewerUid != null && m.authorUid === viewerUid,
+        canDelete: viewerIsAdmin || (viewerUid != null && m.authorUid === viewerUid),
       });
     }
     out.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -99,17 +123,17 @@ export async function listBroadcastsNear(
 }
 
 export async function appendBroadcast(
-  authorSessionId: string,
+  authorUid: string,
   lat: number,
   lng: number,
   body: string,
   now = new Date(),
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   return enqueue(async () => {
-    let list = pruneOld(readRaw(), now);
+    const list = pruneOld(readRaw(), now);
     const hourAgo = now.getTime() - 60 * 60 * 1000;
     const recent = list.filter(
-      (m) => m.authorSessionId === authorSessionId && new Date(m.createdAt).getTime() >= hourAgo,
+      (m) => m.authorUid === authorUid && new Date(m.createdAt).getTime() >= hourAgo,
     );
     if (recent.length >= MAP_BROADCAST_RATE_PER_HOUR) {
       return { ok: false, error: "Rate limit: try again in a little while." };
@@ -117,7 +141,7 @@ export async function appendBroadcast(
 
     const row: BroadcastMessageRow = {
       id: randomUUID(),
-      authorSessionId,
+      authorUid,
       lat,
       lng,
       body,
@@ -126,5 +150,24 @@ export async function appendBroadcast(
     list.push(row);
     writeRaw(list);
     return { ok: true, id: row.id };
+  });
+}
+
+export async function deleteBroadcast(
+  id: string,
+  requesterUid: string,
+  requesterIsAdmin: boolean,
+  now = new Date(),
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  return enqueue(async () => {
+    const list = pruneOld(readRaw(), now);
+    const idx = list.findIndex((m) => m.id === id);
+    if (idx < 0) return { ok: false, error: "Not found" };
+    const row = list[idx];
+    if (!row) return { ok: false, error: "Not found" };
+    if (!requesterIsAdmin && row.authorUid !== requesterUid) return { ok: false, error: "Not allowed" };
+    const next = [...list.slice(0, idx), ...list.slice(idx + 1)];
+    writeRaw(next);
+    return { ok: true };
   });
 }

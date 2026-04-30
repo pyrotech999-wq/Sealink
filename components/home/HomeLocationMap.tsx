@@ -259,7 +259,7 @@ export default function HomeLocationMap() {
 
   useEffect(() => {
     if (!sharing || !pos || !shareNearby) {
-      setNearbyPeers([]);
+      queueMicrotask(() => setNearbyPeers([]));
       return;
     }
     const load = () => {

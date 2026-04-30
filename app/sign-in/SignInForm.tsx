@@ -5,15 +5,17 @@ import { useState } from "react";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-async function startDemoSession(): Promise<{ ok: true } | { ok: false; message: string }> {
+async function startDemoSession(email: string): Promise<{ ok: true } | { ok: false; message: string }> {
   try {
     const res = await fetch("/api/demo/sign-in", {
       method: "POST",
       credentials: "same-origin",
-      headers: { Accept: "application/json" },
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
     });
     if (!res.ok) {
-      return { ok: false, message: "Could not start session. Try again." };
+      const data = (await res.json()) as { error?: string };
+      return { ok: false, message: data.error || "Could not start session. Try again." };
     }
   } catch {
     return { ok: false, message: "Network error. Try again." };
@@ -46,7 +48,7 @@ export function SignInForm() {
     }
     setError("");
     setPending(true);
-    const result = await startDemoSession();
+    const result = await startDemoSession(trimmed);
     if (!result.ok) {
       setError(result.message);
       setPending(false);
@@ -54,13 +56,7 @@ export function SignInForm() {
   }
 
   async function skipSignIn() {
-    setError("");
-    setPending(true);
-    const result = await startDemoSession();
-    if (!result.ok) {
-      setError(result.message);
-      setPending(false);
-    }
+    setError("Sign-in is required to post or manage adverts and broadcasts.");
   }
 
   return (
