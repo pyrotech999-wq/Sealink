@@ -3,6 +3,7 @@ export type AnchorAlertConfig = {
   lat: number | null;
   lng: number | null;
   radiusM: number;
+  monitorDeviceId: string; // "this" or a registered device id
   lastAlertAt: string | null;
 };
 
@@ -13,6 +14,7 @@ const DEFAULTS: AnchorAlertConfig = {
   lat: null,
   lng: null,
   radiusM: 60,
+  monitorDeviceId: "this",
   lastAlertAt: null,
 };
 
@@ -32,6 +34,7 @@ export function getAnchorAlertConfig(): AnchorAlertConfig {
       lat: typeof parsed.lat === "number" && Number.isFinite(parsed.lat) ? parsed.lat : null,
       lng: typeof parsed.lng === "number" && Number.isFinite(parsed.lng) ? parsed.lng : null,
       radiusM,
+      monitorDeviceId: typeof parsed.monitorDeviceId === "string" ? parsed.monitorDeviceId : "this",
       lastAlertAt: typeof parsed.lastAlertAt === "string" ? parsed.lastAlertAt : null,
     };
   } catch {

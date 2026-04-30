@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { getDeviceName, setDeviceName } from "@/lib/device-id";
 
 type Props = {
   open: boolean;
@@ -14,6 +15,9 @@ type Props = {
 
 export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, config, onUpdate }: Props) {
   const [radius, setRadius] = useState(String(config.radiusM));
+  const [deviceLabel, setDeviceLabel] = useState(() => (typeof window !== "undefined" ? getDeviceName() : ""));
+  const [devices, setDevices] = useState<{ deviceId: string; name: string; updatedAt: string; lastFixAt: string | null }[]>([]);
+  const [monitorDeviceId, setMonitorDeviceId] = useState<string>("this");
 
   const canSet = sharing && hasFix && pos != null;
   const hasAnchor = config.lat != null && config.lng != null;
@@ -25,6 +29,19 @@ export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, config, 
   }, [sharing, hasFix]);
 
   if (!open) return null;
+
+  useEffect(() => {
+    if (!open) return;
+    void (async () => {
+      try {
+        const r = await fetch("/api/anchor/devices");
+        const d = (await r.json()) as { devices?: { deviceId: string; name: string; updatedAt: string; lastFixAt: string | null }[] };
+        setDevices(Array.isArray(d.devices) ? d.devices : []);
+      } catch {
+        setDevices([]);
+      }
+    })();
+  }, [open]);
 
   return (
     <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 px-4 py-8">
@@ -52,6 +69,37 @@ export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, config, 
         ) : null}
 
         <div className="mt-4 space-y-3">
+          <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+            This device label (to recognise it later)
+            <input
+              value={deviceLabel}
+              onChange={(e) => setDeviceLabel(e.target.value)}
+              onBlur={() => setDeviceName(deviceLabel)}
+              placeholder="e.g. iPad on boat"
+              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+            />
+          </label>
+
+          <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+            Device to monitor
+            <select
+              value={monitorDeviceId}
+              onChange={(e) => setMonitorDeviceId(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+            >
+              <option value="this">This device (current browser)</option>
+              {devices.map((d) => (
+                <option key={d.deviceId} value={d.deviceId}>
+                  {d.name || d.deviceId.slice(0, 8)}{" "}
+                  {d.lastFixAt ? `· last fix ${new Date(d.lastFixAt).toLocaleString("en-GB")}` : ""}
+                </option>
+              ))}
+            </select>
+            <span className="mt-1 block text-[11px] text-zinc-500">
+              Leave a device on the boat with the app open to keep sending location. Select it here to monitor.
+            </span>
+          </label>
+
           <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
             Drift radius (metres)
             <input
