@@ -91,7 +91,7 @@ function Legend({ mode }: { mode: LayerMode }) {
   return (
     <div className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-700 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
       <p className="font-semibold text-zinc-900 dark:text-zinc-100">
-        Legend · {mode === "wind" ? "Wind" : mode === "rain" ? "Rain" : "Pressure"}
+        Legend · {mode === "rain" ? "Rain" : "Pressure"}
       </p>
       <img
         src={legendImg}
@@ -520,7 +520,7 @@ function WmsOverlay({ mode, opacity, timeIso }: { mode: LayerMode; opacity: numb
       time: timeIso,
     } as any);
 
-    const layer = mode === "wind" ? wind : mode === "rain" ? rain : pressure;
+    const layer = mode === "rain" ? rain : pressure;
     layer.addTo(map);
     return () => {
       map.removeLayer(layer);
