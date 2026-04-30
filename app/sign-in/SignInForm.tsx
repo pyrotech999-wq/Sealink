@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { getDeviceName, getOrCreateDeviceId } from "@/lib/device-id";
+import { useRouter } from "next/navigation";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -21,6 +22,7 @@ function isDeviceRow(v: unknown): v is DeviceRow {
 
 async function startDemoSession(
   email: string,
+  password: string,
   opts?: { deactivateDeviceId?: string },
 ): Promise<
   | { ok: true }
@@ -29,11 +31,11 @@ async function startDemoSession(
   try {
     const deviceId = getOrCreateDeviceId();
     const deviceName = getDeviceName();
-    const res = await fetch("/api/demo/sign-in", {
+    const res = await fetch("/api/auth/sign-in", {
       method: "POST",
       credentials: "same-origin",
       headers: { Accept: "application/json", "Content-Type": "application/json" },
-      body: JSON.stringify({ email, deviceId, deviceName, deactivateDeviceId: opts?.deactivateDeviceId }),
+      body: JSON.stringify({ email, password, deviceId, deviceName, deactivateDeviceId: opts?.deactivateDeviceId }),
     });
     if (!res.ok) {
       const data = (await res.json()) as { error?: string; devices?: unknown };
@@ -51,6 +53,7 @@ async function startDemoSession(
 }
 
 export function SignInForm() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [agree, setAgree] = useState(false);
@@ -78,7 +81,7 @@ export function SignInForm() {
     setError("");
     setDeviceLimit([]);
     setPending(true);
-    const result = await startDemoSession(trimmed);
+    const result = await startDemoSession(trimmed, password);
     if (!result.ok) {
       setError(result.message);
       setDeviceLimit(Array.isArray(result.devices) ? result.devices : []);
@@ -173,7 +176,7 @@ export function SignInForm() {
             <button
               type="button"
               className="text-xs font-medium text-green-800 hover:underline dark:text-green-400"
-              onClick={() => alert("Wire this to your password reset flow.")}
+              onClick={() => router.push(`/forgot-password?email=${encodeURIComponent(email.trim())}`)}
             >
               Forgotten password?
             </button>

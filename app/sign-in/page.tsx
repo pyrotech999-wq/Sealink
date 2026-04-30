@@ -28,9 +28,8 @@ export default function SignInPage() {
         <div className="mb-8 text-center sm:text-left">
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Sign in</h1>
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-            Real auth is not connected yet. To use the form: enter a valid-looking email, any password, and tick the
-            policy box. If anything feels stuck, use <strong className="text-zinc-800 dark:text-zinc-200">Skip sign-in</strong>{" "}
-            or the bottom <strong className="text-zinc-800 dark:text-zinc-200">Home</strong> tab.
+            Use the email and password you registered with. If you can’t remember your password, use{" "}
+            <strong className="text-zinc-800 dark:text-zinc-200">Forgotten password</strong> to get a reset link.
           </p>
         </div>
 
