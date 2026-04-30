@@ -27,7 +27,9 @@ export async function POST(req: Request): Promise<Response> {
   const msg = body && typeof body === "object" && "message" in body ? (body as { message?: unknown }).message : null;
   if (typeof msg !== "string" || !msg.trim()) return NextResponse.json({ ok: false }, { status: 400 });
 
-  const row = await createAnchorAlert(user.uid, msg);
+  const kindRaw = body && typeof body === "object" && "kind" in body ? (body as { kind?: unknown }).kind : null;
+  const kind = kindRaw === "warning" ? "warning" : "alert";
+  const row = await createAnchorAlert(user.uid, msg, { kind });
   return NextResponse.json({ ok: true, alert: row });
 }
 

@@ -10,6 +10,8 @@ export type AnchorAlertRow = {
   createdAt: string;
   message: string;
   seenAt: string | null;
+  kind: "alert" | "warning";
+  expiresAt: string | null;
 };
 
 let queue: Promise<unknown> = Promise.resolve();
@@ -41,21 +43,36 @@ function writeRaw(list: AnchorAlertRow[]): void {
 }
 
 function prune(list: AnchorAlertRow[], now = new Date()): AnchorAlertRow[] {
-  // Keep 30 days.
-  const cutoff = now.getTime() - 30 * 24 * 60 * 60 * 1000;
-  return list.filter((r) => new Date(r.createdAt).getTime() >= cutoff);
+  const nowMs = now.getTime();
+  const cutoff = nowMs - 30 * 24 * 60 * 60 * 1000;
+  return list.filter((r) => {
+    const createdOk = new Date(r.createdAt).getTime() >= cutoff;
+    if (!createdOk) return false;
+    if (r.expiresAt) {
+      const exp = new Date(r.expiresAt).getTime();
+      if (Number.isFinite(exp) && exp <= nowMs) return false;
+    }
+    return true;
+  });
 }
 
-export async function createAnchorAlert(uid: string, message: string): Promise<AnchorAlertRow> {
+export async function createAnchorAlert(
+  uid: string,
+  message: string,
+  opts?: { kind?: "alert" | "warning"; ttlMs?: number },
+): Promise<AnchorAlertRow> {
   return enqueue(async () => {
     const now = new Date();
     const list = prune(readRaw(), now);
+    const ttlMs = typeof opts?.ttlMs === "number" && Number.isFinite(opts.ttlMs) && opts.ttlMs > 0 ? opts.ttlMs : null;
     const row: AnchorAlertRow = {
       id: randomUUID(),
       uid,
       createdAt: now.toISOString(),
       message: message.trim().slice(0, 500),
       seenAt: null,
+      kind: opts?.kind === "warning" ? "warning" : "alert",
+      expiresAt: ttlMs ? new Date(now.getTime() + ttlMs).toISOString() : null,
     };
     list.push(row);
     writeRaw(list);
