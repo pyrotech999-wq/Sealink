@@ -124,6 +124,8 @@ export default function HomeLocationMap() {
   const [activeAnchorAlert, setActiveAnchorAlert] = useState<{ id: string; message: string; createdAt: string } | null>(
     null,
   );
+  const [alarmBlocked, setAlarmBlocked] = useState(false);
+  const alarmTimer = useRef<number | null>(null);
   const deviceId = useMemo(() => (typeof window !== "undefined" ? getOrCreateDeviceId() : "server"), []);
   const [shareNearby, setShareNearby] = useState(() =>
     typeof window !== "undefined" ? getShareNearbyPeers() : false,
@@ -279,7 +281,16 @@ export default function HomeLocationMap() {
 
     try {
       if ("Notification" in window && Notification.permission === "granted") {
-        new Notification("SeaLink anchor alert", { body: msg });
+        const opts = {
+          body: msg,
+          tag: "sealink-anchor-alert",
+          // Non-standard / partial support across browsers, but helps alerts stand out where available.
+          renotify: true,
+          requireInteraction: true,
+          // Vibration works on some Android browsers.
+          vibrate: [250, 150, 250, 150, 400],
+        } as NotificationOptions & Record<string, unknown>;
+        new Notification("SEALINK — ANCHOR ALERT", opts);
       }
     } catch {
       /* ignore */
@@ -308,6 +319,60 @@ export default function HomeLocationMap() {
       window.clearInterval(id);
     };
   }, [sharing, activeAnchorAlert]);
+
+  function stopAlarm() {
+    if (alarmTimer.current != null) window.clearInterval(alarmTimer.current);
+    alarmTimer.current = null;
+  }
+
+  async function beepOnce(): Promise<boolean> {
+    try {
+      const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext | undefined;
+      if (!AudioCtx) return false;
+      const ctx = new AudioCtx();
+      if (ctx.state === "suspended") await ctx.resume();
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "sine";
+      o.frequency.value = 880;
+      g.gain.value = 0.0001;
+      o.connect(g);
+      g.connect(ctx.destination);
+      o.start();
+      const now = ctx.currentTime;
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(0.25, now + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+      o.stop(now + 0.38);
+      window.setTimeout(() => void ctx.close().catch(() => undefined), 600);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function startAlarm(): Promise<void> {
+    stopAlarm();
+    const ok = await beepOnce();
+    if (!ok) {
+      setAlarmBlocked(true);
+      return;
+    }
+    setAlarmBlocked(false);
+    alarmTimer.current = window.setInterval(() => void beepOnce(), 2500);
+  }
+
+  // In-app urgent alarm while alert is visible (until Seen).
+  useEffect(() => {
+    if (!activeAnchorAlert) {
+      stopAlarm();
+      setAlarmBlocked(false);
+      return;
+    }
+    void startAlarm();
+    return () => stopAlarm();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeAnchorAlert?.id]);
 
   useEffect(() => {
     if (!sharing) {
@@ -872,6 +937,15 @@ export default function HomeLocationMap() {
                 <p className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-500">
                   {new Date(activeAnchorAlert.createdAt).toLocaleString("en-GB")}
                 </p>
+                {alarmBlocked ? (
+                  <button
+                    type="button"
+                    onClick={() => void startAlarm()}
+                    className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-800 hover:bg-red-100 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-100 dark:hover:bg-red-950/50"
+                  >
+                    Enable alarm sound
+                  </button>
+                ) : null}
               </div>
               <button
                 type="button"

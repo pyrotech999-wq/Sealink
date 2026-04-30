@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAuthUser } from "@/lib/auth";
 import { createAnchorAlert, listUnseenAnchorAlerts, markAnchorAlertSeen } from "@/lib/anchor-alerts-store";
-import { isWhatsAppConfigured, sendWhatsAppMessage } from "@/lib/whatsapp";
 
 export async function GET(): Promise<Response> {
   const user = await requireAuthUser();
@@ -29,14 +28,6 @@ export async function POST(req: Request): Promise<Response> {
   if (typeof msg !== "string" || !msg.trim()) return NextResponse.json({ ok: false }, { status: 400 });
 
   const row = await createAnchorAlert(user.uid, msg);
-  const to = body && typeof body === "object" && "whatsAppTo" in body ? (body as { whatsAppTo?: unknown }).whatsAppTo : null;
-  if (typeof to === "string" && isWhatsAppConfigured()) {
-    try {
-      await sendWhatsAppMessage(to, msg);
-    } catch {
-      /* ignore */
-    }
-  }
   return NextResponse.json({ ok: true, alert: row });
 }
 
