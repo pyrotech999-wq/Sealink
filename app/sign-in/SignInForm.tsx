@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { getDeviceName, getOrCreateDeviceId } from "@/lib/device-id";
 import { useRouter } from "next/navigation";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const REMEMBER_EMAIL_KEY = "sealink_last_email_v1";
 
 type DeviceRow = { deviceId: string; name: string; activatedAt: string; lastSeenAt: string };
 
@@ -23,7 +24,7 @@ function isDeviceRow(v: unknown): v is DeviceRow {
 async function startDemoSession(
   email: string,
   password: string,
-  opts?: { deactivateDeviceId?: string },
+  opts?: { deactivateDeviceId?: string; rememberMe?: boolean },
 ): Promise<
   | { ok: true }
   | { ok: false; message: string; devices?: { deviceId: string; name: string; activatedAt: string; lastSeenAt: string }[] }
@@ -35,7 +36,14 @@ async function startDemoSession(
       method: "POST",
       credentials: "same-origin",
       headers: { Accept: "application/json", "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, deviceId, deviceName, deactivateDeviceId: opts?.deactivateDeviceId }),
+      body: JSON.stringify({
+        email,
+        password,
+        deviceId,
+        deviceName,
+        deactivateDeviceId: opts?.deactivateDeviceId,
+        rememberMe: opts?.rememberMe ?? true,
+      }),
     });
     if (!res.ok) {
       const data = (await res.json()) as { error?: string; devices?: unknown };
@@ -56,12 +64,22 @@ export function SignInForm() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
   const [agree, setAgree] = useState(false);
   const [error, setError] = useState("");
   const [deviceLimit, setDeviceLimit] = useState<
     { deviceId: string; name: string; activatedAt: string; lastSeenAt: string }[]
   >([]);
   const [pending, setPending] = useState(false);
+
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem(REMEMBER_EMAIL_KEY);
+      if (v && EMAIL_RE.test(v)) setEmail(v);
+    } catch {
+      /* */
+    }
+  }, []);
 
   async function onSubmit(ev: React.FormEvent) {
     ev.preventDefault();
@@ -81,11 +99,18 @@ export function SignInForm() {
     setError("");
     setDeviceLimit([]);
     setPending(true);
-    const result = await startDemoSession(trimmed, password);
+    const result = await startDemoSession(trimmed, password, { rememberMe });
     if (!result.ok) {
       setError(result.message);
       setDeviceLimit(Array.isArray(result.devices) ? result.devices : []);
       setPending(false);
+    } else {
+      try {
+        if (rememberMe) localStorage.setItem(REMEMBER_EMAIL_KEY, trimmed);
+        else localStorage.removeItem(REMEMBER_EMAIL_KEY);
+      } catch {
+        /* */
+      }
     }
   }
 
@@ -130,14 +155,14 @@ export function SignInForm() {
                     }
                     setPending(true);
                     void (async () => {
-                      const res = await startDemoSession(trimmed, password, { deactivateDeviceId: d.deviceId });
+                      const res = await startDemoSession(trimmed, password, { deactivateDeviceId: d.deviceId, rememberMe });
                       if (!res.ok) {
                         setError(res.message);
                         setPending(false);
                         return;
                       }
                       // After deactivating, try sign-in again.
-                      const res2 = await startDemoSession(trimmed, password);
+                      const res2 = await startDemoSession(trimmed, password, { rememberMe });
                       if (!res2.ok) {
                         setError(res2.message);
                         setDeviceLimit(Array.isArray(res2.devices) ? res2.devices : []);
@@ -190,6 +215,21 @@ export function SignInForm() {
             className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
           />
         </div>
+        <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
+          <input
+            type="checkbox"
+            checked={rememberMe}
+            onChange={(e) => setRememberMe(e.target.checked)}
+            className="mt-1 size-4 rounded border-zinc-300 text-green-700 focus:ring-green-600"
+          />
+          <span className="text-sm text-zinc-700 dark:text-zinc-300">
+            <span className="font-medium text-zinc-900 dark:text-zinc-50">Keep me signed in</span>
+            <span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">
+              Uses a longer-lived session cookie (still sign out anytime).
+            </span>
+          </span>
+        </label>
+
         <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
           <input
             type="checkbox"

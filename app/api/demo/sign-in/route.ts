@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { DEMO_SESSION_COOKIE, DEMO_SESSION_VALUE } from "@/lib/demo-session";
 import { AUTH_EMAIL_COOKIE, normaliseEmail, uidFromEmail } from "@/lib/auth";
 import { deactivateAccountDevice, registerAccountDevice } from "@/lib/account-devices-store";
+import { sessionCookieBase } from "@/lib/session-cookies";
 
 export async function POST(req: Request) {
   let email = "";
@@ -48,19 +49,14 @@ export async function POST(req: Request) {
   }
 
   const res = NextResponse.json({ ok: true });
+  const base = sessionCookieBase();
   res.cookies.set(DEMO_SESSION_COOKIE, DEMO_SESSION_VALUE, {
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7,
-    sameSite: "lax",
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    ...base,
+    maxAge: 60 * 60 * 24 * 14,
   });
   res.cookies.set(AUTH_EMAIL_COOKIE, email, {
-    path: "/",
-    maxAge: 60 * 60 * 24 * 30,
-    sameSite: "lax",
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    ...base,
+    maxAge: 60 * 60 * 24 * 180,
   });
   return res;
 }
