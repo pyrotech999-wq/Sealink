@@ -20,12 +20,12 @@ function parseFirstStorm(xml: string, basin: StormAlert["basin"]): StormAlert | 
   // Very small "good enough" RSS parse: find first item whose title mentions tropical cyclone wording.
   const items = xml.split(/<item>/i).slice(1);
   for (const raw of items) {
-    const title = (raw.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/is)?.[1] ??
-      raw.match(/<title>(.*?)<\/title>/is)?.[1] ??
+    const title = (raw.match(/<title><!\[CDATA\[([\s\S]*?)\]\]><\/title>/i)?.[1] ??
+      raw.match(/<title>([\s\S]*?)<\/title>/i)?.[1] ??
       "").trim();
-    const link = (raw.match(/<link>(.*?)<\/link>/is)?.[1] ?? "").trim();
-    const desc = (raw.match(/<description><!\[CDATA\[(.*?)\]\]><\/description>/is)?.[1] ??
-      raw.match(/<description>(.*?)<\/description>/is)?.[1] ??
+    const link = (raw.match(/<link>([\s\S]*?)<\/link>/i)?.[1] ?? "").trim();
+    const desc = (raw.match(/<description><!\[CDATA\[([\s\S]*?)\]\]><\/description>/i)?.[1] ??
+      raw.match(/<description>([\s\S]*?)<\/description>/i)?.[1] ??
       "").trim();
 
     const hay = `${title} ${desc}`.toLowerCase();
