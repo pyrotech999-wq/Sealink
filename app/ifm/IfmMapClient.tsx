@@ -2,8 +2,11 @@
 
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import "leaflet.markercluster/dist/MarkerCluster.css";
+import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
+import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
+import MarkerClusterGroup from "react-leaflet-cluster";
 import { distanceMiles } from "@/lib/geo-haversine";
 import { getAvatarDataUrl, getBoatName, getFullName, getProfilePhone } from "@/lib/map-profile-storage";
 
@@ -30,6 +33,12 @@ function buildAvatarIcon(avatarDataUrl: string): L.DivIcon {
   return L.divIcon({ className: "sealink-ifm-pin", html, iconSize: [38, 38], iconAnchor: [19, 19] });
 }
 
+function MapBinder({ onMap }: { onMap: (m: L.Map) => void }) {
+  const m = useMap();
+  useEffect(() => onMap(m), [m, onMap]);
+  return null;
+}
+
 export function IfmMapClient() {
   const [mode, setMode] = useState<FilterMode>("all");
   const [pos, setPos] = useState<{ lat: number; lng: number; accuracyM: number } | null>(null);
@@ -39,6 +48,7 @@ export function IfmMapClient() {
   const [contact, setContact] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [sharing, setSharing] = useState(true);
+  const [map, setMap] = useState<L.Map | null>(null);
 
   const lastShareAt = useRef<number>(0);
 
@@ -190,6 +200,12 @@ export function IfmMapClient() {
   }, [peers, mode, pos?.lat, pos?.lng]);
 
   const center = initialCenter ?? [51.505, -0.09];
+  const friendsPeersSorted = useMemo(() => {
+    if (mode !== "friends") return [];
+    return peers
+      .slice()
+      .sort((a, b) => (a.fullName || a.boatName).localeCompare(b.fullName || b.boatName));
+  }, [peers, mode]);
 
   return (
     <div className="flex flex-1 flex-col bg-zinc-50 dark:bg-zinc-950">
@@ -243,6 +259,19 @@ export function IfmMapClient() {
 
             <button
               type="button"
+              disabled={!pos || !map}
+              onClick={() => {
+                if (!pos || !map) return;
+                map.flyTo([pos.lat, pos.lng], Math.max(map.getZoom(), 8), { animate: true, duration: 0.6 });
+              }}
+              className="h-9 rounded-xl border border-zinc-200 bg-white px-3 text-sm font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
+              title="Center the map on your location"
+            >
+              Center on me
+            </button>
+
+            <button
+              type="button"
               onClick={() => {
                 const next = !sharing;
                 setSharing(next);
@@ -280,6 +309,7 @@ export function IfmMapClient() {
                 scrollWheelZoom
                 attributionControl
               >
+                <MapBinder onMap={(m) => setMap(m)} />
                 <TileLayer
                   attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -292,17 +322,33 @@ export function IfmMapClient() {
                     </Popup>
                   </Marker>
                 ) : null}
-                {peersWithLocalSort.map((p) => (
-                  <Marker key={p.uid} position={[p.lat, p.lng]} icon={buildAvatarIcon(p.avatarDataUrl)}>
-                    <Popup>
-                      <p className="m-0 text-sm font-semibold text-zinc-900">{p.fullName || "SeaLink user"}</p>
-                      {p.boatName ? <p className="m-0 text-xs text-zinc-600">{p.boatName}</p> : null}
-                      <p className="m-0 mt-1 text-[11px] text-zinc-500">
-                        updated {new Date(p.updatedAt).toLocaleString("en-GB")}
-                      </p>
-                    </Popup>
-                  </Marker>
-                ))}
+                {mode === "all" ? (
+                  <MarkerClusterGroup chunkedLoading>
+                    {peersWithLocalSort.map((p) => (
+                      <Marker key={p.uid} position={[p.lat, p.lng]} icon={buildAvatarIcon(p.avatarDataUrl)}>
+                        <Popup>
+                          <p className="m-0 text-sm font-semibold text-zinc-900">{p.fullName || "SeaLink user"}</p>
+                          {p.boatName ? <p className="m-0 text-xs text-zinc-600">{p.boatName}</p> : null}
+                          <p className="m-0 mt-1 text-[11px] text-zinc-500">
+                            updated {new Date(p.updatedAt).toLocaleString("en-GB")}
+                          </p>
+                        </Popup>
+                      </Marker>
+                    ))}
+                  </MarkerClusterGroup>
+                ) : (
+                  peersWithLocalSort.map((p) => (
+                    <Marker key={p.uid} position={[p.lat, p.lng]} icon={buildAvatarIcon(p.avatarDataUrl)}>
+                      <Popup>
+                        <p className="m-0 text-sm font-semibold text-zinc-900">{p.fullName || "SeaLink user"}</p>
+                        {p.boatName ? <p className="m-0 text-xs text-zinc-600">{p.boatName}</p> : null}
+                        <p className="m-0 mt-1 text-[11px] text-zinc-500">
+                          updated {new Date(p.updatedAt).toLocaleString("en-GB")}
+                        </p>
+                      </Popup>
+                    </Marker>
+                  ))
+                )}
               </MapContainer>
             </div>
             <div className="flex items-center justify-between gap-2 border-t border-zinc-200 px-3 py-2 text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
@@ -315,6 +361,44 @@ export function IfmMapClient() {
           </div>
 
           <aside className="space-y-4">
+            {mode === "friends" ? (
+              <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+                <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Friends on map</p>
+                <p className="mt-1 text-xs text-zinc-500">Tap a friend to zoom to them.</p>
+                <div className="mt-3 max-h-[260px] overflow-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+                  {friendsPeersSorted.length ? (
+                    <ul className="divide-y divide-zinc-200 text-sm dark:divide-zinc-800">
+                      {friendsPeersSorted.map((p) => (
+                        <li key={`peer-${p.uid}`}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!map) return;
+                              map.flyTo([p.lat, p.lng], Math.max(map.getZoom(), 8), { animate: true, duration: 0.6 });
+                            }}
+                            className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                                {p.fullName || "SeaLink user"}
+                              </p>
+                              {p.boatName ? (
+                                <p className="truncate text-[11px] text-zinc-600 dark:text-zinc-400">{p.boatName}</p>
+                              ) : null}
+                            </div>
+                            <span className="shrink-0 text-[10px] text-zinc-500">
+                              {new Date(p.updatedAt).toLocaleDateString("en-GB")}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="px-3 py-3 text-xs text-zinc-500">No friends currently sharing on IFM.</p>
+                  )}
+                </div>
+              </div>
+            ) : null}
             <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
               <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Friends list</p>
               <p className="mt-1 text-xs text-zinc-500">
