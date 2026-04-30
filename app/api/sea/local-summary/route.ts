@@ -36,9 +36,10 @@ function dirText(deg: number | null): string | null {
   return dirs[i] ?? null;
 }
 
-function findNextExtrema(times: string[], sea: number[], nowMs: number): { nextHigh?: { t: string; v: number }; nextLow?: { t: string; v: number } } {
-  const out: { nextHigh?: { t: string; v: number }; nextLow?: { t: string; v: number } } = {};
-  // local extrema across series; pick first after now.
+type TideEvent = { kind: "high" | "low"; t: string; v: number };
+
+function findNextTides(times: string[], sea: number[], nowMs: number, limit = 4): TideEvent[] {
+  const out: TideEvent[] = [];
   for (let i = 1; i < sea.length - 1; i++) {
     const t = times[i];
     if (!t) continue;
@@ -47,9 +48,10 @@ function findNextExtrema(times: string[], sea: number[], nowMs: number): { nextH
     const a = sea[i - 1]!;
     const b = sea[i]!;
     const c = sea[i + 1]!;
-    if (out.nextHigh == null && b >= a && b >= c) out.nextHigh = { t, v: b };
-    if (out.nextLow == null && b <= a && b <= c) out.nextLow = { t, v: b };
-    if (out.nextHigh && out.nextLow) break;
+    if (!Number.isFinite(a) || !Number.isFinite(b) || !Number.isFinite(c)) continue;
+    if (b >= a && b >= c) out.push({ kind: "high", t, v: b });
+    else if (b <= a && b <= c) out.push({ kind: "low", t, v: b });
+    if (out.length >= limit) break;
   }
   return out;
 }
@@ -106,7 +108,8 @@ export async function GET(req: Request): Promise<Response> {
     const sea = (h?.sea_level_height_msl ?? []) as number[];
     const seaTimes = times;
 
-    const extrema = Array.isArray(sea) && sea.length === seaTimes.length ? findNextExtrema(seaTimes, sea, now) : {};
+    const tides =
+      Array.isArray(sea) && sea.length === seaTimes.length ? findNextTides(seaTimes, sea, now, 4) : [];
 
     const parts: string[] = [];
     if (waveM != null) {
@@ -117,12 +120,12 @@ export async function GET(req: Request): Promise<Response> {
       );
     }
     if (sst != null) parts.push(`Sea surface temperature is about ${sst.toFixed(1)}°C.`);
-    if (extrema.nextHigh || extrema.nextLow) {
+    if (tides.length) {
       const fmt = (iso: string) =>
         new Date(iso).toLocaleString("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit" });
-      const tideBits: string[] = [];
-      if (extrema.nextHigh) tideBits.push(`High tide ~${fmt(extrema.nextHigh.t)}`);
-      if (extrema.nextLow) tideBits.push(`Low tide ~${fmt(extrema.nextLow.t)}`);
+      const tideBits = tides
+        .slice(0, 2)
+        .map((e) => `${e.kind === "high" ? "High" : "Low"} tide ~${fmt(e.t)}`);
       parts.push(`${tideBits.join(" · ")} (modelled).`);
     } else {
       parts.push("Tide estimate unavailable for this area.");
@@ -141,8 +144,7 @@ export async function GET(req: Request): Promise<Response> {
         sea_surface_temp_c: sst,
       },
       tide: {
-        nextHigh: extrema.nextHigh ?? null,
-        nextLow: extrema.nextLow ?? null,
+        events: tides,
       },
     });
   } catch (e: unknown) {

@@ -7,12 +7,13 @@ type ApiOk = {
   ok: true;
   text: string;
   snapshot?: { wave_height_m: number | null; sea_surface_temp_c: number | null };
-  tide?: { nextHigh: { t: string; v: number } | null; nextLow: { t: string; v: number } | null };
+  tide?: { events?: { kind: "high" | "low"; t: string; v: number }[] };
 };
 type ApiFail = { error: string };
 
 export function SeaStateSummaryBox() {
   const [text, setText] = useState<string | null>(null);
+  const [tides, setTides] = useState<{ kind: "high" | "low"; t: string; v: number }[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -37,11 +38,13 @@ export function SeaStateSummaryBox() {
       }
       const ok = d as ApiOk;
       setText(ok.text);
+      setTides(Array.isArray(ok.tide?.events) ? ok.tide!.events! : []);
     } catch (e: unknown) {
       if (e instanceof DOMException && e.name === "AbortError") return;
       if (e instanceof Error && e.name === "AbortError") return;
       setErr("Network error");
       setText(null);
+      setTides([]);
     } finally {
       setLoading(false);
     }
@@ -82,9 +85,25 @@ export function SeaStateSummaryBox() {
           </p>
         ) : null}
         {text ? (
-          <p className="rounded-lg border border-sky-200/80 bg-white/90 px-4 py-3 text-sm leading-7 text-zinc-800 dark:border-sky-800/60 dark:bg-zinc-950/80 dark:text-zinc-200">
-            {text}
-          </p>
+          <div className="rounded-lg border border-sky-200/80 bg-white/90 px-4 py-3 text-sm leading-7 text-zinc-800 dark:border-sky-800/60 dark:bg-zinc-950/80 dark:text-zinc-200">
+            <p>{text}</p>
+            {tides.length ? (
+              <div className="mt-3 rounded-lg border border-sky-100 bg-sky-50/70 px-3 py-2 dark:border-sky-900/40 dark:bg-sky-950/20">
+                <p className="text-xs font-semibold text-sky-950 dark:text-sky-100">Next tides (modelled)</p>
+                <ul className="mt-1 space-y-1 text-xs text-zinc-700 dark:text-zinc-200">
+                  {tides.slice(0, 4).map((e) => (
+                    <li key={`${e.kind}:${e.t}`}>
+                      <span className={`font-semibold ${e.kind === "high" ? "text-emerald-700 dark:text-emerald-300" : "text-amber-700 dark:text-amber-300"}`}>
+                        {e.kind === "high" ? "High" : "Low"}
+                      </span>{" "}
+                      {new Date(e.t).toLocaleString("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit" })} ·{" "}
+                      {e.v.toFixed(2)}m
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
         ) : null}
       </div>
     </div>
