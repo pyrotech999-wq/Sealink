@@ -47,7 +47,7 @@ export type VesselClassifiedListing = {
   status: VesselListingStatus;
   paymentStatus: VesselPaymentStatus;
   paymentProvider: VesselPaymentProvider | null;
-  paymentRef: string | null; // stripe session id, paypal order id, etc.
+  paymentRef: string | null; // paypal order id, etc.
 
   categoryId: VesselCategoryId;
   title: string;
