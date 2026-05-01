@@ -111,8 +111,12 @@ export async function getUserByEmail(email: string): Promise<UserRow | null> {
   return enqueue(async () => {
     const key = normaliseEmail(email);
     if (isSupabaseConfigured()) {
-      const fromSb = await getUserByEmailSupabase(email);
-      if (fromSb) return fromSb;
+      try {
+        const fromSb = await getUserByEmailSupabase(email);
+        if (fromSb) return fromSb;
+      } catch (e) {
+        console.error("[users-store] Supabase user lookup failed; falling back to KV/file", e);
+      }
       // Accounts created before Supabase lived only in KV — still try KV so sign-in keeps working.
       return getUserFromKvOrFile(key);
     }
