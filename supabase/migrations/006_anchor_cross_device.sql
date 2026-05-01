@@ -1,4 +1,4 @@
--- Anchor alert cross-device state (was local JSON; required for serverless / multi-instance)
+/* Anchor alert cross-device state (was local JSON; required for serverless / multi-instance) */
 
 create table if not exists anchor_devices (
   user_uid text not null references user_accounts (uid) on delete cascade,

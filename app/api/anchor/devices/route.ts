@@ -5,26 +5,35 @@ import { listAnchorDevices, upsertAnchorDevice, type AnchorDeviceRow } from "@/l
 
 export const runtime = "nodejs";
 
-/** Anchor GPS registry plus any active signed-in devices (so a second phone appears before its first location POST). */
+/**
+ * Devices for anchor UI: active account_devices (max 2) are the source of truth; anchor store adds last GPS.
+ * Anchor-only rows are included if present (e.g. legacy data).
+ */
 async function listAnchorDevicesForUi(uid: string): Promise<AnchorDeviceRow[]> {
   const [fromAnchor, accountDevs] = await Promise.all([listAnchorDevices(uid), listAccountDevices(uid)]);
+  const anchorById = new Map(fromAnchor.map((r) => [r.deviceId, r]));
   const map = new Map<string, AnchorDeviceRow>();
-  for (const r of fromAnchor) {
-    map.set(r.deviceId, r);
-  }
+
   for (const a of accountDevs) {
     if (!a.active) continue;
-    if (map.has(a.deviceId)) continue;
+    const gps = anchorById.get(a.deviceId);
+    const name =
+      (gps?.name?.trim() || a.name?.trim() || "This device").slice(0, 40) || "This device";
     map.set(a.deviceId, {
       uid,
       deviceId: a.deviceId,
-      name: a.name?.trim() ? a.name.trim() : "This device",
-      updatedAt: a.lastSeenAt,
-      lastLat: null,
-      lastLng: null,
-      lastFixAt: null,
+      name,
+      updatedAt: gps?.updatedAt ?? a.lastSeenAt,
+      lastLat: gps?.lastLat ?? null,
+      lastLng: gps?.lastLng ?? null,
+      lastFixAt: gps?.lastFixAt ?? null,
     });
   }
+
+  for (const r of fromAnchor) {
+    if (!map.has(r.deviceId)) map.set(r.deviceId, r);
+  }
+
   return [...map.values()].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 }
 

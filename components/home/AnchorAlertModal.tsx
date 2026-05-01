@@ -3,6 +3,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { getDeviceName, setDeviceName } from "@/lib/device-id";
 
+async function registerSessionDevice(currentDeviceId: string): Promise<void> {
+  if (!currentDeviceId || currentDeviceId === "server") return;
+  try {
+    await fetch("/api/demo/register-device", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ deviceId: currentDeviceId, deviceName: getDeviceName() }),
+    });
+  } catch {
+    /* ignore */
+  }
+}
+
 type Props = {
   open: boolean;
   onClose: () => void;
@@ -54,14 +68,15 @@ export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, deviceId
     if (!open) return;
     void (async () => {
       try {
-        const r = await fetch("/api/anchor/devices");
+        await registerSessionDevice(deviceId);
+        const r = await fetch("/api/anchor/devices", { credentials: "same-origin", cache: "no-store" });
         const d = (await r.json()) as { devices?: { deviceId: string; name: string; updatedAt: string; lastFixAt: string | null }[] };
         setDevices(Array.isArray(d.devices) ? d.devices : []);
       } catch {
         setDevices([]);
       }
     })();
-  }, [open]);
+  }, [open, deviceId]);
 
   useEffect(() => {
     if (!open) return;
@@ -211,7 +226,8 @@ export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, deviceId
                 Save alert delivery
               </button>
               <p className="text-[10px] opacity-75">
-                Note: If “Other device” isn’t listed, open SeaLink on that device while signed in once so it registers.
+                Note: Both devices must load SeaLink while signed in (any tab) so they appear here. Close and reopen this
+                panel to refresh the list.
               </p>
             </div>
           </div>

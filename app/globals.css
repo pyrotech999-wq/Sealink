@@ -1,12 +1,15 @@
 @import "tailwindcss";
 
-/* Dark mode: system preference OR narrow viewport (mobile shell matches laptop dark).
-   Revert: delete this @custom-variant block to restore default (dark = prefers-color-scheme only). */
+/* App shell is always dark (html has class "dark"). This variant keeps dark: utilities scoped to .dark. */
 @custom-variant dark (&:where(.dark, .dark *));
 
+html {
+  color-scheme: dark;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0a0a0a;
+  --foreground: #ededed;
 }
 
 @theme inline {
@@ -14,19 +17,6 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-/* When layout forces .dark on narrow viewports, keep tokens in sync (prefers-color-scheme may still be light). */
-html.dark {
-  --background: #0a0a0a;
-  --foreground: #ededed;
 }
 
 body {
