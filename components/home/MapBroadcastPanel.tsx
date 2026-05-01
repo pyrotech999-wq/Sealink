@@ -5,7 +5,12 @@ import { useBroadcastToast } from "@/components/BroadcastToastProvider";
 import { VicinityChatDrawer } from "@/components/home/VicinityChatDrawer";
 import { LinkifiedPlainText } from "@/components/LinkifiedPlainText";
 import { mapHrefPreferCoords } from "@/lib/map-links";
-import { MAP_BROADCAST_RETENTION_HOURS } from "@/lib/map-broadcast-constants";
+import { MAP_BROADCAST_RETENTION_HOURS, MOB_CANCEL_BROADCAST_INTRO } from "@/lib/map-broadcast-constants";
+import {
+  BROADCAST_HIDDEN_EVENT,
+  hideBroadcastId,
+  readHiddenBroadcastIds,
+} from "@/lib/broadcast-hidden";
 
 const WATERLINE_KEY = "sealink_broadcast_toast_waterline_v1";
 const SOUND_KEY = "sealink_broadcast_sound_v1";
@@ -112,7 +117,7 @@ export type BroadcastMsg = {
   body: string;
   createdAt: string;
   isMine: boolean;
-  canDelete?: boolean;
+  canAdminDelete?: boolean;
   isGlobal?: boolean;
   isMob?: boolean;
 };
@@ -148,6 +153,9 @@ export function MapBroadcastPanel({
   const [broadcastAllAreas, setBroadcastAllAreas] = useState(false);
   const [inboxRows, setInboxRows] = useState<VicinityInboxRowApi[]>([]);
   const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null);
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(() =>
+    typeof window !== "undefined" ? readHiddenBroadcastIds() : new Set(),
+  );
 
   const coordsRef = useRef({ readLat, readLng });
   coordsRef.current = { readLat, readLng };
@@ -262,6 +270,17 @@ export function MapBroadcastPanel({
     return () => window.clearInterval(id);
   }, [signedIn, fetchInbox]);
 
+  useEffect(() => {
+    const sync = () => setHiddenIds(readHiddenBroadcastIds());
+    sync();
+    window.addEventListener("storage", sync);
+    window.addEventListener(BROADCAST_HIDDEN_EVENT, sync);
+    return () => {
+      window.removeEventListener("storage", sync);
+      window.removeEventListener(BROADCAST_HIDDEN_EVENT, sync);
+    };
+  }, []);
+
   const onDeleteDmThread = async (row: VicinityInboxRowApi, ev: React.MouseEvent) => {
     ev.preventDefault();
     ev.stopPropagation();
@@ -330,14 +349,26 @@ export function MapBroadcastPanel({
     }
   };
 
-  const onDelete = async (id: string) => {
-    if (!window.confirm("Delete this broadcast?")) return;
+  const onHideOnDevice = (id: string) => {
+    hideBroadcastId(id);
+    setHiddenIds(readHiddenBroadcastIds());
+  };
+
+  const onAdminDelete = async (m: BroadcastMsg) => {
+    if (!m.canAdminDelete) return;
+    if (
+      !window.confirm(
+        "Remove this broadcast for everyone on the site? (Admin only — other users keep seeing it until you do this.)",
+      )
+    ) {
+      return;
+    }
     setErr(null);
     try {
       const r = await fetch("/api/map/broadcast", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id }),
+        body: JSON.stringify({ id: m.id }),
       });
       const d = (await r.json()) as { error?: string };
       if (!r.ok) {
@@ -349,6 +380,8 @@ export function MapBroadcastPanel({
       setErr("Network error");
     }
   };
+
+  const visibleMessages = messages.filter((m) => !hiddenIds.has(m.id));
 
   const fmtTime = (iso: string) =>
     new Date(iso).toLocaleString("en-GB", {
@@ -367,9 +400,9 @@ export function MapBroadcastPanel({
         Short messages go to everyone roughly within five miles of where you sent from (same radius as nearby pins)
         {canSendGlobalBroadcast ? ", unless you choose to broadcast to all map areas." : "."} The last{" "}
         {MAP_BROADCAST_RETENTION_HOURS} hours stay here (newest at top; only about two show at once — scroll for older). New ones also pop up as a floating{" "}
-        <strong className="font-semibold">Vicinity broadcast</strong> alert when we have a recent position saved from the map. On the live site, messages need{" "}
-        <strong className="font-semibold">Supabase</strong> (or Vercel KV) so they are not stored only on one server
-        disk.
+        <strong className="font-semibold">Vicinity broadcast</strong> alert when we have a recent position saved from the map.{" "}
+        <strong className="font-semibold">Hide</strong> removes a message only on this device;{" "}
+        <strong className="font-semibold">Admin delete</strong> removes it for everyone (site admin only).
       </p>
 
       <label className="mt-2 inline-flex cursor-pointer items-center gap-2 text-xs font-medium text-indigo-900 dark:text-indigo-200">
@@ -394,7 +427,7 @@ export function MapBroadcastPanel({
       ) : null}
 
       <div className="mt-3 overflow-hidden rounded-lg border border-indigo-200/60 bg-white/90 dark:border-indigo-900/40 dark:bg-zinc-950/60">
-        {messages.length > 2 && !loading ? (
+        {visibleMessages.length > 2 && !loading ? (
           <p className="border-b border-indigo-200/50 bg-indigo-50/60 px-2 py-1 text-center text-[10px] text-indigo-800/90 dark:border-indigo-900/40 dark:bg-indigo-950/40 dark:text-indigo-200/85">
             Newest at top — scroll down for older (about two visible at once)
           </p>
@@ -402,18 +435,27 @@ export function MapBroadcastPanel({
         <div className="max-h-[11rem] min-h-[4.5rem] space-y-2 overflow-y-auto scroll-smooth p-2 sm:max-h-[12rem]">
         {loading ? (
           <p className="px-2 py-3 text-xs text-indigo-700 dark:text-indigo-300">Loading…</p>
-        ) : messages.length === 0 ? (
-          <p className="px-2 py-3 text-xs text-indigo-800/80 dark:text-indigo-200/80">No broadcasts in this area yet.</p>
+        ) : visibleMessages.length === 0 ? (
+          <p className="px-2 py-3 text-xs text-indigo-800/80 dark:text-indigo-200/80">
+            {messages.length === 0
+              ? "No broadcasts in this area yet."
+              : "No messages shown — hidden on this device. Others may still see them."}
+          </p>
         ) : (
-          messages.map((m) => {
-            const mobMapHref = m.isMob ? mapHrefPreferCoords(m.body, m.lat, m.lng) : null;
+          visibleMessages.map((m) => {
+            const allClear =
+              !m.isMob && m.body.trimStart().startsWith(MOB_CANCEL_BROADCAST_INTRO);
+            const mobMapHref =
+              m.isMob || allClear ? mapHrefPreferCoords(m.body, m.lat, m.lng) : null;
             return (
               <article
                 key={m.id}
                 className={`rounded-md border px-2.5 py-2 text-sm dark:bg-zinc-900/80 ${
                   m.isMob
                     ? "border-red-400/90 bg-red-50/90 dark:border-red-800/70 dark:bg-red-950/35"
-                    : "border-indigo-100/80 bg-white dark:border-indigo-900/30"
+                    : allClear
+                      ? "border-emerald-700/50 bg-emerald-50/90 dark:border-emerald-800/60 dark:bg-emerald-950/30"
+                      : "border-indigo-100/80 bg-white dark:border-indigo-900/30"
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
@@ -422,6 +464,11 @@ export function MapBroadcastPanel({
                     {m.isMob ? (
                       <span className="ml-2 rounded bg-red-600 px-1 py-0.5 font-bold text-white dark:bg-red-700">
                         MOB
+                      </span>
+                    ) : null}
+                    {allClear ? (
+                      <span className="ml-2 rounded bg-emerald-700 px-1 py-0.5 font-bold text-white dark:bg-emerald-800">
+                        All clear
                       </span>
                     ) : null}
                     {m.isGlobal ? (
@@ -448,13 +495,24 @@ export function MapBroadcastPanel({
                         Reply
                       </button>
                     ) : null}
-                    {m.canDelete ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm("Hide this message on this device only? It stays visible for other people.")) {
+                          onHideOnDevice(m.id);
+                        }
+                      }}
+                      className="rounded-md border border-zinc-300 bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold text-zinc-800 hover:bg-zinc-200 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
+                    >
+                      Hide
+                    </button>
+                    {m.canAdminDelete ? (
                       <button
                         type="button"
-                        onClick={() => void onDelete(m.id)}
+                        onClick={() => void onAdminDelete(m)}
                         className="rounded-md border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-800 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950/55"
                       >
-                        Delete
+                        Admin delete
                       </button>
                     ) : null}
                   </div>

@@ -143,7 +143,8 @@ function rowToPublic(
     isMob: m.isMob,
     mobPhone: m.mobPhone,
     isMine: viewerUid != null && m.authorUid === viewerUid,
-    canDelete: viewerIsAdmin || (viewerUid != null && m.authorUid === viewerUid),
+    /** Only site admin may DELETE on the server (removes for all users). */
+    canAdminDelete: viewerIsAdmin,
   };
 }
 
@@ -159,7 +160,7 @@ export type BroadcastMessagePublic = {
   isMob: boolean;
   mobPhone: string | null;
   isMine: boolean;
-  canDelete: boolean;
+  canAdminDelete: boolean;
 };
 
 async function readRawUnified(now: Date): Promise<BroadcastMessageRow[]> {
@@ -423,7 +424,7 @@ export async function appendMobBroadcast(
 
 export async function deleteBroadcast(
   id: string,
-  requesterUid: string,
+  _requesterUid: string,
   requesterIsAdmin: boolean,
   now = new Date(),
 ): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -433,6 +434,8 @@ export async function deleteBroadcast(
       const cIso = cutoffIso(now);
       await sb.from("map_broadcasts").delete().lt("created_at", cIso);
 
+      if (!requesterIsAdmin) return { ok: false, error: "Not allowed" };
+
       const { data: row, error: fErr } = await sb
         .from("map_broadcasts")
         .select("author_uid")
@@ -441,7 +444,6 @@ export async function deleteBroadcast(
       if (fErr) return { ok: false, error: fErr.message };
       const r = row as { author_uid?: string } | null;
       if (!r || typeof r.author_uid !== "string") return { ok: false, error: "Not found" };
-      if (!requesterIsAdmin && r.author_uid !== requesterUid) return { ok: false, error: "Not allowed" };
       const { error: dErr } = await sb.from("map_broadcasts").delete().eq("id", id);
       if (dErr) return { ok: false, error: dErr.message };
       return { ok: true };
@@ -452,7 +454,7 @@ export async function deleteBroadcast(
     if (idx < 0) return { ok: false, error: "Not found" };
     const row = list[idx];
     if (!row) return { ok: false, error: "Not found" };
-    if (!requesterIsAdmin && row.authorUid !== requesterUid) return { ok: false, error: "Not allowed" };
+    if (!requesterIsAdmin) return { ok: false, error: "Not allowed" };
     const next = [...list.slice(0, idx), ...list.slice(idx + 1)];
     if (canUseKv()) await kvSetJson(KV_KEY, next);
     else writeRawFile(next);

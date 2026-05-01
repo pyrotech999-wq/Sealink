@@ -6,6 +6,7 @@ import { startMobSiren, stopMobSiren } from "@/lib/mob-siren";
 import { MOB_CANCEL_BROADCAST_INTRO } from "@/lib/map-broadcast-constants";
 import { LinkifiedPlainText } from "@/components/LinkifiedPlainText";
 import { mapHrefPreferCoords } from "@/lib/map-links";
+import { hideBroadcastId, readHiddenBroadcastIds } from "@/lib/broadcast-hidden";
 
 const WATERLINE_KEY = "sealink_mob_incoming_waterline_v1";
 const DISMISSED_KEY = "sealink_mob_dismissed_ids_v1";
@@ -21,7 +22,9 @@ type ApiMsg = {
   createdAt: string;
   isMine: boolean;
   isMob?: boolean;
+  isGlobal?: boolean;
   mobPhone?: string | null;
+  canAdminDelete?: boolean;
 };
 
 function readWaterline(): string | null {
@@ -73,6 +76,7 @@ function telHref(phone: string): string {
 export function MobIncomingAlertHost() {
   const [open, setOpen] = useState(false);
   const [msg, setMsg] = useState<ApiMsg | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [sessionOk, setSessionOk] = useState(false);
   const dismissedRef = useRef(readDismissed());
   const msgRef = useRef<ApiMsg | null>(null);
@@ -90,6 +94,43 @@ export function MobIncomingAlertHost() {
     setOpen(false);
     setMsg(null);
   }, []);
+
+  const hideMobOnDevice = useCallback(() => {
+    const cur = msgRef.current;
+    if (!cur) return;
+    hideBroadcastId(cur.id);
+    silence(cur.id);
+  }, [silence]);
+
+  const deleteMobFromFeed = useCallback(async () => {
+    const cur = msgRef.current;
+    if (!cur?.canAdminDelete) return;
+    if (
+      !window.confirm(
+        "Remove this MOB alert for everyone on the site? (Admin only — other devices keep it until they hide it or you remove it.)",
+      )
+    ) {
+      return;
+    }
+    setDeleting(true);
+    try {
+      const r = await fetch("/api/map/broadcast", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: cur.id }),
+      });
+      const d = (await r.json()) as { error?: string };
+      if (!r.ok) {
+        window.alert(d.error || "Could not delete");
+        return;
+      }
+      silence(cur.id);
+    } catch {
+      window.alert("Network error");
+    } finally {
+      setDeleting(false);
+    }
+  }, [silence]);
 
   useEffect(() => {
     let cancelled = false;
@@ -154,9 +195,10 @@ export function MobIncomingAlertHost() {
             if (off) silence(cur.id);
           }
 
+          const hidden = readHiddenBroadcastIds();
           for (const m of messages) {
             if (new Date(m.createdAt) <= new Date(wl)) break;
-            if (!m.isMob || m.isMine || dismissed.has(m.id)) continue;
+            if (!m.isMob || m.isMine || dismissed.has(m.id) || hidden.has(m.id)) continue;
             setMsg(m);
             setOpen(true);
             break;
@@ -201,7 +243,8 @@ export function MobIncomingAlertHost() {
           <LinkifiedPlainText text={msg.body} />
         </div>
         <p className="mt-3 text-xs text-zinc-500">
-          Alarm runs up to five minutes. Use Silence to stop sound on this device (others are unchanged).
+          Alarm runs up to five minutes. Silence stops sound here only. Hide removes this alert from your list on this
+          device; others still see it unless they hide it or an admin removes it from the server.
         </p>
         <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           {mapHref ? (
@@ -229,6 +272,25 @@ export function MobIncomingAlertHost() {
           >
             Silence alarm
           </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (window.confirm("Hide this MOB alert on this device only?")) hideMobOnDevice();
+            }}
+            className="inline-flex h-12 w-full items-center justify-center rounded-xl border border-zinc-500 bg-zinc-900 text-sm font-semibold text-zinc-100 hover:bg-zinc-800 sm:w-auto sm:flex-1"
+          >
+            Hide on this device
+          </button>
+          {msg.canAdminDelete ? (
+            <button
+              type="button"
+              disabled={deleting}
+              onClick={() => void deleteMobFromFeed()}
+              className="inline-flex h-12 w-full items-center justify-center rounded-xl border border-red-700/80 bg-red-950/50 text-sm font-semibold text-red-200 hover:bg-red-950 disabled:opacity-50 sm:w-auto sm:flex-1"
+            >
+              {deleting ? "Removing…" : "Admin: remove for everyone"}
+            </button>
+          ) : null}
         </div>
         <button
           type="button"
