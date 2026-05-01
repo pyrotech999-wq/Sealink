@@ -219,8 +219,12 @@ async function main() {
     try {
       const res = await fetch(OVERPASS_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: `data=${encodeURIComponent(q)}`,
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          Accept: "application/json",
+          "User-Agent": "SeaLink-marina-import/1.0",
+        },
+        body: q,
       });
       if (!res.ok) {
         console.error(`[error] ${iso}: HTTP ${res.status}`);
