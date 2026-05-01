@@ -36,3 +36,19 @@ body {
   background: transparent !important;
   border: none !important;
 }
+
+@keyframes sealink-mob-flash {
+  0%,
+  100% {
+    opacity: 1;
+    filter: brightness(1.15);
+  }
+  50% {
+    opacity: 0.45;
+    filter: brightness(0.75);
+  }
+}
+
+.sealink-mob-sender-bar {
+  animation: sealink-mob-flash 1s ease-in-out infinite;
+}

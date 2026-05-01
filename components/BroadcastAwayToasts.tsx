@@ -24,7 +24,7 @@ function writeWaterline(iso: string): void {
   }
 }
 
-type Msg = { id: string; body: string; createdAt: string; isMine: boolean };
+type Msg = { id: string; body: string; createdAt: string; isMine: boolean; isMob?: boolean };
 
 /** When not on the home map, poll using last-known GPS (if fresh) and surface new area broadcasts as toasts. */
 export function BroadcastAwayToasts() {
@@ -56,6 +56,7 @@ export function BroadcastAwayToasts() {
 
           for (const m of msgs) {
             if (new Date(m.createdAt) <= new Date(wl)) break;
+            if (m.isMob) continue;
             if (!m.isMine) toast.pushToast(m.body, "broadcast", { id: m.id });
           }
           writeWaterline(newest);

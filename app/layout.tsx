@@ -7,6 +7,8 @@ import { AppLoadSplash } from "@/components/AppLoadSplash";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import { SessionDeviceRegistrar } from "@/components/SessionDeviceRegistrar";
 import { TopNav } from "@/components/TopNav";
+import { MobSenderActiveBanner } from "@/components/MobSenderActiveBanner";
+import { MobIncomingAlertHost } from "@/components/MobIncomingAlertHost";
 import "./globals.css";
 
 function getMetadataBase(): URL {
@@ -77,6 +79,8 @@ export default function RootLayout({
           <ServiceWorkerRegister />
           <SessionDeviceRegistrar />
           <TopNav />
+          <MobSenderActiveBanner />
+          <MobIncomingAlertHost />
           {children}
           <BroadcastAwayToasts />
           <BottomNav />

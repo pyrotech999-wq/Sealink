@@ -110,6 +110,7 @@ export type BroadcastMsg = {
   isMine: boolean;
   canDelete?: boolean;
   isGlobal?: boolean;
+  isMob?: boolean;
 };
 
 type Props = {
@@ -188,6 +189,7 @@ export function MapBroadcastPanel({
       if (t) {
         for (const m of msgs) {
           if (new Date(m.createdAt) <= new Date(wl)) break;
+          if (m.isMob) continue;
           if (!m.isMine) t.pushToast(m.body, "broadcast", { id: m.id });
           if (!m.isMine) shouldBeep = true;
         }
@@ -360,8 +362,8 @@ export function MapBroadcastPanel({
       <p className="mt-1 text-xs leading-5 text-indigo-900/80 dark:text-indigo-200/85">
         Short messages go to everyone roughly within five miles of where you sent from (same radius as nearby pins)
         {canSendGlobalBroadcast ? ", unless you choose to broadcast to all map areas." : "."} The last{" "}
-        {MAP_BROADCAST_RETENTION_HOURS} hours stay here; new ones also pop up as a floating <strong className="font-semibold">Vicinity broadcast</strong> alert when we have a
-        recent position saved from the map. On the live site, messages need{" "}
+        {MAP_BROADCAST_RETENTION_HOURS} hours stay here (newest at top; only about two show at once — scroll for older). New ones also pop up as a floating{" "}
+        <strong className="font-semibold">Vicinity broadcast</strong> alert when we have a recent position saved from the map. On the live site, messages need{" "}
         <strong className="font-semibold">Supabase</strong> (or Vercel KV) so they are not stored only on one server
         disk.
       </p>
@@ -387,7 +389,13 @@ export function MapBroadcastPanel({
         </p>
       ) : null}
 
-      <div className="mt-3 max-h-64 space-y-2 overflow-y-auto rounded-lg border border-indigo-200/60 bg-white/90 p-2 dark:border-indigo-900/40 dark:bg-zinc-950/60">
+      <div className="mt-3 overflow-hidden rounded-lg border border-indigo-200/60 bg-white/90 dark:border-indigo-900/40 dark:bg-zinc-950/60">
+        {messages.length > 2 && !loading ? (
+          <p className="border-b border-indigo-200/50 bg-indigo-50/60 px-2 py-1 text-center text-[10px] text-indigo-800/90 dark:border-indigo-900/40 dark:bg-indigo-950/40 dark:text-indigo-200/85">
+            Newest at top — scroll down for older (about two visible at once)
+          </p>
+        ) : null}
+        <div className="max-h-[11rem] min-h-[4.5rem] space-y-2 overflow-y-auto scroll-smooth p-2 sm:max-h-[12rem]">
         {loading ? (
           <p className="px-2 py-3 text-xs text-indigo-700 dark:text-indigo-300">Loading…</p>
         ) : messages.length === 0 ? (
@@ -396,11 +404,20 @@ export function MapBroadcastPanel({
           messages.map((m) => (
             <article
               key={m.id}
-              className="rounded-md border border-indigo-100/80 bg-white px-2.5 py-2 text-sm dark:border-indigo-900/30 dark:bg-zinc-900/80"
+              className={`rounded-md border px-2.5 py-2 text-sm dark:bg-zinc-900/80 ${
+                m.isMob
+                  ? "border-red-400/90 bg-red-50/90 dark:border-red-800/70 dark:bg-red-950/35"
+                  : "border-indigo-100/80 bg-white dark:border-indigo-900/30"
+              }`}
             >
               <div className="flex items-start justify-between gap-2">
                 <p className="text-[10px] font-medium text-indigo-600 dark:text-indigo-400">
                   {fmtTime(m.createdAt)}
+                  {m.isMob ? (
+                    <span className="ml-2 rounded bg-red-600 px-1 py-0.5 font-bold text-white dark:bg-red-700">
+                      MOB
+                    </span>
+                  ) : null}
                   {m.isGlobal ? (
                     <span className="ml-2 rounded bg-amber-100 px-1 py-0.5 text-amber-950 dark:bg-amber-900/50 dark:text-amber-100">
                       All areas
@@ -440,6 +457,7 @@ export function MapBroadcastPanel({
             </article>
           ))
         )}
+        </div>
       </div>
 
       {signedIn ? (
@@ -450,7 +468,7 @@ export function MapBroadcastPanel({
           <p className="mt-1 text-[11px] leading-snug text-indigo-900/75 dark:text-indigo-200/80">
             If someone taps <strong className="font-semibold">Reply</strong> on a broadcast, you chat in a private thread.
             There is no email or push — watch for a <strong className="font-semibold">Vicinity message</strong> alert. In the
-            chat, only the latest pair of messages shows at once — scroll or use Earlier / Latest for the rest.{" "}
+            chat, only about two messages show at once — scroll the list for the rest.{" "}
             <strong className="font-semibold">Seen</strong> closes the chat but keeps all messages;{" "}
             <strong className="font-semibold">tap this row</strong> (preview) to reopen.{" "}
             <strong className="font-semibold">Delete</strong> removes the whole thread for both people.

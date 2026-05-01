@@ -3,7 +3,13 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { distanceMiles } from "@/lib/geo-haversine";
 import { canUseKv, kvGetJson, kvSetJson } from "@/lib/kv-json";
-import { MAP_BROADCAST_RATE_PER_HOUR, MAP_BROADCAST_RETENTION_HOURS } from "@/lib/map-broadcast-constants";
+import {
+  MAP_BROADCAST_RATE_PER_HOUR,
+  MAP_BROADCAST_RETENTION_HOURS,
+  MAP_MOB_BODY_MAX,
+  MAP_MOB_RADIUS_MI,
+  MAP_MOB_RATE_PER_HOUR,
+} from "@/lib/map-broadcast-constants";
 import { MAP_NEARBY_RADIUS_MI } from "@/lib/map-nearby-constants";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -20,6 +26,10 @@ export type BroadcastMessageRow = {
   createdAt: string;
   /** When true, listed for all viewers (admin-only to create). */
   isGlobal: boolean;
+  /** Man overboard: listed within {@link MAP_MOB_RADIUS_MI} mi for all signed-in map viewers. */
+  isMob: boolean;
+  /** Sender phone for MOB tel: link (digits / E.164). */
+  mobPhone: string | null;
 };
 
 let queue: Promise<unknown> = Promise.resolve();
@@ -88,8 +98,16 @@ function normaliseRow(row: unknown): BroadcastMessageRow | null {
         : "";
 
   const isGlobal = r.isGlobal === true;
+  const isMob = r.isMob === true || (r as { is_mob?: unknown }).is_mob === true;
+  const mp =
+    typeof r.mobPhone === "string"
+      ? r.mobPhone
+      : typeof (r as { mob_phone?: unknown }).mob_phone === "string"
+        ? (r as { mob_phone: string }).mob_phone
+        : "";
+  const mobPhone = mp.trim().slice(0, 40) || null;
   if (!id || !authorUid || !Number.isFinite(lat) || !Number.isFinite(lng) || !createdAt) return null;
-  return { id, authorUid, lat, lng, body, createdAt, isGlobal };
+  return { id, authorUid, lat, lng, body, createdAt, isGlobal, isMob, mobPhone };
 }
 
 function rowToPublic(
@@ -105,6 +123,8 @@ function rowToPublic(
     body: m.body,
     createdAt: m.createdAt,
     isGlobal: m.isGlobal,
+    isMob: m.isMob,
+    mobPhone: m.mobPhone,
     isMine: viewerUid != null && m.authorUid === viewerUid,
     canDelete: viewerIsAdmin || (viewerUid != null && m.authorUid === viewerUid),
   };
@@ -119,6 +139,8 @@ export type BroadcastMessagePublic = {
   body: string;
   createdAt: string;
   isGlobal: boolean;
+  isMob: boolean;
+  mobPhone: string | null;
   isMine: boolean;
   canDelete: boolean;
 };
@@ -131,7 +153,7 @@ async function readRawUnified(now: Date): Promise<BroadcastMessageRow[]> {
     await sb.from("map_broadcasts").delete().lt("created_at", cIso);
     const { data, error } = await sb
       .from("map_broadcasts")
-      .select("id, author_uid, lat, lng, body, created_at, is_global")
+      .select("id, author_uid, lat, lng, body, created_at, is_global, is_mob, mob_phone")
       .order("created_at", { ascending: false })
       .limit(1000);
     if (error) throw new Error(error.message);
@@ -162,8 +184,11 @@ function dbRowToInternal(r: Record<string, unknown>): BroadcastMessageRow | null
   const lat = typeof r.lat === "number" ? r.lat : Number(r.lat);
   const lng = typeof r.lng === "number" ? r.lng : Number(r.lng);
   const isGlobal = r.is_global === true;
+  const isMob = r.is_mob === true;
+  const mobRaw = typeof r.mob_phone === "string" ? r.mob_phone.trim().slice(0, 40) : "";
+  const mobPhone = mobRaw.length > 0 ? mobRaw : null;
   if (!id || !authorUid || !createdAt || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  return { id, authorUid, lat, lng, body, createdAt, isGlobal };
+  return { id, authorUid, lat, lng, body, createdAt, isGlobal, isMob, mobPhone };
 }
 
 export async function listBroadcastsNear(
@@ -179,7 +204,13 @@ export async function listBroadcastsNear(
     const maxMi = radiusMi();
     const out: BroadcastMessagePublic[] = [];
     for (const m of raw) {
-      if (!m.isGlobal && distanceMiles(lat, lng, m.lat, m.lng) > maxMi) continue;
+      if (m.isGlobal) {
+        out.push(rowToPublic(m, viewerUid, viewerIsAdmin));
+        continue;
+      }
+      const d = distanceMiles(lat, lng, m.lat, m.lng);
+      const limitMi = m.isMob ? MAP_MOB_RADIUS_MI : maxMi;
+      if (d > limitMi) continue;
       out.push(rowToPublic(m, viewerUid, viewerIsAdmin));
     }
     out.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -242,6 +273,88 @@ export async function appendBroadcast(
       body,
       createdAt: now.toISOString(),
       isGlobal,
+      isMob: false,
+      mobPhone: null,
+    };
+    const next = [...list, row];
+    if (canUseKv()) await kvSetJson(KV_KEY, next);
+    else writeRawFile(next);
+    return { ok: true, id: row.id };
+  });
+}
+
+export async function appendMobBroadcast(
+  authorUid: string,
+  lat: number,
+  lng: number,
+  body: string,
+  mobPhone: string | null,
+  now = new Date(),
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const text = body.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim().slice(0, MAP_MOB_BODY_MAX);
+  if (text.length < 1) return { ok: false, error: "Message cannot be empty." };
+
+  return enqueue(async () => {
+    const hourAgo = now.getTime() - 60 * 60 * 1000;
+    const hourAgoIso = new Date(hourAgo).toISOString();
+
+    if (isSupabaseConfigured()) {
+      const sb = supabaseAdmin();
+      const cIso = cutoffIso(now);
+      await sb.from("map_broadcasts").delete().lt("created_at", cIso);
+
+      const { count, error: cErr } = await sb
+        .from("map_broadcasts")
+        .select("id", { count: "exact", head: true })
+        .eq("author_uid", authorUid)
+        .eq("is_mob", true)
+        .gte("created_at", hourAgoIso);
+      if (cErr) return { ok: false, error: cErr.message };
+      if ((count ?? 0) >= MAP_MOB_RATE_PER_HOUR) {
+        return { ok: false, error: "MOB alert rate limit: try again in a little while." };
+      }
+
+      const phoneVal = mobPhone && mobPhone.trim() ? mobPhone.trim().slice(0, 40) : null;
+      const { data, error } = await sb
+        .from("map_broadcasts")
+        .insert({
+          author_uid: authorUid,
+          lat,
+          lng,
+          body: text,
+          is_global: false,
+          is_mob: true,
+          mob_phone: phoneVal,
+        })
+        .select("id")
+        .single();
+      if (error) return { ok: false, error: error.message };
+      const id = data && typeof (data as { id?: string }).id === "string" ? (data as { id: string }).id : "";
+      if (!id) return { ok: false, error: "Insert failed" };
+      return { ok: true, id };
+    }
+
+    const list = await readRawUnified(now);
+    const recentMob = list.filter(
+      (m) =>
+        m.authorUid === authorUid &&
+        m.isMob &&
+        new Date(m.createdAt).getTime() >= hourAgo,
+    );
+    if (recentMob.length >= MAP_MOB_RATE_PER_HOUR) {
+      return { ok: false, error: "MOB alert rate limit: try again in a little while." };
+    }
+
+    const row: BroadcastMessageRow = {
+      id: randomUUID(),
+      authorUid,
+      lat,
+      lng,
+      body: text,
+      createdAt: now.toISOString(),
+      isGlobal: false,
+      isMob: true,
+      mobPhone: mobPhone && mobPhone.trim() ? mobPhone.trim().slice(0, 40) : null,
     };
     const next = [...list, row];
     if (canUseKv()) await kvSetJson(KV_KEY, next);
