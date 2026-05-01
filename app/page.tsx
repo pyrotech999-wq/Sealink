@@ -4,6 +4,7 @@ import { HomeLocationMapLoader } from "@/components/home/HomeLocationMapLoader";
 import { SeaStateSummaryBox } from "@/components/home/SeaStateSummaryBox";
 import { HomeMainCtas } from "@/components/HomeMainCtas";
 import { HomeMarinaBookingCta } from "@/components/home/HomeMarinaBookingCta";
+import { SeaLinkBrandFooter } from "@/components/SeaLinkBrandFooter";
 import { ShareAppLink } from "@/components/home/ShareAppLink";
 import { DEMO_SESSION_COOKIE, DEMO_SESSION_VALUE } from "@/lib/demo-session";
 
@@ -50,6 +51,8 @@ export default async function Home() {
         <ShareAppLink className="mt-8" />
 
         <HomeMarinaBookingCta className="mt-8" />
+
+        <SeaLinkBrandFooter />
       </main>
     </div>
   );

@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { BroadcastAwayToasts } from "@/components/BroadcastAwayToasts";
 import { BroadcastToastProvider } from "@/components/BroadcastToastProvider";
 import { BottomNav } from "@/components/BottomNav";
+import { AppLoadSplash } from "@/components/AppLoadSplash";
 import { SessionDeviceRegistrar } from "@/components/SessionDeviceRegistrar";
 import { TopNav } from "@/components/TopNav";
 import "./globals.css";
@@ -64,6 +65,7 @@ export default function RootLayout({
         style={{ backgroundColor: "#000000" }}
       >
         <BroadcastToastProvider>
+          <AppLoadSplash />
           <SessionDeviceRegistrar />
           <TopNav />
           {children}
