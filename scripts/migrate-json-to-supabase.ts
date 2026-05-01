@@ -2,7 +2,7 @@
  * One-off: copy local `data/*.json` into Supabase (same tables as 001_initial.sql).
  *
  * Prerequisites:
- *   - Run supabase/migrations/001_initial.sql (and 002_ifm_presence.sql for IFM presence rows)
+ *   - Run 001_initial.sql, 002_ifm_presence.sql (IFM map), 003_ifm_friends.sql (IFM friends) as needed
  *   - Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.local
  *
  * Usage:
@@ -97,6 +97,35 @@ type IfmPresenceJsonRow = {
   share: boolean;
 };
 
+type IfmFriendJsonRow = {
+  kind: "email" | "phone";
+  value: string;
+  addedAt: string;
+};
+
+function flattenIfmFriendsFromJson(raw: Record<string, IfmFriendJsonRow[]> | null): {
+  user_uid: string;
+  kind: string;
+  value: string;
+  added_at: string;
+}[] {
+  if (!raw || typeof raw !== "object") return [];
+  const out: { user_uid: string; kind: string; value: string; added_at: string }[] = [];
+  for (const [userUid, list] of Object.entries(raw)) {
+    if (!Array.isArray(list)) continue;
+    for (const r of list) {
+      if (!r || (r.kind !== "email" && r.kind !== "phone") || typeof r.value !== "string") continue;
+      out.push({
+        user_uid: userUid,
+        kind: r.kind,
+        value: r.value,
+        added_at: typeof r.addedAt === "string" ? r.addedAt : new Date().toISOString(),
+      });
+    }
+  }
+  return out;
+}
+
 function readJson<T>(file: string): T | null {
   const p = path.join(process.cwd(), "data", file);
   if (!existsSync(p)) {
@@ -132,6 +161,8 @@ async function main() {
   const paypalRows = paypalRaw ? Object.values(paypalRaw) : [];
   const ifmPresenceRaw = readJson<IfmPresenceJsonRow[]>("ifm-presence.json");
   const ifmPresence = Array.isArray(ifmPresenceRaw) ? ifmPresenceRaw : [];
+  const ifmFriendsRaw = readJson<Record<string, IfmFriendJsonRow[]>>("ifm-friends.json");
+  const ifmFriendRows = flattenIfmFriendsFromJson(ifmFriendsRaw);
 
   console.log("SeaLink → Supabase migration");
   console.log({
@@ -142,6 +173,7 @@ async function main() {
     gear: gear.length,
     paypalSubscriptions: paypalRows.length,
     ifmPresence: ifmPresence.length,
+    ifmFriendRows: ifmFriendRows.length,
   });
 
   if (DRY) {
@@ -296,6 +328,19 @@ async function main() {
       }
     }
     console.log(`[ok] ifm_presence: ${ifmPresence.length}`);
+  }
+
+  // 7) IFM friends (optional; requires 003_ifm_friends.sql)
+  if (ifmFriendRows.length > 0) {
+    for (const batch of chunk(ifmFriendRows, 50)) {
+      const { error } = await sb.from("ifm_friends").upsert(batch, { onConflict: "user_uid,kind,value" });
+      if (error) {
+        console.error("ifm_friends upsert failed:", error.message);
+        console.error("Did you run supabase/migrations/003_ifm_friends.sql?");
+        process.exit(1);
+      }
+    }
+    console.log(`[ok] ifm_friends: ${ifmFriendRows.length}`);
   }
 
   console.log("\nDone. Profiles were not in JSON — they stay empty until users sign in / update. Local /uploads files are not copied to Storage; image URLs in rows still point at old paths if you used disk uploads.");

@@ -1,9 +1,13 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 import { uidFromEmail } from "@/lib/auth";
+import { canUseKv, kvGetJson, kvSetJson } from "@/lib/kv-json";
 import { normalisePhone } from "@/lib/phone-normalise";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 const DATA_PATH = path.join(process.cwd(), "data", "ifm-friends.json");
+const KV_KEY = "sealink:ifm-friends:v1";
 
 export type IfmFriendRow = {
   kind: "email" | "phone";
@@ -24,7 +28,7 @@ function enqueue<T>(fn: () => Promise<T>): Promise<T> {
   return next;
 }
 
-function readStore(): StoreShape {
+function readStoreFile(): StoreShape {
   try {
     if (!existsSync(DATA_PATH)) return {};
     const raw = readFileSync(DATA_PATH, "utf-8");
@@ -36,9 +40,54 @@ function readStore(): StoreShape {
   }
 }
 
-function writeStore(store: StoreShape): void {
+function writeStoreFile(store: StoreShape): void {
   mkdirSync(path.dirname(DATA_PATH), { recursive: true });
   writeFileSync(DATA_PATH, JSON.stringify(store, null, 2), "utf-8");
+}
+
+function sortFriends(rows: IfmFriendRow[]): IfmFriendRow[] {
+  return rows.slice().sort((a, b) => (a.addedAt < b.addedAt ? 1 : -1));
+}
+
+async function readStoreShape(): Promise<StoreShape> {
+  if (canUseKv()) {
+    const raw = (await kvGetJson<StoreShape>(KV_KEY, {})) ?? {};
+    return raw && typeof raw === "object" ? raw : {};
+  }
+  return readStoreFile();
+}
+
+async function writeStoreShape(store: StoreShape): Promise<void> {
+  if (canUseKv()) await kvSetJson(KV_KEY, store);
+  else writeStoreFile(store);
+}
+
+function rowFromDb(row: { kind: string; value: string; added_at: string }): IfmFriendRow | null {
+  if (row.kind !== "email" && row.kind !== "phone") return null;
+  return { kind: row.kind, value: row.value, addedAt: row.added_at };
+}
+
+/** Loads one user’s friends (no queue — use only inside an `enqueue` callback or standalone). */
+async function fetchFriendsForUser(uid: string): Promise<IfmFriendRow[]> {
+  if (isSupabaseConfigured()) {
+    const sb = supabaseAdmin();
+    const { data, error } = await sb
+      .from("ifm_friends")
+      .select("kind, value, added_at")
+      .eq("user_uid", uid)
+      .order("added_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    const out: IfmFriendRow[] = [];
+    for (const r of data ?? []) {
+      const f = rowFromDb(r as { kind: string; value: string; added_at: string });
+      if (f) out.push(f);
+    }
+    return out;
+  }
+
+  const store = await readStoreShape();
+  const list = Array.isArray(store[uid]) ? store[uid]! : [];
+  return sortFriends(list);
 }
 
 export function friendTargets(rows: IfmFriendRow[]): { uids: string[]; phones: string[] } {
@@ -52,17 +101,15 @@ export function friendTargets(rows: IfmFriendRow[]): { uids: string[]; phones: s
 }
 
 export async function listIfmFriends(uid: string): Promise<IfmFriendRow[]> {
-  return enqueue(async () => {
-    const store = readStore();
-    const list = Array.isArray(store[uid]) ? store[uid]! : [];
-    return list.slice().sort((a, b) => (a.addedAt < b.addedAt ? 1 : -1));
-  });
+  return enqueue(async () => fetchFriendsForUser(uid));
 }
 
-export async function addIfmFriend(uid: string, contact: string): Promise<{ ok: true; friends: IfmFriendRow[] } | { ok: false; error: string; friends: IfmFriendRow[] }> {
+export async function addIfmFriend(
+  uid: string,
+  contact: string,
+): Promise<{ ok: true; friends: IfmFriendRow[] } | { ok: false; error: string; friends: IfmFriendRow[] }> {
   return enqueue(async () => {
-    const store = readStore();
-    const list = Array.isArray(store[uid]) ? store[uid]! : [];
+    const friendsFirst = await fetchFriendsForUser(uid);
 
     const trimmed = contact.trim();
     const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
@@ -74,29 +121,57 @@ export async function addIfmFriend(uid: string, contact: string): Promise<{ ok: 
         ? { kind: "phone", value: phoneNorm, addedAt: new Date().toISOString() }
         : null;
 
-    if (!row) return { ok: false, error: "Enter a valid email or phone number.", friends: list };
+    if (!row) {
+      return { ok: false, error: "Enter a valid email or phone number.", friends: friendsFirst };
+    }
 
     const dedupeKey = `${row.kind}:${row.value}`;
-    const existing = new Set(list.map((r) => `${r.kind}:${r.value}`));
-    if (existing.has(dedupeKey)) return { ok: true, friends: list };
+    const existing = new Set(friendsFirst.map((r) => `${r.kind}:${r.value}`));
+    if (existing.has(dedupeKey)) return { ok: true, friends: friendsFirst };
 
-    if (list.length >= 100) return { ok: false, error: "Friends list limit reached (100).", friends: list };
+    if (friendsFirst.length >= 100) {
+      return { ok: false, error: "Friends list limit reached (100).", friends: friendsFirst };
+    }
 
+    if (isSupabaseConfigured()) {
+      const sb = supabaseAdmin();
+      const { error } = await sb.from("ifm_friends").insert({
+        user_uid: uid,
+        kind: row.kind,
+        value: row.value,
+        added_at: row.addedAt,
+      });
+      if (error) {
+        const code = (error as { code?: string }).code;
+        if (code === "23505") return { ok: true, friends: await fetchFriendsForUser(uid) };
+        throw new Error(error.message);
+      }
+      return { ok: true, friends: await fetchFriendsForUser(uid) };
+    }
+
+    const store = await readStoreShape();
+    const list = Array.isArray(store[uid]) ? store[uid]!.slice() : [];
     list.push(row);
     store[uid] = list;
-    writeStore(store);
-    return { ok: true, friends: list };
+    await writeStoreShape(store);
+    return { ok: true, friends: sortFriends(list) };
   });
 }
 
 export async function removeIfmFriend(uid: string, kind: "email" | "phone", value: string): Promise<IfmFriendRow[]> {
   return enqueue(async () => {
-    const store = readStore();
+    if (isSupabaseConfigured()) {
+      const sb = supabaseAdmin();
+      const { error } = await sb.from("ifm_friends").delete().match({ user_uid: uid, kind, value });
+      if (error) throw new Error(error.message);
+      return fetchFriendsForUser(uid);
+    }
+
+    const store = await readStoreShape();
     const list = Array.isArray(store[uid]) ? store[uid]! : [];
     const next = list.filter((r) => !(r.kind === kind && r.value === value));
     store[uid] = next;
-    writeStore(store);
-    return next;
+    await writeStoreShape(store);
+    return sortFriends(next);
   });
 }
-
