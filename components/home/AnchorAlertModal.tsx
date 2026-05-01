@@ -51,6 +51,7 @@ export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, deviceId
   const [angleDeg, setAngleDeg] = useState<string>(String(config.angleDeg ?? 360));
   const [deviceLabel, setDeviceLabel] = useState(() => (typeof window !== "undefined" ? getDeviceName() : ""));
   const [devices, setDevices] = useState<{ deviceId: string; name: string; updatedAt: string; lastFixAt: string | null }[]>([]);
+  const [devicesLoadError, setDevicesLoadError] = useState<string | null>(null);
   const [monitorDeviceId, setMonitorDeviceId] = useState<string>(config.monitorDeviceId || "this");
   const [alertMode, setAlertMode] = useState<"this" | "other" | "both">("both");
   const [alertOtherId, setAlertOtherId] = useState<string>("");
@@ -67,13 +68,23 @@ export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, deviceId
   useEffect(() => {
     if (!open) return;
     void (async () => {
+      setDevicesLoadError(null);
       try {
         await registerSessionDevice(deviceId);
         const r = await fetch("/api/anchor/devices", { credentials: "same-origin", cache: "no-store" });
-        const d = (await r.json()) as { devices?: { deviceId: string; name: string; updatedAt: string; lastFixAt: string | null }[] };
+        const d = (await r.json()) as {
+          devices?: { deviceId: string; name: string; updatedAt: string; lastFixAt: string | null }[];
+          error?: string;
+        };
+        if (!r.ok) {
+          setDevices([]);
+          setDevicesLoadError(d.error === "Sign-in required" ? "Sign-in required — refresh the page and try again." : "Could not load devices.");
+          return;
+        }
         setDevices(Array.isArray(d.devices) ? d.devices : []);
       } catch {
         setDevices([]);
+        setDevicesLoadError("Network error loading devices.");
       }
     })();
   }, [open, deviceId]);
@@ -125,6 +136,23 @@ export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, deviceId
         {hint ? (
           <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
             {hint}
+          </p>
+        ) : null}
+
+        {devicesLoadError ? (
+          <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100">
+            {devicesLoadError}
+          </p>
+        ) : null}
+
+        {!devicesLoadError && devices.length === 1 ? (
+          <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+            Only one device is registered for this session on the server. If you already see two rows in Supabase{" "}
+            <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/50">account_devices</code>, production may be
+            running old code — merge the latest changes to <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/50">main</code>{" "}
+            and redeploy, then hard-refresh this page (Shift+reload). In DevTools → Network, open the{" "}
+            <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/50">anchor/devices</code> request and confirm the JSON
+            lists two <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/50">deviceId</code> values.
           </p>
         ) : null}
 

@@ -39,9 +39,17 @@ async function listAnchorDevicesForUi(uid: string): Promise<AnchorDeviceRow[]> {
 
 export async function GET() {
   const u = await requireAuthUser().catch(() => null);
-  if (!u) return NextResponse.json({ error: "Sign-in required" }, { status: 401 });
+  if (!u) {
+    return NextResponse.json(
+      { error: "Sign-in required" },
+      { status: 401, headers: { "Cache-Control": "no-store" } },
+    );
+  }
   const devices = await listAnchorDevicesForUi(u.uid);
-  return NextResponse.json({ devices });
+  return NextResponse.json(
+    { devices },
+    { headers: { "Cache-Control": "no-store, must-revalidate" } },
+  );
 }
 
 type Body = { deviceId?: unknown; name?: unknown; lat?: unknown; lng?: unknown };
