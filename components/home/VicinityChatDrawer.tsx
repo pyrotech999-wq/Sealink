@@ -20,8 +20,10 @@ type Props = {
 
 export function VicinityChatDrawer({ open, onClose, peerUid, contextLine }: Props) {
   const [messages, setMessages] = useState<Msg[]>([]);
+  const [threadId, setThreadId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [draft, setDraft] = useState("");
   const [err, setErr] = useState<string | null>(null);
 
@@ -31,23 +33,30 @@ export function VicinityChatDrawer({ open, onClose, peerUid, contextLine }: Prop
     setErr(null);
     try {
       const r = await fetch(`/api/vicinity-chat/messages?peerUid=${encodeURIComponent(peerUid)}`);
-      const d = (await r.json()) as { messages?: Msg[]; error?: string };
+      const d = (await r.json()) as { threadId?: string; messages?: Msg[]; error?: string };
       if (!r.ok) {
         setErr(d.error ?? "Could not load chat");
         setMessages([]);
+        setThreadId(null);
         return;
       }
       setMessages(Array.isArray(d.messages) ? d.messages : []);
+      setThreadId(typeof d.threadId === "string" && d.threadId ? d.threadId : null);
     } catch {
       setErr("Network error");
       setMessages([]);
+      setThreadId(null);
     } finally {
       setLoading(false);
     }
   }, [open, peerUid]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setThreadId(null);
+      setMessages([]);
+      return;
+    }
     void load();
     const id = window.setInterval(() => void load(), 14_000);
     return () => window.clearInterval(id);
@@ -79,6 +88,36 @@ export function VicinityChatDrawer({ open, onClose, peerUid, contextLine }: Prop
     }
   };
 
+  const onDeleteConversation = async () => {
+    if (!threadId) return;
+    if (
+      !window.confirm(
+        "Delete this entire conversation? All messages are removed for you and the other boater.",
+      )
+    ) {
+      return;
+    }
+    setDeleting(true);
+    setErr(null);
+    try {
+      const r = await fetch("/api/vicinity-chat/thread", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ threadId }),
+      });
+      const d = (await r.json()) as { error?: string };
+      if (!r.ok) {
+        setErr(d.error ?? "Could not delete");
+        return;
+      }
+      onClose();
+    } catch {
+      setErr("Network error");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   if (!open) return null;
 
   return (
@@ -105,13 +144,23 @@ export function VicinityChatDrawer({ open, onClose, peerUid, contextLine }: Prop
               <p className="mt-1 line-clamp-2 text-[11px] text-zinc-600 dark:text-zinc-300">Re: {contextLine}</p>
             ) : null}
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="shrink-0 rounded-lg border border-zinc-200 px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-900"
-          >
-            Close
-          </button>
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-zinc-200 px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-900"
+            >
+              Close
+            </button>
+            <button
+              type="button"
+              disabled={!threadId || deleting}
+              onClick={() => void onDeleteConversation()}
+              className="rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs font-semibold text-red-800 hover:bg-red-100 disabled:opacity-50 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950/55"
+            >
+              {deleting ? "Deleting…" : "Delete chat"}
+            </button>
+          </div>
         </div>
 
         <div className="min-h-[220px] flex-1 space-y-2 overflow-y-auto px-3 py-3">

@@ -312,3 +312,42 @@ export async function listVicinityInbox(viewerUid: string, limit = 40): Promise<
     return items.slice(0, limit);
   });
 }
+
+export async function deleteVicinityThread(
+  viewerUid: string,
+  threadId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const tid = threadId.trim();
+  if (!tid) return { ok: false, error: "Thread id required." };
+
+  return enqueue(async () => {
+    if (isSupabaseConfigured()) {
+      const sb = supabaseAdmin();
+      const { data: row, error: selErr } = await sb
+        .from("vicinity_dm_threads")
+        .select("user_a, user_b")
+        .eq("id", tid)
+        .maybeSingle();
+      if (selErr) return { ok: false, error: selErr.message };
+      const r = row as { user_a?: string; user_b?: string } | null;
+      if (!r?.user_a || !r?.user_b) return { ok: false, error: "Thread not found." };
+      if (r.user_a !== viewerUid && r.user_b !== viewerUid) {
+        return { ok: false, error: "Not allowed." };
+      }
+      const { error: delErr } = await sb.from("vicinity_dm_threads").delete().eq("id", tid);
+      if (delErr) return { ok: false, error: delErr.message };
+      return { ok: true };
+    }
+
+    const payload = await readPayload();
+    const thread = payload.threads.find((t) => t.id === tid);
+    if (!thread) return { ok: false, error: "Thread not found." };
+    if (thread.userA !== viewerUid && thread.userB !== viewerUid) {
+      return { ok: false, error: "Not allowed." };
+    }
+    payload.threads = payload.threads.filter((t) => t.id !== tid);
+    payload.messages = payload.messages.filter((m) => m.threadId !== tid);
+    await writePayload(payload);
+    return { ok: true };
+  });
+}

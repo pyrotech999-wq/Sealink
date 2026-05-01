@@ -142,6 +142,7 @@ export function MapBroadcastPanel({
   const [chatContext, setChatContext] = useState<string | undefined>(undefined);
   const [broadcastAllAreas, setBroadcastAllAreas] = useState(false);
   const [inboxRows, setInboxRows] = useState<VicinityInboxRowApi[]>([]);
+  const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null);
 
   const coordsRef = useRef({ readLat, readLng });
   coordsRef.current = { readLat, readLng };
@@ -254,6 +255,41 @@ export function MapBroadcastPanel({
     const id = window.setInterval(() => void fetchInbox(), 55_000);
     return () => window.clearInterval(id);
   }, [signedIn, fetchInbox]);
+
+  const onDeleteDmThread = async (row: VicinityInboxRowApi, ev: React.MouseEvent) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (
+      !window.confirm(
+        "Delete this entire conversation? All messages in the thread are removed for you and the other boater.",
+      )
+    ) {
+      return;
+    }
+    setDeletingThreadId(row.threadId);
+    setErr(null);
+    try {
+      const r = await fetch("/api/vicinity-chat/thread", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ threadId: row.threadId }),
+      });
+      const d = (await r.json()) as { error?: string };
+      if (!r.ok) {
+        setErr(d.error || "Could not delete conversation");
+        return;
+      }
+      if (chatPeerUid === row.peerUid) {
+        setChatPeerUid(null);
+        setChatContext(undefined);
+      }
+      await fetchInbox();
+    } catch {
+      setErr("Network error");
+    } finally {
+      setDeletingThreadId(null);
+    }
+  };
 
   const onSend = async (ev: React.FormEvent) => {
     ev.preventDefault();
@@ -414,21 +450,21 @@ export function MapBroadcastPanel({
           <p className="mt-1 text-[11px] leading-snug text-indigo-900/75 dark:text-indigo-200/80">
             If someone taps <strong className="font-semibold">Reply</strong> on a broadcast, you chat in a private thread.
             There is no email or push — open a thread below or watch for a <strong className="font-semibold">Vicinity message</strong>{" "}
-            alert.
+            alert. <strong className="font-semibold">Delete</strong> removes the whole thread for both people.
           </p>
           {inboxRows.length === 0 ? (
             <p className="mt-2 text-[11px] text-indigo-800/60 dark:text-indigo-300/70">No DM threads yet.</p>
           ) : (
             <ul className="mt-2 max-h-40 space-y-1.5 overflow-y-auto">
               {inboxRows.map((row) => (
-                <li key={row.threadId}>
+                <li key={row.threadId} className="flex gap-1.5">
                   <button
                     type="button"
                     onClick={() => {
                       setChatContext(row.lastBody.trim().split(/\r?\n/)[0]?.slice(0, 120));
                       setChatPeerUid(row.peerUid);
                     }}
-                    className="flex w-full flex-col rounded-md border border-indigo-100 bg-white px-2 py-2 text-left text-xs hover:bg-indigo-50/80 dark:border-indigo-900/35 dark:bg-zinc-900/70 dark:hover:bg-zinc-900"
+                    className="flex min-w-0 flex-1 flex-col rounded-md border border-indigo-100 bg-white px-2 py-2 text-left text-xs hover:bg-indigo-50/80 dark:border-indigo-900/35 dark:bg-zinc-900/70 dark:hover:bg-zinc-900"
                   >
                     <span className="font-mono text-[10px] text-indigo-700/80 dark:text-indigo-300/90">
                       {row.peerUid.length > 14 ? `${row.peerUid.slice(0, 14)}…` : row.peerUid}
@@ -440,6 +476,14 @@ export function MapBroadcastPanel({
                     </span>
                     <span className="mt-0.5 line-clamp-2 text-zinc-800 dark:text-zinc-200">{row.lastBody}</span>
                     <span className="mt-0.5 text-[10px] text-zinc-500 dark:text-zinc-400">{fmtTime(row.lastAt)}</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={deletingThreadId === row.threadId}
+                    onClick={(e) => void onDeleteDmThread(row, e)}
+                    className="shrink-0 self-stretch rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-semibold text-red-800 hover:bg-red-100 disabled:opacity-50 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950/55"
+                  >
+                    {deletingThreadId === row.threadId ? "…" : "Delete"}
                   </button>
                 </li>
               ))}
