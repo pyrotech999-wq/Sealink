@@ -10,7 +10,7 @@ export function TopNav() {
 
   return (
     <nav
-      className="sticky top-0 z-40 border-b border-zinc-200 bg-white/90 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90"
+      className="sticky top-0 z-40 border-b border-zinc-800 bg-zinc-950/90 backdrop-blur"
       aria-label="Main"
     >
       <div className="mx-auto flex max-w-5xl items-center gap-2 px-2 py-1 sm:px-6">
@@ -28,7 +28,7 @@ export function TopNav() {
                   className={`inline-flex h-9 items-center justify-center rounded-lg px-3 text-sm font-semibold transition-colors ${
                     active
                       ? "bg-green-600 text-white"
-                      : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-900 dark:hover:text-white"
+                      : "text-zinc-300 hover:bg-zinc-900 hover:text-white"
                   }`}
                 >
                   {item.short}

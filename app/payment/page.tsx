@@ -14,7 +14,7 @@ export default async function PaymentPage({ searchParams }: Props) {
   const showCanceled = canceled === "1";
 
   return (
-    <div className="flex flex-1 flex-col bg-zinc-50 dark:bg-zinc-950">
+    <div className="flex flex-1 flex-col bg-black">
       <PaymentClient showCanceled={showCanceled} />
     </div>
   );

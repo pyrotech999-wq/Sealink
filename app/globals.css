@@ -8,7 +8,8 @@ html {
 }
 
 :root {
-  --background: #0a0a0a;
+  /* Match always-on black shell (layout + page wrappers); avoids light flash if a page omits dark: pair. */
+  --background: #000000;
   --foreground: #ededed;
 }
 

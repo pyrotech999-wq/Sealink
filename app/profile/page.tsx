@@ -17,7 +17,7 @@ export default async function ProfilePage() {
   const accountEmail = signedIn ? normaliseEmail(raw) : "";
 
   return (
-    <div className="flex flex-1 flex-col bg-zinc-50 dark:bg-black">
+    <div className="flex flex-1 flex-col bg-black">
       <main className="mx-auto flex w-full max-w-lg flex-1 flex-col px-4 py-8 sm:px-6 sm:py-10">
         <Link
           href="/"

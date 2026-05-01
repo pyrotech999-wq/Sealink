@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 export default function VesselsPage() {
   return (
-    <div className="flex flex-1 flex-col bg-zinc-50 dark:bg-zinc-950">
+    <div className="flex flex-1 flex-col bg-black">
       <VesselClassifiedsClient />
     </div>
   );

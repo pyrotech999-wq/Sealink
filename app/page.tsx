@@ -14,14 +14,14 @@ export default async function Home() {
   const signedIn = jar.get(DEMO_SESSION_COOKIE)?.value === DEMO_SESSION_VALUE;
 
   return (
-    <div className="flex flex-1 flex-col bg-zinc-50 dark:bg-black">
+    <div className="flex flex-1 flex-col bg-black">
       <HomeHeader signedIn={signedIn} />
 
       <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col px-4 py-8 sm:px-6 sm:py-10">
-        <h1 className="text-3xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+        <h1 className="text-3xl font-semibold tracking-tight text-zinc-50">
           {signedIn ? "Welcome back" : "Stay linked"}
         </h1>
-        <p className="mt-3 max-w-2xl text-base leading-7 text-zinc-600 dark:text-zinc-400">
+        <p className="mt-3 max-w-2xl text-base leading-7 text-zinc-400">
           {signedIn ? (
             <>
               You’re on your SeaLink home screen. Use the map below to share location, set anchor alerts, and browse
@@ -36,7 +36,7 @@ export default async function Home() {
           )}
         </p>
         {signedIn ? (
-          <p className="mt-4 text-sm text-green-800 dark:text-green-300">
+          <p className="mt-4 text-sm text-green-300">
             You&apos;re signed in. Posting adverts and broadcasts is tied to your account email.
           </p>
         ) : null}

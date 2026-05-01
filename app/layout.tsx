@@ -56,9 +56,13 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
+      className={`${geistSans.variable} ${geistMono.variable} h-full bg-black antialiased dark`}
+      style={{ backgroundColor: "#000000" }}
     >
-      <body className="flex min-h-full flex-col pb-[calc(4.25rem+env(safe-area-inset-bottom))]">
+      <body
+        className="flex min-h-full flex-col bg-black pb-[calc(4.25rem+env(safe-area-inset-bottom))] text-zinc-100"
+        style={{ backgroundColor: "#000000" }}
+      >
         <BroadcastToastProvider>
           <SessionDeviceRegistrar />
           <TopNav />

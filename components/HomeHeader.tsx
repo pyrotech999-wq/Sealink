@@ -19,9 +19,9 @@ export function HomeHeader({ signedIn }: Props) {
   }
 
   return (
-    <header className="border-b border-zinc-200 bg-white/90 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90">
+    <header className="border-b border-zinc-800 bg-zinc-950/90 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4 sm:px-6">
-        <Link href="/" className="flex items-center gap-2 text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+        <Link href="/" className="flex items-center gap-2 text-sm font-semibold tracking-tight text-zinc-50">
           <span
             aria-hidden
             className="inline-flex size-8 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-emerald-500 shadow-sm"
@@ -41,16 +41,16 @@ export function HomeHeader({ signedIn }: Props) {
         <div className="flex items-center gap-3">
           <Link
             href="/payment"
-            className="text-sm font-medium text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white"
+            className="text-sm font-medium text-zinc-400 hover:text-white"
           >
             Plans
           </Link>
           {signedIn ? (
             <>
-              <span className="hidden text-xs text-zinc-500 sm:inline dark:text-zinc-400">Signed in</span>
+              <span className="hidden text-xs text-zinc-400 sm:inline">Signed in</span>
               <Link
                 href="/profile"
-                className="text-sm font-medium text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white"
+                className="text-sm font-medium text-zinc-300 hover:text-white"
               >
                 Edit profile
               </Link>
@@ -58,7 +58,7 @@ export function HomeHeader({ signedIn }: Props) {
                 type="button"
                 disabled={busy}
                 onClick={() => void signOutDemo()}
-                className="text-sm font-medium text-zinc-700 hover:text-zinc-900 disabled:opacity-50 dark:text-zinc-300 dark:hover:text-white"
+                className="text-sm font-medium text-zinc-300 hover:text-white disabled:opacity-50"
               >
                 {busy ? "…" : "Sign out"}
               </button>
@@ -67,7 +67,7 @@ export function HomeHeader({ signedIn }: Props) {
             <>
               <Link
                 href="/sign-in"
-                className="text-sm font-medium text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white"
+                className="text-sm font-medium text-zinc-300 hover:text-white"
               >
                 Sign in
               </Link>

@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 export default function MarinasPage() {
   return (
-    <div className="flex flex-1 flex-col bg-zinc-50 dark:bg-black">
+    <div className="flex flex-1 flex-col bg-black">
       <MarinaBookingsClient />
     </div>
   );
