@@ -9,7 +9,9 @@
     "lint": "eslint",
     "migrate:supabase": "tsx scripts/migrate-json-to-supabase.ts",
     "migrate:supabase:dry": "tsx scripts/migrate-json-to-supabase.ts --dry-run",
-    "marinas:build-catalog": "tsx scripts/build-marinas-world-json.ts"
+    "marinas:build-catalog": "tsx scripts/build-marinas-world-json.ts",
+    "marinas:import:osm": "tsx scripts/import-marinas-osm.ts",
+    "marinas:import:osm:dry": "tsx scripts/import-marinas-osm.ts --dry-run"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.1",

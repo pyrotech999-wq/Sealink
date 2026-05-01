@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { MARINA_WORLD_CATALOG, marinaCountriesSorted, marinaTelHref, type MarinaListing } from "@/lib/marina-catalog";
+import { MARINA_WORLD_CATALOG, marinaTelHref, type MarinaListing } from "@/lib/marina-catalog";
 import { distanceKm, distanceMiles } from "@/lib/geo-haversine";
 
 function todayIso(): string {
@@ -122,36 +122,63 @@ export function MarinaBookingsClient() {
     };
   }, [refreshRequests]);
 
-  const countries = useMemo(() => marinaCountriesSorted(), []);
+  const [countries, setCountries] = useState<string[]>([]);
+  const [listMarinas, setListMarinas] = useState<MarinaListing[]>([]);
+  const [listLoading, setListLoading] = useState(true);
+  const [listSource, setListSource] = useState<"supabase" | "seed" | null>(null);
 
-  const filtered = useMemo(() => {
-    const q = locationQ.trim().toLowerCase();
-    const len = lengthM.trim() === "" ? null : Number(lengthM);
-    const lenOk = len !== null && !Number.isNaN(len) && len > 0;
+  useEffect(() => {
+    void fetch("/api/marinas/countries", { credentials: "same-origin" })
+      .then((r) => r.json() as Promise<{ countries?: string[] }>)
+      .then((d) => {
+        if (Array.isArray(d.countries)) setCountries(d.countries);
+      })
+      .catch(() => {
+        /* keep empty; select still works */
+      });
+  }, []);
 
-    let list = MARINA_WORLD_CATALOG.filter((m) => {
-      if (countryFilter && m.country !== countryFilter) return false;
-      if (q) {
-        const blob = `${m.name} ${m.harbour} ${m.region} ${m.country}`.toLowerCase();
-        if (!blob.includes(q)) return false;
+  useEffect(() => {
+    const ac = new AbortController();
+    const t = setTimeout(() => {
+      setListLoading(true);
+      const params = new URLSearchParams();
+      if (countryFilter) params.set("country", countryFilter);
+      const qt = locationQ.trim();
+      if (qt) params.set("q", qt);
+      const len = lengthM.trim();
+      if (len !== "") params.set("boatLengthM", len);
+      if (userPos) {
+        params.set("lat", String(userPos.lat));
+        params.set("lng", String(userPos.lng));
+        params.set("radiusMi", String(radiusMi));
       }
-      if (lenOk && len! > m.maxLengthM) return false;
-      return true;
-    });
-
-    if (userPos) {
-      const tagged = list.map((m) => ({
-        m,
-        mi: distanceMiles(userPos.lat, userPos.lng, m.lat, m.lng),
-      }));
-      const within =
-        radiusMi >= 9000 ? tagged : tagged.filter((t) => t.mi <= radiusMi);
-      within.sort((a, b) => a.mi - b.mi);
-      return within.map((t) => t.m);
-    }
-
-    return list;
-  }, [locationQ, lengthM, countryFilter, userPos, radiusMi]);
+      params.set("limit", "250");
+      void fetch(`/api/marinas/list?${params.toString()}`, {
+        signal: ac.signal,
+        credentials: "same-origin",
+      })
+        .then((r) => r.json() as Promise<{ marinas?: MarinaListing[]; source?: string }>)
+        .then((d) => {
+          if (ac.signal.aborted) return;
+          setListMarinas(Array.isArray(d.marinas) ? d.marinas : []);
+          setListSource(d.source === "supabase" ? "supabase" : "seed");
+        })
+        .catch(() => {
+          if (!ac.signal.aborted) {
+            setListMarinas([]);
+            setListSource(null);
+          }
+        })
+        .finally(() => {
+          if (!ac.signal.aborted) setListLoading(false);
+        });
+    }, 300);
+    return () => {
+      ac.abort();
+      clearTimeout(t);
+    };
+  }, [countryFilter, locationQ, lengthM, userPos, radiusMi]);
 
   function requestNearMe() {
     if (!navigator.geolocation) {

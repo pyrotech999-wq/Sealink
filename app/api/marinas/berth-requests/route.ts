@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAuthUser } from "@/lib/auth";
-import { getMarinaById } from "@/lib/marina-catalog";
+import { resolveMarinaById } from "@/lib/marina-resolve";
 import { createMarinaBerthRequest, listMarinaBerthRequestsForUser } from "@/lib/marina-berth-requests-store";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
@@ -75,7 +75,7 @@ export async function POST(req: Request): Promise<Response> {
   const departureRaw = typeof body.departure === "string" ? body.departure : "";
   const noteRaw = typeof body.note === "string" ? body.note : "";
 
-  const marina = getMarinaById(marinaId);
+  const marina = await resolveMarinaById(marinaId);
   if (!marina) return NextResponse.json({ error: "Unknown marina" }, { status: 400 });
 
   const arrival = parseISODateOnly(arrivalRaw);
@@ -93,7 +93,7 @@ export async function POST(req: Request): Promise<Response> {
     if (!Number.isFinite(n) || n <= 0) {
       return NextResponse.json({ error: "Boat length must be a positive number (metres)." }, { status: 400 });
     }
-    if (n > marina.maxLengthM) {
+    if (marina.maxLengthM != null && n > marina.maxLengthM) {
       return NextResponse.json(
         { error: `This marina lists a maximum length of ${marina.maxLengthM} m. Adjust length or pick another harbour.` },
         { status: 400 },
