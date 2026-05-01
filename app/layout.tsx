@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import Script from "next/script";
 import { BroadcastAwayToasts } from "@/components/BroadcastAwayToasts";
 import { BroadcastToastProvider } from "@/components/BroadcastToastProvider";
 import { BottomNav } from "@/components/BottomNav";
@@ -42,6 +41,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
+    /* Narrow viewports use dark UI (see globals + inline script); avoid white browser chrome on first paint. */
+    { media: "(max-width: 767px)", color: "#000000" },
     { media: "(prefers-color-scheme: light)", color: "#ffffff" },
     { media: "(prefers-color-scheme: dark)", color: "#000000" },
   ],
@@ -60,11 +61,16 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        {/* Runs during head parse — before body paints — so Tailwind dark: and html.dark tokens apply on first frame. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              '(function(){function a(){var d=window.matchMedia("(prefers-color-scheme: dark)").matches;var m=window.matchMedia("(max-width: 767px)").matches;document.documentElement.classList.toggle("dark",d||m);}a();try{window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change",a);window.matchMedia("(max-width: 767px)").addEventListener("change",a);}catch(e){window.matchMedia("(prefers-color-scheme: dark)").addListener(a);window.matchMedia("(max-width: 767px)").addListener(a);}})();',
+          }}
+        />
+      </head>
       <body className="flex min-h-full flex-col pb-[calc(4.25rem+env(safe-area-inset-bottom))]">
-        {/* Sets html.dark when system is dark OR viewport is mobile-width; pairs with @custom-variant dark in globals.css. Revert both if unwanted. */}
-        <Script id="sealink-dark-class" strategy="beforeInteractive">
-          {`(function(){function a(){var d=window.matchMedia("(prefers-color-scheme: dark)").matches;var m=window.matchMedia("(max-width: 767px)").matches;document.documentElement.classList.toggle("dark",d||m);}a();try{window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change",a);window.matchMedia("(max-width: 767px)").addEventListener("change",a);}catch(e){window.matchMedia("(prefers-color-scheme: dark)").addListener(a);window.matchMedia("(max-width: 767px)").addListener(a);}})();`}
-        </Script>
         <BroadcastToastProvider>
           <TopNav />
           {children}

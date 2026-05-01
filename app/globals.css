@@ -23,6 +23,12 @@
   }
 }
 
+/* When layout forces .dark on narrow viewports, keep tokens in sync (prefers-color-scheme may still be light). */
+html.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
