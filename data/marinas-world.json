@@ -1,0 +1,2011 @@
+[
+  {
+    "id": "plymouth-qab",
+    "name": "Queen Anne’s Battery",
+    "harbour": "Plymouth",
+    "region": "Devon",
+    "country": "United Kingdom",
+    "lat": 50.3677,
+    "lng": -4.1503,
+    "priceFromEur": 42,
+    "maxLengthM": 18,
+    "depthM": 4.2,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers",
+      "Laundry",
+      "Fuel nearby"
+    ],
+    "description": "Walk to the Barbican and city centre; all-tide access with pilotage notes for larger yachts.",
+    "phone": "+44 1752 206200"
+  },
+  {
+    "id": "falmouth",
+    "name": "Falmouth Marina",
+    "harbour": "Falmouth",
+    "region": "Cornwall",
+    "country": "United Kingdom",
+    "lat": 50.1547,
+    "lng": -5.0651,
+    "priceFromEur": 48,
+    "maxLengthM": 25,
+    "depthM": 5,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers",
+      "Boatyard"
+    ],
+    "description": "Deep-water berths close to Carrick Roads; good base for Scillies hops.",
+    "phone": "+44 1326 211200"
+  },
+  {
+    "id": "la-rochelle",
+    "name": "Port des Minimes",
+    "harbour": "La Rochelle",
+    "region": "Charente-Maritime",
+    "country": "France",
+    "lat": 46.1423,
+    "lng": -1.1678,
+    "priceFromEur": 38,
+    "maxLengthM": 30,
+    "depthM": 6,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers",
+      "Bike hire",
+      "Chandlery"
+    ],
+    "description": "One of Europe’s largest pleasure harbours; short cycle to the old town and Île de Ré.",
+    "phone": "+33 5 46 44 36 86"
+  },
+  {
+    "id": "lisbon",
+    "name": "Doca de Santo Amaro",
+    "harbour": "Lisbon",
+    "region": "Lisboa",
+    "country": "Portugal",
+    "lat": 38.6979,
+    "lng": -9.1722,
+    "priceFromEur": 55,
+    "maxLengthM": 40,
+    "depthM": 7,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "24h security",
+      "Restaurants"
+    ],
+    "description": "City-centre marina beneath 25 de Abril bridge; tidal currents need planning on entry.",
+    "phone": "+351 21 393 9594"
+  },
+  {
+    "id": "porto-montenegro",
+    "name": "Porto Montenegro",
+    "harbour": "Tivat",
+    "region": "Bay of Kotor",
+    "country": "Montenegro",
+    "lat": 42.4325,
+    "lng": 18.6986,
+    "priceFromEur": 85,
+    "maxLengthM": 100,
+    "depthM": 12,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Fuel dock",
+      "Luxury services",
+      "Helipad"
+    ],
+    "description": "Full-service superyacht hub with boutiques and international clearance support.",
+    "phone": "+382 32 661 039"
+  },
+  {
+    "id": "es-ibiza",
+    "name": "Marina Ibiza",
+    "harbour": "Ibiza Town",
+    "region": "Balearic Islands",
+    "country": "Spain",
+    "lat": 38.9088,
+    "lng": 1.4377,
+    "priceFromEur": 72,
+    "maxLengthM": 60,
+    "depthM": 8,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Pool",
+      "Concierge"
+    ],
+    "description": "Upscale berthing steps from Dalt Vila; peak season books early.",
+    "phone": "+34 971 31 99 00"
+  },
+  {
+    "id": "gb-southampton-ov",
+    "name": "Ocean Village Marina",
+    "harbour": "Southampton",
+    "region": "Hampshire",
+    "country": "United Kingdom",
+    "lat": 50.8952,
+    "lng": -1.3878,
+    "priceFromEur": 45,
+    "maxLengthM": 40,
+    "depthM": 6,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Ocean Village Marina (Southampton, United Kingdom) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+44 23 8022 0001"
+  },
+  {
+    "id": "gb-portsmouth-gunwharf",
+    "name": "Gunwharf Quays Marina",
+    "harbour": "Portsmouth",
+    "region": "Hampshire",
+    "country": "United Kingdom",
+    "lat": 50.7967,
+    "lng": -1.1086,
+    "priceFromEur": 45,
+    "maxLengthM": 36,
+    "depthM": 5,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Gunwharf Quays Marina (Portsmouth, United Kingdom) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+44 23 9283 9777"
+  },
+  {
+    "id": "gb-chichester",
+    "name": "Chichester Marina",
+    "harbour": "Chichester",
+    "region": "West Sussex",
+    "country": "United Kingdom",
+    "lat": 50.7986,
+    "lng": -0.9297,
+    "priceFromEur": 45,
+    "maxLengthM": 24,
+    "depthM": 3.5,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Chichester Marina (Chichester, United Kingdom) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+44 1243 512731"
+  },
+  {
+    "id": "gb-brighton",
+    "name": "Brighton Marina",
+    "harbour": "Brighton",
+    "region": "East Sussex",
+    "country": "United Kingdom",
+    "lat": 50.8136,
+    "lng": -0.1044,
+    "priceFromEur": 45,
+    "maxLengthM": 35,
+    "depthM": 5,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Brighton Marina (Brighton, United Kingdom) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+44 1273 819919"
+  },
+  {
+    "id": "gb-dover",
+    "name": "Dover Marina",
+    "harbour": "Dover",
+    "region": "Kent",
+    "country": "United Kingdom",
+    "lat": 51.1258,
+    "lng": 1.3139,
+    "priceFromEur": 45,
+    "maxLengthM": 40,
+    "depthM": 6,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Dover Marina (Dover, United Kingdom) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+44 1304 241 690"
+  },
+  {
+    "id": "gb-liverpool",
+    "name": "Liverpool Marina",
+    "harbour": "Liverpool",
+    "region": "Merseyside",
+    "country": "United Kingdom",
+    "lat": 53.466,
+    "lng": -3.028,
+    "priceFromEur": 45,
+    "maxLengthM": 30,
+    "depthM": 5,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Liverpool Marina (Liverpool, United Kingdom) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+44 151 708 8870"
+  },
+  {
+    "id": "gb-glasgow-kgv",
+    "name": "KGV Dock",
+    "harbour": "Glasgow",
+    "region": "Scotland",
+    "country": "United Kingdom",
+    "lat": 55.8609,
+    "lng": -4.2514,
+    "priceFromEur": 45,
+    "maxLengthM": 28,
+    "depthM": 5,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "KGV Dock (Glasgow, United Kingdom) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+44 141 427 2776"
+  },
+  {
+    "id": "gb-inverness",
+    "name": "Seaport Marina Inverness",
+    "harbour": "Inverness",
+    "region": "Scotland",
+    "country": "United Kingdom",
+    "lat": 57.4778,
+    "lng": -4.2247,
+    "priceFromEur": 45,
+    "maxLengthM": 22,
+    "depthM": 4,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Seaport Marina Inverness (Inverness, United Kingdom) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+44 1463 717000"
+  },
+  {
+    "id": "ie-dun-laoghaire",
+    "name": "Dún Laoghaire Marina",
+    "harbour": "Dún Laoghaire",
+    "region": "Dublin",
+    "country": "Ireland",
+    "lat": 53.2936,
+    "lng": -6.1358,
+    "priceFromEur": 45,
+    "maxLengthM": 30,
+    "depthM": 5,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Dún Laoghaire Marina (Dún Laoghaire, Ireland) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+353 1 280 1811"
+  },
+  {
+    "id": "ie-cork",
+    "name": "Cork City Marina",
+    "harbour": "Cork",
+    "region": "County Cork",
+    "country": "Ireland",
+    "lat": 51.901,
+    "lng": -8.465,
+    "priceFromEur": 45,
+    "maxLengthM": 25,
+    "depthM": 4.5,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Cork City Marina (Cork, Ireland) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+353 21 484 5200"
+  },
+  {
+    "id": "fr-cherbourg",
+    "name": "Port Chantereyne",
+    "harbour": "Cherbourg",
+    "region": "Normandy",
+    "country": "France",
+    "lat": 49.648,
+    "lng": -1.611,
+    "priceFromEur": 45,
+    "maxLengthM": 45,
+    "depthM": 8,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Port Chantereyne (Cherbourg, France) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+33 2 33 93 11 02"
+  },
+  {
+    "id": "fr-brest",
+    "name": "Port du Moulin Blanc",
+    "harbour": "Brest",
+    "region": "Brittany",
+    "country": "France",
+    "lat": 48.385,
+    "lng": -4.49,
+    "priceFromEur": 45,
+    "maxLengthM": 35,
+    "depthM": 6,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Port du Moulin Blanc (Brest, France) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+33 2 98 44 84 39"
+  },
+  {
+    "id": "fr-lorient",
+    "name": "Lorient La Base",
+    "harbour": "Lorient",
+    "region": "Brittany",
+    "country": "France",
+    "lat": 47.726,
+    "lng": -3.37,
+    "priceFromEur": 45,
+    "maxLengthM": 40,
+    "depthM": 7,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Lorient La Base (Lorient, France) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+33 2 97 21 25 25"
+  },
+  {
+    "id": "fr-vannes",
+    "name": "Port de Vannes",
+    "harbour": "Vannes",
+    "region": "Brittany",
+    "country": "France",
+    "lat": 47.655,
+    "lng": -2.76,
+    "priceFromEur": 45,
+    "maxLengthM": 28,
+    "depthM": 5,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Port de Vannes (Vannes, France) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+33 2 97 01 62 30"
+  },
+  {
+    "id": "fr-marseille-vieux",
+    "name": "Vieux-Port Marseille",
+    "harbour": "Marseille",
+    "region": "Provence",
+    "country": "France",
+    "lat": 43.295,
+    "lng": 5.375,
+    "priceFromEur": 45,
+    "maxLengthM": 45,
+    "depthM": 6,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Vieux-Port Marseille (Marseille, France) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+33 4 91 52 08 20"
+  },
+  {
+    "id": "fr-nice",
+    "name": "Port de Nice",
+    "harbour": "Nice",
+    "region": "Côte d'Azur",
+    "country": "France",
+    "lat": 43.695,
+    "lng": 7.285,
+    "priceFromEur": 45,
+    "maxLengthM": 50,
+    "depthM": 8,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Port de Nice (Nice, France) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+33 4 93 217 217"
+  },
+  {
+    "id": "fr-cannes",
+    "name": "Port Pierre Canto",
+    "harbour": "Cannes",
+    "region": "Côte d'Azur",
+    "country": "France",
+    "lat": 43.548,
+    "lng": 7.025,
+    "priceFromEur": 45,
+    "maxLengthM": 60,
+    "depthM": 8,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Port Pierre Canto (Cannes, France) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+33 4 93 39 22 00"
+  },
+  {
+    "id": "fr-arcachon",
+    "name": "Port d'Arcachon",
+    "harbour": "Arcachon",
+    "region": "Nouvelle-Aquitaine",
+    "country": "France",
+    "lat": 44.658,
+    "lng": -1.168,
+    "priceFromEur": 45,
+    "maxLengthM": 22,
+    "depthM": 4,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Port d'Arcachon (Arcachon, France) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+33 5 56 83 11 77"
+  },
+  {
+    "id": "es-barcelona",
+    "name": "Port Vell",
+    "harbour": "Barcelona",
+    "region": "Catalonia",
+    "country": "Spain",
+    "lat": 41.385,
+    "lng": 2.18,
+    "priceFromEur": 45,
+    "maxLengthM": 90,
+    "depthM": 10,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Port Vell (Barcelona, Spain) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+34 932 21 74 17"
+  },
+  {
+    "id": "es-valencia",
+    "name": "Marina Real Juan Carlos I",
+    "harbour": "Valencia",
+    "region": "Valencia",
+    "country": "Spain",
+    "lat": 39.455,
+    "lng": -0.32,
+    "priceFromEur": 45,
+    "maxLengthM": 70,
+    "depthM": 8,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Marina Real Juan Carlos I (Valencia, Spain) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+34 963 67 50 62"
+  },
+  {
+    "id": "es-palma",
+    "name": "Club de Mar Palma",
+    "harbour": "Palma",
+    "region": "Mallorca",
+    "country": "Spain",
+    "lat": 39.565,
+    "lng": 2.628,
+    "priceFromEur": 45,
+    "maxLengthM": 80,
+    "depthM": 9,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Club de Mar Palma (Palma, Spain) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+34 971 72 50 00"
+  },
+  {
+    "id": "es-mahon",
+    "name": "Port de Maó",
+    "harbour": "Mahón",
+    "region": "Menorca",
+    "country": "Spain",
+    "lat": 39.889,
+    "lng": 4.265,
+    "priceFromEur": 45,
+    "maxLengthM": 45,
+    "depthM": 7,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Port de Maó (Mahón, Spain) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+34 971 36 50 00"
+  },
+  {
+    "id": "es-malaga",
+    "name": "Muelle Uno",
+    "harbour": "Málaga",
+    "region": "Andalusia",
+    "country": "Spain",
+    "lat": 36.715,
+    "lng": -4.415,
+    "priceFromEur": 45,
+    "maxLengthM": 40,
+    "depthM": 6,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Muelle Uno (Málaga, Spain) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+34 952 00 77 77"
+  },
+  {
+    "id": "es-las-palmas",
+    "name": "Marina Las Palmas",
+    "harbour": "Las Palmas",
+    "region": "Gran Canaria",
+    "country": "Spain",
+    "lat": 28.144,
+    "lng": -15.42,
+    "priceFromEur": 45,
+    "maxLengthM": 50,
+    "depthM": 8,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Marina Las Palmas (Las Palmas, Spain) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+34 928 24 49 00"
+  },
+  {
+    "id": "pt-porto-leixoes",
+    "name": "Douro Marina",
+    "harbour": "Porto",
+    "region": "Porto",
+    "country": "Portugal",
+    "lat": 41.175,
+    "lng": -8.69,
+    "priceFromEur": 45,
+    "maxLengthM": 25,
+    "depthM": 5,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Douro Marina (Porto, Portugal) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+351 22 900 1000"
+  },
+  {
+    "id": "pt-lagos",
+    "name": "Marina de Lagos",
+    "harbour": "Lagos",
+    "region": "Algarve",
+    "country": "Portugal",
+    "lat": 37.105,
+    "lng": -8.675,
+    "priceFromEur": 45,
+    "maxLengthM": 30,
+    "depthM": 5,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Marina de Lagos (Lagos, Portugal) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+351 282 770 200"
+  },
+  {
+    "id": "pt-cascais",
+    "name": "Cascais Marina",
+    "harbour": "Cascais",
+    "region": "Lisboa",
+    "country": "Portugal",
+    "lat": 38.697,
+    "lng": -9.42,
+    "priceFromEur": 45,
+    "maxLengthM": 35,
+    "depthM": 6,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Cascais Marina (Cascais, Portugal) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+351 214 824 000"
+  },
+  {
+    "id": "it-genoa",
+    "name": "Marina Molo Vecchio",
+    "harbour": "Genoa",
+    "region": "Liguria",
+    "country": "Italy",
+    "lat": 44.405,
+    "lng": 8.915,
+    "priceFromEur": 45,
+    "maxLengthM": 70,
+    "depthM": 9,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Marina Molo Vecchio (Genoa, Italy) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+39 010 25 35 181"
+  },
+  {
+    "id": "it-civitavecchia",
+    "name": "Porto di Civitavecchia",
+    "harbour": "Civitavecchia",
+    "region": "Lazio",
+    "country": "Italy",
+    "lat": 42.095,
+    "lng": 11.795,
+    "priceFromEur": 45,
+    "maxLengthM": 50,
+    "depthM": 8,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Porto di Civitavecchia (Civitavecchia, Italy) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+39 0766 22 91"
+  },
+  {
+    "id": "it-naples",
+    "name": "Marina Molo Luise",
+    "harbour": "Naples",
+    "region": "Campania",
+    "country": "Italy",
+    "lat": 40.835,
+    "lng": 14.265,
+    "priceFromEur": 45,
+    "maxLengthM": 45,
+    "depthM": 7,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Marina Molo Luise (Naples, Italy) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+39 081 552 0767"
+  },
+  {
+    "id": "it-venice",
+    "name": "Marina Venezia",
+    "harbour": "Venice",
+    "region": "Veneto",
+    "country": "Italy",
+    "lat": 45.435,
+    "lng": 12.335,
+    "priceFromEur": 45,
+    "maxLengthM": 35,
+    "depthM": 6,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Marina Venezia (Venice, Italy) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+39 041 531 3111"
+  },
+  {
+    "id": "it-olbia",
+    "name": "Marina di Olbia",
+    "harbour": "Olbia",
+    "region": "Sardinia",
+    "country": "Italy",
+    "lat": 40.915,
+    "lng": 9.515,
+    "priceFromEur": 45,
+    "maxLengthM": 55,
+    "depthM": 8,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Marina di Olbia (Olbia, Italy) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+39 0789 19 345"
+  },
+  {
+    "id": "it-taormina",
+    "name": "Porto di Giardini Naxos",
+    "harbour": "Giardini Naxos",
+    "region": "Sicily",
+    "country": "Italy",
+    "lat": 37.825,
+    "lng": 15.275,
+    "priceFromEur": 45,
+    "maxLengthM": 30,
+    "depthM": 6,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Porto di Giardini Naxos (Giardini Naxos, Italy) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+39 0942 51 211"
+  },
+  {
+    "id": "gr-athens",
+    "name": "Alimos Marina",
+    "harbour": "Athens",
+    "region": "Attica",
+    "country": "Greece",
+    "lat": 37.905,
+    "lng": 23.71,
+    "priceFromEur": 45,
+    "maxLengthM": 50,
+    "depthM": 7,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Alimos Marina (Athens, Greece) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+30 210 98 80 970"
+  },
+  {
+    "id": "gr-corfu",
+    "name": "Mandraki Marina",
+    "harbour": "Corfu Town",
+    "region": "Ionian Islands",
+    "country": "Greece",
+    "lat": 39.625,
+    "lng": 19.915,
+    "priceFromEur": 45,
+    "maxLengthM": 40,
+    "depthM": 6,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Mandraki Marina (Corfu Town, Greece) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+30 26610 39420"
+  },
+  {
+    "id": "gr-rhodes",
+    "name": "Mandraki Harbour",
+    "harbour": "Rhodes Town",
+    "region": "Dodecanese",
+    "country": "Greece",
+    "lat": 36.45,
+    "lng": 28.225,
+    "priceFromEur": 45,
+    "maxLengthM": 45,
+    "depthM": 7,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Mandraki Harbour (Rhodes Town, Greece) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+30 22410 27623"
+  },
+  {
+    "id": "gr-mykonos",
+    "name": "Mykonos New Port",
+    "harbour": "Mykonos",
+    "region": "Cyclades",
+    "country": "Greece",
+    "lat": 37.45,
+    "lng": 25.325,
+    "priceFromEur": 45,
+    "maxLengthM": 35,
+    "depthM": 6,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Mykonos New Port (Mykonos, Greece) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+30 22890 22218"
+  },
+  {
+    "id": "cy-limassol",
+    "name": "Limassol Marina",
+    "harbour": "Limassol",
+    "region": "Limassol",
+    "country": "Cyprus",
+    "lat": 34.685,
+    "lng": 33.045,
+    "priceFromEur": 45,
+    "maxLengthM": 60,
+    "depthM": 8,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Limassol Marina (Limassol, Cyprus) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+357 25 020 020"
+  },
+  {
+    "id": "hr-dubrovnik",
+    "name": "ACI Marina Dubrovnik",
+    "harbour": "Dubrovnik",
+    "region": "Dubrovnik-Neretva",
+    "country": "Croatia",
+    "lat": 42.67,
+    "lng": 18.085,
+    "priceFromEur": 45,
+    "maxLengthM": 40,
+    "depthM": 6,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "ACI Marina Dubrovnik (Dubrovnik, Croatia) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+385 20 455 020"
+  },
+  {
+    "id": "hr-split",
+    "name": "ACI Marina Split",
+    "harbour": "Split",
+    "region": "Split-Dalmatia",
+    "country": "Croatia",
+    "lat": 43.505,
+    "lng": 16.435,
+    "priceFromEur": 45,
+    "maxLengthM": 45,
+    "depthM": 7,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "ACI Marina Split (Split, Croatia) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+385 21 398 127"
+  },
+  {
+    "id": "hr-hvar",
+    "name": "Hvar Town Harbour",
+    "harbour": "Hvar",
+    "region": "Split-Dalmatia",
+    "country": "Croatia",
+    "lat": 43.17,
+    "lng": 16.44,
+    "priceFromEur": 45,
+    "maxLengthM": 35,
+    "depthM": 6,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Hvar Town Harbour (Hvar, Croatia) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+385 21 741 007"
+  },
+  {
+    "id": "hr-zadar",
+    "name": "Marina Zadar",
+    "harbour": "Zadar",
+    "region": "Zadar",
+    "country": "Croatia",
+    "lat": 44.115,
+    "lng": 15.235,
+    "priceFromEur": 45,
+    "maxLengthM": 40,
+    "depthM": 6,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Marina Zadar (Zadar, Croatia) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+385 23 333 800"
+  },
+  {
+    "id": "si-piran",
+    "name": "Marina Piran",
+    "harbour": "Piran",
+    "region": "Slovenian Istria",
+    "country": "Slovenia",
+    "lat": 45.525,
+    "lng": 13.57,
+    "priceFromEur": 45,
+    "maxLengthM": 22,
+    "depthM": 4,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Marina Piran (Piran, Slovenia) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+386 5 673 4600"
+  },
+  {
+    "id": "nl-ijmuiden",
+    "name": "IJmuiden Marina",
+    "harbour": "IJmuiden",
+    "region": "North Holland",
+    "country": "Netherlands",
+    "lat": 52.465,
+    "lng": 4.565,
+    "priceFromEur": 45,
+    "maxLengthM": 28,
+    "depthM": 5,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "IJmuiden Marina (IJmuiden, Netherlands) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+31 255 51 22 88"
+  },
+  {
+    "id": "nl-amsterdam",
+    "name": "Sixhaven Marina",
+    "harbour": "Amsterdam",
+    "region": "North Holland",
+    "country": "Netherlands",
+    "lat": 52.385,
+    "lng": 4.905,
+    "priceFromEur": 45,
+    "maxLengthM": 24,
+    "depthM": 4,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Sixhaven Marina (Amsterdam, Netherlands) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+31 20 636 33 00"
+  },
+  {
+    "id": "de-hamburg",
+    "name": "Hamburg City Sporthafen",
+    "harbour": "Hamburg",
+    "region": "Hamburg",
+    "country": "Germany",
+    "lat": 53.545,
+    "lng": 9.965,
+    "priceFromEur": 45,
+    "maxLengthM": 30,
+    "depthM": 5,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Hamburg City Sporthafen (Hamburg, Germany) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+49 40 361 868 0"
+  },
+  {
+    "id": "de-kiel",
+    "name": "Olympiazentrum Kiel",
+    "harbour": "Kiel",
+    "region": "Schleswig-Holstein",
+    "country": "Germany",
+    "lat": 54.325,
+    "lng": 10.145,
+    "priceFromEur": 45,
+    "maxLengthM": 35,
+    "depthM": 6,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Olympiazentrum Kiel (Kiel, Germany) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+49 431 982 020"
+  },
+  {
+    "id": "dk-copenhagen",
+    "name": "Langelinie Marina",
+    "harbour": "Copenhagen",
+    "region": "Capital Region",
+    "country": "Denmark",
+    "lat": 55.695,
+    "lng": 12.595,
+    "priceFromEur": 45,
+    "maxLengthM": 32,
+    "depthM": 5,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Langelinie Marina (Copenhagen, Denmark) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+45 33 13 10 50"
+  },
+  {
+    "id": "se-stockholm",
+    "name": "Wasahamnen",
+    "harbour": "Stockholm",
+    "region": "Stockholm County",
+    "country": "Sweden",
+    "lat": 59.32,
+    "lng": 18.095,
+    "priceFromEur": 45,
+    "maxLengthM": 28,
+    "depthM": 5,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Wasahamnen (Stockholm, Sweden) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+46 8 120 058 81"
+  },
+  {
+    "id": "no-bergen",
+    "name": "Bergen Guest Marina",
+    "harbour": "Bergen",
+    "region": "Vestland",
+    "country": "Norway",
+    "lat": 60.395,
+    "lng": 5.315,
+    "priceFromEur": 45,
+    "maxLengthM": 40,
+    "depthM": 8,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Bergen Guest Marina (Bergen, Norway) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+47 55 30 80 30"
+  },
+  {
+    "id": "pl-gdansk",
+    "name": "Marina Gdańsk",
+    "harbour": "Gdańsk",
+    "region": "Pomerania",
+    "country": "Poland",
+    "lat": 54.355,
+    "lng": 18.655,
+    "priceFromEur": 45,
+    "maxLengthM": 30,
+    "depthM": 5,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Marina Gdańsk (Gdańsk, Poland) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+48 58 301 43 12"
+  },
+  {
+    "id": "tr-marmaris",
+    "name": "Netsel Marmaris Marina",
+    "harbour": "Marmaris",
+    "region": "Muğla",
+    "country": "Turkey",
+    "lat": 36.855,
+    "lng": 28.275,
+    "priceFromEur": 45,
+    "maxLengthM": 45,
+    "depthM": 7,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Netsel Marmaris Marina (Marmaris, Turkey) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+90 252 412 2708"
+  },
+  {
+    "id": "tr-bodrum",
+    "name": "Yalıkavak Marina",
+    "harbour": "Bodrum",
+    "region": "Muğla",
+    "country": "Turkey",
+    "lat": 37.105,
+    "lng": 27.285,
+    "priceFromEur": 45,
+    "maxLengthM": 80,
+    "depthM": 10,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Yalıkavak Marina (Bodrum, Turkey) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+90 252 311 3311"
+  },
+  {
+    "id": "mt-valletta",
+    "name": "Grand Harbour Marina",
+    "harbour": "Vittoriosa",
+    "region": "Malta",
+    "country": "Malta",
+    "lat": 35.89,
+    "lng": 14.52,
+    "priceFromEur": 45,
+    "maxLengthM": 70,
+    "depthM": 9,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Grand Harbour Marina (Vittoriosa, Malta) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+356 21 809 000"
+  },
+  {
+    "id": "us-newport-ri",
+    "name": "Newport Yachting Center",
+    "harbour": "Newport",
+    "region": "Rhode Island",
+    "country": "United States",
+    "lat": 41.485,
+    "lng": -71.315,
+    "priceFromEur": 45,
+    "maxLengthM": 45,
+    "depthM": 6,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Newport Yachting Center (Newport, United States) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+1 401-847-1000"
+  },
+  {
+    "id": "us-boston",
+    "name": "Constitution Marina",
+    "harbour": "Boston",
+    "region": "Massachusetts",
+    "country": "United States",
+    "lat": 42.37,
+    "lng": -71.055,
+    "priceFromEur": 45,
+    "maxLengthM": 30,
+    "depthM": 5,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Constitution Marina (Boston, United States) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+1 617-242-3821"
+  },
+  {
+    "id": "us-annapolis",
+    "name": "Annapolis City Dock",
+    "harbour": "Annapolis",
+    "region": "Maryland",
+    "country": "United States",
+    "lat": 38.978,
+    "lng": -76.485,
+    "priceFromEur": 45,
+    "maxLengthM": 28,
+    "depthM": 4,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Annapolis City Dock (Annapolis, United States) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+1 410-263-7973"
+  },
+  {
+    "id": "us-miami",
+    "name": "Miami Beach Marina",
+    "harbour": "Miami Beach",
+    "region": "Florida",
+    "country": "United States",
+    "lat": 25.77,
+    "lng": -80.135,
+    "priceFromEur": 45,
+    "maxLengthM": 70,
+    "depthM": 8,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Miami Beach Marina (Miami Beach, United States) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+1 305-673-6000"
+  },
+  {
+    "id": "us-charleston",
+    "name": "Charleston City Marina",
+    "harbour": "Charleston",
+    "region": "South Carolina",
+    "country": "United States",
+    "lat": 32.78,
+    "lng": -79.925,
+    "priceFromEur": 45,
+    "maxLengthM": 50,
+    "depthM": 7,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Charleston City Marina (Charleston, United States) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+1 843-723-8000"
+  },
+  {
+    "id": "us-san-diego",
+    "name": "Sheraton Marina",
+    "harbour": "San Diego",
+    "region": "California",
+    "country": "United States",
+    "lat": 32.715,
+    "lng": -117.225,
+    "priceFromEur": 45,
+    "maxLengthM": 40,
+    "depthM": 6,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Sheraton Marina (San Diego, United States) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+1 619-291-8011"
+  },
+  {
+    "id": "us-seattle",
+    "name": "Bell Harbor Marina",
+    "harbour": "Seattle",
+    "region": "Washington",
+    "country": "United States",
+    "lat": 47.605,
+    "lng": -122.355,
+    "priceFromEur": 45,
+    "maxLengthM": 35,
+    "depthM": 6,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Bell Harbor Marina (Seattle, United States) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+1 206-787-3952"
+  },
+  {
+    "id": "ca-vancouver",
+    "name": "Coal Harbour Marina",
+    "harbour": "Vancouver",
+    "region": "British Columbia",
+    "country": "Canada",
+    "lat": 49.295,
+    "lng": -123.125,
+    "priceFromEur": 45,
+    "maxLengthM": 40,
+    "depthM": 6,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Coal Harbour Marina (Vancouver, Canada) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+1 604-681-2244"
+  },
+  {
+    "id": "ca-halifax",
+    "name": "Alderney Landing Marina",
+    "harbour": "Dartmouth",
+    "region": "Nova Scotia",
+    "country": "Canada",
+    "lat": 44.67,
+    "lng": -63.565,
+    "priceFromEur": 45,
+    "maxLengthM": 25,
+    "depthM": 5,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Alderney Landing Marina (Dartmouth, Canada) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+1 902-461-6432"
+  },
+  {
+    "id": "bs-nassau",
+    "name": "Nassau Yacht Haven",
+    "harbour": "Nassau",
+    "region": "New Providence",
+    "country": "Bahamas",
+    "lat": 25.078,
+    "lng": -77.345,
+    "priceFromEur": 45,
+    "maxLengthM": 45,
+    "depthM": 6,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Nassau Yacht Haven (Nassau, Bahamas) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+1 242-322-1616"
+  },
+  {
+    "id": "tt-chaguaramas",
+    "name": "Crews Inn Marina",
+    "harbour": "Chaguaramas",
+    "region": "Trinidad",
+    "country": "Trinidad and Tobago",
+    "lat": 10.685,
+    "lng": -61.635,
+    "priceFromEur": 45,
+    "maxLengthM": 40,
+    "depthM": 6,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Crews Inn Marina (Chaguaramas, Trinidad and Tobago) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+1 868-634-4334"
+  },
+  {
+    "id": "ky-george-town",
+    "name": "Barcadere Marina",
+    "harbour": "George Town",
+    "region": "Grand Cayman",
+    "country": "Cayman Islands",
+    "lat": 19.295,
+    "lng": -81.365,
+    "priceFromEur": 45,
+    "maxLengthM": 35,
+    "depthM": 5,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Barcadere Marina (George Town, Cayman Islands) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+1 345-640-5555"
+  },
+  {
+    "id": "bz-san-pedro",
+    "name": "San Pedro Marina",
+    "harbour": "San Pedro",
+    "region": "Ambergris Caye",
+    "country": "Belize",
+    "lat": 17.915,
+    "lng": -87.965,
+    "priceFromEur": 45,
+    "maxLengthM": 22,
+    "depthM": 4,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "San Pedro Marina (San Pedro, Belize) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+501 226 3596"
+  },
+  {
+    "id": "pa-colon",
+    "name": "Shelter Bay Marina",
+    "harbour": "Colón",
+    "region": "Colón",
+    "country": "Panama",
+    "lat": 9.365,
+    "lng": -79.945,
+    "priceFromEur": 45,
+    "maxLengthM": 50,
+    "depthM": 7,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Shelter Bay Marina (Colón, Panama) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+507 433-6662"
+  },
+  {
+    "id": "br-rio",
+    "name": "Marina da Glória",
+    "harbour": "Rio de Janeiro",
+    "region": "Rio de Janeiro",
+    "country": "Brazil",
+    "lat": -22.915,
+    "lng": -43.175,
+    "priceFromEur": 45,
+    "maxLengthM": 40,
+    "depthM": 6,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Marina da Glória (Rio de Janeiro, Brazil) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+55 21 2555 2200"
+  },
+  {
+    "id": "au-sydney",
+    "name": "Darling Harbour Marina",
+    "harbour": "Sydney",
+    "region": "New South Wales",
+    "country": "Australia",
+    "lat": -33.875,
+    "lng": 151.195,
+    "priceFromEur": 45,
+    "maxLengthM": 45,
+    "depthM": 6,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Darling Harbour Marina (Sydney, Australia) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+61 2 9211 5111"
+  },
+  {
+    "id": "au-brisbane",
+    "name": "Rivergate Marina",
+    "harbour": "Brisbane",
+    "region": "Queensland",
+    "country": "Australia",
+    "lat": -27.445,
+    "lng": 153.105,
+    "priceFromEur": 45,
+    "maxLengthM": 50,
+    "depthM": 7,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Rivergate Marina (Brisbane, Australia) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+61 7 3907 9000"
+  },
+  {
+    "id": "au-fremantle",
+    "name": "Fremantle Sailing Club",
+    "harbour": "Fremantle",
+    "region": "Western Australia",
+    "country": "Australia",
+    "lat": -32.055,
+    "lng": 115.745,
+    "priceFromEur": 45,
+    "maxLengthM": 35,
+    "depthM": 6,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Fremantle Sailing Club (Fremantle, Australia) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+61 8 9435 8800"
+  },
+  {
+    "id": "nz-auckland",
+    "name": "Westhaven Marina",
+    "harbour": "Auckland",
+    "region": "Auckland",
+    "country": "New Zealand",
+    "lat": -36.84,
+    "lng": 174.745,
+    "priceFromEur": 45,
+    "maxLengthM": 50,
+    "depthM": 7,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Westhaven Marina (Auckland, New Zealand) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+64 9 360 5536"
+  },
+  {
+    "id": "nz-wellington",
+    "name": "Chaffers Marina",
+    "harbour": "Wellington",
+    "region": "Wellington",
+    "country": "New Zealand",
+    "lat": -41.285,
+    "lng": 174.78,
+    "priceFromEur": 45,
+    "maxLengthM": 28,
+    "depthM": 5,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Chaffers Marina (Wellington, New Zealand) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+64 4 499 8888"
+  },
+  {
+    "id": "za-cape-town",
+    "name": "V&A Waterfront Marina",
+    "harbour": "Cape Town",
+    "region": "Western Cape",
+    "country": "South Africa",
+    "lat": -33.905,
+    "lng": 18.42,
+    "priceFromEur": 45,
+    "maxLengthM": 45,
+    "depthM": 7,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "V&A Waterfront Marina (Cape Town, South Africa) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+27 21 408 7600"
+  },
+  {
+    "id": "mu-mauritius",
+    "name": "La Balise Marina",
+    "harbour": "Black River",
+    "region": "Rivière Noire",
+    "country": "Mauritius",
+    "lat": -20.365,
+    "lng": 57.365,
+    "priceFromEur": 45,
+    "maxLengthM": 35,
+    "depthM": 6,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "La Balise Marina (Black River, Mauritius) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+230 483 8080"
+  },
+  {
+    "id": "sc-eden",
+    "name": "Eden Island Marina",
+    "harbour": "Mahé",
+    "region": "Mahé",
+    "country": "Seychelles",
+    "lat": -4.635,
+    "lng": 55.445,
+    "priceFromEur": 45,
+    "maxLengthM": 60,
+    "depthM": 8,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Eden Island Marina (Mahé, Seychelles) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+248 4 671 000"
+  },
+  {
+    "id": "th-phuket",
+    "name": "Boat Lagoon Marina",
+    "harbour": "Phuket",
+    "region": "Phuket",
+    "country": "Thailand",
+    "lat": 7.995,
+    "lng": 98.405,
+    "priceFromEur": 45,
+    "maxLengthM": 40,
+    "depthM": 6,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Boat Lagoon Marina (Phuket, Thailand) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+66 76 239 055"
+  },
+  {
+    "id": "my-langkawi",
+    "name": "Telaga Harbour Marina",
+    "harbour": "Langkawi",
+    "region": "Kedah",
+    "country": "Malaysia",
+    "lat": 6.355,
+    "lng": 99.685,
+    "priceFromEur": 45,
+    "maxLengthM": 35,
+    "depthM": 6,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Telaga Harbour Marina (Langkawi, Malaysia) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+60 4 959 3500"
+  },
+  {
+    "id": "sg-singapore",
+    "name": "ONE°15 Marina",
+    "harbour": "Singapore",
+    "region": "Singapore",
+    "country": "Singapore",
+    "lat": 1.245,
+    "lng": 103.845,
+    "priceFromEur": 45,
+    "maxLengthM": 80,
+    "depthM": 8,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "ONE°15 Marina (Singapore, Singapore) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+65 6305 6982"
+  },
+  {
+    "id": "jp-yokohama",
+    "name": "Yokohama Bayside Marina",
+    "harbour": "Yokohama",
+    "region": "Kanagawa",
+    "country": "Japan",
+    "lat": 35.455,
+    "lng": 139.645,
+    "priceFromEur": 45,
+    "maxLengthM": 40,
+    "depthM": 6,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Yokohama Bayside Marina (Yokohama, Japan) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+81 45 900 2540"
+  },
+  {
+    "id": "kr-busan",
+    "name": "Busan Yachting Center",
+    "harbour": "Busan",
+    "region": "Yeongdo",
+    "country": "South Korea",
+    "lat": 35.075,
+    "lng": 129.045,
+    "priceFromEur": 45,
+    "maxLengthM": 30,
+    "depthM": 5,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Busan Yachting Center (Busan, South Korea) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+82 51 419 4751"
+  },
+  {
+    "id": "tw-keelung",
+    "name": "Keelung Marina",
+    "harbour": "Keelung",
+    "region": "Taiwan",
+    "country": "Taiwan",
+    "lat": 25.155,
+    "lng": 121.745,
+    "priceFromEur": 45,
+    "maxLengthM": 28,
+    "depthM": 5,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Keelung Marina (Keelung, Taiwan) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+886 2 2426 3366"
+  },
+  {
+    "id": "ae-dubai",
+    "name": "Dubai Marina Yacht Club",
+    "harbour": "Dubai",
+    "region": "Dubai",
+    "country": "United Arab Emirates",
+    "lat": 25.075,
+    "lng": 55.135,
+    "priceFromEur": 45,
+    "maxLengthM": 90,
+    "depthM": 8,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Dubai Marina Yacht Club (Dubai, United Arab Emirates) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+971 4 362 7900"
+  },
+  {
+    "id": "il-herzliya",
+    "name": "Herzliya Marina",
+    "harbour": "Herzliya",
+    "region": "Tel Aviv",
+    "country": "Israel",
+    "lat": 32.165,
+    "lng": 34.795,
+    "priceFromEur": 45,
+    "maxLengthM": 40,
+    "depthM": 6,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Herzliya Marina (Herzliya, Israel) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+972 9 959 0565"
+  },
+  {
+    "id": "be-ostend",
+    "name": "Mercator Marina",
+    "harbour": "Ostend",
+    "region": "West Flanders",
+    "country": "Belgium",
+    "lat": 51.225,
+    "lng": 2.925,
+    "priceFromEur": 45,
+    "maxLengthM": 22,
+    "depthM": 4,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Mercator Marina (Ostend, Belgium) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+32 59 800 086"
+  },
+  {
+    "id": "es-gibraltar",
+    "name": "Ocean Village Marina",
+    "harbour": "Gibraltar",
+    "region": "Gibraltar",
+    "country": "Gibraltar",
+    "lat": 36.135,
+    "lng": -5.355,
+    "priceFromEur": 45,
+    "maxLengthM": 45,
+    "depthM": 7,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Ocean Village Marina (Gibraltar, Gibraltar) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+350 200 456 00"
+  },
+  {
+    "id": "tn-tunis",
+    "name": "Sidi Bou Said Marina",
+    "harbour": "Tunis",
+    "region": "Tunis",
+    "country": "Tunisia",
+    "lat": 36.875,
+    "lng": 10.345,
+    "priceFromEur": 45,
+    "maxLengthM": 30,
+    "depthM": 5,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Sidi Bou Said Marina (Tunis, Tunisia) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+216 71 740 066"
+  },
+  {
+    "id": "eg-hurghada",
+    "name": "Hurghada Marina",
+    "harbour": "Hurghada",
+    "region": "Red Sea",
+    "country": "Egypt",
+    "lat": 27.255,
+    "lng": 33.815,
+    "priceFromEur": 45,
+    "maxLengthM": 35,
+    "depthM": 6,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Hurghada Marina (Hurghada, Egypt) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+20 65 346 0500"
+  },
+  {
+    "id": "al-saranda",
+    "name": "Porto Saranda",
+    "harbour": "Sarandë",
+    "region": "Vlorë",
+    "country": "Albania",
+    "lat": 39.875,
+    "lng": 20.005,
+    "priceFromEur": 45,
+    "maxLengthM": 25,
+    "depthM": 5,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Porto Saranda (Sarandë, Albania) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+355 69 20 44 444"
+  },
+  {
+    "id": "is-reykjavik",
+    "name": "Skarfabakki Marina",
+    "harbour": "Reykjavík",
+    "region": "Capital Region",
+    "country": "Iceland",
+    "lat": 64.155,
+    "lng": -21.785,
+    "priceFromEur": 45,
+    "maxLengthM": 28,
+    "depthM": 6,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Skarfabakki Marina (Reykjavík, Iceland) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+354 525 8600"
+  },
+  {
+    "id": "fi-helsinki",
+    "name": "Helsinki Guest Harbour",
+    "harbour": "Helsinki",
+    "region": "Uusimaa",
+    "country": "Finland",
+    "lat": 60.165,
+    "lng": 24.965,
+    "priceFromEur": 45,
+    "maxLengthM": 30,
+    "depthM": 5,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Helsinki Guest Harbour (Helsinki, Finland) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+358 9 310 33 213"
+  },
+  {
+    "id": "ee-tallinn",
+    "name": "Pirita Marina",
+    "harbour": "Tallinn",
+    "region": "Harju",
+    "country": "Estonia",
+    "lat": 59.455,
+    "lng": 24.825,
+    "priceFromEur": 45,
+    "maxLengthM": 25,
+    "depthM": 5,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Pirita Marina (Tallinn, Estonia) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+372 6 40 9438"
+  },
+  {
+    "id": "lv-riga",
+    "name": "Andrejsala Marina",
+    "harbour": "Riga",
+    "region": "Riga",
+    "country": "Latvia",
+    "lat": 56.975,
+    "lng": 24.095,
+    "priceFromEur": 45,
+    "maxLengthM": 22,
+    "depthM": 4,
+    "facilities": [
+      "Water",
+      "Electricity",
+      "Wi‑Fi",
+      "Showers"
+    ],
+    "description": "Andrejsala Marina (Riga, Latvia) — confirm berth availability, depth, and tariffs with the marina office.",
+    "phone": "+371 67 328 000"
+  }
+]
