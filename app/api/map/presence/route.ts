@@ -68,7 +68,7 @@ export async function POST(req: Request) {
   }
 
   const labelRaw = typeof body.label === "string" ? body.label : "";
-  const label = labelRaw.replace(/[\r\n]+/g, " ").trim().slice(0, 48) || "Nearby boat";
+  const label = labelRaw.replace(/[\r\n]+/g, " ").trim().slice(0, 40) || "Nearby boat";
   const avatarRaw = typeof body.avatarDataUrl === "string" ? body.avatarDataUrl : "";
   const avatarDataUrl = avatarRaw.trim().slice(0, 450_000);
 

@@ -55,7 +55,7 @@ function clearMapPresence(keepalive = false) {
 function buildNearbyPinIcon(avatarDataUrl: string): L.DivIcon {
   const safeAvatar = avatarDataUrl.replace(/'/g, "");
   const inner = avatarDataUrl
-    ? `<img src='${safeAvatar}' alt="" width="36" height="36" style="border-radius:9999px;object-fit:cover;display:block;"/>`
+    ? `<img src='${safeAvatar}' alt="" width="36" height="36" style="max-width:36px;max-height:36px;border-radius:9999px;object-fit:cover;display:block;"/>`
     : `<div style="width:36px;height:36px;border-radius:9999px;background:#2563eb;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff">⌖</div>`;
   const html = `<div style="width:40px;height:40px;border-radius:9999px;background:#fff;border:2px solid #fff;box-shadow:0 2px 10px rgba(0,0,0,.25);overflow:hidden;display:flex;align-items:center;justify-content:center">${inner}</div>`;
   return L.divIcon({
@@ -79,6 +79,26 @@ function readCachedPinForSharing(): LatLngAcc | null {
 }
 
 type NearbyPeer = { id: string; lat: number; lng: number; label: string; avatarDataUrl?: string };
+
+/** Compact lines for map popup (label is "boat · name" or a single field). */
+function NearbyPeerPopupBody({ label }: { label: string }) {
+  const raw = (label || "Nearby boat").trim();
+  const parts = raw.includes(" · ") ? raw.split(" · ").map((s) => s.trim()).filter(Boolean) : [raw];
+  const title = parts.join(" · ");
+  return (
+    <div className="max-w-[11rem]">
+      {parts.map((line, i) => (
+        <p
+          key={i}
+          className={`m-0 max-w-[11rem] truncate text-zinc-900 ${i === 0 ? "text-sm font-semibold" : "mt-0.5 text-xs font-medium text-zinc-600"}`}
+          title={title}
+        >
+          {line}
+        </p>
+      ))}
+    </div>
+  );
+}
 
 function MapRecenter({ lat, lng, zoom }: { lat: number; lng: number; zoom: number }) {
   const map = useMap();
@@ -887,7 +907,9 @@ export default function HomeLocationMap({ signedIn = false }: { signedIn?: boole
 
   useEffect(() => {
     if (!sharing || !pos || !shareNearby) return;
-    const label = fullName.trim() || boatInput.trim() || "Boat";
+    // Boat first keeps popups short like other skippers; name second after " · " (max length enforced server-side).
+    const label =
+      [boatInput.trim(), fullName.trim()].filter(Boolean).join(" · ").slice(0, 40) || "Nearby boat";
     const avatarDataUrl = showAvatar ? (avatarUrl || "") : "";
     const pulse = () => {
       void fetch("/api/map/presence", {
@@ -1009,7 +1031,7 @@ export default function HomeLocationMap({ signedIn = false }: { signedIn?: boole
               <MapContainer
                 center={center}
                 zoom={zoom}
-                className="h-full w-full [&_.leaflet-tile-pane]:opacity-90"
+                className="h-full w-full [&_.leaflet-tile-pane]:opacity-90 [&_.leaflet-popup-content]:max-w-[200px] [&_.leaflet-popup-content]:!m-0 [&_.leaflet-popup-content]:p-2 [&_.leaflet-popup-content]:text-sm"
                 scrollWheelZoom
                 attributionControl
               >
@@ -1059,8 +1081,8 @@ export default function HomeLocationMap({ signedIn = false }: { signedIn?: boole
                         icon={buildNearbyPinIcon(p.avatarDataUrl || "")}
                         zIndexOffset={620}
                       >
-                        <Popup>
-                          <p className="m-0 text-sm font-semibold text-zinc-900">{p.label || "Nearby boat"}</p>
+                        <Popup maxWidth={200}>
+                          <NearbyPeerPopupBody label={p.label} />
                         </Popup>
                       </Marker>
                     ))}
@@ -1100,7 +1122,7 @@ export default function HomeLocationMap({ signedIn = false }: { signedIn?: boole
         <div className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
           <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">On your pin</p>
           <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-            Your name (nearby users see this on tap)
+            Your name (shown after boat in the small nearby pin popup)
             <input
               value={fullName}
               onChange={(e) => setFullNameState(e.target.value)}
