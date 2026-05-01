@@ -12,6 +12,6 @@ const HomeLocationMap = dynamic(() => import("./HomeLocationMap"), {
   ),
 });
 
-export function HomeLocationMapLoader() {
-  return <HomeLocationMap />;
+export function HomeLocationMapLoader({ signedIn = false }: { signedIn?: boolean }) {
+  return <HomeLocationMap signedIn={signedIn} />;
 }

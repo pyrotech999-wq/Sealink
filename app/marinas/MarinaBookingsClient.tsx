@@ -73,6 +73,8 @@ export function MarinaBookingsClient() {
   const [savedRequests, setSavedRequests] = useState<SavedBerthRequest[]>([]);
   /** From `/api/marinas/config` — server has both URL + service role (not inferred from berth-requests fetch errors). */
   const [supabaseReady, setSupabaseReady] = useState<boolean | null>(null);
+  /** Rows in `marinas` table when Supabase is configured; null = unknown or not applicable. */
+  const [marinasRowCount, setMarinasRowCount] = useState<number | null>(null);
 
   const [submitLoading, setSubmitLoading] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -95,9 +97,13 @@ export function MarinaBookingsClient() {
   useEffect(() => {
     let cancelled = false;
     void fetch("/api/marinas/config")
-      .then((res) => res.json() as Promise<{ supabaseConfigured?: boolean }>)
+      .then((res) => res.json() as Promise<{ supabaseConfigured?: boolean; marinasRowCount?: number | null }>)
       .then((d) => {
-        if (!cancelled && typeof d.supabaseConfigured === "boolean") setSupabaseReady(d.supabaseConfigured);
+        if (cancelled) return;
+        if (typeof d.supabaseConfigured === "boolean") setSupabaseReady(d.supabaseConfigured);
+        if (d.marinasRowCount === null || typeof d.marinasRowCount === "number") {
+          setMarinasRowCount(d.marinasRowCount ?? null);
+        }
       })
       .catch(() => {
         /* leave supabaseReady null */
@@ -308,6 +314,32 @@ export function MarinaBookingsClient() {
           OpenStreetMap import; otherwise a curated seed list loads. Save berth requests when signed in (Supabase).
         </p>
       </header>
+
+      {supabaseReady === true && marinasRowCount === 0 ? (
+        <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
+          <p className="font-medium">Supabase is connected, but the <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/60">marinas</code> table is empty.</p>
+          <p className="mt-2">
+            Run <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/60">005_marinas.sql</code>, then import from OpenStreetMap, e.g.{" "}
+            <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/60">npm run marinas:import:osm -- --countries=GB</code>. Until rows exist, the
+            badge stays on <strong>Seed list</strong> (the small JSON sample).
+          </p>
+        </div>
+      ) : null}
+
+      {supabaseReady === true && marinasRowCount === null ? (
+        <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
+          Supabase env is set, but the app could not read the <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/60">marinas</code> table (missing
+          migration <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/60">005_marinas.sql</code>, wrong project, or key permissions). Fix that,
+          then run the OSM import.
+        </div>
+      ) : null}
+
+      {supabaseReady === true && marinasRowCount != null && marinasRowCount > 0 ? (
+        <p className="mt-4 text-xs text-zinc-500 dark:text-zinc-400">
+          Database directory: <strong className="text-zinc-700 dark:text-zinc-300">{marinasRowCount}</strong> marinas (OSM import). List badge should show{" "}
+          <strong className="text-zinc-700 dark:text-zinc-300">OSM directory</strong> when the query returns rows.
+        </p>
+      ) : null}
 
       {meChecked && !signedIn ? (
         <p className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">

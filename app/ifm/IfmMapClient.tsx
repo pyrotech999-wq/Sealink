@@ -11,6 +11,8 @@ import { SeaLinkBrandFooter } from "@/components/SeaLinkBrandFooter";
 import { distanceMiles } from "@/lib/geo-haversine";
 import { getAvatarDataUrl, getBoatName, getFullName, getProfilePhone } from "@/lib/map-profile-storage";
 
+const IFM_SHARE_CONTACT_KEY = "sealink_ifm_share_contact_v1";
+
 type FilterMode = "all" | "friends" | "local";
 
 type IfmPeer = {
@@ -20,6 +22,10 @@ type IfmPeer = {
   fullName: string;
   boatName: string;
   avatarDataUrl: string;
+  /** Normalised phone from profile when shared via IFM presence. */
+  phoneNorm?: string;
+  /** Sign-in email when the user opted in to share it on IFM. */
+  contactEmail?: string;
   updatedAt: string;
 };
 
@@ -32,6 +38,57 @@ function buildAvatarIcon(avatarDataUrl: string): L.DivIcon {
     : `<div style="width:34px;height:34px;border-radius:9999px;background:#0ea5e9;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff">⛵</div>`;
   const html = `<div style="width:38px;height:38px;border-radius:9999px;background:#fff;border:2px solid #fff;box-shadow:0 2px 10px rgba(0,0,0,.25);overflow:hidden;display:flex;align-items:center;justify-content:center">${inner}</div>`;
   return L.divIcon({ className: "sealink-ifm-pin", html, iconSize: [38, 38], iconAnchor: [19, 19] });
+}
+
+function peerFriendContact(p: IfmPeer): string {
+  const email = (p.contactEmail ?? "").trim();
+  if (email) return email;
+  const phone = (p.phoneNorm ?? "").trim();
+  if (phone) return phone;
+  return "";
+}
+
+function IfmPeerPopup({
+  peer,
+  onAdd,
+  adding,
+}: {
+  peer: IfmPeer;
+  onAdd: () => void;
+  adding: boolean;
+}) {
+  const contact = peerFriendContact(peer);
+  const via = (peer.contactEmail ?? "").trim() ? "email" : contact ? "phone" : null;
+  return (
+    <div className="min-w-[220px] max-w-[280px]">
+      <p className="m-0 text-sm font-semibold text-zinc-900">{peer.fullName || "SeaLink user"}</p>
+      {peer.boatName ? <p className="m-0 text-xs text-zinc-600">{peer.boatName}</p> : null}
+      <p className="m-0 mt-1 text-[11px] text-zinc-500">
+        updated {new Date(peer.updatedAt).toLocaleString("en-GB")}
+      </p>
+      {contact ? (
+        <>
+          <p className="m-0 mt-2 text-[11px] text-zinc-600">
+            {via === "email" ? "Email" : "Phone"} (for adding as friend)
+          </p>
+          <p className="m-0 break-all text-xs font-medium text-zinc-800">{contact}</p>
+          <button
+            type="button"
+            disabled={adding}
+            onClick={onAdd}
+            className="mt-2 w-full rounded-lg bg-indigo-600 px-2 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+          >
+            {adding ? "Adding…" : "Add to friends"}
+          </button>
+        </>
+      ) : (
+        <p className="m-0 mt-2 text-[11px] leading-snug text-zinc-500">
+          This sailor has not shared an email (opt-in) or phone on IFM, so you can’t add them from the map. Ask them to
+          enable “Share contact on IFM” or add them manually below.
+        </p>
+      )}
+    </div>
+  );
 }
 
 function MapBinder({ onMap }: { onMap: (m: L.Map) => void }) {
@@ -51,11 +108,21 @@ export function IfmMapClient() {
     typeof navigator === "undefined" || !navigator.geolocation ? "Geolocation not supported in this browser." : null,
   );
   const [sharing, setSharing] = useState(true);
+  const [shareContactOnIfm, setShareContactOnIfm] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return window.localStorage.getItem(IFM_SHARE_CONTACT_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
   const [map, setMap] = useState<L.Map | null>(null);
   /** Bumped after a successful presence POST so the “me” pin reflects latest profile from storage. */
   const [profileSync, setProfileSync] = useState(0);
+  const [addingFriendUid, setAddingFriendUid] = useState<string | null>(null);
 
   const lastShareAt = useRef<number>(0);
+  const forceNextPresencePost = useRef(false);
 
   const myDisplay = useMemo(() => {
     const fullName = getFullName().trim();
@@ -99,7 +166,9 @@ export function IfmMapClient() {
     if (!sharing) return;
     if (!pos) return;
     const now = Date.now();
-    if (lastShareAt.current !== 0 && now - lastShareAt.current < 30_000) return;
+    const force = forceNextPresencePost.current;
+    forceNextPresencePost.current = false;
+    if (!force && lastShareAt.current !== 0 && now - lastShareAt.current < 30_000) return;
     const fullName = getFullName().trim();
     const boatName = getBoatName().trim();
     const avatarDataUrl = getAvatarDataUrl() || "";
@@ -111,6 +180,7 @@ export function IfmMapClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           share: true,
+          shareContactOnIfm,
           lat: pos.lat,
           lng: pos.lng,
           fullName,
@@ -126,7 +196,7 @@ export function IfmMapClient() {
     } catch {
       /* ignore */
     }
-  }, [sharing, pos?.lat, pos?.lng]);
+  }, [sharing, shareContactOnIfm, pos?.lat, pos?.lng]);
 
   useEffect(() => {
     void sharePresence();
@@ -170,8 +240,22 @@ export function IfmMapClient() {
     return () => window.clearInterval(id);
   }, [loadPeers]);
 
-  const addFriend = useCallback(async () => {
-    const v = contact.trim();
+  const refreshFriendsList = useCallback(async () => {
+    try {
+      const r = await fetch("/api/ifm/friends", { credentials: "same-origin", cache: "no-store" });
+      const d = (await r.json()) as { friends?: FriendRow[] };
+      if (r.ok && Array.isArray(d.friends)) setFriends(d.friends);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshFriendsList();
+  }, [refreshFriendsList]);
+
+  const addFriendWithContact = useCallback(async (raw: string, opts?: { zoomFriendsMap?: boolean }) => {
+    const v = raw.trim();
     if (!v) return;
     setErr(null);
     try {
@@ -185,10 +269,30 @@ export function IfmMapClient() {
       if (!r.ok || d.ok === false) throw new Error(d.error || "Could not add friend");
       setContact("");
       setFriends(Array.isArray(d.friends) ? d.friends : []);
+      if (opts?.zoomFriendsMap) setMode("friends");
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Could not add friend");
     }
-  }, [contact]);
+  }, []);
+
+  const addFriend = useCallback(async () => {
+    await addFriendWithContact(contact, { zoomFriendsMap: false });
+  }, [contact, addFriendWithContact]);
+
+  const addPeerAsFriend = useCallback(
+    async (p: IfmPeer) => {
+      const v = peerFriendContact(p);
+      if (!v) return;
+      setAddingFriendUid(p.uid);
+      setErr(null);
+      try {
+        await addFriendWithContact(v, { zoomFriendsMap: true });
+      } finally {
+        setAddingFriendUid(null);
+      }
+    },
+    [addFriendWithContact],
+  );
 
   const removeFriend = useCallback(async (f: FriendRow) => {
     setErr(null);
@@ -312,6 +416,31 @@ export function IfmMapClient() {
               {sharing ? "Sharing: ON" : "Sharing: OFF"}
             </button>
           </div>
+          <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-700 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-400 text-indigo-600"
+              checked={shareContactOnIfm}
+              disabled={!sharing}
+              onChange={(e) => {
+                const on = e.target.checked;
+                forceNextPresencePost.current = true;
+                setShareContactOnIfm(on);
+                try {
+                  window.localStorage.setItem(IFM_SHARE_CONTACT_KEY, on ? "1" : "0");
+                } catch {
+                  /* ignore */
+                }
+              }}
+            />
+            <span>
+              <span className="font-semibold text-zinc-900 dark:text-zinc-100">Share contact on IFM</span>
+              <span className="mt-0.5 block text-[11px] font-normal text-zinc-500 dark:text-zinc-400">
+                Lets others add you as a friend from your map pin: your sign-in email (if checked) and the phone from
+                your profile (already shared with your position) can be used.
+              </span>
+            </span>
+          </label>
         </div>
 
         {err ? (
@@ -348,11 +477,11 @@ export function IfmMapClient() {
                     {peersWithLocalSort.map((p) => (
                       <Marker key={p.uid} position={[p.lat, p.lng]} icon={buildAvatarIcon(p.avatarDataUrl)}>
                         <Popup>
-                          <p className="m-0 text-sm font-semibold text-zinc-900">{p.fullName || "SeaLink user"}</p>
-                          {p.boatName ? <p className="m-0 text-xs text-zinc-600">{p.boatName}</p> : null}
-                          <p className="m-0 mt-1 text-[11px] text-zinc-500">
-                            updated {new Date(p.updatedAt).toLocaleString("en-GB")}
-                          </p>
+                          <IfmPeerPopup
+                            peer={p}
+                            onAdd={() => void addPeerAsFriend(p)}
+                            adding={addingFriendUid === p.uid}
+                          />
                         </Popup>
                       </Marker>
                     ))}
@@ -361,11 +490,11 @@ export function IfmMapClient() {
                   peersWithLocalSort.map((p) => (
                     <Marker key={p.uid} position={[p.lat, p.lng]} icon={buildAvatarIcon(p.avatarDataUrl)}>
                       <Popup>
-                        <p className="m-0 text-sm font-semibold text-zinc-900">{p.fullName || "SeaLink user"}</p>
-                        {p.boatName ? <p className="m-0 text-xs text-zinc-600">{p.boatName}</p> : null}
-                        <p className="m-0 mt-1 text-[11px] text-zinc-500">
-                          updated {new Date(p.updatedAt).toLocaleString("en-GB")}
-                        </p>
+                        <IfmPeerPopup
+                          peer={p}
+                          onAdd={() => void addPeerAsFriend(p)}
+                          adding={addingFriendUid === p.uid}
+                        />
                       </Popup>
                     </Marker>
                   ))
@@ -423,7 +552,8 @@ export function IfmMapClient() {
             <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
               <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Friends list</p>
               <p className="mt-1 text-xs text-zinc-500">
-                Add by email or phone. Max 100. Switch to <span className="font-semibold">Friends</span> to view them on the map.
+                Add by email or phone, or tap someone on the map when they share contact on IFM. Max 100. Switch to{" "}
+                <span className="font-semibold">Friends</span> to view them on the map.
               </p>
               <div className="mt-3 flex gap-2">
                 <input

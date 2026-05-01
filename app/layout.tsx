@@ -4,6 +4,7 @@ import { BroadcastAwayToasts } from "@/components/BroadcastAwayToasts";
 import { BroadcastToastProvider } from "@/components/BroadcastToastProvider";
 import { BottomNav } from "@/components/BottomNav";
 import { AppLoadSplash } from "@/components/AppLoadSplash";
+import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import { SessionDeviceRegistrar } from "@/components/SessionDeviceRegistrar";
 import { TopNav } from "@/components/TopNav";
 import "./globals.css";
@@ -31,6 +32,13 @@ export const metadata: Metadata = {
   },
   description: "Map, weather & sea, and anchor alerts.",
   applicationName: "SeaLink",
+  icons: {
+    icon: [
+      { url: "/pwa-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/pwa-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/pwa-512.png", sizes: "512x512", type: "image/png" }],
+  },
   appleWebApp: {
     capable: true,
     title: "SeaLink",
@@ -66,6 +74,7 @@ export default function RootLayout({
       >
         <BroadcastToastProvider>
           <AppLoadSplash />
+          <ServiceWorkerRegister />
           <SessionDeviceRegistrar />
           <TopNav />
           {children}

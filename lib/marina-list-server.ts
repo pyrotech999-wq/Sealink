@@ -6,16 +6,22 @@ import { distanceMiles } from "@/lib/geo-haversine";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
-async function marinasTableHasRows(): Promise<boolean> {
-  if (!isSupabaseConfigured()) return false;
+/** Row count in `marinas`, or null if Supabase off / table missing / error. */
+export async function marinasTableRowCount(): Promise<number | null> {
+  if (!isSupabaseConfigured()) return null;
   try {
     const sb = supabaseAdmin();
     const { count, error } = await sb.from("marinas").select("*", { count: "exact", head: true });
-    if (error) return false;
-    return (count ?? 0) > 0;
+    if (error) return null;
+    return count ?? 0;
   } catch {
-    return false;
+    return null;
   }
+}
+
+async function marinasTableHasRows(): Promise<boolean> {
+  const n = await marinasTableRowCount();
+  return n != null && n > 0;
 }
 
 function bboxForRadiusMi(lat: number, lng: number, radiusMi: number): { minLat: number; maxLat: number; minLng: number; maxLng: number } {
@@ -100,7 +106,8 @@ export async function listMarinasMerged(p: MarinaQueryParams): Promise<{ marinas
   if (useDb) {
     try {
       const marinas = await queryMarinasFromSupabase(p);
-      if (marinas.length > 0) return { marinas, source: "supabase" };
+      // Important: empty result still means we are backed by the DB (do not silently swap in seed).
+      return { marinas, source: "supabase" };
     } catch {
       /* fallback */
     }

@@ -138,7 +138,7 @@ function buildPinIcon(boat: string, avatarUrl: string, peekAvatar: boolean): L.D
   });
 }
 
-export default function HomeLocationMap() {
+export default function HomeLocationMap({ signedIn = false }: { signedIn?: boolean }) {
   const [boatInput, setBoatInput] = useState(() => (typeof window !== "undefined" ? getBoatName() : ""));
   const [avatarUrl] = useState(() => (typeof window !== "undefined" ? getAvatarDataUrl() : ""));
   const [pinAvatarPeek, setPinAvatarPeek] = useState(false);
@@ -1186,8 +1186,7 @@ export default function HomeLocationMap() {
             <span>
               <span className="font-semibold">Show me to nearby SeaLink users (~5 mi)</span>
               <span className="mt-1 block opacity-90">
-                Only members who also turn this on appear on your map (blue pins). Your position is refreshed about
-                every 45s while this page is open; others drop off after a couple of minutes without a heartbeat.
+                Only members who also turn this on appear on your map (blue pins).
               </span>
             </span>
           </label>
@@ -1215,7 +1214,7 @@ export default function HomeLocationMap() {
               <span className="mt-1 block opacity-90">
                 On by default: we keep requesting your position on a slower cadence while this tab stays open, even if
                 you switch apps (browser may still throttle GPS). Turn this off to only update while this tab is visible.
-                Fully closing the browser stops tracking — this is not a native app.
+                Fully closing the browser stops tracking.
               </span>
             </span>
           </label>
@@ -1224,6 +1223,7 @@ export default function HomeLocationMap() {
 
       <div className="mt-4">
         <MapBroadcastPanel
+          signedIn={signedIn}
           readLat={pos?.lat ?? DEFAULT_MAP_CENTER.lat}
           readLng={pos?.lng ?? DEFAULT_MAP_CENTER.lng}
           canSend={Boolean(sharing && pos)}

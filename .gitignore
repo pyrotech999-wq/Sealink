@@ -53,6 +53,9 @@ next-env.d.ts
 /data/vessel-classifieds.json
 /public/uploads/vessels/
 
+# OSM marina import resume offset (local only)
+.marinas-osm-import-state.json
+
 # anchor alert device registry
 /data/anchor-devices.json
 /data/anchor-alerts.json

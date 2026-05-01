@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAuthUser } from "@/lib/auth";
+import { normaliseEmail, requireAuthUser } from "@/lib/auth";
 import { getAvatarDataUrl, getBoatName, getFullName, getProfilePhone } from "@/lib/map-profile-storage";
 import { normalisePhone } from "@/lib/phone-normalise";
 import {
@@ -67,6 +67,7 @@ export async function POST(req: Request): Promise<Response> {
       boatName: "",
       avatarDataUrl: "",
       phoneNorm: "",
+      ifmContactEmail: "",
       share: false,
     });
     return NextResponse.json({ ok: true, removed: true });
@@ -87,6 +88,8 @@ export async function POST(req: Request): Promise<Response> {
   const boatName = String(boatRaw || "").replace(/[\r\n]+/g, " ").trim().slice(0, 80) || "";
   const avatarDataUrl = String(avatarRaw || "").trim().slice(0, 450_000);
   const phoneNorm = normalisePhone(String(phoneRaw || ""));
+  const shareContactOnIfm = obj?.shareContactOnIfm === true;
+  const ifmContactEmail = shareContactOnIfm ? normaliseEmail(user.email).slice(0, 320) : "";
 
   await upsertIfmPresence(user.uid, {
     lat: coords.lat,
@@ -95,6 +98,7 @@ export async function POST(req: Request): Promise<Response> {
     boatName,
     avatarDataUrl,
     phoneNorm,
+    ifmContactEmail,
     share: true,
   });
 

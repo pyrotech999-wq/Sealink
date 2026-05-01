@@ -12,6 +12,11 @@
     "migrate:supabase:dry": "tsx scripts/migrate-json-to-supabase.ts --dry-run",
     "marinas:build-catalog": "tsx scripts/build-marinas-world-json.ts",
     "marinas:import:osm": "tsx scripts/import-marinas-osm.ts",
+    "marinas:import:osm:uk": "tsx scripts/import-marinas-osm.ts --countries=GB",
+    "marinas:import:osm:eu-me": "tsx scripts/import-marinas-osm.ts --preset=europe-middle-east --limit=0",
+    "marinas:import:osm:row": "tsx scripts/import-marinas-osm.ts --preset=rest-of-world --limit=0",
+    "marinas:import:osm:reset": "tsx scripts/import-marinas-osm.ts --reset-only",
+    "marinas:import:osm:all": "tsx scripts/import-marinas-osm.ts --all",
     "marinas:import:osm:dry": "tsx scripts/import-marinas-osm.ts --dry-run"
   },
   "dependencies": {

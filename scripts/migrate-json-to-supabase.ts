@@ -93,6 +93,7 @@ type IfmPresenceJsonRow = {
   boatName: string;
   avatarDataUrl: string;
   phoneNorm: string;
+  ifmContactEmail?: string;
   updatedAt: string;
   share: boolean;
 };
@@ -317,6 +318,7 @@ async function main() {
         boat_name: r.boatName ?? "",
         avatar_data_url: r.avatarDataUrl ?? "",
         phone_norm: r.phoneNorm ?? "",
+        ifm_contact_email: typeof r.ifmContactEmail === "string" ? r.ifmContactEmail : "",
         updated_at: r.updatedAt,
         share: Boolean(r.share),
       }));

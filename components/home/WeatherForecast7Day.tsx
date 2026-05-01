@@ -32,6 +32,40 @@ function fmtSunshineSec(sec: number): string {
   return `${Math.round(h * 10) / 10} h`;
 }
 
+/**
+ * Downwind arrow on a small compass disc (N fixed at top).
+ * `fromDeg` is meteorological wind-from, clockwise from north; arrow points where the wind blows toward.
+ */
+function WindDirectionDisc({ fromDeg, title }: { fromDeg: number | null; title: string }) {
+  const toward = fromDeg != null ? (((fromDeg + 180) % 360) + 360) % 360 : null;
+  return (
+    <div
+      className="relative mx-auto mt-1 flex h-[3.25rem] w-[3.25rem] shrink-0 items-center justify-center rounded-full border-2 border-current/25 bg-black/[0.06] shadow-inner dark:bg-white/[0.08]"
+      title={title}
+      role="img"
+      aria-label={title}
+    >
+      <span className="pointer-events-none absolute top-0.5 text-[9px] font-bold leading-none opacity-55" aria-hidden>
+        N
+      </span>
+      {toward != null ? (
+        <svg
+          viewBox="0 0 24 24"
+          className="h-8 w-8 text-current"
+          style={{ transform: `rotate(${toward}deg)`, transformOrigin: "12px 12px" }}
+          aria-hidden
+        >
+          <path fill="currentColor" d="M12 4 19.5 19.5h-15L12 4z" />
+        </svg>
+      ) : (
+        <span className="text-sm font-medium opacity-45" aria-hidden>
+          —
+        </span>
+      )}
+    </div>
+  );
+}
+
 function ConditionsCard({ day }: { day: DailyForecastRow }) {
   const { dow, dayMonth } = formatDayLabel(day.date);
   const wmo = day.wmo;
@@ -144,8 +178,8 @@ export function WeatherForecast7Day({ lat, lng }: Props) {
             7-day wind forecast
           </h3>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Daily maximum wind at 10 m with dominant direction (3-hour steps with direction + speed on the map). Sea state is a guide
-            only. Data:{" "}
+            Daily maximum wind at 10 m with dominant direction (map timeline uses 3-hour steps). Each card’s arrow points{" "}
+            <span className="font-medium text-zinc-600 dark:text-zinc-300">downwind</span>. Sea state is a guide only. Data:{" "}
             <a
               href="https://open-meteo.com/"
               className="font-medium text-green-800 underline-offset-2 hover:underline dark:text-green-400"
@@ -190,6 +224,10 @@ export function WeatherForecast7Day({ lat, lng }: Props) {
               const dirDeg = day.windDirDominantDeg;
               const dirNorm = dirDeg != null ? Math.round(((dirDeg % 360) + 360) % 360) : null;
               const dirLabel = dirDeg != null ? windFromCompass16(dirDeg) : null;
+              const arrowTitle =
+                dirLabel != null && dirNorm != null
+                  ? `Wind from ${dirLabel} (${String(dirNorm).padStart(3, "0")}°); arrow points downwind`
+                  : "Wind direction";
               return (
                 <article
                   key={day.date}
@@ -204,7 +242,8 @@ export function WeatherForecast7Day({ lat, lng }: Props) {
                       {tier.id === "calm" || tier.id === "light" ? "OK" : tier.id === "amber" ? "Care" : "Risk"}
                     </span>
                   </div>
-                  <p className="mt-3 text-xl font-bold tabular-nums">{Math.round(mph)} mph</p>
+                  <WindDirectionDisc fromDeg={dirDeg} title={arrowTitle} />
+                  <p className="mt-2 text-xl font-bold tabular-nums">{Math.round(mph)} mph</p>
                   <p className="text-sm font-semibold tabular-nums opacity-90">{Math.round(kn)} kn</p>
                   <p className="mt-1.5 text-[11px] font-medium leading-snug opacity-95">
                     {dirLabel != null && dirNorm != null ? (

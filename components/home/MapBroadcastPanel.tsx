@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useBroadcastToast } from "@/components/BroadcastToastProvider";
+import { VicinityChatDrawer } from "@/components/home/VicinityChatDrawer";
 import { MAP_BROADCAST_RETENTION_HOURS } from "@/lib/map-broadcast-constants";
 
 const WATERLINE_KEY = "sealink_broadcast_toast_waterline_v1";
@@ -71,6 +72,7 @@ function writeWaterline(iso: string): void {
 
 export type BroadcastMsg = {
   id: string;
+  authorUid: string;
   body: string;
   createdAt: string;
   isMine: boolean;
@@ -78,6 +80,7 @@ export type BroadcastMsg = {
 };
 
 type Props = {
+  signedIn: boolean;
   readLat: number;
   readLng: number;
   canSend: boolean;
@@ -85,7 +88,7 @@ type Props = {
   sendLng: number | null;
 };
 
-export function MapBroadcastPanel({ readLat, readLng, canSend, sendLat, sendLng }: Props) {
+export function MapBroadcastPanel({ signedIn, readLat, readLng, canSend, sendLat, sendLng }: Props) {
   const toast = useBroadcastToast();
   const [messages, setMessages] = useState<BroadcastMsg[]>([]);
   const [draft, setDraft] = useState("");
@@ -93,6 +96,8 @@ export function MapBroadcastPanel({ readLat, readLng, canSend, sendLat, sendLng 
   const [posting, setPosting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [soundOn, setSoundOn] = useState(() => (typeof window !== "undefined" ? readSoundOn() : true));
+  const [chatPeerUid, setChatPeerUid] = useState<string | null>(null);
+  const [chatContext, setChatContext] = useState<string | undefined>(undefined);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -206,7 +211,9 @@ export function MapBroadcastPanel({ readLat, readLng, canSend, sendLat, sendLng 
       <p className="mt-1 text-xs leading-5 text-indigo-900/80 dark:text-indigo-200/85">
         Short messages go to everyone roughly within five miles of where you sent from (same radius as nearby pins).
         The last {MAP_BROADCAST_RETENTION_HOURS} hours stay here; new ones also pop up as a banner across the app when
-        we have a recent position saved from the map.
+        we have a recent position saved from the map. On the live site, messages need{" "}
+        <strong className="font-semibold">Supabase</strong> (or Vercel KV) so they are not stored only on one server
+        disk.
       </p>
 
       <label className="mt-2 inline-flex cursor-pointer items-center gap-2 text-xs font-medium text-indigo-900 dark:text-indigo-200">
@@ -250,15 +257,29 @@ export function MapBroadcastPanel({ readLat, readLng, canSend, sendLat, sendLng 
                     </span>
                   ) : null}
                 </p>
-                {m.canDelete ? (
-                  <button
-                    type="button"
-                    onClick={() => void onDelete(m.id)}
-                    className="rounded-md border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-800 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950/55"
-                  >
-                    Delete
-                  </button>
-                ) : null}
+                <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+                  {signedIn && !m.isMine && m.authorUid ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setChatContext(m.body.trim().split(/\r?\n/)[0]?.slice(0, 120) ?? "");
+                        setChatPeerUid(m.authorUid);
+                      }}
+                      className="rounded-md border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-900 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-100 dark:hover:bg-indigo-900/40"
+                    >
+                      Reply
+                    </button>
+                  ) : null}
+                  {m.canDelete ? (
+                    <button
+                      type="button"
+                      onClick={() => void onDelete(m.id)}
+                      className="rounded-md border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-800 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950/55"
+                    >
+                      Delete
+                    </button>
+                  ) : null}
+                </div>
               </div>
               <p className="mt-1 whitespace-pre-wrap leading-snug text-zinc-800 dark:text-zinc-200">{m.body}</p>
             </article>
@@ -292,6 +313,18 @@ export function MapBroadcastPanel({ readLat, readLng, canSend, sendLat, sendLng 
           Turn on <strong>Share my location on this map</strong> to send a broadcast from your current position.
         </p>
       )}
+
+      {chatPeerUid ? (
+        <VicinityChatDrawer
+          open
+          peerUid={chatPeerUid}
+          contextLine={chatContext}
+          onClose={() => {
+            setChatPeerUid(null);
+            setChatContext(undefined);
+          }}
+        />
+      ) : null}
     </section>
   );
 }

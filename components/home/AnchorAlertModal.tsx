@@ -46,9 +46,14 @@ type Props = {
   }) => void;
 };
 
+const ANGLE_OFF = 360;
+const ANGLE_DEFAULT_ON = 45;
+
 export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, deviceId, config, monitor, onUpdate }: Props) {
   const [radius, setRadius] = useState<string>(String(config.radiusM));
-  const [angleDeg, setAngleDeg] = useState<string>(String(config.angleDeg ?? 360));
+  const [angleDeg, setAngleDeg] = useState<string>(String(config.angleDeg ?? ANGLE_OFF));
+  /** When false, angle-change alerts are disabled (stored as 360°). */
+  const [angleEnabled, setAngleEnabled] = useState<boolean>((config.angleDeg ?? ANGLE_OFF) < ANGLE_OFF);
   const [deviceLabel, setDeviceLabel] = useState(() => (typeof window !== "undefined" ? getDeviceName() : ""));
   const [devices, setDevices] = useState<{ deviceId: string; name: string; updatedAt: string; lastFixAt: string | null }[]>([]);
   const [devicesLoadError, setDevicesLoadError] = useState<string | null>(null);
@@ -111,6 +116,14 @@ export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, deviceId
       }
     });
   }, [open, monitor?.alertDeviceIds, deviceId]);
+
+  useEffect(() => {
+    if (!open) return;
+    const deg = config.angleDeg ?? ANGLE_OFF;
+    const on = deg < ANGLE_OFF;
+    setAngleEnabled(on);
+    setAngleDeg(String(on ? deg : ANGLE_DEFAULT_ON));
+  }, [open, config.angleDeg]);
 
   if (!open) return null;
 
@@ -279,34 +292,59 @@ export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, deviceId
             <span className="mt-1 block text-[11px] text-zinc-500">Alert if the monitored device drifts beyond this distance.</span>
           </label>
 
-          <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-            Angle change (degrees)
-            <select
-              value={angleDeg}
-              onChange={(e) => {
-                const v = e.target.value;
-                setAngleDeg(v);
-                onUpdate({ ...config, angleDeg: Number(v), monitorDeviceId });
-              }}
-              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
-            >
-              <option value="360">Off (360°)</option>
-              <option value="0">0°</option>
-              <option value="10">10°</option>
-              <option value="20">20°</option>
-              <option value="30">30°</option>
-              <option value="45">45°</option>
-              <option value="60">60°</option>
-              <option value="90">90°</option>
-              <option value="120">120°</option>
-              <option value="180">180°</option>
-              <option value="270">270°</option>
-              <option value="360">360°</option>
-            </select>
-            <span className="mt-1 block text-[11px] text-zinc-500">
-              Alert if the bearing from the anchor point changes more than this amount (360° disables).
-            </span>
-          </label>
+          <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900/50">
+            <label className="flex cursor-pointer items-start gap-2 text-xs font-medium text-zinc-800 dark:text-zinc-200">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-400 text-green-600"
+                checked={angleEnabled}
+                onChange={(e) => {
+                  const on = e.target.checked;
+                  setAngleEnabled(on);
+                  if (!on) {
+                    setAngleDeg(String(ANGLE_DEFAULT_ON));
+                    onUpdate({ ...config, angleDeg: ANGLE_OFF, monitorDeviceId });
+                  } else {
+                    const v = Math.max(0, Math.min(359, Math.round(Number(angleDeg) || ANGLE_DEFAULT_ON)));
+                    const use = Number.isFinite(v) && v < ANGLE_OFF ? v : ANGLE_DEFAULT_ON;
+                    setAngleDeg(String(use));
+                    onUpdate({ ...config, angleDeg: use, monitorDeviceId });
+                  }
+                }}
+              />
+              <span>
+                Alert on bearing change
+                <span className="mt-0.5 block text-[11px] font-normal text-zinc-500 dark:text-zinc-400">
+                  Off by default. Turn on to warn if direction from the anchor shifts more than the limit below.
+                </span>
+              </span>
+            </label>
+            {angleEnabled ? (
+              <label className="mt-3 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                Max bearing change (degrees)
+                <select
+                  value={angleDeg}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setAngleDeg(v);
+                    onUpdate({ ...config, angleDeg: Number(v), monitorDeviceId });
+                  }}
+                  className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+                >
+                  <option value="0">0°</option>
+                  <option value="10">10°</option>
+                  <option value="20">20°</option>
+                  <option value="30">30°</option>
+                  <option value="45">45°</option>
+                  <option value="60">60°</option>
+                  <option value="90">90°</option>
+                  <option value="120">120°</option>
+                  <option value="180">180°</option>
+                  <option value="270">270°</option>
+                </select>
+              </label>
+            ) : null}
+          </div>
 
           <div className="flex flex-wrap gap-2">
             <button
@@ -314,7 +352,9 @@ export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, deviceId
               disabled={!canSet}
               onClick={() => {
                 const n = (Number(radius) as 10 | 20 | 40 | 50) || config.radiusM;
-                const a = Math.max(0, Math.min(360, Math.round(Number(angleDeg) || config.angleDeg || 360)));
+                const a = angleEnabled
+                  ? Math.max(0, Math.min(359, Math.round(Number(angleDeg) || ANGLE_DEFAULT_ON)))
+                  : ANGLE_OFF;
                 // Persist monitor + alert targets to server so it applies across both devices.
                 const chosenMonitor = monitorDeviceId === "this" ? deviceId : monitorDeviceId;
                 const ids: string[] = [];
@@ -353,7 +393,8 @@ export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, deviceId
           <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-300">
             <p className="font-semibold text-zinc-900 dark:text-zinc-100">Status</p>
             <p className="mt-1">
-              {config.armed && hasAnchor ? "Armed" : "Not armed"} · Distance {config.radiusM}m · Angle {config.angleDeg ?? 360}°
+              {config.armed && hasAnchor ? "Armed" : "Not armed"} · Distance {config.radiusM}m · Bearing change{" "}
+              {(config.angleDeg ?? ANGLE_OFF) >= ANGLE_OFF ? "off" : `≤${config.angleDeg}°`}
             </p>
             {hasAnchor ? (
               <p className="mt-1 text-[11px] opacity-80">

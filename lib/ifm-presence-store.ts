@@ -16,6 +16,8 @@ export type IfmPresenceRecord = {
   boatName: string;
   avatarDataUrl: string;
   phoneNorm: string;
+  /** Normalised sign-in email; only non-empty when user opted in to share on IFM. */
+  ifmContactEmail: string;
   updatedAt: string;
   share: boolean;
 };
@@ -28,6 +30,8 @@ export type IfmPeer = {
   boatName: string;
   avatarDataUrl: string;
   phoneNorm: string;
+  /** Present when the user chose to share their email on IFM for friend adds. */
+  contactEmail: string;
   updatedAt: string;
 };
 
@@ -42,13 +46,20 @@ function enqueue<T>(fn: () => Promise<T>): Promise<T> {
   return next;
 }
 
+function ensureIfmRecord(r: IfmPresenceRecord): IfmPresenceRecord {
+  return {
+    ...r,
+    ifmContactEmail: typeof r.ifmContactEmail === "string" ? r.ifmContactEmail : "",
+  };
+}
+
 function readRawFile(): IfmPresenceRecord[] {
   try {
     if (!existsSync(DATA_PATH)) return [];
     const raw = readFileSync(DATA_PATH, "utf-8");
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
-    return parsed as IfmPresenceRecord[];
+    return (parsed as IfmPresenceRecord[]).map((row) => ensureIfmRecord(row));
   } catch {
     return [];
   }
@@ -77,12 +88,14 @@ function toPeer(r: IfmPresenceRecord): IfmPeer {
     boatName: r.boatName,
     avatarDataUrl: r.avatarDataUrl || "",
     phoneNorm: r.phoneNorm || "",
+    contactEmail: (r.ifmContactEmail || "").trim().toLowerCase(),
     updatedAt: r.updatedAt,
   };
 }
 
 function rowDbToRecord(r: Record<string, unknown>): IfmPresenceRecord | null {
   if (typeof r.uid !== "string") return null;
+  const emailRaw = typeof r.ifm_contact_email === "string" ? r.ifm_contact_email : "";
   return {
     uid: r.uid,
     lat: typeof r.lat === "number" ? r.lat : Number(r.lat),
@@ -91,6 +104,7 @@ function rowDbToRecord(r: Record<string, unknown>): IfmPresenceRecord | null {
     boatName: typeof r.boat_name === "string" ? r.boat_name : "",
     avatarDataUrl: typeof r.avatar_data_url === "string" ? r.avatar_data_url : "",
     phoneNorm: typeof r.phone_norm === "string" ? r.phone_norm : "",
+    ifmContactEmail: emailRaw.trim().toLowerCase().slice(0, 320),
     updatedAt: typeof r.updated_at === "string" ? r.updated_at : new Date().toISOString(),
     share: r.share === true,
   };
@@ -107,11 +121,13 @@ async function readRawUnified(now: Date): Promise<IfmPresenceRecord[]> {
       .eq("share", true)
       .gte("updated_at", cutoffIso);
     if (error) throw new Error(error.message);
-    return (data ?? []).map((row) => rowDbToRecord(row as Record<string, unknown>)).filter(Boolean) as IfmPresenceRecord[];
+    return (data ?? [])
+      .map((row) => rowDbToRecord(row as Record<string, unknown>))
+      .filter(Boolean) as IfmPresenceRecord[];
   }
 
   if (canUseKv()) {
-    const raw = (await kvGetJson<IfmPresenceRecord[]>(KV_KEY, [])) ?? [];
+    const raw = ((await kvGetJson<IfmPresenceRecord[]>(KV_KEY, [])) ?? []).map(ensureIfmRecord);
     return prune(raw, now);
   }
 
@@ -129,6 +145,7 @@ async function upsertUnified(
     boatName: string;
     avatarDataUrl: string;
     phoneNorm: string;
+    ifmContactEmail: string;
     share: boolean;
   },
 ): Promise<void> {
@@ -149,6 +166,7 @@ async function upsertUnified(
       boat_name: patch.boatName,
       avatar_data_url: patch.avatarDataUrl,
       phone_norm: patch.phoneNorm,
+      ifm_contact_email: patch.ifmContactEmail,
       updated_at: now.toISOString(),
       share: true,
     };
@@ -173,6 +191,7 @@ async function upsertUnified(
     boatName: patch.boatName,
     avatarDataUrl: patch.avatarDataUrl,
     phoneNorm: patch.phoneNorm,
+    ifmContactEmail: patch.ifmContactEmail,
     updatedAt: now.toISOString(),
     share: true,
   };
@@ -200,6 +219,7 @@ export async function upsertIfmPresence(
     boatName: string;
     avatarDataUrl: string;
     phoneNorm: string;
+    ifmContactEmail: string;
     share: boolean;
   },
 ): Promise<void> {
@@ -218,7 +238,9 @@ export async function listAllIfmPeers(excludeUid: string, now = new Date()): Pro
         .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
     }
 
-    const raw = canUseKv() ? ((await kvGetJson<IfmPresenceRecord[]>(KV_KEY, [])) ?? []) : readRawFile();
+    const raw = (
+      canUseKv() ? ((await kvGetJson<IfmPresenceRecord[]>(KV_KEY, [])) ?? []) : readRawFile()
+    ).map(ensureIfmRecord);
     const list = prune(raw, now);
     await persistPrunedFileIfNeeded(raw, list);
     return list

@@ -2,10 +2,14 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
 import { distanceMiles } from "@/lib/geo-haversine";
+import { canUseKv, kvGetJson, kvSetJson } from "@/lib/kv-json";
 import { MAP_BROADCAST_RATE_PER_HOUR, MAP_BROADCAST_RETENTION_HOURS } from "@/lib/map-broadcast-constants";
 import { MAP_NEARBY_RADIUS_MI } from "@/lib/map-nearby-constants";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 const DATA_PATH = path.join(process.cwd(), "data", "map-broadcast-messages.json");
+const KV_KEY = "sealink:map-broadcasts:v1";
 
 export type BroadcastMessageRow = {
   id: string;
@@ -38,7 +42,11 @@ function radiusMi(): number {
   return Number.isFinite(n) && n > 0 ? n : MAP_NEARBY_RADIUS_MI;
 }
 
-function readRaw(): BroadcastMessageRow[] {
+function cutoffIso(now: Date): string {
+  return new Date(now.getTime() - retentionMs()).toISOString();
+}
+
+function readRawFile(): BroadcastMessageRow[] {
   try {
     if (!existsSync(DATA_PATH)) return [];
     const raw = readFileSync(DATA_PATH, "utf-8");
@@ -52,7 +60,7 @@ function readRaw(): BroadcastMessageRow[] {
   }
 }
 
-function writeRaw(list: BroadcastMessageRow[]): void {
+function writeRawFile(list: BroadcastMessageRow[]): void {
   mkdirSync(path.dirname(DATA_PATH), { recursive: true });
   writeFileSync(DATA_PATH, JSON.stringify(list, null, 2), "utf-8");
 }
@@ -81,8 +89,27 @@ function normaliseRow(row: unknown): BroadcastMessageRow | null {
   return { id, authorUid, lat, lng, body, createdAt };
 }
 
+function rowToPublic(
+  m: BroadcastMessageRow,
+  viewerUid: string | null,
+  viewerIsAdmin: boolean,
+): BroadcastMessagePublic {
+  return {
+    id: m.id,
+    authorUid: m.authorUid,
+    lat: m.lat,
+    lng: m.lng,
+    body: m.body,
+    createdAt: m.createdAt,
+    isMine: viewerUid != null && m.authorUid === viewerUid,
+    canDelete: viewerIsAdmin || (viewerUid != null && m.authorUid === viewerUid),
+  };
+}
+
 export type BroadcastMessagePublic = {
   id: string;
+  /** Stable account id (sha256 slice); shown so signed-in users can reply in DM. */
+  authorUid: string;
   lat: number;
   lng: number;
   body: string;
@@ -90,6 +117,48 @@ export type BroadcastMessagePublic = {
   isMine: boolean;
   canDelete: boolean;
 };
+
+async function readRawUnified(now: Date): Promise<BroadcastMessageRow[]> {
+  const cIso = cutoffIso(now);
+
+  if (isSupabaseConfigured()) {
+    const sb = supabaseAdmin();
+    await sb.from("map_broadcasts").delete().lt("created_at", cIso);
+    const { data, error } = await sb
+      .from("map_broadcasts")
+      .select("id, author_uid, lat, lng, body, created_at")
+      .order("created_at", { ascending: false })
+      .limit(1000);
+    if (error) throw new Error(error.message);
+    return (data ?? []).map((row) => dbRowToInternal(row as Record<string, unknown>)).filter(Boolean) as BroadcastMessageRow[];
+  }
+
+  if (canUseKv()) {
+    const raw = (await kvGetJson<unknown[]>(KV_KEY, [])) ?? [];
+    const normalized = raw
+      .map((r) => normaliseRow(r))
+      .filter((r): r is BroadcastMessageRow => r != null);
+    const pruned = pruneOld(normalized, now);
+    if (pruned.length !== normalized.length) await kvSetJson(KV_KEY, pruned);
+    return pruned;
+  }
+
+  const raw = readRawFile();
+  const pruned = pruneOld(raw, now);
+  if (pruned.length !== raw.length) writeRawFile(pruned);
+  return pruned;
+}
+
+function dbRowToInternal(r: Record<string, unknown>): BroadcastMessageRow | null {
+  const id = typeof r.id === "string" ? r.id : "";
+  const authorUid = typeof r.author_uid === "string" ? r.author_uid : "";
+  const body = typeof r.body === "string" ? r.body : "";
+  const createdAt = typeof r.created_at === "string" ? r.created_at : "";
+  const lat = typeof r.lat === "number" ? r.lat : Number(r.lat);
+  const lng = typeof r.lng === "number" ? r.lng : Number(r.lng);
+  if (!id || !authorUid || !createdAt || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return { id, authorUid, lat, lng, body, createdAt };
+}
 
 export async function listBroadcastsNear(
   lat: number,
@@ -99,23 +168,13 @@ export async function listBroadcastsNear(
   now = new Date(),
 ): Promise<BroadcastMessagePublic[]> {
   return enqueue(async () => {
-    const raw = readRaw();
-    const pruned = pruneOld(raw, now);
-    if (pruned.length !== raw.length) writeRaw(pruned);
+    const raw = await readRawUnified(now);
 
     const maxMi = radiusMi();
     const out: BroadcastMessagePublic[] = [];
-    for (const m of pruned) {
+    for (const m of raw) {
       if (distanceMiles(lat, lng, m.lat, m.lng) > maxMi) continue;
-      out.push({
-        id: m.id,
-        lat: m.lat,
-        lng: m.lng,
-        body: m.body,
-        createdAt: m.createdAt,
-        isMine: viewerUid != null && m.authorUid === viewerUid,
-        canDelete: viewerIsAdmin || (viewerUid != null && m.authorUid === viewerUid),
-      });
+      out.push(rowToPublic(m, viewerUid, viewerIsAdmin));
     }
     out.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return out;
@@ -130,8 +189,36 @@ export async function appendBroadcast(
   now = new Date(),
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   return enqueue(async () => {
-    const list = pruneOld(readRaw(), now);
     const hourAgo = now.getTime() - 60 * 60 * 1000;
+    const hourAgoIso = new Date(hourAgo).toISOString();
+
+    if (isSupabaseConfigured()) {
+      const sb = supabaseAdmin();
+      const cIso = cutoffIso(now);
+      await sb.from("map_broadcasts").delete().lt("created_at", cIso);
+
+      const { count, error: cErr } = await sb
+        .from("map_broadcasts")
+        .select("id", { count: "exact", head: true })
+        .eq("author_uid", authorUid)
+        .gte("created_at", hourAgoIso);
+      if (cErr) return { ok: false, error: cErr.message };
+      if ((count ?? 0) >= MAP_BROADCAST_RATE_PER_HOUR) {
+        return { ok: false, error: "Rate limit: try again in a little while." };
+      }
+
+      const { data, error } = await sb
+        .from("map_broadcasts")
+        .insert({ author_uid: authorUid, lat, lng, body })
+        .select("id")
+        .single();
+      if (error) return { ok: false, error: error.message };
+      const id = data && typeof (data as { id?: string }).id === "string" ? (data as { id: string }).id : "";
+      if (!id) return { ok: false, error: "Insert failed" };
+      return { ok: true, id };
+    }
+
+    const list = await readRawUnified(now);
     const recent = list.filter(
       (m) => m.authorUid === authorUid && new Date(m.createdAt).getTime() >= hourAgo,
     );
@@ -147,8 +234,9 @@ export async function appendBroadcast(
       body,
       createdAt: now.toISOString(),
     };
-    list.push(row);
-    writeRaw(list);
+    const next = [...list, row];
+    if (canUseKv()) await kvSetJson(KV_KEY, next);
+    else writeRawFile(next);
     return { ok: true, id: row.id };
   });
 }
@@ -160,14 +248,34 @@ export async function deleteBroadcast(
   now = new Date(),
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   return enqueue(async () => {
-    const list = pruneOld(readRaw(), now);
+    if (isSupabaseConfigured()) {
+      const sb = supabaseAdmin();
+      const cIso = cutoffIso(now);
+      await sb.from("map_broadcasts").delete().lt("created_at", cIso);
+
+      const { data: row, error: fErr } = await sb
+        .from("map_broadcasts")
+        .select("author_uid")
+        .eq("id", id)
+        .maybeSingle();
+      if (fErr) return { ok: false, error: fErr.message };
+      const r = row as { author_uid?: string } | null;
+      if (!r || typeof r.author_uid !== "string") return { ok: false, error: "Not found" };
+      if (!requesterIsAdmin && r.author_uid !== requesterUid) return { ok: false, error: "Not allowed" };
+      const { error: dErr } = await sb.from("map_broadcasts").delete().eq("id", id);
+      if (dErr) return { ok: false, error: dErr.message };
+      return { ok: true };
+    }
+
+    const list = await readRawUnified(now);
     const idx = list.findIndex((m) => m.id === id);
     if (idx < 0) return { ok: false, error: "Not found" };
     const row = list[idx];
     if (!row) return { ok: false, error: "Not found" };
     if (!requesterIsAdmin && row.authorUid !== requesterUid) return { ok: false, error: "Not allowed" };
     const next = [...list.slice(0, idx), ...list.slice(idx + 1)];
-    writeRaw(next);
+    if (canUseKv()) await kvSetJson(KV_KEY, next);
+    else writeRawFile(next);
     return { ok: true };
   });
 }

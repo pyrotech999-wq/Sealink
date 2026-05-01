@@ -42,7 +42,7 @@ export default async function Home() {
           </p>
         ) : null}
 
-        <HomeLocationMapLoader />
+        <HomeLocationMapLoader signedIn={signedIn} />
 
         <HomeMainCtas signedIn={signedIn} />
 

@@ -9,7 +9,7 @@ export function SeaLinkBrandFooter({ className = "" }: Props) {
       <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-zinc-800 bg-black shadow-lg">
         <Image
           src="/sealink-brand-hero.png"
-          alt="SeaLink — ferry on the water"
+          alt="SeaLink — sailing catamaran"
           width={1024}
           height={1024}
           className="h-auto w-full object-cover"
