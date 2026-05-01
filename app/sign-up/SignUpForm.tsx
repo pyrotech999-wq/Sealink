@@ -263,8 +263,8 @@ export function SignUpForm() {
     }
   }
 
-  async function onSubmit(ev: React.FormEvent) {
-    ev.preventDefault();
+  async function completeSignUp() {
+    if (step !== 4) return;
     if (!validateStep(4)) return;
     setBoatName(form.boatName);
     setFullName(form.contactName);
@@ -305,6 +305,15 @@ export function SignUpForm() {
     } catch {
       setErrors((e) => ({ ...e, submit: "Network error. Try again." }));
     }
+  }
+
+  async function onSubmit(ev: React.FormEvent) {
+    ev.preventDefault();
+    if (step < 4) {
+      next();
+      return;
+    }
+    await completeSignUp();
   }
 
   if (submitted) {
@@ -829,10 +838,11 @@ export function SignUpForm() {
             </button>
           ) : (
             <button
-              type="submit"
+              type="button"
+              onClick={() => void completeSignUp()}
               className="inline-flex h-10 flex-1 items-center justify-center rounded-lg bg-green-700 px-4 text-sm font-medium text-white hover:bg-green-800 sm:flex-none"
             >
-              Finish sign up
+              Next
             </button>
           )}
         </div>

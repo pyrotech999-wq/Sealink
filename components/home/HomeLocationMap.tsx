@@ -14,7 +14,7 @@ import {
 } from "@/lib/life-on-seas-popup-storage";
 import { WindTimelineControls } from "@/components/home/WindTimelineControls";
 import { DEFAULT_MAP_CENTER } from "@/lib/map-constants";
-import { recordLastKnownPosition } from "@/lib/map-last-known";
+import { getLastKnownPosition, recordLastKnownPosition } from "@/lib/map-last-known";
 import { angleDiffDeg, bearingDeg, distanceMiles } from "@/lib/geo-haversine";
 import { fetchWindSlotsEvery3h, nearestSlotIndex, type HourlyWindSlot } from "@/lib/open-meteo-hourly";
 import { buildWindArrowDivIcon } from "@/lib/wind-map-icon";
@@ -83,6 +83,30 @@ function MapRecenter({ lat, lng, zoom }: { lat: number; lng: number; zoom: numbe
   return null;
 }
 
+/** Mobile browsers resize the map when the URL bar shows/hides; Leaflet needs a nudge. */
+function MapResizeFix() {
+  const map = useMap();
+  useEffect(() => {
+    const fix = () => {
+      window.setTimeout(() => {
+        map.invalidateSize();
+      }, 0);
+    };
+    window.addEventListener("orientationchange", fix);
+    window.addEventListener("resize", fix);
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", fix);
+    vv?.addEventListener("scroll", fix);
+    return () => {
+      window.removeEventListener("orientationchange", fix);
+      window.removeEventListener("resize", fix);
+      vv?.removeEventListener("resize", fix);
+      vv?.removeEventListener("scroll", fix);
+    };
+  }, [map]);
+  return null;
+}
+
 function buildPinIcon(boat: string, avatarUrl: string, peekAvatar: boolean): L.DivIcon {
   const label = escapeHtml(boat || "Your boat");
   const safeAvatar = avatarUrl.replace(/'/g, "");
@@ -117,6 +141,8 @@ export default function HomeLocationMap() {
   );
   const [locMode, setLocMode] = useState<string | null>(null);
   const [pos, setPos] = useState<LatLngAcc | null>(null);
+  /** While sharing, keep showing the last good fix (or localStorage seed) so the map does not jump to the default ocean view between GPS reads on phones. */
+  const [heldSharingPos, setHeldSharingPos] = useState<LatLngAcc | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
   const [windSlots, setWindSlots] = useState<HourlyWindSlot[]>([]);
   const [windSlotIdx, setWindSlotIdx] = useState(0);
@@ -145,13 +171,35 @@ export default function HomeLocationMap() {
   const polling = useRef(false);
   const lastAnchorReportAt = useRef<number>(0);
 
+  useEffect(() => {
+    if (!sharing) {
+      setHeldSharingPos(null);
+      return;
+    }
+    if (pos) {
+      setHeldSharingPos(pos);
+      return;
+    }
+    setHeldSharingPos((prev) => {
+      if (prev) return prev;
+      const lk = getLastKnownPosition();
+      if (!lk) return null;
+      return { lat: lk.lat, lng: lk.lng, accuracyM: 80 };
+    });
+  }, [sharing, pos]);
+
+  const mapPinPos = useMemo(() => {
+    if (!sharing) return null;
+    return pos ?? heldSharingPos;
+  }, [sharing, pos, heldSharingPos]);
+
   const forecastLat = useMemo(
-    () => Number((pos?.lat ?? DEFAULT_MAP_CENTER.lat).toFixed(2)),
-    [pos?.lat],
+    () => Number((mapPinPos?.lat ?? pos?.lat ?? DEFAULT_MAP_CENTER.lat).toFixed(2)),
+    [mapPinPos?.lat, pos?.lat],
   );
   const forecastLng = useMemo(
-    () => Number((pos?.lng ?? DEFAULT_MAP_CENTER.lng).toFixed(2)),
-    [pos?.lng],
+    () => Number((mapPinPos?.lng ?? pos?.lng ?? DEFAULT_MAP_CENTER.lng).toFixed(2)),
+    [mapPinPos?.lng, pos?.lng],
   );
 
   const stopPolling = useCallback(() => {
@@ -517,6 +565,7 @@ export default function HomeLocationMap() {
     }
 
     let disposed = false;
+    let watchId: number | undefined;
 
     const nav = navigator as Navigator & {
       getBattery?: () => Promise<{ level: number; charging: boolean; addEventListener: (k: string, fn: () => void) => void; removeEventListener: (k: string, fn: () => void) => void }>;
@@ -531,6 +580,8 @@ export default function HomeLocationMap() {
       let next: string;
       if (intervalMs == null) {
         next = "Background updates paused (disabled).";
+      } else if (typeof document !== "undefined" && !document.hidden) {
+        next = "Live GPS while this tab is visible.";
       } else if (intervalMs >= 15 * 60_000) {
         next = "Low power mode: updating about every 15 minutes.";
       } else if (intervalMs >= 4 * 60_000) {
@@ -546,7 +597,6 @@ export default function HomeLocationMap() {
     const calcIntervalMs = () => {
       if (typeof document !== "undefined" && document.hidden) {
         if (!bgConsent) return null;
-        // Anchor monitoring: tighter background interval (battery trade-off).
         if (anchorCfg.armed) return 180_000;
         return batteryLow || saveData ? 15 * 60_000 : 4 * 60_000;
       }
@@ -556,15 +606,64 @@ export default function HomeLocationMap() {
     const optsFor = (intervalMs: number | null): PositionOptions => {
       const maxAge = intervalMs == null ? 60_000 : Math.min(intervalMs, 15 * 60_000);
       return {
-        // Low-power hint: let the browser use Wi‑Fi/cell when it can.
         enableHighAccuracy: false,
         maximumAge: maxAge,
         timeout: 8_000,
       };
     };
 
-    const tick = () => {
+    function stopWatch() {
+      if (watchId != null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = undefined;
+      }
+    }
+
+    function startWatch() {
+      stopWatch();
+      watchId = navigator.geolocation.watchPosition(
+        (p) => {
+          if (disposed) return;
+          setGeoError(null);
+          setPos({
+            lat: p.coords.latitude,
+            lng: p.coords.longitude,
+            accuracyM: Math.min(Math.max(p.coords.accuracy || 0, 8), 1200),
+          });
+        },
+        (e) => {
+          if (disposed) return;
+          setGeoError(e.message || "Location error");
+        },
+        { enableHighAccuracy: true, maximumAge: 15_000, timeout: 20_000 },
+      );
+    }
+
+    function syncTracking() {
       if (disposed) return;
+      const intervalMs = calcIntervalMs();
+      setMode(intervalMs);
+      stopWatch();
+      if (pollTimer.current != null) window.clearTimeout(pollTimer.current);
+      pollTimer.current = null;
+      polling.current = false;
+      if (intervalMs == null) {
+        stopPolling();
+        return;
+      }
+      if (typeof document !== "undefined" && !document.hidden) {
+        startWatch();
+        return;
+      }
+      pollTimer.current = window.setTimeout(tick, 250);
+    }
+
+    function tick() {
+      if (disposed) return;
+      if (typeof document !== "undefined" && !document.hidden) {
+        syncTracking();
+        return;
+      }
       const intervalMs = calcIntervalMs();
       setMode(intervalMs);
       if (intervalMs == null) {
@@ -596,29 +695,21 @@ export default function HomeLocationMap() {
         },
         optsFor(intervalMs),
       );
-    };
+    }
 
-    const onVisibility = () => {
-      const intervalMs = calcIntervalMs();
-      setMode(intervalMs);
-      if (intervalMs == null) {
-        stopPolling();
-        return;
-      }
-      if (pollTimer.current != null) window.clearTimeout(pollTimer.current);
-      pollTimer.current = window.setTimeout(tick, 250);
-    };
+    const onVisibility = () => syncTracking();
 
     const onBattery = () => {
       if (!battery) return;
       batteryLow = !battery.charging && battery.level <= 0.2;
-      onVisibility();
+      syncTracking();
     };
 
     void (async () => {
       if (!nav.getBattery) {
         batteryLow = false;
         saveData = Boolean(nav.connection?.saveData);
+        syncTracking();
         return;
       }
       try {
@@ -629,6 +720,7 @@ export default function HomeLocationMap() {
         battery.addEventListener("chargingchange", onBattery);
       } catch {
         battery = null;
+        syncTracking();
       }
     })();
 
@@ -636,12 +728,9 @@ export default function HomeLocationMap() {
       document.addEventListener("visibilitychange", onVisibility);
     }
 
-    // Start quickly when sharing begins.
-    pollTimer.current = window.setTimeout(tick, 250);
-    setMode(calcIntervalMs());
-
     return () => {
       disposed = true;
+      stopWatch();
       stopPolling();
       if (typeof document !== "undefined") document.removeEventListener("visibilitychange", onVisibility);
       if (battery) {
@@ -733,10 +822,10 @@ export default function HomeLocationMap() {
     }, 2000);
   }
 
-  const baseLat = pos?.lat ?? DEFAULT_MAP_CENTER.lat;
-  const baseLng = pos?.lng ?? DEFAULT_MAP_CENTER.lng;
+  const baseLat = mapPinPos?.lat ?? DEFAULT_MAP_CENTER.lat;
+  const baseLng = mapPinPos?.lng ?? DEFAULT_MAP_CENTER.lng;
   /** Tiny offset north (~1 m) so the wind readout clears labels. */
-  const windMarkerLat = pos ? baseLat + 0.000009 : baseLat;
+  const windMarkerLat = mapPinPos ? baseLat + 0.000009 : baseLat;
   const windMarkerLng = baseLng;
 
   const activeWind = windSlots.length ? windSlots[Math.min(windSlotIdx, windSlots.length - 1)] : null;
@@ -805,8 +894,8 @@ export default function HomeLocationMap() {
     setShowAvatarState(on);
   }
 
-  const center: [number, number] = pos ? [pos.lat, pos.lng] : DEFAULT_CENTER;
-  const zoom = pos ? 14 : DEFAULT_ZOOM;
+  const center: [number, number] = mapPinPos ? [mapPinPos.lat, mapPinPos.lng] : DEFAULT_CENTER;
+  const zoom = mapPinPos ? 14 : DEFAULT_ZOOM;
 
   return (
     <section className="mt-8 w-full space-y-4" aria-labelledby="map-heading">
@@ -881,6 +970,7 @@ export default function HomeLocationMap() {
                   attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
+                <MapResizeFix />
                 {activeWind && windIcon ? (
                   <Marker
                     key={`wind-${activeWind.at}-${windSlotIdx}`}
@@ -889,12 +979,12 @@ export default function HomeLocationMap() {
                     zIndexOffset={650}
                   />
                 ) : null}
-                {pos ? (
+                {mapPinPos ? (
                   <>
-                    <MapRecenter lat={pos.lat} lng={pos.lng} zoom={14} />
+                    <MapRecenter lat={mapPinPos.lat} lng={mapPinPos.lng} zoom={14} />
                     <Circle
-                      center={[pos.lat, pos.lng]}
-                      radius={pos.accuracyM}
+                      center={[mapPinPos.lat, mapPinPos.lng]}
+                      radius={mapPinPos.accuracyM}
                       pathOptions={{
                         color: "#16a34a",
                         fillColor: "#22c55e",
@@ -904,7 +994,7 @@ export default function HomeLocationMap() {
                     />
                     {shareNearby ? (
                       <Circle
-                        center={[pos.lat, pos.lng]}
+                        center={[mapPinPos.lat, mapPinPos.lng]}
                         radius={NEARBY_RING_METRES}
                         pathOptions={{
                           color: "#3b82f6",
@@ -929,7 +1019,7 @@ export default function HomeLocationMap() {
                     ))}
                     <Marker
                       key={`${boatInput}:${pinAvatarPeek ? "peek" : "circle"}:${avatarUrl ? avatarUrl.slice(0, 24) : "no-avatar"}`}
-                      position={[pos.lat, pos.lng]}
+                      position={[mapPinPos.lat, mapPinPos.lng]}
                       icon={pinIconVisible}
                       zIndexOffset={750}
                       eventHandlers={{
@@ -1095,7 +1185,7 @@ export default function HomeLocationMap() {
         />
       </div>
 
-      <WeatherForecast7Day lat={pos?.lat ?? null} lng={pos?.lng ?? null} />
+      <WeatherForecast7Day lat={mapPinPos?.lat ?? null} lng={mapPinPos?.lng ?? null} />
 
       <LifeOnSeasDailyModal
         open={lifeSeasOpen}
