@@ -2,7 +2,7 @@
  * One-off: copy local `data/*.json` into Supabase (same tables as 001_initial.sql).
  *
  * Prerequisites:
- *   - Run supabase/migrations/001_initial.sql on your project
+ *   - Run supabase/migrations/001_initial.sql (and 002_ifm_presence.sql for IFM presence rows)
  *   - Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.local
  *
  * Usage:
@@ -84,6 +84,19 @@ type PayPalRowJson = {
   updatedAt: string;
 };
 
+/** Matches `data/ifm-presence.json` (same shape as `IfmPresenceRecord` in lib). */
+type IfmPresenceJsonRow = {
+  uid: string;
+  lat: number;
+  lng: number;
+  fullName: string;
+  boatName: string;
+  avatarDataUrl: string;
+  phoneNorm: string;
+  updatedAt: string;
+  share: boolean;
+};
+
 function readJson<T>(file: string): T | null {
   const p = path.join(process.cwd(), "data", file);
   if (!existsSync(p)) {
@@ -117,6 +130,8 @@ async function main() {
   const gear = Array.isArray(gearRaw) ? gearRaw : [];
   const paypalRaw = readJson<Record<string, PayPalRowJson>>("paypal-subscriptions.json");
   const paypalRows = paypalRaw ? Object.values(paypalRaw) : [];
+  const ifmPresenceRaw = readJson<IfmPresenceJsonRow[]>("ifm-presence.json");
+  const ifmPresence = Array.isArray(ifmPresenceRaw) ? ifmPresenceRaw : [];
 
   console.log("SeaLink → Supabase migration");
   console.log({
@@ -126,6 +141,7 @@ async function main() {
     vessels: vessels.length,
     gear: gear.length,
     paypalSubscriptions: paypalRows.length,
+    ifmPresence: ifmPresence.length,
   });
 
   if (DRY) {
@@ -257,6 +273,30 @@ async function main() {
     }
   }
   console.log(`[ok] paypal_subscriptions: ${paypalRows.length}`);
+
+  // 6) IFM map presence (optional; requires 002_ifm_presence.sql)
+  if (ifmPresence.length > 0) {
+    for (const batch of chunk(ifmPresence, 50)) {
+      const rows = batch.map((r) => ({
+        uid: r.uid,
+        lat: r.lat,
+        lng: r.lng,
+        full_name: r.fullName ?? "",
+        boat_name: r.boatName ?? "",
+        avatar_data_url: r.avatarDataUrl ?? "",
+        phone_norm: r.phoneNorm ?? "",
+        updated_at: r.updatedAt,
+        share: Boolean(r.share),
+      }));
+      const { error } = await sb.from("ifm_presence").upsert(rows, { onConflict: "uid" });
+      if (error) {
+        console.error("ifm_presence upsert failed:", error.message);
+        console.error("Did you run supabase/migrations/002_ifm_presence.sql?");
+        process.exit(1);
+      }
+    }
+    console.log(`[ok] ifm_presence: ${ifmPresence.length}`);
+  }
 
   console.log("\nDone. Profiles were not in JSON — they stay empty until users sign in / update. Local /uploads files are not copied to Storage; image URLs in rows still point at old paths if you used disk uploads.");
 }
