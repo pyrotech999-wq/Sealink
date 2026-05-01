@@ -449,8 +449,11 @@ export function MapBroadcastPanel({
           </h4>
           <p className="mt-1 text-[11px] leading-snug text-indigo-900/75 dark:text-indigo-200/80">
             If someone taps <strong className="font-semibold">Reply</strong> on a broadcast, you chat in a private thread.
-            There is no email or push — open a thread below or watch for a <strong className="font-semibold">Vicinity message</strong>{" "}
-            alert. <strong className="font-semibold">Delete</strong> removes the whole thread for both people.
+            There is no email or push — watch for a <strong className="font-semibold">Vicinity message</strong> alert. In the
+            chat, only the latest pair of messages shows at once — scroll or use Earlier / Latest for the rest.{" "}
+            <strong className="font-semibold">Seen</strong> closes the chat but keeps all messages;{" "}
+            <strong className="font-semibold">tap this row</strong> (preview) to reopen.{" "}
+            <strong className="font-semibold">Delete</strong> removes the whole thread for both people.
           </p>
           {inboxRows.length === 0 ? (
             <p className="mt-2 text-[11px] text-indigo-800/60 dark:text-indigo-300/70">No DM threads yet.</p>
@@ -460,6 +463,7 @@ export function MapBroadcastPanel({
                 <li key={row.threadId} className="flex gap-1.5">
                   <button
                     type="button"
+                    aria-label="Open vicinity chat. Tap again after Seen to reopen."
                     onClick={() => {
                       setChatContext(row.lastBody.trim().split(/\r?\n/)[0]?.slice(0, 120));
                       setChatPeerUid(row.peerUid);

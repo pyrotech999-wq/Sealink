@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 type Msg = {
   id: string;
@@ -26,6 +26,13 @@ export function VicinityChatDrawer({ open, onClose, peerUid, contextLine }: Prop
   const [deleting, setDeleting] = useState(false);
   const [draft, setDraft] = useState("");
   const [err, setErr] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, []);
 
   const load = useCallback(async () => {
     if (!open || !peerUid) return;
@@ -62,6 +69,18 @@ export function VicinityChatDrawer({ open, onClose, peerUid, contextLine }: Prop
     return () => window.clearInterval(id);
   }, [open, load]);
 
+  useLayoutEffect(() => {
+    if (!open || messages.length === 0) return;
+    scrollToBottom();
+  }, [open, messages, scrollToBottom]);
+
+  const scrollEarlier = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const step = Math.max(120, el.clientHeight * 0.75);
+    el.scrollTop = Math.max(0, el.scrollTop - step);
+  };
+
   const onSend = async (ev: React.FormEvent) => {
     ev.preventDefault();
     const text = draft.trim();
@@ -81,6 +100,7 @@ export function VicinityChatDrawer({ open, onClose, peerUid, contextLine }: Prop
       }
       setDraft("");
       await load();
+      queueMicrotask(() => scrollToBottom());
     } catch {
       setErr("Network error");
     } finally {
@@ -141,8 +161,14 @@ export function VicinityChatDrawer({ open, onClose, peerUid, contextLine }: Prop
               </span>
             </p>
             {contextLine ? (
-              <p className="mt-1 line-clamp-2 text-[11px] text-zinc-600 dark:text-zinc-300">Re: {contextLine}</p>
+              <p className="mt-1 line-clamp-2 text-[11px] font-medium text-zinc-700 dark:text-zinc-200">
+                Re: {contextLine}
+              </p>
             ) : null}
+            <p className="mt-1 text-[10px] leading-snug text-zinc-500 dark:text-zinc-400">
+              About two messages visible at once — scroll up or use Earlier / Latest. Seen closes this chat (messages
+              stay); tap the thread row under Vicinity replies to reopen.
+            </p>
           </div>
           <div className="flex shrink-0 flex-col items-end gap-1">
             <button
@@ -163,7 +189,32 @@ export function VicinityChatDrawer({ open, onClose, peerUid, contextLine }: Prop
           </div>
         </div>
 
-        <div className="min-h-[220px] flex-1 space-y-2 overflow-y-auto px-3 py-3">
+        {messages.length > 2 ? (
+          <div className="flex items-center justify-between gap-2 border-b border-zinc-200 px-3 py-1.5 dark:border-zinc-800">
+            <button
+              type="button"
+              onClick={scrollEarlier}
+              className="rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1 text-[10px] font-semibold text-zinc-800 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            >
+              ↑ Earlier
+            </button>
+            <span className="text-center text-[10px] text-zinc-500 dark:text-zinc-400">
+              {messages.length} in thread · newest at bottom
+            </span>
+            <button
+              type="button"
+              onClick={scrollToBottom}
+              className="rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1 text-[10px] font-semibold text-zinc-800 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            >
+              Latest ↓
+            </button>
+          </div>
+        ) : null}
+
+        <div
+          ref={scrollRef}
+          className="max-h-[13.5rem] min-h-[7rem] flex-1 space-y-2 overflow-y-auto scroll-smooth px-3 py-3 sm:max-h-[15rem]"
+        >
           {loading && messages.length === 0 ? <p className="text-xs text-zinc-500">Loading…</p> : null}
           {err ? (
             <p className="rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
@@ -201,13 +252,22 @@ export function VicinityChatDrawer({ open, onClose, peerUid, contextLine }: Prop
             placeholder="Write a message…"
             className="w-full rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-sm text-zinc-900 outline-none focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
           />
-          <button
-            type="submit"
-            disabled={sending || !draft.trim()}
-            className="mt-2 h-9 w-full rounded-lg bg-indigo-600 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 dark:bg-indigo-600"
-          >
-            {sending ? "Sending…" : "Send"}
-          </button>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="h-9 shrink-0 rounded-lg border border-zinc-300 bg-white px-3 text-xs font-semibold text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            >
+              Seen
+            </button>
+            <button
+              type="submit"
+              disabled={sending || !draft.trim()}
+              className="h-9 min-w-0 flex-1 rounded-lg bg-indigo-600 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 dark:bg-indigo-600"
+            >
+              {sending ? "Sending…" : "Send"}
+            </button>
+          </div>
         </form>
       </div>
     </div>
