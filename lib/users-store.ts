@@ -101,15 +101,22 @@ async function upsertUserSupabase(email: string, password: PasswordHash): Promis
   return { uid, email: key, password, createdAt, updatedAt: now };
 }
 
+async function getUserFromKvOrFile(emailKey: string): Promise<UserRow | null> {
+  const store = canUseKv() ? await kvGetJson<StoreShape>(KV_KEY, {}) : readStore();
+  const row = store[emailKey];
+  return row && typeof row === "object" ? row : null;
+}
+
 export async function getUserByEmail(email: string): Promise<UserRow | null> {
   return enqueue(async () => {
-    if (isSupabaseConfigured()) {
-      return getUserByEmailSupabase(email);
-    }
-    const store = canUseKv() ? await kvGetJson<StoreShape>(KV_KEY, {}) : readStore();
     const key = normaliseEmail(email);
-    const row = store[key];
-    return row && typeof row === "object" ? row : null;
+    if (isSupabaseConfigured()) {
+      const fromSb = await getUserByEmailSupabase(email);
+      if (fromSb) return fromSb;
+      // Accounts created before Supabase lived only in KV — still try KV so sign-in keeps working.
+      return getUserFromKvOrFile(key);
+    }
+    return getUserFromKvOrFile(key);
   });
 }
 

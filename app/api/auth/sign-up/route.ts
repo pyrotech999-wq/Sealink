@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { DEMO_SESSION_COOKIE, DEMO_SESSION_VALUE } from "@/lib/demo-session";
-import { AUTH_EMAIL_COOKIE, normaliseEmail, uidFromEmail } from "@/lib/auth";
+import { AUTH_EMAIL_COOKIE, uidFromEmail } from "@/lib/auth";
+import { normaliseEmailFromInput } from "@/lib/email-normalise";
 import { registerAccountDevice } from "@/lib/account-devices-store";
 import { hashPassword } from "@/lib/password-hash";
 import { getUserByEmail, upsertUser } from "@/lib/users-store";
@@ -38,7 +39,7 @@ export async function POST(req: Request) {
       deviceName?: unknown;
       profile?: ProfileBody;
     };
-    email = typeof body.email === "string" ? normaliseEmail(body.email) : "";
+    email = typeof body.email === "string" ? normaliseEmailFromInput(body.email) : "";
     password = typeof body.password === "string" ? body.password : "";
     deviceId = typeof body.deviceId === "string" ? body.deviceId : "";
     deviceName = typeof body.deviceName === "string" ? body.deviceName : "";
