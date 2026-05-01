@@ -46,13 +46,15 @@ function writeStore(store: StoreShape): void {
   writeFileSync(DATA_PATH, JSON.stringify(store, null, 2), "utf-8");
 }
 
-function rowFromDb(data: {
+type UserAccountRowDb = {
   uid: string;
   email: string;
   password_hash: unknown;
   created_at: string;
   updated_at: string;
-}): UserRow {
+};
+
+function rowFromDb(data: UserAccountRowDb): UserRow {
   return {
     uid: data.uid,
     email: data.email,
@@ -67,7 +69,7 @@ async function getUserByEmailSupabase(email: string): Promise<UserRow | null> {
   const key = normaliseEmail(email);
   const { data, error } = await sb.from("user_accounts").select("*").eq("email", key).maybeSingle();
   if (error || !data) return null;
-  return rowFromDb(data as Parameters<typeof rowFromDb>[0]);
+  return rowFromDb(data as UserAccountRowDb);
 }
 
 async function upsertUserSupabase(email: string, password: PasswordHash): Promise<UserRow> {

@@ -6,6 +6,7 @@ import { LAST_SIGNIN_EMAIL_STORAGE_KEY, normaliseEmail } from "@/lib/email-norma
 import { getBoatName, setAvatarDataUrl, setBoatName, setFullName, setProfilePhone } from "@/lib/map-profile-storage";
 import { normalisePhone } from "@/lib/phone-normalise";
 import { getDeviceName, getOrCreateDeviceId } from "@/lib/device-id";
+import { compressProfilePhoto } from "@/lib/client/compress-profile-photo";
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -37,7 +38,8 @@ const initial = {
   invitedEmails: "",
 };
 
-const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+/** Large photos are shrunk in the browser before upload; cap raw picker size to avoid memory issues. */
+const MAX_PHOTO_BYTES = 24 * 1024 * 1024;
 
 const PHONE_DIAL_OPTIONS: { dial: string; label: string }[] = [
   { dial: "+44", label: "United Kingdom (+44)" },
@@ -70,6 +72,7 @@ export function SignUpForm() {
   const [notifHint, setNotifHint] = useState<string | null>(null);
   const [bleHint, setBleHint] = useState<string | null>(null);
   const [shareHint, setShareHint] = useState<string | null>(null);
+  const [profileAvatarDataUrl, setProfileAvatarDataUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const formTopRef = useRef<HTMLFormElement>(null);
   /** Stops the primary action sitting under the thumb from firing twice when step 3 → 4 re-renders on mobile. */
@@ -118,7 +121,7 @@ export function SignUpForm() {
     });
   }
 
-  function onPickPhoto(ev: React.ChangeEvent<HTMLInputElement>) {
+  async function onPickPhoto(ev: React.ChangeEvent<HTMLInputElement>) {
     const file = ev.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith("image/")) {
@@ -126,32 +129,44 @@ export function SignUpForm() {
       return;
     }
     if (file.size > MAX_PHOTO_BYTES) {
-      setErrors((e) => ({ ...e, profilePhoto: "Image must be 5MB or smaller" }));
+      setErrors((e) => ({ ...e, profilePhoto: "That file is too large to process here. Try a smaller original or another photo." }));
       return;
     }
     clearPhotoError();
-    setPhotoFile(file);
+    let processed: File;
+    try {
+      processed = await compressProfilePhoto(file);
+    } catch {
+      setErrors((e) => ({ ...e, profilePhoto: "Could not process that image. Try a different photo." }));
+      return;
+    }
+    setPhotoFile(processed);
+    setProfileAvatarDataUrl(null);
     setPhotoPreview((prev) => {
       if (prev) URL.revokeObjectURL(prev);
-      return URL.createObjectURL(file);
+      return URL.createObjectURL(processed);
     });
 
-    // Also store a small-ish data URL for the map pin (local only).
     const reader = new FileReader();
     reader.onload = () => {
       try {
         const url = String(reader.result || "");
         setAvatarDataUrl(url);
+        setProfileAvatarDataUrl(url);
       } catch {
-        setErrors((e) => ({ ...e, profilePhoto: "That photo is too large for map storage. Choose a smaller image." }));
+        setErrors((e) => ({
+          ...e,
+          profilePhoto: "That photo is still too large after resizing. Try a simpler image or lower resolution.",
+        }));
       }
     };
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(processed);
   }
 
   function removePhoto() {
     clearPhotoError();
     setPhotoFile(null);
+    setProfileAvatarDataUrl(null);
     setAvatarDataUrl(null);
     setPhotoPreview((prev) => {
       if (prev) URL.revokeObjectURL(prev);
@@ -312,7 +327,25 @@ export function SignUpForm() {
       const r = await fetch("/api/auth/sign-up", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: form.email.trim(), password: form.password, deviceId, deviceName }),
+        body: JSON.stringify({
+          email: form.email.trim(),
+          password: form.password,
+          deviceId,
+          deviceName,
+          profile: {
+            fullName: form.contactName.trim(),
+            boatName: form.boatName.trim(),
+            phone: fullPhone,
+            age: ageNum,
+            line1: form.line1.trim(),
+            line2: form.line2.trim(),
+            city: form.city.trim(),
+            postcode: form.postcode.trim(),
+            invitedEmails: form.invitedEmails.trim(),
+            locationAccess: form.locationAccess,
+            avatarDataUrl: profileAvatarDataUrl,
+          },
+        }),
       });
       const d = (await r.json()) as { ok?: boolean; error?: string };
       if (!r.ok || !d.ok) {
@@ -396,7 +429,9 @@ export function SignUpForm() {
         <div className="space-y-5">
           <div>
             <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Profile photo</p>
-            <p className="mt-0.5 text-xs text-zinc-500">A clear face photo helps people in your Circle recognise you on the map.</p>
+            <p className="mt-0.5 text-xs text-zinc-500">
+              A clear face photo helps people in your Circle recognise you on the map. Large pictures are shrunk automatically.
+            </p>
             <div className="mt-3 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
               <div className="relative size-24 shrink-0 overflow-hidden rounded-full border-2 border-dashed border-zinc-300 bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900">
                 {photoPreview ? (

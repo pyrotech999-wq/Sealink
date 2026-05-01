@@ -1,7 +1,8 @@
 /**
  * Browser-only: downscale and re-encode profile photos so they stay under map/localStorage limits.
  */
-const TARGET_MAX_BYTES = 420_000;
+/** Binary blob target; base64 data URLs must stay under map `MAX_AVATAR_BYTES` (~450k chars). */
+const TARGET_MAX_BYTES = 260_000;
 const MAX_EDGE_PX = 1600;
 const MIN_EDGE_PX = 480;
 const MIME_JPEG = "image/jpeg";

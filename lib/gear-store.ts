@@ -2,20 +2,20 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
 import type { GearListing } from "@/lib/gear-types";
-import { GEAR_LISTING_TTL_DAYS, GEAR_REMINDER_DAYS_BEFORE } from "@/lib/gear-constants";
 import { isGearCategoryId, isGearListingKind } from "@/lib/gear-types";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
+import * as gearSupabase from "@/lib/gear-supabase";
+import {
+  applyPruneAndReminders,
+  defaultExpiresAt,
+  extendExpiresFromCurrent,
+  daysUntilExpiry,
+  isInReminderWindow,
+} from "@/lib/gear-store-shared";
+
+export { defaultExpiresAt, extendExpiresFromCurrent, daysUntilExpiry, isInReminderWindow };
 
 const DATA_PATH = path.join(process.cwd(), "data", "gear-listings.json");
-
-function ttlDays(): number {
-  const n = Number(process.env.GEAR_LISTING_TTL_DAYS);
-  return Number.isFinite(n) && n > 0 ? n : GEAR_LISTING_TTL_DAYS;
-}
-
-function reminderDays(): number {
-  const n = Number(process.env.GEAR_REMINDER_DAYS_BEFORE);
-  return Number.isFinite(n) && n > 0 ? n : GEAR_REMINDER_DAYS_BEFORE;
-}
 
 let queue: Promise<unknown> = Promise.resolve();
 
@@ -47,8 +47,6 @@ function writeRaw(list: GearListing[]): void {
   writeFileSync(DATA_PATH, JSON.stringify(list, null, 2), "utf-8");
 }
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 function normaliseListing(row: unknown): GearListing | null {
   if (!row || typeof row !== "object") return null;
   const r = row as Partial<GearListing> & { [k: string]: unknown };
@@ -79,41 +77,14 @@ function normaliseListing(row: unknown): GearListing | null {
   };
 }
 
-function applyPruneAndReminders(list: GearListing[], now: Date): { next: GearListing[]; changed: boolean } {
-  const nowMs = now.getTime();
-  const remMs = reminderDays() * DAY_MS;
-  let changed = false;
-
-  const kept = list.filter((l) => {
-    const exp = new Date(l.expiresAt).getTime();
-    if (!l.soldAt && exp <= nowMs) {
-      changed = true;
-      return false;
-    }
-    return true;
-  });
-
-  for (const l of kept) {
-    if (l.soldAt) continue;
-    const exp = new Date(l.expiresAt).getTime();
-    if (exp > nowMs && exp - nowMs <= remMs && !l.reminderSentAt) {
-      l.reminderSentAt = now.toISOString();
-      changed = true;
-    }
-  }
-
-  return { next: kept, changed };
-}
-
 export function newListingId(): string {
   return randomUUID();
 }
 
-export function defaultExpiresAt(createdAt: Date): string {
-  return new Date(createdAt.getTime() + ttlDays() * DAY_MS).toISOString();
-}
-
 export async function loadGearListings(now = new Date()): Promise<GearListing[]> {
+  if (isSupabaseConfigured()) {
+    return gearSupabase.loadGearListings(now);
+  }
   return enqueue(async () => {
     const raw = readRaw();
     const { next, changed } = applyPruneAndReminders(raw, now);
@@ -123,6 +94,9 @@ export async function loadGearListings(now = new Date()): Promise<GearListing[]>
 }
 
 export async function appendListing(listing: GearListing): Promise<void> {
+  if (isSupabaseConfigured()) {
+    return gearSupabase.appendListing(listing);
+  }
   return enqueue(async () => {
     const raw = readRaw();
     raw.push(listing);
@@ -136,6 +110,9 @@ export async function updateListing(
   sellerUid: string,
   mutator: (l: GearListing) => GearListing | null,
 ): Promise<{ ok: boolean; error?: string }> {
+  if (isSupabaseConfigured()) {
+    return gearSupabase.updateListing(id, sellerUid, mutator);
+  }
   return enqueue(async () => {
     const raw = readRaw();
     const { next: list } = applyPruneAndReminders(raw, new Date());
@@ -152,10 +129,10 @@ export async function updateListing(
   });
 }
 
-export async function deleteListing(
-  id: string,
-  sellerUid: string,
-): Promise<{ ok: boolean; error?: string }> {
+export async function deleteListing(id: string, sellerUid: string): Promise<{ ok: boolean; error?: string }> {
+  if (isSupabaseConfigured()) {
+    return gearSupabase.deleteListing(id, sellerUid);
+  }
   return enqueue(async () => {
     const raw = readRaw();
     const { next: list } = applyPruneAndReminders(raw, new Date());
@@ -168,20 +145,4 @@ export async function deleteListing(
     writeRaw(next);
     return { ok: true };
   });
-}
-
-export function daysUntilExpiry(expiresAt: string, now = new Date()): number {
-  const ms = new Date(expiresAt).getTime() - now.getTime();
-  if (ms <= 0) return 0;
-  return Math.ceil(ms / DAY_MS);
-}
-
-export function isInReminderWindow(expiresAt: string, now = new Date()): boolean {
-  const d = daysUntilExpiry(expiresAt, now);
-  return d > 0 && d <= reminderDays();
-}
-
-/** Add another full listing period onto the current expiry instant. */
-export function extendExpiresFromCurrent(expiresAtIso: string): string {
-  return new Date(new Date(expiresAtIso).getTime() + ttlDays() * DAY_MS).toISOString();
 }

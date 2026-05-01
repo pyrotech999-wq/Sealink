@@ -6,9 +6,7 @@ import type { GearCategoryId, GearListing, GearListingKind } from "@/lib/gear-ty
 import { isGearCategoryId, isGearListingKind } from "@/lib/gear-types";
 import { appendListing, defaultExpiresAt, loadGearListings, newListingId } from "@/lib/gear-store";
 import { validateGearText } from "@/lib/gear-validate";
-import { mkdirSync, writeFileSync } from "fs";
-import path from "path";
-import { randomUUID } from "crypto";
+import { persistListingImages } from "@/lib/listing-uploads";
 
 export const runtime = "nodejs";
 
@@ -157,21 +155,16 @@ export async function POST(req: Request) {
     if (imageFiles.length > MAX_IMAGES) {
       return NextResponse.json({ error: `Please add up to ${MAX_IMAGES} images.` }, { status: 400 });
     }
-    const dir = path.join(process.cwd(), "public", "uploads", "gear", id);
-    mkdirSync(dir, { recursive: true });
-
+    const parts: { buffer: Buffer; contentType: string }[] = [];
     for (const f of imageFiles) {
       const ext = extFromContentType(f.type || "");
       if (!ext) return NextResponse.json({ error: "Images must be JPG, PNG, or WebP." }, { status: 400 });
       if (f.size > MAX_IMAGE_BYTES) {
         return NextResponse.json({ error: "Each image must be 3 MB or smaller." }, { status: 400 });
       }
-      const name = `${randomUUID()}.${ext}`;
-      const p = path.join(dir, name);
-      const ab = await f.arrayBuffer();
-      writeFileSync(p, Buffer.from(ab));
-      urls.push(`/uploads/gear/${id}/${name}`);
+      parts.push({ buffer: Buffer.from(await f.arrayBuffer()), contentType: f.type || "image/jpeg" });
     }
+    urls.push(...(await persistListingImages("gear", id, parts)));
   }
 
   const row: GearListing = {

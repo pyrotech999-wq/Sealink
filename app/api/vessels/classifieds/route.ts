@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
-import { mkdirSync, writeFileSync } from "fs";
-import path from "path";
-import { randomUUID } from "crypto";
 import { requireAuthUser } from "@/lib/auth";
 import { buildDraftListing, appendVesselListing, loadVesselClassifieds, updateVesselListing, adminUpdateVesselListing } from "@/lib/vessel-classifieds-store";
 import { isVesselCategoryId, type VesselCategoryId } from "@/lib/vessel-classifieds-types";
 import { toPublicVesselListing } from "@/lib/vessel-classifieds-public";
+import { persistListingImages } from "@/lib/listing-uploads";
 
 export const runtime = "nodejs";
 
@@ -95,17 +93,13 @@ export async function POST(req: Request) {
   row.priceGbp = priceGbp != null ? Math.max(0, Math.min(999_999_999, Math.round(priceGbp * 100) / 100)) : null;
 
   if (files.length) {
-    const dir = path.join(process.cwd(), "public", "uploads", "vessels", row.id);
-    mkdirSync(dir, { recursive: true });
-    const urls: string[] = [];
-    for (const f of files) {
-      const ext = extFromContentType(f.type || "")!;
-      const name = `${randomUUID()}.${ext}`;
-      const p = path.join(dir, name);
-      writeFileSync(p, Buffer.from(await f.arrayBuffer()));
-      urls.push(`/uploads/vessels/${row.id}/${name}`);
-    }
-    row.imageUrls = urls;
+    const parts = await Promise.all(
+      files.map(async (f) => ({
+        buffer: Buffer.from(await f.arrayBuffer()),
+        contentType: f.type || "image/jpeg",
+      })),
+    );
+    row.imageUrls = await persistListingImages("vessel", row.id, parts);
   }
 
   await appendVesselListing(row);

@@ -5,20 +5,44 @@ import { registerAccountDevice } from "@/lib/account-devices-store";
 import { hashPassword } from "@/lib/password-hash";
 import { getUserByEmail, upsertUser } from "@/lib/users-store";
 import { sessionCookieBase } from "@/lib/session-cookies";
+import { upsertProfileAfterSignUp } from "@/lib/profiles-server";
+import { normalisePhone } from "@/lib/phone-normalise";
 
 export const runtime = "nodejs";
+
+type ProfileBody = {
+  fullName?: unknown;
+  boatName?: unknown;
+  phone?: unknown;
+  age?: unknown;
+  line1?: unknown;
+  line2?: unknown;
+  city?: unknown;
+  postcode?: unknown;
+  invitedEmails?: unknown;
+  locationAccess?: unknown;
+  avatarDataUrl?: unknown;
+};
 
 export async function POST(req: Request) {
   let email = "";
   let password = "";
   let deviceId = "";
   let deviceName = "";
+  let profile: ProfileBody | null = null;
   try {
-    const body = (await req.json()) as { email?: unknown; password?: unknown; deviceId?: unknown; deviceName?: unknown };
+    const body = (await req.json()) as {
+      email?: unknown;
+      password?: unknown;
+      deviceId?: unknown;
+      deviceName?: unknown;
+      profile?: ProfileBody;
+    };
     email = typeof body.email === "string" ? normaliseEmail(body.email) : "";
     password = typeof body.password === "string" ? body.password : "";
     deviceId = typeof body.deviceId === "string" ? body.deviceId : "";
     deviceName = typeof body.deviceName === "string" ? body.deviceName : "";
+    profile = body.profile && typeof body.profile === "object" ? body.profile : null;
   } catch {
     /* */
   }
@@ -48,6 +72,24 @@ export async function POST(req: Request) {
     }
   }
 
+  if (profile) {
+    const ageRaw = profile.age;
+    const ageNum = typeof ageRaw === "number" ? ageRaw : typeof ageRaw === "string" ? parseInt(ageRaw, 10) : NaN;
+    await upsertProfileAfterSignUp(uid, {
+      fullName: typeof profile.fullName === "string" ? profile.fullName : undefined,
+      boatName: typeof profile.boatName === "string" ? profile.boatName : undefined,
+      phone: typeof profile.phone === "string" ? normalisePhone(profile.phone) : undefined,
+      age: Number.isFinite(ageNum) ? ageNum : null,
+      line1: typeof profile.line1 === "string" ? profile.line1 : undefined,
+      line2: typeof profile.line2 === "string" ? profile.line2 : undefined,
+      city: typeof profile.city === "string" ? profile.city : undefined,
+      postcode: typeof profile.postcode === "string" ? profile.postcode : undefined,
+      invitedEmails: typeof profile.invitedEmails === "string" ? profile.invitedEmails : undefined,
+      locationAccess: typeof profile.locationAccess === "string" ? profile.locationAccess : undefined,
+      avatarDataUrl: typeof profile.avatarDataUrl === "string" ? profile.avatarDataUrl : null,
+    });
+  }
+
   const res = NextResponse.json({ ok: true });
   const base = sessionCookieBase();
   res.cookies.set(DEMO_SESSION_COOKIE, DEMO_SESSION_VALUE, {
@@ -60,4 +102,3 @@ export async function POST(req: Request) {
   });
   return res;
 }
-

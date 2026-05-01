@@ -1,4 +1,4 @@
-import type { VesselClassifiedListing, VesselListingStatus } from "@/lib/vessel-classifieds-types";
+import type { VesselClassifiedListing } from "@/lib/vessel-classifieds-types";
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 export const TTL_DAYS = 180; // ~6 months
@@ -32,7 +32,7 @@ export function applyExpiry(list: VesselClassifiedListing[], now: Date): { next:
     if (l.status === "expired") return l;
     if (new Date(l.expiresAt).getTime() <= nowMs) {
       changed = true;
-      return { ...l, status: "expired" as const satisfies VesselListingStatus };
+      return { ...l, status: "expired" as const };
     }
     return l;
   });
