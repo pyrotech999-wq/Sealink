@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAppBaseUrl } from "@/lib/app-base-url";
-import { normaliseEmail } from "@/lib/auth";
+import { normaliseEmailFromInput } from "@/lib/email-normalise";
 import { createResetToken } from "@/lib/password-reset-store";
 import { sendMail } from "@/lib/mail";
 import { getUserByEmail } from "@/lib/users-store";
@@ -18,7 +18,7 @@ export async function POST(req: Request) {
   let email = "";
   try {
     const body = (await req.json()) as { email?: unknown };
-    email = typeof body.email === "string" ? normaliseEmail(body.email) : "";
+    email = typeof body.email === "string" ? normaliseEmailFromInput(body.email) : "";
   } catch {
     /* */
   }

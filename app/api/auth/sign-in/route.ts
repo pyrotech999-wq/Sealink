@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { DEMO_SESSION_COOKIE, DEMO_SESSION_VALUE } from "@/lib/demo-session";
-import { AUTH_EMAIL_COOKIE, normaliseEmail, uidFromEmail } from "@/lib/auth";
+import { AUTH_EMAIL_COOKIE, uidFromEmail } from "@/lib/auth";
+import { normaliseEmailFromInput } from "@/lib/email-normalise";
 import { deactivateAccountDevice, registerAccountDevice } from "@/lib/account-devices-store";
 import { getUserByEmail } from "@/lib/users-store";
 import { verifyPassword } from "@/lib/password-hash";
@@ -24,7 +25,7 @@ export async function POST(req: Request) {
       deactivateDeviceId?: unknown;
       rememberMe?: unknown;
     };
-    email = typeof body.email === "string" ? normaliseEmail(body.email) : "";
+    email = typeof body.email === "string" ? normaliseEmailFromInput(body.email) : "";
     password = typeof body.password === "string" ? body.password : "";
     deviceId = typeof body.deviceId === "string" ? body.deviceId : "";
     deviceName = typeof body.deviceName === "string" ? body.deviceName : "";
@@ -48,10 +49,11 @@ export async function POST(req: Request) {
 
   const user = await getUserByEmail(email);
   if (!user) {
-    // Avoid account enumeration.
+    console.warn("[auth/sign-in] no account for normalized email");
     return NextResponse.json({ ok: false, error: "Invalid email or password." }, { status: 401 });
   }
   if (!password || !verifyPassword(password, user.password)) {
+    console.warn("[auth/sign-in] password verification failed");
     return NextResponse.json({ ok: false, error: "Invalid email or password." }, { status: 401 });
   }
 
