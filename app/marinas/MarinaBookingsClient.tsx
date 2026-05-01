@@ -273,9 +273,11 @@ export function MarinaBookingsClient() {
       <header className="max-w-2xl">
         <h1 className="text-3xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Marina berths</h1>
         <p className="mt-3 text-base leading-7 text-zinc-600 dark:text-zinc-400">
-          Browse {MARINA_WORLD_CATALOG.length}+ harbours worldwide — filter by <strong className="font-medium text-zinc-800 dark:text-zinc-200">country</strong>,{" "}
-          text search, boat length, or <strong className="font-medium text-zinc-800 dark:text-zinc-200">near me</strong>. Save a berth request when signed in
-          (Supabase), or copy an enquiry and call the marina. Numbers and rates are indicative; always confirm with the office.
+          Filter by <strong className="font-medium text-zinc-800 dark:text-zinc-200">country</strong>, text search, boat length, or{" "}
+          <strong className="font-medium text-zinc-800 dark:text-zinc-200">near me</strong>. With{" "}
+          <code className="rounded bg-zinc-200/80 px-1 text-sm dark:bg-zinc-800">005_marinas</code> +{" "}
+          <code className="rounded bg-zinc-200/80 px-1 text-sm dark:bg-zinc-800">npm run marinas:import:osm</code>, results come from your
+          OpenStreetMap import; otherwise a curated seed list loads. Save berth requests when signed in (Supabase).
         </p>
       </header>
 
@@ -465,11 +467,22 @@ export function MarinaBookingsClient() {
       </section>
 
       <section className="mt-8">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-          {filtered.length} marina{filtered.length === 1 ? "" : "s"}
-        </h2>
+        <div className="flex flex-wrap items-baseline gap-2">
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+            {listLoading ? "Loading marinas…" : `${listMarinas.length} marina${listMarinas.length === 1 ? "" : "s"}`}
+          </h2>
+          {listSource === "supabase" ? (
+            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200">
+              OSM directory
+            </span>
+          ) : listSource === "seed" ? (
+            <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+              Seed list
+            </span>
+          ) : null}
+        </div>
         <ul className="mt-4 flex flex-col gap-4">
-          {filtered.map((m) => {
+          {listMarinas.map((m) => {
             const tel = marinaTelHref(m.phone);
             const distKm =
               userPos != null ? Math.round(distanceKm(userPos.lat, userPos.lng, m.lat, m.lng)) : null;
@@ -514,7 +527,9 @@ export function MarinaBookingsClient() {
                         ))}
                       </ul>
                       <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
-                        Max length {m.maxLengthM} m · Chart depth ~{m.depthM} m · From €{m.priceFromEur}/night (indicative)
+                        Max length {m.maxLengthM != null ? `${m.maxLengthM} m` : "—"} · Chart depth{" "}
+                        {m.depthM != null ? `~${m.depthM} m` : "—"} ·{" "}
+                        {m.priceFromEur != null ? `From €${m.priceFromEur}/night` : "Price on request"} (indicative)
                       </p>
                     </div>
                     <div className="flex shrink-0 flex-col gap-2 sm:items-end">
@@ -554,7 +569,7 @@ export function MarinaBookingsClient() {
             );
           })}
         </ul>
-        {filtered.length === 0 ? (
+        {!listLoading && listMarinas.length === 0 ? (
           <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
             No marinas match — try another country or search, relax boat length, or increase the “Near me” radius /
             choose Worldwide (sort only).
@@ -684,10 +699,12 @@ export function MarinaBookingsClient() {
       ) : null}
 
       <p className="mt-10 pb-4 text-center text-[11px] text-zinc-500 dark:text-zinc-400">
-        Curated worldwide seed list ({MARINA_WORLD_CATALOG.length} harbours) — not exhaustive. Regenerate{" "}
-        <code className="rounded bg-zinc-200/80 px-1 dark:bg-zinc-800">data/marinas-world.json</code> with{" "}
-        <code className="rounded bg-zinc-200/80 px-1 dark:bg-zinc-800">npm run marinas:build-catalog</code>. Confirm all
-        details with each marina.
+        Seed fallback: {MARINA_WORLD_CATALOG.length} harbours in{" "}
+        <code className="rounded bg-zinc-200/80 px-1 dark:bg-zinc-800">data/marinas-world.json</code> (
+        <code className="rounded bg-zinc-200/80 px-1 dark:bg-zinc-800">npm run marinas:build-catalog</code>). Expand with
+        OSM: <code className="rounded bg-zinc-200/80 px-1 dark:bg-zinc-800">005_marinas.sql</code> +{" "}
+        <code className="rounded bg-zinc-200/80 px-1 dark:bg-zinc-800">npm run marinas:import:osm</code>. Always confirm with
+        each marina.
       </p>
     </div>
   );
