@@ -158,7 +158,13 @@ function buildPinIcon(boat: string, avatarUrl: string, peekAvatar: boolean): L.D
   });
 }
 
-export default function HomeLocationMap({ signedIn = false }: { signedIn?: boolean }) {
+export default function HomeLocationMap({
+  signedIn = false,
+  canSendGlobalBroadcast = false,
+}: {
+  signedIn?: boolean;
+  canSendGlobalBroadcast?: boolean;
+}) {
   const [boatInput, setBoatInput] = useState(() => (typeof window !== "undefined" ? getBoatName() : ""));
   const [avatarUrl] = useState(() => (typeof window !== "undefined" ? getAvatarDataUrl() : ""));
   const [pinAvatarPeek, setPinAvatarPeek] = useState(false);
@@ -1246,6 +1252,7 @@ export default function HomeLocationMap({ signedIn = false }: { signedIn?: boole
       <div className="mt-4">
         <MapBroadcastPanel
           signedIn={signedIn}
+          canSendGlobalBroadcast={canSendGlobalBroadcast}
           readLat={pos?.lat ?? DEFAULT_MAP_CENTER.lat}
           readLng={pos?.lng ?? DEFAULT_MAP_CENTER.lng}
           canSend={Boolean(sharing && pos)}

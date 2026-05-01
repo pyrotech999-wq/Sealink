@@ -7,12 +7,15 @@ import { HomeMarinaBookingCta } from "@/components/home/HomeMarinaBookingCta";
 import { SeaLinkBrandFooter } from "@/components/SeaLinkBrandFooter";
 import { ShareAppLink } from "@/components/home/ShareAppLink";
 import { DEMO_SESSION_COOKIE, DEMO_SESSION_VALUE } from "@/lib/demo-session";
+import { canSendGlobalAreaBroadcast, getAuthUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const jar = await cookies();
   const signedIn = jar.get(DEMO_SESSION_COOKIE)?.value === DEMO_SESSION_VALUE;
+  const authUser = await getAuthUser();
+  const canSendGlobalBroadcast = authUser ? canSendGlobalAreaBroadcast(authUser.email) : false;
 
   return (
     <div className="flex flex-1 flex-col bg-black">
@@ -42,7 +45,7 @@ export default async function Home() {
           </p>
         ) : null}
 
-        <HomeLocationMapLoader signedIn={signedIn} />
+        <HomeLocationMapLoader signedIn={signedIn} canSendGlobalBroadcast={canSendGlobalBroadcast} />
 
         <HomeMainCtas signedIn={signedIn} />
 

@@ -77,10 +77,12 @@ export type BroadcastMsg = {
   createdAt: string;
   isMine: boolean;
   canDelete?: boolean;
+  isGlobal?: boolean;
 };
 
 type Props = {
   signedIn: boolean;
+  canSendGlobalBroadcast?: boolean;
   readLat: number;
   readLng: number;
   canSend: boolean;
@@ -88,7 +90,15 @@ type Props = {
   sendLng: number | null;
 };
 
-export function MapBroadcastPanel({ signedIn, readLat, readLng, canSend, sendLat, sendLng }: Props) {
+export function MapBroadcastPanel({
+  signedIn,
+  canSendGlobalBroadcast = false,
+  readLat,
+  readLng,
+  canSend,
+  sendLat,
+  sendLng,
+}: Props) {
   const toast = useBroadcastToast();
   const [messages, setMessages] = useState<BroadcastMsg[]>([]);
   const [draft, setDraft] = useState("");
@@ -98,6 +108,7 @@ export function MapBroadcastPanel({ signedIn, readLat, readLng, canSend, sendLat
   const [soundOn, setSoundOn] = useState(() => (typeof window !== "undefined" ? readSoundOn() : true));
   const [chatPeerUid, setChatPeerUid] = useState<string | null>(null);
   const [chatContext, setChatContext] = useState<string | undefined>(undefined);
+  const [broadcastAllAreas, setBroadcastAllAreas] = useState(false);
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent === true;
@@ -169,7 +180,12 @@ export function MapBroadcastPanel({ signedIn, readLat, readLng, canSend, sendLat
       const r = await fetch("/api/map/broadcast", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lat: sendLat, lng: sendLng, text }),
+        body: JSON.stringify({
+          lat: sendLat,
+          lng: sendLng,
+          text,
+          ...(canSendGlobalBroadcast && broadcastAllAreas ? { broadcastAllAreas: true } : {}),
+        }),
       });
       const d = (await r.json()) as { error?: string };
       if (!r.ok) {
@@ -177,6 +193,7 @@ export function MapBroadcastPanel({ signedIn, readLat, readLng, canSend, sendLat
         return;
       }
       setDraft("");
+      setBroadcastAllAreas(false);
       await load({ silent: true });
     } catch {
       setErr("Network error");
@@ -219,9 +236,10 @@ export function MapBroadcastPanel({ signedIn, readLat, readLng, canSend, sendLat
         Area broadcasts (~5 mi)
       </h3>
       <p className="mt-1 text-xs leading-5 text-indigo-900/80 dark:text-indigo-200/85">
-        Short messages go to everyone roughly within five miles of where you sent from (same radius as nearby pins).
-        The last {MAP_BROADCAST_RETENTION_HOURS} hours stay here; new ones also pop up as a banner across the app when
-        we have a recent position saved from the map. On the live site, messages need{" "}
+        Short messages go to everyone roughly within five miles of where you sent from (same radius as nearby pins)
+        {canSendGlobalBroadcast ? ", unless you choose to broadcast to all map areas." : "."} The last{" "}
+        {MAP_BROADCAST_RETENTION_HOURS} hours stay here; new ones also pop up as a banner across the app when we have a
+        recent position saved from the map. On the live site, messages need{" "}
         <strong className="font-semibold">Supabase</strong> (or Vercel KV) so they are not stored only on one server
         disk.
       </p>
@@ -261,6 +279,11 @@ export function MapBroadcastPanel({ signedIn, readLat, readLng, canSend, sendLat
               <div className="flex items-start justify-between gap-2">
                 <p className="text-[10px] font-medium text-indigo-600 dark:text-indigo-400">
                   {fmtTime(m.createdAt)}
+                  {m.isGlobal ? (
+                    <span className="ml-2 rounded bg-amber-100 px-1 py-0.5 text-amber-950 dark:bg-amber-900/50 dark:text-amber-100">
+                      All areas
+                    </span>
+                  ) : null}
                   {m.isMine ? (
                     <span className="ml-2 rounded bg-indigo-100 px-1 py-0.5 text-indigo-900 dark:bg-indigo-900/60 dark:text-indigo-100">
                       You
@@ -299,8 +322,21 @@ export function MapBroadcastPanel({ signedIn, readLat, readLng, canSend, sendLat
 
       {canSend && sendLat != null && sendLng != null ? (
         <form onSubmit={(e) => void onSend(e)} className="mt-3 space-y-2">
+          {canSendGlobalBroadcast ? (
+            <label className="flex cursor-pointer items-start gap-2 text-xs font-medium text-indigo-900 dark:text-indigo-200">
+              <input
+                type="checkbox"
+                checked={broadcastAllAreas}
+                onChange={(e) => setBroadcastAllAreas(e.target.checked)}
+                className="mt-0.5 size-4 shrink-0 rounded border-indigo-300 text-indigo-700 focus:ring-indigo-600"
+              />
+              <span>
+                Send to <strong className="font-semibold">all map areas</strong> (not only ~5 mi from here)
+              </span>
+            </label>
+          ) : null}
           <label className="block text-xs font-medium text-indigo-900 dark:text-indigo-200">
-            Broadcast to ~5 mi
+            {broadcastAllAreas && canSendGlobalBroadcast ? "Broadcast (all areas)" : "Broadcast to ~5 mi"}
             <textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
@@ -315,7 +351,7 @@ export function MapBroadcastPanel({ signedIn, readLat, readLng, canSend, sendLat
             disabled={posting || !draft.trim()}
             className="h-9 rounded-lg bg-indigo-700 px-3 text-sm font-semibold text-white hover:bg-indigo-800 disabled:opacity-50 dark:bg-indigo-600 dark:hover:bg-indigo-500"
           >
-            {posting ? "Sending…" : "Send broadcast"}
+            {posting ? "Sending…" : broadcastAllAreas && canSendGlobalBroadcast ? "Send to all areas" : "Send broadcast"}
           </button>
         </form>
       ) : (
