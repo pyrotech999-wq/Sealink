@@ -74,13 +74,6 @@ export function VicinityChatDrawer({ open, onClose, peerUid, contextLine }: Prop
     scrollToBottom();
   }, [open, messages, scrollToBottom]);
 
-  const scrollEarlier = () => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const step = Math.max(120, el.clientHeight * 0.75);
-    el.scrollTop = Math.max(0, el.scrollTop - step);
-  };
-
   const onSend = async (ev: React.FormEvent) => {
     ev.preventDefault();
     const text = draft.trim();
@@ -166,8 +159,8 @@ export function VicinityChatDrawer({ open, onClose, peerUid, contextLine }: Prop
               </p>
             ) : null}
             <p className="mt-1 text-[10px] leading-snug text-zinc-500 dark:text-zinc-400">
-              About two messages visible at once — scroll up or use Earlier / Latest. Seen closes this chat (messages
-              stay); tap the thread row under Vicinity replies to reopen.
+              About two messages show at once — scroll inside the list for the rest (newest at bottom). Seen closes this
+              chat (messages stay); tap the thread row under Vicinity replies to reopen.
             </p>
           </div>
           <div className="flex shrink-0 flex-col items-end gap-1">
@@ -189,58 +182,43 @@ export function VicinityChatDrawer({ open, onClose, peerUid, contextLine }: Prop
           </div>
         </div>
 
-        {messages.length > 2 ? (
-          <div className="flex items-center justify-between gap-2 border-b border-zinc-200 px-3 py-1.5 dark:border-zinc-800">
-            <button
-              type="button"
-              onClick={scrollEarlier}
-              className="rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1 text-[10px] font-semibold text-zinc-800 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-            >
-              ↑ Earlier
-            </button>
-            <span className="text-center text-[10px] text-zinc-500 dark:text-zinc-400">
-              {messages.length} in thread · newest at bottom
-            </span>
-            <button
-              type="button"
-              onClick={scrollToBottom}
-              className="rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1 text-[10px] font-semibold text-zinc-800 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-            >
-              Latest ↓
-            </button>
-          </div>
-        ) : null}
-
-        <div
-          ref={scrollRef}
-          className="max-h-[13.5rem] min-h-[7rem] flex-1 space-y-2 overflow-y-auto scroll-smooth px-3 py-3 sm:max-h-[15rem]"
-        >
-          {loading && messages.length === 0 ? <p className="text-xs text-zinc-500">Loading…</p> : null}
-          {err ? (
-            <p className="rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
-              {err}
+        <div className="overflow-hidden border-t border-zinc-200 dark:border-zinc-800">
+          {messages.length > 2 && !loading ? (
+            <p className="border-b border-zinc-200 bg-zinc-50/80 px-2 py-1 text-center text-[10px] text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-300">
+              Newest at bottom — scroll up for earlier ({messages.length} in thread)
             </p>
           ) : null}
-          {messages.map((m) => (
-            <div
-              key={m.id}
-              className={`max-w-[88%] rounded-xl px-2.5 py-2 text-sm leading-snug ${
-                m.isMine
-                  ? "ml-auto bg-indigo-600 text-white"
-                  : "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50"
-              }`}
-            >
-              <p className="whitespace-pre-wrap">{m.body}</p>
-              <p className="mt-1 text-[9px] opacity-70">
-                {new Date(m.createdAt).toLocaleString("en-GB", {
-                  day: "numeric",
-                  month: "short",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
+          <div
+            ref={scrollRef}
+            className="max-h-[11rem] min-h-[4.5rem] space-y-2 overflow-y-auto scroll-smooth px-3 py-2 sm:max-h-[12rem]"
+          >
+            {loading && messages.length === 0 ? <p className="text-xs text-zinc-500">Loading…</p> : null}
+            {err ? (
+              <p className="rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+                {err}
               </p>
-            </div>
-          ))}
+            ) : null}
+            {messages.map((m) => (
+              <div
+                key={m.id}
+                className={`max-w-[88%] rounded-xl px-2.5 py-2 text-sm leading-snug ${
+                  m.isMine
+                    ? "ml-auto bg-indigo-600 text-white"
+                    : "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50"
+                }`}
+              >
+                <p className="whitespace-pre-wrap">{m.body}</p>
+                <p className="mt-1 text-[9px] opacity-70">
+                  {new Date(m.createdAt).toLocaleString("en-GB", {
+                    day: "numeric",
+                    month: "short",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
 
         <form onSubmit={(e) => void onSend(e)} className="border-t border-zinc-200 p-3 dark:border-zinc-800">

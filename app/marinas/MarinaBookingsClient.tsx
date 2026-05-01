@@ -308,10 +308,17 @@ export function MarinaBookingsClient() {
         <h1 className="text-3xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Marina berths</h1>
         <p className="mt-3 text-base leading-7 text-zinc-600 dark:text-zinc-400">
           Filter by <strong className="font-medium text-zinc-800 dark:text-zinc-200">country</strong>, text search, boat length, or{" "}
-          <strong className="font-medium text-zinc-800 dark:text-zinc-200">near me</strong>. With{" "}
-          <code className="rounded bg-zinc-200/80 px-1 text-sm dark:bg-zinc-800">005_marinas</code> +{" "}
-          <code className="rounded bg-zinc-200/80 px-1 text-sm dark:bg-zinc-800">npm run marinas:import:osm</code>, results come from your
-          OpenStreetMap import; otherwise a curated seed list loads. Save berth requests when signed in (Supabase).
+          <strong className="font-medium text-zinc-800 dark:text-zinc-200">near me</strong>.{" "}
+          <strong className="font-medium text-zinc-800 dark:text-zinc-200">Seed fallback:</strong>{" "}
+          {MARINA_WORLD_CATALOG.length} harbours in{" "}
+          <code className="rounded bg-zinc-200/80 px-1 text-sm dark:bg-zinc-800">data/marinas-world.json</code> (
+          <code className="rounded bg-zinc-200/80 px-1 text-sm dark:bg-zinc-800">npm run marinas:build-catalog</code>
+          ). <strong className="font-medium text-zinc-800 dark:text-zinc-200">Expand with OSM:</strong>{" "}
+          <code className="rounded bg-zinc-200/80 px-1 text-sm dark:bg-zinc-800">005_marinas.sql</code> (Supabase migrations) +{" "}
+          <code className="rounded bg-zinc-200/80 px-1 text-sm dark:bg-zinc-800">npm run marinas:import:osm</code>
+          — then listings come from your database import.{" "}
+          <strong className="font-medium text-zinc-800 dark:text-zinc-200">Always confirm with each marina</strong> (berths,
+          terms, access) before you travel. Save berth requests when signed in (Supabase).
         </p>
       </header>
 
@@ -321,7 +328,9 @@ export function MarinaBookingsClient() {
           <p className="mt-2">
             Run <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/60">005_marinas.sql</code>, then import from OpenStreetMap, e.g.{" "}
             <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/60">npm run marinas:import:osm -- --countries=GB</code>. Until rows exist, the
-            badge stays on <strong>Seed list</strong> (the small JSON sample).
+            badge stays on <strong>Seed list</strong> ({MARINA_WORLD_CATALOG.length} harbours from{" "}
+            <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/60">npm run marinas:build-catalog</code> →{" "}
+            <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/60">data/marinas-world.json</code>).
           </p>
         </div>
       ) : null}
@@ -789,11 +798,11 @@ export function MarinaBookingsClient() {
         </section>
       ) : null}
 
-      <p className="mt-10 pb-4 text-center text-[11px] text-zinc-500 dark:text-zinc-400">
+      <p className="mt-10 pb-4 text-center text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">
         Seed fallback: {MARINA_WORLD_CATALOG.length} harbours in{" "}
         <code className="rounded bg-zinc-200/80 px-1 dark:bg-zinc-800">data/marinas-world.json</code> (
-        <code className="rounded bg-zinc-200/80 px-1 dark:bg-zinc-800">npm run marinas:build-catalog</code>). Expand with
-        OSM: <code className="rounded bg-zinc-200/80 px-1 dark:bg-zinc-800">005_marinas.sql</code> +{" "}
+        <code className="rounded bg-zinc-200/80 px-1 dark:bg-zinc-800">npm run marinas:build-catalog</code>). Expand with OSM:{" "}
+        <code className="rounded bg-zinc-200/80 px-1 dark:bg-zinc-800">005_marinas.sql</code> +{" "}
         <code className="rounded bg-zinc-200/80 px-1 dark:bg-zinc-800">npm run marinas:import:osm</code>. Always confirm with
         each marina.
       </p>
