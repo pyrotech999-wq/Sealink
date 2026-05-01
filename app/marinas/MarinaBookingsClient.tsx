@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { MARINA_WORLD_CATALOG, marinaTelHref, type MarinaListing } from "@/lib/marina-catalog";
 import { distanceKm } from "@/lib/geo-haversine";
 
