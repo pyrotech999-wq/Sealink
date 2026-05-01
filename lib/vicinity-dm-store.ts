@@ -16,6 +16,15 @@ export type VicinityDmMessagePublic = {
   isMine: boolean;
 };
 
+export type VicinityInboxRow = {
+  threadId: string;
+  peerUid: string;
+  lastMessageId: string;
+  lastBody: string;
+  lastAt: string;
+  lastIsMine: boolean;
+};
+
 type ThreadRow = { id: string; userA: string; userB: string; createdAt: string };
 type MessageRow = { id: string; threadId: string; senderUid: string; body: string; createdAt: string };
 type FilePayload = { threads: ThreadRow[]; messages: MessageRow[] };
@@ -217,5 +226,89 @@ export async function appendVicinityMessage(
       if (e instanceof Error && e.message === "SELF_DM") return { ok: false, error: "Invalid recipient." };
       throw e;
     }
+  });
+}
+
+export async function listVicinityInbox(viewerUid: string, limit = 40): Promise<VicinityInboxRow[]> {
+  return enqueue(async () => {
+    if (isSupabaseConfigured()) {
+      const sb = supabaseAdmin();
+      const { data: threads, error: tErr } = await sb
+        .from("vicinity_dm_threads")
+        .select("id, user_a, user_b")
+        .or(`user_a.eq.${viewerUid},user_b.eq.${viewerUid}`);
+      if (tErr) throw new Error(tErr.message);
+      if (!threads?.length) return [];
+
+      const threadRows = threads as { id: string; user_a: string; user_b: string }[];
+      const threadIds = threadRows.map((t) => t.id);
+      const peerFor = new Map<string, string>();
+      for (const t of threadRows) {
+        peerFor.set(t.id, t.user_a === viewerUid ? t.user_b : t.user_a);
+      }
+
+      const { data: allMsgs, error: mErr } = await sb
+        .from("vicinity_dm_messages")
+        .select("id, thread_id, sender_uid, body, created_at")
+        .in("thread_id", threadIds)
+        .order("created_at", { ascending: false });
+      if (mErr) throw new Error(mErr.message);
+
+      const latestByThread = new Map<
+        string,
+        { id: string; thread_id: string; sender_uid: string; body: string; created_at: string }
+      >();
+      for (const raw of allMsgs ?? []) {
+        const m = raw as {
+          id: string;
+          thread_id: string;
+          sender_uid: string;
+          body: string;
+          created_at: string;
+        };
+        if (latestByThread.has(m.thread_id)) continue;
+        latestByThread.set(m.thread_id, m);
+      }
+
+      const items: VicinityInboxRow[] = [];
+      for (const tid of threadIds) {
+        const last = latestByThread.get(tid);
+        if (!last) continue;
+        const peer = peerFor.get(tid);
+        if (!peer) continue;
+        items.push({
+          threadId: tid,
+          peerUid: peer,
+          lastMessageId: last.id,
+          lastBody: last.body,
+          lastAt: last.created_at,
+          lastIsMine: last.sender_uid === viewerUid,
+        });
+      }
+      items.sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime());
+      return items.slice(0, limit);
+    }
+
+    const payload = await readPayload();
+    const items: VicinityInboxRow[] = [];
+    for (const t of payload.threads) {
+      if (t.userA !== viewerUid && t.userB !== viewerUid) continue;
+      const peer = t.userA === viewerUid ? t.userB : t.userA;
+      const msgs = payload.messages
+        .filter((m) => m.threadId === t.id)
+        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      const last = msgs[msgs.length - 1];
+      if (!last) continue;
+      items.push({
+        threadId: t.id,
+        peerUid: peer,
+        lastMessageId: last.id,
+        lastBody: last.body,
+        lastAt: last.createdAt,
+        lastIsMine: last.senderUid === viewerUid,
+      });
+    }
+    items.sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime());
+    return items.slice(0, limit);
   });
 }

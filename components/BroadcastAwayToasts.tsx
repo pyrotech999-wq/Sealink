@@ -56,7 +56,7 @@ export function BroadcastAwayToasts() {
 
           for (const m of msgs) {
             if (new Date(m.createdAt) <= new Date(wl)) break;
-            if (!m.isMine) toast.pushToast(m.body);
+            if (!m.isMine) toast.pushToast(m.body, "broadcast", { id: m.id });
           }
           writeWaterline(newest);
         } catch {
