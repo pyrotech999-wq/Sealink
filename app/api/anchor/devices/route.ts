@@ -1,13 +1,37 @@
 import { NextResponse } from "next/server";
 import { requireAuthUser } from "@/lib/auth";
-import { listAnchorDevices, upsertAnchorDevice } from "@/lib/anchor-devices-store";
+import { listAccountDevices } from "@/lib/account-devices-store";
+import { listAnchorDevices, upsertAnchorDevice, type AnchorDeviceRow } from "@/lib/anchor-devices-store";
 
 export const runtime = "nodejs";
+
+/** Anchor GPS registry plus any active signed-in devices (so a second phone appears before its first location POST). */
+async function listAnchorDevicesForUi(uid: string): Promise<AnchorDeviceRow[]> {
+  const [fromAnchor, accountDevs] = await Promise.all([listAnchorDevices(uid), listAccountDevices(uid)]);
+  const map = new Map<string, AnchorDeviceRow>();
+  for (const r of fromAnchor) {
+    map.set(r.deviceId, r);
+  }
+  for (const a of accountDevs) {
+    if (!a.active) continue;
+    if (map.has(a.deviceId)) continue;
+    map.set(a.deviceId, {
+      uid,
+      deviceId: a.deviceId,
+      name: a.name?.trim() ? a.name.trim() : "This device",
+      updatedAt: a.lastSeenAt,
+      lastLat: null,
+      lastLng: null,
+      lastFixAt: null,
+    });
+  }
+  return [...map.values()].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+}
 
 export async function GET() {
   const u = await requireAuthUser().catch(() => null);
   if (!u) return NextResponse.json({ error: "Sign-in required" }, { status: 401 });
-  const devices = await listAnchorDevices(u.uid);
+  const devices = await listAnchorDevicesForUi(u.uid);
   return NextResponse.json({ devices });
 }
 

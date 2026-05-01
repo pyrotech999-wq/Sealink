@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import { ResetPasswordForm } from "./ui";
+import { ResetPasswordForm } from "./ResetPasswordForm";
 
 export const metadata: Metadata = {
   title: "Reset password | SeaLink",

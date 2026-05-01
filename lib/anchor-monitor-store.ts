@@ -1,5 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 const DATA_PATH = path.join(process.cwd(), "data", "anchor-monitor.json");
 
@@ -38,9 +40,31 @@ function writeRaw(list: AnchorMonitorConfig[]): void {
   writeFileSync(DATA_PATH, JSON.stringify(list, null, 2), "utf-8");
 }
 
+async function readMonitorSupabase(uid: string): Promise<AnchorMonitorConfig> {
+  const now = new Date().toISOString();
+  const sb = supabaseAdmin();
+  const { data, error } = await sb.from("anchor_monitor_config").select("*").eq("user_uid", uid).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) {
+    return { uid, monitorDeviceId: null, alertDeviceIds: [], updatedAt: now };
+  }
+  const r = data as Record<string, unknown>;
+  const ids = r.alert_device_ids;
+  return {
+    uid,
+    monitorDeviceId: (r.monitor_device_id as string | null) ?? null,
+    alertDeviceIds: Array.isArray(ids) ? (ids as string[]).filter((x) => typeof x === "string") : [],
+    updatedAt: String(r.updated_at ?? now),
+  };
+}
+
 export async function getAnchorMonitorConfig(uid: string): Promise<AnchorMonitorConfig> {
   return enqueue(async () => {
     const now = new Date().toISOString();
+    if (isSupabaseConfigured()) {
+      return readMonitorSupabase(uid);
+    }
+
     const list = readRaw();
     const row = list.find((r) => r.uid === uid) ?? null;
     if (row) return row;
@@ -61,8 +85,36 @@ export async function setAnchorMonitorConfig(
   patch: Partial<Pick<AnchorMonitorConfig, "monitorDeviceId" | "alertDeviceIds">>,
 ): Promise<AnchorMonitorConfig> {
   return enqueue(async () => {
-    const list = readRaw();
     const now = new Date().toISOString();
+    if (isSupabaseConfigured()) {
+      const cur = await readMonitorSupabase(uid);
+      const next: AnchorMonitorConfig = {
+        ...cur,
+        monitorDeviceId:
+          patch.monitorDeviceId === undefined ? cur.monitorDeviceId : patch.monitorDeviceId,
+        alertDeviceIds:
+          patch.alertDeviceIds === undefined
+            ? cur.alertDeviceIds
+            : Array.isArray(patch.alertDeviceIds)
+              ? patch.alertDeviceIds.filter((x) => typeof x === "string" && x.trim()).slice(0, 4)
+              : cur.alertDeviceIds,
+        updatedAt: now,
+      };
+      const sb = supabaseAdmin();
+      const { error } = await sb.from("anchor_monitor_config").upsert(
+        {
+          user_uid: uid,
+          monitor_device_id: next.monitorDeviceId,
+          alert_device_ids: next.alertDeviceIds,
+          updated_at: next.updatedAt,
+        },
+        { onConflict: "user_uid" },
+      );
+      if (error) throw new Error(error.message);
+      return next;
+    }
+
+    const list = readRaw();
     const idx = list.findIndex((r) => r.uid === uid);
     const cur: AnchorMonitorConfig =
       idx >= 0

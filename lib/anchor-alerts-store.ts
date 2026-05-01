@@ -1,6 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 const DATA_PATH = path.join(process.cwd(), "data", "anchor-alerts.json");
 
@@ -56,6 +58,26 @@ function prune(list: AnchorAlertRow[], now = new Date()): AnchorAlertRow[] {
   });
 }
 
+async function pruneAnchorAlertsSupabase(now = new Date()): Promise<void> {
+  const sb = supabaseAdmin();
+  const nowIso = now.toISOString();
+  const createdCutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  await sb.from("anchor_alerts").delete().lt("created_at", createdCutoff);
+  await sb.from("anchor_alerts").delete().lt("expires_at", nowIso);
+}
+
+function mapAlertRow(r: Record<string, unknown>): AnchorAlertRow {
+  return {
+    id: String(r.id ?? ""),
+    uid: String(r.user_uid ?? r.uid ?? ""),
+    createdAt: String(r.created_at ?? r.createdAt ?? ""),
+    message: String(r.message ?? ""),
+    seenAt: r.seen_at != null ? String(r.seen_at) : r.seenAt != null ? String(r.seenAt) : null,
+    kind: r.kind === "warning" ? "warning" : "alert",
+    expiresAt: r.expires_at != null ? String(r.expires_at) : r.expiresAt != null ? String(r.expiresAt) : null,
+  };
+}
+
 export async function createAnchorAlert(
   uid: string,
   message: string,
@@ -63,7 +85,6 @@ export async function createAnchorAlert(
 ): Promise<AnchorAlertRow> {
   return enqueue(async () => {
     const now = new Date();
-    const list = prune(readRaw(), now);
     const ttlMs = typeof opts?.ttlMs === "number" && Number.isFinite(opts.ttlMs) && opts.ttlMs > 0 ? opts.ttlMs : null;
     const row: AnchorAlertRow = {
       id: randomUUID(),
@@ -74,6 +95,24 @@ export async function createAnchorAlert(
       kind: opts?.kind === "warning" ? "warning" : "alert",
       expiresAt: ttlMs ? new Date(now.getTime() + ttlMs).toISOString() : null,
     };
+
+    if (isSupabaseConfigured()) {
+      await pruneAnchorAlertsSupabase(now);
+      const sb = supabaseAdmin();
+      const { error } = await sb.from("anchor_alerts").insert({
+        id: row.id,
+        user_uid: uid,
+        created_at: row.createdAt,
+        message: row.message,
+        seen_at: null,
+        kind: row.kind,
+        expires_at: row.expiresAt,
+      });
+      if (error) throw new Error(error.message);
+      return row;
+    }
+
+    const list = prune(readRaw(), now);
     list.push(row);
     writeRaw(list);
     return row;
@@ -83,6 +122,26 @@ export async function createAnchorAlert(
 export async function listUnseenAnchorAlerts(uid: string): Promise<AnchorAlertRow[]> {
   return enqueue(async () => {
     const now = new Date();
+    if (isSupabaseConfigured()) {
+      await pruneAnchorAlertsSupabase(now);
+      const sb = supabaseAdmin();
+      const { data, error } = await sb
+        .from("anchor_alerts")
+        .select("*")
+        .eq("user_uid", uid)
+        .is("seen_at", null)
+        .order("created_at", { ascending: true });
+      if (error) throw new Error(error.message);
+      const nowMs = now.getTime();
+      return (data ?? [])
+        .map((x) => mapAlertRow(x as Record<string, unknown>))
+        .filter((r) => {
+          if (!r.expiresAt) return true;
+          const exp = new Date(r.expiresAt).getTime();
+          return !Number.isFinite(exp) || exp > nowMs;
+        });
+    }
+
     const list = prune(readRaw(), now);
     writeRaw(list);
     return list.filter((r) => r.uid === uid && !r.seenAt).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
@@ -92,6 +151,20 @@ export async function listUnseenAnchorAlerts(uid: string): Promise<AnchorAlertRo
 export async function markAnchorAlertSeen(uid: string, id: string): Promise<boolean> {
   return enqueue(async () => {
     const now = new Date();
+    if (isSupabaseConfigured()) {
+      await pruneAnchorAlertsSupabase(now);
+      const sb = supabaseAdmin();
+      const { data, error } = await sb
+        .from("anchor_alerts")
+        .update({ seen_at: now.toISOString() })
+        .eq("user_uid", uid)
+        .eq("id", id)
+        .is("seen_at", null)
+        .select("id");
+      if (error) throw new Error(error.message);
+      return Array.isArray(data) && data.length > 0;
+    }
+
     const list = prune(readRaw(), now);
     const idx = list.findIndex((r) => r.uid === uid && r.id === id);
     if (idx < 0) return false;

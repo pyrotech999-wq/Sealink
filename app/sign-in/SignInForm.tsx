@@ -21,6 +21,22 @@ function isDeviceRow(v: unknown): v is DeviceRow {
   );
 }
 
+/** When fetch() throws before any HTTP response (TLS, DNS, timeout, blocked in-app browser, etc.). */
+function signInFetchFailedMessage(err: unknown): string {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You look offline. Turn on Wi‑Fi or mobile data, then try again.";
+  }
+  const detail = err instanceof Error ? err.message.trim() : "";
+  const devSuffix =
+    process.env.NODE_ENV === "development" && detail ? ` Technical detail: ${detail}` : "";
+  return (
+    "The sign-in request never reached the server (or the connection dropped). Try: Wi‑Fi instead of weak mobile data; " +
+    "open https://sealinkapp.com in Safari or Chrome (not inside Facebook/Instagram’s in-app browser); pause VPN or ad blockers; " +
+    "confirm the home page loads. Then try again." +
+    devSuffix
+  );
+}
+
 async function startDemoSession(
   email: string,
   password: string,
@@ -79,16 +95,17 @@ async function startDemoSession(
           return false;
         }
       }
+      /** Mobile / slow devices sometimes apply Set-Cookie a beat after the JSON response — poll briefly. */
       let okCookie = await readSignedIn();
-      if (!okCookie) {
-        await new Promise((r) => setTimeout(r, 120));
+      for (let i = 0; !okCookie && i < 8; i++) {
+        await new Promise((r) => setTimeout(r, 80 + i * 40));
         okCookie = await readSignedIn();
       }
       if (!okCookie) {
         return {
           ok: false,
           message:
-            "Your details were accepted, but this browser did not keep the sign-in cookie. Try turning off strict tracking prevention for this site, avoid private/incognito mode, or ask the host to fix COOKIE_DOMAIN (must be the bare hostname like sealinkapp.com — never https://…).",
+            "Your details were accepted, but this browser did not keep the sign-in cookie. On a phone testing dev, open the same machine using http://YOUR-PC-IP:3000 (run npm run dev:lan) and leave COOKIE_DOMAIN unset in .env.local. Also try turning off strict tracking prevention, avoid private mode, and on production ensure COOKIE_DOMAIN is only the bare hostname (e.g. sealinkapp.com).",
         };
       }
       try {
@@ -99,8 +116,8 @@ async function startDemoSession(
       window.location.assign("/");
     }
     return { ok: true };
-  } catch {
-    return { ok: false, message: "Network error. Try again." };
+  } catch (e: unknown) {
+    return { ok: false, message: signInFetchFailedMessage(e) };
   }
 }
 
