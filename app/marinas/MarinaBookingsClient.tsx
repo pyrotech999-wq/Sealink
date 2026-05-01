@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { MARINA_WORLD_CATALOG, marinaTelHref, type MarinaListing } from "@/lib/marina-catalog";
-import { distanceKm, distanceMiles } from "@/lib/geo-haversine";
+import { distanceKm } from "@/lib/geo-haversine";
 
 function todayIso(): string {
   const d = new Date();
