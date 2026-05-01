@@ -89,10 +89,10 @@ export function SignUpForm() {
 
   useEffect(() => {
     if (step !== 4) {
-      setStep4PrimaryReady(false);
+      queueMicrotask(() => setStep4PrimaryReady(false));
       return;
     }
-    setStep4PrimaryReady(false);
+    queueMicrotask(() => setStep4PrimaryReady(false));
     const id = window.setTimeout(() => setStep4PrimaryReady(true), 550);
     return () => window.clearTimeout(id);
   }, [step]);
