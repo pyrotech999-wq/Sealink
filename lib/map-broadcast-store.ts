@@ -18,6 +18,8 @@ export type BroadcastMessageRow = {
   lng: number;
   body: string;
   createdAt: string;
+  /** When true, listed for all viewers (admin-only to create). */
+  isGlobal: boolean;
 };
 
 let queue: Promise<unknown> = Promise.resolve();
@@ -85,8 +87,9 @@ function normaliseRow(row: unknown): BroadcastMessageRow | null {
         ? r.authorSessionId
         : "";
 
+  const isGlobal = r.isGlobal === true;
   if (!id || !authorUid || !Number.isFinite(lat) || !Number.isFinite(lng) || !createdAt) return null;
-  return { id, authorUid, lat, lng, body, createdAt };
+  return { id, authorUid, lat, lng, body, createdAt, isGlobal };
 }
 
 function rowToPublic(
@@ -101,6 +104,7 @@ function rowToPublic(
     lng: m.lng,
     body: m.body,
     createdAt: m.createdAt,
+    isGlobal: m.isGlobal,
     isMine: viewerUid != null && m.authorUid === viewerUid,
     canDelete: viewerIsAdmin || (viewerUid != null && m.authorUid === viewerUid),
   };
@@ -114,6 +118,7 @@ export type BroadcastMessagePublic = {
   lng: number;
   body: string;
   createdAt: string;
+  isGlobal: boolean;
   isMine: boolean;
   canDelete: boolean;
 };
@@ -126,7 +131,7 @@ async function readRawUnified(now: Date): Promise<BroadcastMessageRow[]> {
     await sb.from("map_broadcasts").delete().lt("created_at", cIso);
     const { data, error } = await sb
       .from("map_broadcasts")
-      .select("id, author_uid, lat, lng, body, created_at")
+      .select("id, author_uid, lat, lng, body, created_at, is_global")
       .order("created_at", { ascending: false })
       .limit(1000);
     if (error) throw new Error(error.message);
@@ -156,8 +161,9 @@ function dbRowToInternal(r: Record<string, unknown>): BroadcastMessageRow | null
   const createdAt = typeof r.created_at === "string" ? r.created_at : "";
   const lat = typeof r.lat === "number" ? r.lat : Number(r.lat);
   const lng = typeof r.lng === "number" ? r.lng : Number(r.lng);
+  const isGlobal = r.is_global === true;
   if (!id || !authorUid || !createdAt || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  return { id, authorUid, lat, lng, body, createdAt };
+  return { id, authorUid, lat, lng, body, createdAt, isGlobal };
 }
 
 export async function listBroadcastsNear(
@@ -173,7 +179,7 @@ export async function listBroadcastsNear(
     const maxMi = radiusMi();
     const out: BroadcastMessagePublic[] = [];
     for (const m of raw) {
-      if (distanceMiles(lat, lng, m.lat, m.lng) > maxMi) continue;
+      if (!m.isGlobal && distanceMiles(lat, lng, m.lat, m.lng) > maxMi) continue;
       out.push(rowToPublic(m, viewerUid, viewerIsAdmin));
     }
     out.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -186,8 +192,10 @@ export async function appendBroadcast(
   lat: number,
   lng: number,
   body: string,
+  opts: { isGlobal?: boolean } = {},
   now = new Date(),
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const isGlobal = opts.isGlobal === true;
   return enqueue(async () => {
     const hourAgo = now.getTime() - 60 * 60 * 1000;
     const hourAgoIso = new Date(hourAgo).toISOString();
@@ -209,7 +217,7 @@ export async function appendBroadcast(
 
       const { data, error } = await sb
         .from("map_broadcasts")
-        .insert({ author_uid: authorUid, lat, lng, body })
+        .insert({ author_uid: authorUid, lat, lng, body, is_global: isGlobal })
         .select("id")
         .single();
       if (error) return { ok: false, error: error.message };
@@ -233,6 +241,7 @@ export async function appendBroadcast(
       lng,
       body,
       createdAt: now.toISOString(),
+      isGlobal,
     };
     const next = [...list, row];
     if (canUseKv()) await kvSetJson(KV_KEY, next);

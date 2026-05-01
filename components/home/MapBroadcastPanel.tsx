@@ -99,21 +99,27 @@ export function MapBroadcastPanel({ signedIn, readLat, readLng, canSend, sendLat
   const [chatPeerUid, setChatPeerUid] = useState<string | null>(null);
   const [chatContext, setChatContext] = useState<string | undefined>(undefined);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setErr(null);
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent === true;
+    if (!silent) {
+      setLoading(true);
+      setErr(null);
+    }
     try {
       const r = await fetch(
         `/api/map/broadcast?lat=${encodeURIComponent(String(readLat))}&lng=${encodeURIComponent(String(readLng))}`,
       );
       const d = (await r.json()) as { messages?: BroadcastMsg[]; error?: string };
       if (!r.ok) {
-        setErr(d.error || "Could not load broadcasts");
-        setMessages([]);
+        if (!silent) {
+          setErr(d.error || "Could not load broadcasts");
+          setMessages([]);
+        }
         return;
       }
       const msgs = Array.isArray(d.messages) ? d.messages : [];
       setMessages(msgs);
+      if (silent) setErr(null);
 
       const newest = msgs[0]?.createdAt;
       if (!newest) return;
@@ -135,16 +141,20 @@ export function MapBroadcastPanel({ signedIn, readLat, readLng, canSend, sendLat
       if (shouldBeep && soundOn) void beepOnce();
       writeWaterline(newest);
     } catch {
-      setErr("Network error");
-      setMessages([]);
+      if (!silent) {
+        setErr("Network error");
+        setMessages([]);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [readLat, readLng, toast, soundOn]);
 
+  const POLL_MS = 60_000;
+
   useEffect(() => {
     queueMicrotask(() => void load());
-    const id = window.setInterval(() => queueMicrotask(() => void load()), 22_000);
+    const id = window.setInterval(() => queueMicrotask(() => void load({ silent: true })), POLL_MS);
     return () => window.clearInterval(id);
   }, [load]);
 
@@ -167,7 +177,7 @@ export function MapBroadcastPanel({ signedIn, readLat, readLng, canSend, sendLat
         return;
       }
       setDraft("");
-      await load();
+      await load({ silent: true });
     } catch {
       setErr("Network error");
     } finally {
@@ -189,7 +199,7 @@ export function MapBroadcastPanel({ signedIn, readLat, readLng, canSend, sendLat
         setErr(d.error || "Could not delete");
         return;
       }
-      await load();
+      await load({ silent: true });
     } catch {
       setErr("Network error");
     }

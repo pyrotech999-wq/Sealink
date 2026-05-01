@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { applyPresenceCookie, resolvePresenceSession } from "@/lib/map-presence-api-helpers";
 import { appendBroadcast, deleteBroadcast, listBroadcastsNear } from "@/lib/map-broadcast-store";
-import { getAuthUser, requireAuthUser } from "@/lib/auth";
+import { canSendGlobalAreaBroadcast, getAuthUser, requireAuthUser } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
@@ -33,13 +33,16 @@ export async function GET(req: Request) {
   return res;
 }
 
-type PostBody = { lat?: unknown; lng?: unknown; text?: unknown };
+type PostBody = { lat?: unknown; lng?: unknown; text?: unknown; broadcastAllAreas?: unknown };
 
 export async function POST(req: Request) {
   const { id: presenceId, cookieFresh } = await resolvePresenceSession();
   let authorUid: string;
+  let authorEmail: string;
   try {
-    authorUid = (await requireAuthUser()).uid;
+    const u = await requireAuthUser();
+    authorUid = u.uid;
+    authorEmail = u.email;
   } catch {
     return NextResponse.json({ error: "Sign-in required" }, { status: 401 });
   }
@@ -49,6 +52,11 @@ export async function POST(req: Request) {
     body = (await req.json()) as PostBody;
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const broadcastAllAreas = body.broadcastAllAreas === true;
+  if (broadcastAllAreas && !canSendGlobalAreaBroadcast(authorEmail)) {
+    return NextResponse.json({ error: "Global broadcasts are not allowed for this account." }, { status: 403 });
   }
 
   const lat = typeof body.lat === "number" ? body.lat : Number(body.lat);
@@ -64,7 +72,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Message cannot be empty." }, { status: 400 });
   }
 
-  const out = await appendBroadcast(authorUid, coords.lat, coords.lng, text);
+  const out = await appendBroadcast(authorUid, coords.lat, coords.lng, text, { isGlobal: broadcastAllAreas });
   if (!out.ok) {
     return NextResponse.json({ error: out.error }, { status: 429 });
   }

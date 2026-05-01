@@ -66,7 +66,7 @@ export function BroadcastAwayToasts() {
     };
 
     tick();
-    const id = window.setInterval(tick, 28_000);
+    const id = window.setInterval(tick, 60_000);
     return () => window.clearInterval(id);
   }, [pathname, toast]);
 

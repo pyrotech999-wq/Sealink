@@ -24,6 +24,12 @@ export function isAdminEmail(email: string): boolean {
   return normaliseEmail(email) === admin;
 }
 
+/** Area broadcast “all regions” — only this sign-in email may create (default: pyrotech999@hotmail.co.uk). */
+export function canSendGlobalAreaBroadcast(email: string): boolean {
+  const allowed = normaliseEmail(process.env.SEALINK_GLOBAL_BROADCAST_EMAIL ?? DEFAULT_ADMIN);
+  return normaliseEmail(email) === allowed;
+}
+
 export async function getAuthUser(): Promise<AuthUser | null> {
   const jar = await cookies();
   const hasDemo = jar.get(DEMO_SESSION_COOKIE)?.value === DEMO_SESSION_VALUE;
