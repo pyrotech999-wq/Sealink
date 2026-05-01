@@ -7,6 +7,7 @@ import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
+import { SeaLinkBrandFooter } from "@/components/SeaLinkBrandFooter";
 import { distanceMiles } from "@/lib/geo-haversine";
 import { getAvatarDataUrl, getBoatName, getFullName, getProfilePhone } from "@/lib/map-profile-storage";
 
@@ -470,6 +471,8 @@ export function IfmMapClient() {
             </div>
           </aside>
         </div>
+
+        <SeaLinkBrandFooter />
       </main>
     </div>
   );
