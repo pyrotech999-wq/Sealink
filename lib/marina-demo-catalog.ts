@@ -12,6 +12,8 @@ export type MarinaListing = {
   depthM: number;
   facilities: string[];
   description: string;
+  /** Harbour / marina office phone (E.164 or international digits; shown and used in tel: links). */
+  phone: string;
 };
 
 /** Demo data for the marina booking MVP — replace with API / partner feed later. */
@@ -29,6 +31,7 @@ export const MARINA_DEMO_CATALOG: readonly MarinaListing[] = [
     depthM: 4.2,
     facilities: ["Water", "Electricity", "Wi‑Fi", "Showers", "Laundry", "Fuel nearby"],
     description: "Walk to the Barbican and city centre; all-tide access with pilotage notes for larger yachts.",
+    phone: "+44 1752 206200",
   },
   {
     id: "falmouth",
@@ -43,6 +46,7 @@ export const MARINA_DEMO_CATALOG: readonly MarinaListing[] = [
     depthM: 5,
     facilities: ["Water", "Electricity", "Wi‑Fi", "Showers", "Boatyard"],
     description: "Deep-water berths close to Carrick Roads; good base for Scillies hops.",
+    phone: "+44 1326 211200",
   },
   {
     id: "la-rochelle",
@@ -57,6 +61,7 @@ export const MARINA_DEMO_CATALOG: readonly MarinaListing[] = [
     depthM: 6,
     facilities: ["Water", "Electricity", "Wi‑Fi", "Showers", "Bike hire", "Chandlery"],
     description: "One of Europe’s largest pleasure harbours; short cycle to the old town and Île de Ré.",
+    phone: "+33 5 46 44 36 86",
   },
   {
     id: "lisbon",
@@ -71,6 +76,7 @@ export const MARINA_DEMO_CATALOG: readonly MarinaListing[] = [
     depthM: 7,
     facilities: ["Water", "Electricity", "Wi‑Fi", "24h security", "Restaurants"],
     description: "City-centre marina beneath 25 de Abril bridge; tidal currents need planning on entry.",
+    phone: "+351 21 393 9594",
   },
   {
     id: "porto-montenegro",
@@ -85,6 +91,7 @@ export const MARINA_DEMO_CATALOG: readonly MarinaListing[] = [
     depthM: 12,
     facilities: ["Water", "Electricity", "Wi‑Fi", "Fuel dock", "Luxury services", "Helipad"],
     description: "Full-service superyacht hub with boutiques and international clearance support.",
+    phone: "+382 32 661 039",
   },
   {
     id: "ibiza",
@@ -99,5 +106,18 @@ export const MARINA_DEMO_CATALOG: readonly MarinaListing[] = [
     depthM: 8,
     facilities: ["Water", "Electricity", "Wi‑Fi", "Pool", "Concierge"],
     description: "Upscale berthing steps from Dalt Vila; peak season books early.",
+    phone: "+34 971 31 99 00",
   },
 ] as const;
+
+export function getMarinaById(id: string): MarinaListing | undefined {
+  return MARINA_DEMO_CATALOG.find((m) => m.id === id);
+}
+
+/** Normalise for `tel:` — strip spaces; keep leading + and digits. */
+export function marinaTelHref(phone: string): string {
+  const t = phone.trim();
+  if (!t) return "";
+  const compact = t.replace(/\s/g, "");
+  return `tel:${compact}`;
+}
