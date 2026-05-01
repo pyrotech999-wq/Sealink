@@ -49,12 +49,14 @@ function normaliseName(name: string): string {
 }
 
 function mapDbRow(r: Record<string, unknown>): AccountDeviceRow {
+  const rawActive = r.active;
   return {
     deviceId: String(r.device_id ?? ""),
     name: String(r.name ?? ""),
     activatedAt: String(r.activated_at ?? ""),
     lastSeenAt: String(r.last_seen_at ?? ""),
-    active: Boolean(r.active),
+    /* Postgres boolean; treat null/undefined as active (legacy rows). */
+    active: rawActive === false ? false : true,
   };
 }
 
