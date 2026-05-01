@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* Dark mode: system preference OR narrow viewport (mobile shell matches laptop dark).
+   Revert: delete this @custom-variant block to restore default (dark = prefers-color-scheme only). */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #ffffff;
   --foreground: #171717;

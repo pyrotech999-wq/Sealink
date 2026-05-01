@@ -22,7 +22,7 @@ export function HomeMainCtas({ signedIn }: Props) {
         </div>
         <Link
           href="/profile"
-          className="self-start text-sm font-medium text-green-800 underline-offset-2 hover:underline dark:text-green-400"
+          className="inline-flex h-11 w-full items-center justify-center rounded-lg border border-zinc-300 bg-white px-5 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900 sm:w-auto sm:self-start"
         >
           Edit profile
         </Link>

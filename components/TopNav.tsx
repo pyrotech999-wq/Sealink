@@ -2,27 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+
 import { NAV_ITEMS } from "@/components/nav-items";
 
 export function TopNav() {
   const pathname = usePathname();
-  const [showProfile, setShowProfile] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    void fetch("/api/demo/me", { credentials: "same-origin" })
-      .then((r) => r.json() as Promise<{ signedIn?: boolean }>)
-      .then((d) => {
-        if (!cancelled && d?.signedIn === true) setShowProfile(true);
-      })
-      .catch(() => {
-        /* */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   return (
     <nav
@@ -53,20 +37,7 @@ export function TopNav() {
             );
           })}
         </ul>
-        {showProfile ? (
-          <Link
-            href="/profile"
-            className={`inline-flex h-9 shrink-0 items-center justify-center rounded-lg px-3 text-sm font-semibold transition-colors ${
-              pathname === "/profile" || pathname.startsWith("/profile/")
-                ? "bg-green-600 text-white"
-                : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-900 dark:hover:text-white"
-            }`}
-          >
-            Profile
-          </Link>
-        ) : null}
       </div>
     </nav>
   );
 }
-
