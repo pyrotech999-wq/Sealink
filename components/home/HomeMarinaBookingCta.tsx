@@ -14,7 +14,7 @@ export function HomeMarinaBookingCta({ className }: Props) {
               Marina berths
             </p>
             <h2 id="marina-cta-heading" className="mt-1 text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-              Book a berth like Navily
+              Book a berth at Marina
             </h2>
             <p className="mt-2 max-w-xl text-sm leading-6 text-zinc-600 dark:text-zinc-400">
               Browse harbours worldwide by country, text search, or your current location, then draft an enquiry or save a
