@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type Props = {
   lat: number | null;
@@ -17,19 +17,26 @@ export function AiForecast48hBox({ lat, lng }: Props) {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const hasLocation = lat != null && lng != null;
+  const gridLat = useMemo(
+    () => (lat != null ? Number(lat.toFixed(2)) : null),
+    [lat],
+  );
+  const gridLng = useMemo(
+    () => (lng != null ? Number(lng.toFixed(2)) : null),
+    [lng],
+  );
+  const hasLocation = gridLat != null && gridLng != null;
 
   const generate = useCallback(
     async (opts?: GenerateOpts) => {
-      if (lat == null || lng == null) return;
+      if (gridLat == null || gridLng == null) return;
       setLoading(true);
       setErr(null);
-      setText(null);
       try {
         const res = await fetch("/api/forecast/ai-48h", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ lat, lng }),
+          body: JSON.stringify({ lat: gridLat, lng: gridLng }),
           signal: opts?.signal,
         });
         const data = (await res.json()) as ApiSuccess | ApiFail;
@@ -52,15 +59,20 @@ export function AiForecast48hBox({ lat, lng }: Props) {
         setLoading(false);
       }
     },
-    [lat, lng],
+    [gridLat, gridLng],
   );
 
   useEffect(() => {
-    if (!hasLocation) return;
+    if (!hasLocation) {
+      setText(null);
+      setErr(null);
+      setLoading(false);
+      return;
+    }
     const ac = new AbortController();
-    queueMicrotask(() => void generate({ signal: ac.signal }));
+    void generate({ signal: ac.signal });
     return () => ac.abort();
-  }, [hasLocation, lat, lng, generate]);
+  }, [hasLocation, gridLat, gridLng, generate]);
 
   if (!hasLocation) {
     return (
@@ -80,9 +92,11 @@ export function AiForecast48hBox({ lat, lng }: Props) {
       </div>
 
       <div className="rounded-xl border border-violet-200 bg-violet-50/80 p-4 shadow-sm dark:border-violet-900/50 dark:bg-violet-950/30">
-        {loading && !text && (
+        {loading && !text ? (
           <p className="text-sm text-violet-950/90 dark:text-violet-100/90">Loading forecast…</p>
-        )}
+        ) : loading && text ? (
+          <p className="text-xs text-violet-800/80 dark:text-violet-200/80">Refreshing…</p>
+        ) : null}
 
         {err && (
           <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">

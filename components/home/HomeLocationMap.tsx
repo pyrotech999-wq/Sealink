@@ -200,10 +200,26 @@ export default function HomeLocationMap() {
     });
   }, [sharing, pos]);
 
+  /** Pin for map + forecasts: live fix, then last held fix, then localStorage seed — avoids null gaps before state effects run (which was flickering forecasts). */
   const mapPinPos = useMemo(() => {
     if (!sharing) return null;
-    return pos ?? heldSharingPos;
+    if (pos) return pos;
+    if (heldSharingPos) return heldSharingPos;
+    if (typeof window !== "undefined") {
+      const cached = readCachedPinForSharing();
+      if (cached) return cached;
+    }
+    return null;
   }, [sharing, pos, heldSharingPos]);
+
+  /** Rounded once for weather children so GPS micro-moves don’t retrigger client effects. */
+  const forecastCoords = useMemo((): { lat: number | null; lng: number | null } => {
+    if (!mapPinPos) return { lat: null, lng: null };
+    return {
+      lat: Number(mapPinPos.lat.toFixed(2)),
+      lng: Number(mapPinPos.lng.toFixed(2)),
+    };
+  }, [mapPinPos?.lat, mapPinPos?.lng]);
 
   const forecastLat = useMemo(
     () => Number((mapPinPos?.lat ?? pos?.lat ?? DEFAULT_MAP_CENTER.lat).toFixed(2)),
@@ -1216,7 +1232,7 @@ export default function HomeLocationMap() {
         />
       </div>
 
-      <WeatherForecast7Day lat={mapPinPos?.lat ?? null} lng={mapPinPos?.lng ?? null} />
+      <WeatherForecast7Day lat={forecastCoords.lat} lng={forecastCoords.lng} />
 
       <LifeOnSeasDailyModal
         open={lifeSeasOpen}
