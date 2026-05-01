@@ -43,8 +43,13 @@ export async function POST(req: Request) {
 
   const uid = uidFromEmail(email);
   if (deactivateDeviceId) {
-    const active = await deactivateAccountDevice(uid, deactivateDeviceId);
-    return NextResponse.json({ ok: true, devices: active });
+    try {
+      const active = await deactivateAccountDevice(uid, deactivateDeviceId);
+      return NextResponse.json({ ok: true, devices: active });
+    } catch (e) {
+      console.error("[auth/sign-in] deactivate device failed", e);
+      return NextResponse.json({ ok: false, error: "Could not update devices. Try again." }, { status: 500 });
+    }
   }
 
   const user = await getUserByEmail(email);
@@ -58,16 +63,21 @@ export async function POST(req: Request) {
   }
 
   if (deviceId) {
-    const reg = await registerAccountDevice(uid, deviceId, deviceName, 2);
-    if (!reg.ok) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "You can only use SeaLink on 2 devices at once. Deactivate one to continue.",
-          devices: reg.devices,
-        },
-        { status: 409 },
-      );
+    try {
+      const reg = await registerAccountDevice(uid, deviceId, deviceName, 2);
+      if (!reg.ok) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "You can only use SeaLink on 2 devices at once. Deactivate one to continue.",
+            devices: reg.devices,
+          },
+          { status: 409 },
+        );
+      }
+    } catch (e) {
+      // DB/KV/Supabase device table issues should not block sign-in (session still valid).
+      console.error("[auth/sign-in] device registration failed; continuing with session", e);
     }
   }
 

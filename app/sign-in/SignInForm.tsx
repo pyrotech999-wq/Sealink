@@ -47,12 +47,21 @@ async function startDemoSession(
       }),
     });
     if (!res.ok) {
-      const data = (await res.json()) as { error?: string; devices?: unknown };
-      return {
-        ok: false,
-        message: data.error || "Could not start session. Try again.",
-        devices: Array.isArray(data.devices) ? data.devices.filter(isDeviceRow) : undefined,
-      };
+      let message = "Could not start session. Try again.";
+      let devices: { deviceId: string; name: string; activatedAt: string; lastSeenAt: string }[] | undefined;
+      try {
+        const ct = res.headers.get("content-type");
+        if (ct?.includes("application/json")) {
+          const data = (await res.json()) as { error?: string; devices?: unknown };
+          message = data.error || message;
+          devices = Array.isArray(data.devices) ? data.devices.filter(isDeviceRow) : undefined;
+        } else {
+          message = `Sign-in failed (${res.status}). Try again in a moment.`;
+        }
+      } catch {
+        message = `Sign-in failed (${res.status}). Try again in a moment.`;
+      }
+      return { ok: false, message, devices };
     }
     if (opts?.deactivateDeviceId) {
       return { ok: true };
@@ -60,9 +69,15 @@ async function startDemoSession(
 
     if (shouldRedirect) {
       async function readSignedIn(): Promise<boolean> {
-        const r = await fetch("/api/demo/me", { credentials: "same-origin", cache: "no-store" });
-        const j = (await r.json()) as { signedIn?: boolean };
-        return j.signedIn === true;
+        try {
+          const r = await fetch("/api/demo/me", { credentials: "same-origin", cache: "no-store" });
+          const ct = r.headers.get("content-type");
+          if (!ct?.includes("application/json")) return false;
+          const j = (await r.json()) as { signedIn?: boolean };
+          return j.signedIn === true;
+        } catch {
+          return false;
+        }
       }
       let okCookie = await readSignedIn();
       if (!okCookie) {
