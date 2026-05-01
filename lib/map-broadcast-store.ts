@@ -17,6 +17,19 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 const DATA_PATH = path.join(process.cwd(), "data", "map-broadcast-messages.json");
 const KV_KEY = "sealink:map-broadcasts:v1";
 
+/** Supabase columns for map_broadcasts reads (wide_area_reach needs migration 013). */
+const MAP_BROADCAST_SELECT_WITH_WIDE =
+  "id, author_uid, lat, lng, body, created_at, is_global, is_mob, mob_phone, wide_area_reach";
+const MAP_BROADCAST_SELECT_LEGACY =
+  "id, author_uid, lat, lng, body, created_at, is_global, is_mob, mob_phone";
+
+function isWideAreaReachSchemaError(err: { message?: string } | null | undefined): boolean {
+  const m = (err?.message ?? "").toLowerCase();
+  if (m.includes("wide_area_reach")) return true;
+  /* PostgREST: column missing from schema cache */
+  return m.includes("wide_area") && m.includes("schema cache");
+}
+
 export type BroadcastMessageRow = {
   id: string;
   authorUid: string;
@@ -155,11 +168,20 @@ async function readRawUnified(now: Date): Promise<BroadcastMessageRow[]> {
   if (isSupabaseConfigured()) {
     const sb = supabaseAdmin();
     await sb.from("map_broadcasts").delete().lt("created_at", cIso);
-    const { data, error } = await sb
+    let { data, error } = await sb
       .from("map_broadcasts")
-      .select("id, author_uid, lat, lng, body, created_at, is_global, is_mob, mob_phone, wide_area_reach")
+      .select(MAP_BROADCAST_SELECT_WITH_WIDE)
       .order("created_at", { ascending: false })
       .limit(1000);
+    if (error && isWideAreaReachSchemaError(error)) {
+      const retry = await sb
+        .from("map_broadcasts")
+        .select(MAP_BROADCAST_SELECT_LEGACY)
+        .order("created_at", { ascending: false })
+        .limit(1000);
+      data = retry.data as typeof data;
+      error = retry.error;
+    }
     if (error) throw new Error(error.message);
     return (data ?? []).map((row) => dbRowToInternal(row as Record<string, unknown>)).filter(Boolean) as BroadcastMessageRow[];
   }
@@ -252,18 +274,27 @@ export async function appendBroadcast(
         return { ok: false, error: "Rate limit: try again in a little while." };
       }
 
-      const { data, error } = await sb
-        .from("map_broadcasts")
-        .insert({
-          author_uid: authorUid,
-          lat,
-          lng,
-          body,
-          is_global: isGlobal,
-          wide_area_reach: wideAreaReach,
-        })
-        .select("id")
-        .single();
+      const insertWide = {
+        author_uid: authorUid,
+        lat,
+        lng,
+        body,
+        is_global: isGlobal,
+        wide_area_reach: wideAreaReach,
+      };
+      const insertLegacy = {
+        author_uid: authorUid,
+        lat,
+        lng,
+        body,
+        is_global: isGlobal,
+      };
+      let { data, error } = await sb.from("map_broadcasts").insert(insertWide).select("id").single();
+      if (error && isWideAreaReachSchemaError(error)) {
+        const retry = await sb.from("map_broadcasts").insert(insertLegacy).select("id").single();
+        data = retry.data;
+        error = retry.error;
+      }
       if (error) return { ok: false, error: error.message };
       const id = data && typeof (data as { id?: string }).id === "string" ? (data as { id: string }).id : "";
       if (!id) return { ok: false, error: "Insert failed" };
@@ -329,20 +360,31 @@ export async function appendMobBroadcast(
       }
 
       const phoneVal = mobPhone && mobPhone.trim() ? mobPhone.trim().slice(0, 40) : null;
-      const { data, error } = await sb
-        .from("map_broadcasts")
-        .insert({
-          author_uid: authorUid,
-          lat,
-          lng,
-          body: text,
-          is_global: false,
-          is_mob: true,
-          mob_phone: phoneVal,
-          wide_area_reach: false,
-        })
-        .select("id")
-        .single();
+      const insertMobWide = {
+        author_uid: authorUid,
+        lat,
+        lng,
+        body: text,
+        is_global: false,
+        is_mob: true,
+        mob_phone: phoneVal,
+        wide_area_reach: false,
+      };
+      const insertMobLegacy = {
+        author_uid: authorUid,
+        lat,
+        lng,
+        body: text,
+        is_global: false,
+        is_mob: true,
+        mob_phone: phoneVal,
+      };
+      let { data, error } = await sb.from("map_broadcasts").insert(insertMobWide).select("id").single();
+      if (error && isWideAreaReachSchemaError(error)) {
+        const retry = await sb.from("map_broadcasts").insert(insertMobLegacy).select("id").single();
+        data = retry.data;
+        error = retry.error;
+      }
       if (error) return { ok: false, error: error.message };
       const id = data && typeof (data as { id?: string }).id === "string" ? (data as { id: string }).id : "";
       if (!id) return { ok: false, error: "Insert failed" };

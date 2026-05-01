@@ -16,21 +16,26 @@ function sanitizeBody(text: string): string {
 }
 
 export async function GET(req: Request) {
-  const { id: viewerId, cookieFresh } = await resolvePresenceSession();
-  const viewer = await getAuthUser();
-  const url = new URL(req.url);
-  const lat = Number(url.searchParams.get("lat"));
-  const lng = Number(url.searchParams.get("lng"));
-  const coords = clampLatLng(lat, lng);
-  if (!coords) {
-    return NextResponse.json({ error: "lat and lng required" }, { status: 400 });
+  try {
+    const { id: viewerId, cookieFresh } = await resolvePresenceSession();
+    const viewer = await getAuthUser();
+    const url = new URL(req.url);
+    const lat = Number(url.searchParams.get("lat"));
+    const lng = Number(url.searchParams.get("lng"));
+    const coords = clampLatLng(lat, lng);
+    if (!coords) {
+      return NextResponse.json({ error: "lat and lng required" }, { status: 400 });
+    }
+
+    const messages = await listBroadcastsNear(coords.lat, coords.lng, viewer?.uid ?? null, viewer?.isAdmin ?? false);
+
+    const res = NextResponse.json({ messages });
+    if (cookieFresh) applyPresenceCookie(res, viewerId);
+    return res;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Could not load broadcasts";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
-
-  const messages = await listBroadcastsNear(coords.lat, coords.lng, viewer?.uid ?? null, viewer?.isAdmin ?? false);
-
-  const res = NextResponse.json({ messages });
-  if (cookieFresh) applyPresenceCookie(res, viewerId);
-  return res;
 }
 
 type PostBody = { lat?: unknown; lng?: unknown; text?: unknown; broadcastAllAreas?: unknown };
