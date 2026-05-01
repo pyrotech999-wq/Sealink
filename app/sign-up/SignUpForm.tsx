@@ -71,6 +71,10 @@ export function SignUpForm() {
   const [bleHint, setBleHint] = useState<string | null>(null);
   const [shareHint, setShareHint] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const formTopRef = useRef<HTMLFormElement>(null);
+  /** Stops the primary action sitting under the thumb from firing twice when step 3 → 4 re-renders on mobile. */
+  const [step4PrimaryReady, setStep4PrimaryReady] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const progress = useMemo(() => ({ 1: 25, 2: 50, 3: 75, 4: 100 }[step]), [step]);
 
@@ -79,6 +83,23 @@ export function SignUpForm() {
       if (photoPreview) URL.revokeObjectURL(photoPreview);
     };
   }, [photoPreview]);
+
+  useEffect(() => {
+    if (step !== 4) {
+      setStep4PrimaryReady(false);
+      return;
+    }
+    setStep4PrimaryReady(false);
+    const id = window.setTimeout(() => setStep4PrimaryReady(true), 550);
+    return () => window.clearTimeout(id);
+  }, [step]);
+
+  useEffect(() => {
+    if (step !== 4) return;
+    const el = formTopRef.current;
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [step]);
 
   function set<K extends keyof typeof initial>(key: K, value: (typeof initial)[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -266,6 +287,8 @@ export function SignUpForm() {
   async function completeSignUp() {
     if (step !== 4) return;
     if (!validateStep(4)) return;
+    if (!step4PrimaryReady || submitting) return;
+    setSubmitting(true);
     setBoatName(form.boatName);
     setFullName(form.contactName);
     const national = form.phone.replace(/^0+/, "").replace(/\D/g, "");
@@ -304,6 +327,8 @@ export function SignUpForm() {
       setSubmitted(true);
     } catch {
       setErrors((e) => ({ ...e, submit: "Network error. Try again." }));
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -313,6 +338,7 @@ export function SignUpForm() {
       next();
       return;
     }
+    if (!step4PrimaryReady) return;
     await completeSignUp();
   }
 
@@ -343,7 +369,11 @@ export function SignUpForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+    <form
+      ref={formTopRef}
+      onSubmit={onSubmit}
+      className="rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-950"
+    >
       {errors.submit ? (
         <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-200">
           {errors.submit}
@@ -839,10 +869,11 @@ export function SignUpForm() {
           ) : (
             <button
               type="button"
+              disabled={!step4PrimaryReady || submitting}
               onClick={() => void completeSignUp()}
-              className="inline-flex h-10 flex-1 items-center justify-center rounded-lg bg-green-700 px-4 text-sm font-medium text-white hover:bg-green-800 sm:flex-none"
+              className="inline-flex h-10 flex-1 items-center justify-center rounded-lg bg-green-700 px-4 text-sm font-medium text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none"
             >
-              Next
+              {submitting ? "Creating account…" : "Create account"}
             </button>
           )}
         </div>

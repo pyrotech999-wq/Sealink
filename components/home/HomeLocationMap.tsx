@@ -26,11 +26,13 @@ import {
   getFullName,
   getShowAvatar,
   getShareNearbyPeers,
+  getShareOnMap,
   setBackgroundLocationConsent,
   setBoatName,
   setFullName,
   setShowAvatar,
   setShareNearbyPeers,
+  setShareOnMap,
 } from "@/lib/map-profile-storage";
 import { getAnchorAlertConfig, setAnchorAlertConfig } from "@/lib/anchor-alert-storage";
 import { getDeviceName, getOrCreateDeviceId } from "@/lib/device-id";
@@ -65,6 +67,16 @@ function buildNearbyPinIcon(avatarDataUrl: string): L.DivIcon {
 }
 
 type LatLngAcc = { lat: number; lng: number; accuracyM: number };
+
+/** Keep showing a cached pin while GPS warms up or briefly drops (mobile). */
+const LAST_KNOWN_PIN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+function readCachedPinForSharing(): LatLngAcc | null {
+  if (typeof window === "undefined") return null;
+  const lk = getLastKnownPosition(LAST_KNOWN_PIN_MAX_AGE_MS);
+  if (!lk) return null;
+  return { lat: lk.lat, lng: lk.lng, accuracyM: 80 };
+}
 
 type NearbyPeer = { id: string; lat: number; lng: number; label: string; avatarDataUrl?: string };
 
@@ -135,14 +147,16 @@ export default function HomeLocationMap() {
     typeof window !== "undefined" ? getShowAvatar() : true,
   );
   const [fullName, setFullNameState] = useState(() => (typeof window !== "undefined" ? getFullName() : ""));
-  const [sharing, setSharing] = useState(false);
+  const [sharing, setSharing] = useState(() => (typeof window !== "undefined" ? getShareOnMap() : false));
   const [bgConsent, setBgConsentState] = useState(() =>
     typeof window !== "undefined" ? getBackgroundLocationConsent() : true,
   );
   const [locMode, setLocMode] = useState<string | null>(null);
   const [pos, setPos] = useState<LatLngAcc | null>(null);
   /** While sharing, keep showing the last good fix (or localStorage seed) so the map does not jump to the default ocean view between GPS reads on phones. */
-  const [heldSharingPos, setHeldSharingPos] = useState<LatLngAcc | null>(null);
+  const [heldSharingPos, setHeldSharingPos] = useState<LatLngAcc | null>(() =>
+    typeof window !== "undefined" && getShareOnMap() ? readCachedPinForSharing() : null,
+  );
   const [geoError, setGeoError] = useState<string | null>(null);
   const [windSlots, setWindSlots] = useState<HourlyWindSlot[]>([]);
   const [windSlotIdx, setWindSlotIdx] = useState(0);
@@ -182,9 +196,7 @@ export default function HomeLocationMap() {
     }
     setHeldSharingPos((prev) => {
       if (prev) return prev;
-      const lk = getLastKnownPosition();
-      if (!lk) return null;
-      return { lat: lk.lat, lng: lk.lng, accuracyM: 80 };
+      return readCachedPinForSharing();
     });
   }, [sharing, pos]);
 
@@ -566,6 +578,8 @@ export default function HomeLocationMap() {
 
     let disposed = false;
     let watchId: number | undefined;
+    /** Avoid restarting watchPosition on every visibility tick — iOS/Android often drop the fix briefly when we do. */
+    let geoTrackingMode: "off" | "watch" | "poll" = "off";
 
     const nav = navigator as Navigator & {
       getBattery?: () => Promise<{ level: number; charging: boolean; addEventListener: (k: string, fn: () => void) => void; removeEventListener: (k: string, fn: () => void) => void }>;
@@ -643,18 +657,30 @@ export default function HomeLocationMap() {
       if (disposed) return;
       const intervalMs = calcIntervalMs();
       setMode(intervalMs);
-      stopWatch();
-      if (pollTimer.current != null) window.clearTimeout(pollTimer.current);
-      pollTimer.current = null;
-      polling.current = false;
-      if (intervalMs == null) {
+      const nextMode: "off" | "watch" | "poll" =
+        intervalMs == null ? "off" : typeof document !== "undefined" && !document.hidden ? "watch" : "poll";
+
+      if (nextMode === "off") {
+        if (geoTrackingMode === "off") return;
+        geoTrackingMode = "off";
+        stopWatch();
         stopPolling();
         return;
       }
-      if (typeof document !== "undefined" && !document.hidden) {
+
+      if (nextMode === "watch") {
+        if (geoTrackingMode === "watch") return;
+        geoTrackingMode = "watch";
+        stopWatch();
+        stopPolling();
         startWatch();
         return;
       }
+
+      if (geoTrackingMode === "poll") return;
+      geoTrackingMode = "poll";
+      stopWatch();
+      stopPolling();
       pollTimer.current = window.setTimeout(tick, 250);
     }
 
@@ -667,6 +693,7 @@ export default function HomeLocationMap() {
       const intervalMs = calcIntervalMs();
       setMode(intervalMs);
       if (intervalMs == null) {
+        geoTrackingMode = "off";
         stopPolling();
         return;
       }
@@ -790,6 +817,7 @@ export default function HomeLocationMap() {
       setNearbyPeers([]);
       setPos(null);
       setGeoError(null);
+      setShareOnMap(false);
       setSharing(false);
       return;
     }
@@ -798,6 +826,9 @@ export default function HomeLocationMap() {
       return;
     }
     setGeoError(null);
+    const seed = readCachedPinForSharing();
+    if (seed) setHeldSharingPos(seed);
+    setShareOnMap(true);
     setSharing(true);
   }
 
