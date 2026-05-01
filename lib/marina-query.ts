@@ -13,7 +13,7 @@ export type MarinaQueryParams = {
 };
 
 export function filterMarinaList(catalog: readonly MarinaListing[], p: MarinaQueryParams): MarinaListing[] {
-  const limit = Math.min(Math.max(p.limit ?? 250, 1), 400);
+  const limit = Math.min(Math.max(p.limit ?? 250, 1), 2000);
   const q = (p.q ?? "").trim().toLowerCase();
   const country = (p.country ?? "").trim();
   const len = p.boatLengthM;
@@ -42,6 +42,12 @@ export function filterMarinaList(catalog: readonly MarinaListing[], p: MarinaQue
     const within = radiusMi >= 9000 ? tagged : tagged.filter((t) => t.mi <= radiusMi);
     within.sort((a, b) => a.mi - b.mi);
     list = within.map((t) => t.m);
+  } else {
+    list.sort((a, b) => {
+      const byName = a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+      if (byName !== 0) return byName;
+      return a.harbour.localeCompare(b.harbour, undefined, { sensitivity: "base" });
+    });
   }
 
   return list.slice(0, limit);

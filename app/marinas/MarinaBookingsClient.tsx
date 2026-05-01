@@ -5,6 +5,10 @@ import { useCallback, useEffect, useState } from "react";
 import { MARINA_WORLD_CATALOG, marinaTelHref, type MarinaListing } from "@/lib/marina-catalog";
 import { distanceKm } from "@/lib/geo-haversine";
 
+const DEFAULT_COUNTRY = "United Kingdom";
+const LIST_PAGE_SIZE = 10;
+const LIST_FETCH_LIMIT = 2000;
+
 function todayIso(): string {
   const d = new Date();
   return d.toISOString().slice(0, 10);
@@ -57,7 +61,7 @@ export function MarinaBookingsClient() {
   const [selected, setSelected] = useState<MarinaListing | null>(null);
   const [copyHint, setCopyHint] = useState<string | null>(null);
 
-  const [countryFilter, setCountryFilter] = useState("");
+  const [countryFilter, setCountryFilter] = useState(DEFAULT_COUNTRY);
   const [userPos, setUserPos] = useState<{ lat: number; lng: number } | null>(null);
   const [geoLoading, setGeoLoading] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
@@ -126,6 +130,7 @@ export function MarinaBookingsClient() {
   const [listMarinas, setListMarinas] = useState<MarinaListing[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [listSource, setListSource] = useState<"supabase" | "seed" | null>(null);
+  const [listPage, setListPage] = useState(0);
 
   useEffect(() => {
     void fetch("/api/marinas/countries", { credentials: "same-origin" })
@@ -137,6 +142,18 @@ export function MarinaBookingsClient() {
         /* keep empty; select still works */
       });
   }, []);
+
+  useEffect(() => {
+    if (countries.length === 0) return;
+    setCountryFilter((prev) => {
+      if (prev === "" || countries.includes(prev)) return prev;
+      return countries.includes(DEFAULT_COUNTRY) ? DEFAULT_COUNTRY : "";
+    });
+  }, [countries]);
+
+  useEffect(() => {
+    setListPage(0);
+  }, [countryFilter, locationQ, lengthM, userPos?.lat, userPos?.lng, radiusMi]);
 
   useEffect(() => {
     const ac = new AbortController();
@@ -153,7 +170,7 @@ export function MarinaBookingsClient() {
         params.set("lng", String(userPos.lng));
         params.set("radiusMi", String(radiusMi));
       }
-      params.set("limit", "250");
+      params.set("limit", String(LIST_FETCH_LIMIT));
       void fetch(`/api/marinas/list?${params.toString()}`, {
         signal: ac.signal,
         credentials: "same-origin",
@@ -179,6 +196,17 @@ export function MarinaBookingsClient() {
       clearTimeout(t);
     };
   }, [countryFilter, locationQ, lengthM, userPos, radiusMi]);
+
+  const listPageCount = Math.max(1, Math.ceil(listMarinas.length / LIST_PAGE_SIZE));
+  const safeListPage = Math.min(listPage, listPageCount - 1);
+  const visibleMarinas = listMarinas.slice(
+    safeListPage * LIST_PAGE_SIZE,
+    safeListPage * LIST_PAGE_SIZE + LIST_PAGE_SIZE,
+  );
+  const rangeFrom = listMarinas.length === 0 ? 0 : safeListPage * LIST_PAGE_SIZE + 1;
+  const rangeTo = Math.min((safeListPage + 1) * LIST_PAGE_SIZE, listMarinas.length);
+  const canPrevPage = safeListPage > 0;
+  const canNextPage = safeListPage < listPageCount - 1;
 
   function requestNearMe() {
     if (!navigator.geolocation) {
@@ -446,7 +474,7 @@ export function MarinaBookingsClient() {
             type="button"
             onClick={() => {
               setLocationQ("");
-              setCountryFilter("");
+              setCountryFilter(DEFAULT_COUNTRY);
               setUserPos(null);
               setGeoError(null);
               setRadiusMi(250);
@@ -469,7 +497,11 @@ export function MarinaBookingsClient() {
       <section className="mt-8">
         <div className="flex flex-wrap items-baseline gap-2">
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-            {listLoading ? "Loading marinas…" : `${listMarinas.length} marina${listMarinas.length === 1 ? "" : "s"}`}
+            {listLoading
+              ? "Loading marinas…"
+              : listMarinas.length === 0
+                ? "0 marinas"
+                : `Showing ${rangeFrom}–${rangeTo} of ${listMarinas.length} marina${listMarinas.length === 1 ? "" : "s"}`}
           </h2>
           {listSource === "supabase" ? (
             <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200">
@@ -481,8 +513,32 @@ export function MarinaBookingsClient() {
             </span>
           ) : null}
         </div>
+        {!listLoading && listMarinas.length > LIST_PAGE_SIZE ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={!canPrevPage}
+              onClick={() => setListPage((p) => Math.max(0, p - 1))}
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-800 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            >
+              Previous 10
+            </button>
+            <button
+              type="button"
+              disabled={!canNextPage}
+              onClick={() => setListPage((p) => Math.min(listPageCount - 1, p + 1))}
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-800 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            >
+              Show next 10
+            </button>
+            <span className="text-xs text-zinc-500 dark:text-zinc-400">
+              Page {safeListPage + 1} of {listPageCount}
+              {userPos ? " · nearest first" : " · A–Z"}
+            </span>
+          </div>
+        ) : null}
         <ul className="mt-4 flex flex-col gap-4">
-          {listMarinas.map((m) => {
+          {visibleMarinas.map((m) => {
             const tel = marinaTelHref(m.phone);
             const distKm =
               userPos != null ? Math.round(distanceKm(userPos.lat, userPos.lng, m.lat, m.lng)) : null;
@@ -574,6 +630,9 @@ export function MarinaBookingsClient() {
             No marinas match — try another country or search, relax boat length, or increase the “Near me” radius /
             choose Worldwide (sort only).
           </p>
+        ) : null}
+        {!listLoading && listMarinas.length > 0 && listMarinas.length <= LIST_PAGE_SIZE ? (
+          <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">{userPos ? "Nearest first." : "Sorted A–Z."}</p>
         ) : null}
       </section>
 

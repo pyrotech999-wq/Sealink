@@ -18,7 +18,7 @@ export async function GET(req: Request): Promise<Response> {
   const userLat = parseNum(url.searchParams.get("lat"));
   const userLng = parseNum(url.searchParams.get("lng"));
   const radiusMi = parseNum(url.searchParams.get("radiusMi")) ?? 250;
-  const limit = parseNum(url.searchParams.get("limit")) ?? 250;
+  const limit = Math.min(parseNum(url.searchParams.get("limit")) ?? 2000, 2000);
 
   const p: MarinaQueryParams = {
     country: country || undefined,

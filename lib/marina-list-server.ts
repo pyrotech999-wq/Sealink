@@ -32,7 +32,7 @@ function bboxForRadiusMi(lat: number, lng: number, radiusMi: number): { minLat: 
 
 async function queryMarinasFromSupabase(p: MarinaQueryParams): Promise<MarinaListing[]> {
   const sb = supabaseAdmin();
-  const limit = Math.min(Math.max(p.limit ?? 250, 1), 400);
+  const limit = Math.min(Math.max(p.limit ?? 250, 1), 2000);
   const radiusMi = p.radiusMi ?? 250;
   const q = (p.q ?? "").trim();
   const country = (p.country ?? "").trim();
@@ -84,7 +84,11 @@ async function queryMarinasFromSupabase(p: MarinaQueryParams): Promise<MarinaLis
     within.sort((a, b) => a.mi - b.mi);
     rows = within.map((t) => t.m);
   } else {
-    rows.sort((a, b) => a.name.localeCompare(b.name));
+    rows.sort((a, b) => {
+      const byName = a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+      if (byName !== 0) return byName;
+      return a.harbour.localeCompare(b.harbour, undefined, { sensitivity: "base" });
+    });
   }
 
   return rows.slice(0, limit);
