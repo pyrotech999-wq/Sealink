@@ -51,6 +51,8 @@ export function IfmMapClient() {
   );
   const [sharing, setSharing] = useState(true);
   const [map, setMap] = useState<L.Map | null>(null);
+  /** Bumped after a successful presence POST so the “me” pin reflects latest profile from storage. */
+  const [profileSync, setProfileSync] = useState(0);
 
   const lastShareAt = useRef<number>(0);
 
@@ -60,7 +62,7 @@ export function IfmMapClient() {
     const avatarDataUrl = getAvatarDataUrl() || "";
     const phone = getProfilePhone().trim();
     return { fullName, boatName, avatarDataUrl, phone };
-  }, []);
+  }, [profileSync]);
 
   const myIcon = useMemo(() => buildAvatarIcon(myDisplay.avatarDataUrl), [myDisplay.avatarDataUrl]);
 
@@ -96,26 +98,34 @@ export function IfmMapClient() {
     if (!sharing) return;
     if (!pos) return;
     const now = Date.now();
-    if (now - lastShareAt.current < 45_000) return;
-    lastShareAt.current = now;
+    if (lastShareAt.current !== 0 && now - lastShareAt.current < 30_000) return;
+    const fullName = getFullName().trim();
+    const boatName = getBoatName().trim();
+    const avatarDataUrl = getAvatarDataUrl() || "";
+    const phone = getProfilePhone().trim();
     try {
-      await fetch("/api/ifm/presence", {
+      const r = await fetch("/api/ifm/presence", {
         method: "POST",
+        credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           share: true,
           lat: pos.lat,
           lng: pos.lng,
-          fullName: myDisplay.fullName,
-          boatName: myDisplay.boatName,
-          avatarDataUrl: myDisplay.avatarDataUrl,
-          phone: myDisplay.phone,
+          fullName,
+          boatName,
+          avatarDataUrl,
+          phone,
         }),
       });
+      if (r.ok) {
+        lastShareAt.current = Date.now();
+        setProfileSync((n) => n + 1);
+      }
     } catch {
       /* ignore */
     }
-  }, [sharing, pos?.lat, pos?.lng, myDisplay]);
+  }, [sharing, pos?.lat, pos?.lng]);
 
   useEffect(() => {
     void sharePresence();
@@ -127,6 +137,7 @@ export function IfmMapClient() {
       if (mode === "local") {
         if (!pos) return;
         const r = await fetch(`/api/ifm/presence?mode=local&lat=${encodeURIComponent(String(pos.lat))}&lng=${encodeURIComponent(String(pos.lng))}`, {
+          credentials: "same-origin",
           cache: "no-store",
         });
         const d = (await r.json()) as { peers?: IfmPeer[]; error?: string };
@@ -135,14 +146,14 @@ export function IfmMapClient() {
         return;
       }
       if (mode === "friends") {
-        const r = await fetch("/api/ifm/presence?mode=friends", { cache: "no-store" });
+        const r = await fetch("/api/ifm/presence?mode=friends", { credentials: "same-origin", cache: "no-store" });
         const d = (await r.json()) as { peers?: IfmPeer[]; friends?: FriendRow[]; error?: string };
         if (!r.ok) throw new Error(d.error || "Could not load friends");
         setPeers(Array.isArray(d.peers) ? d.peers : []);
         setFriends(Array.isArray(d.friends) ? d.friends : []);
         return;
       }
-      const r = await fetch("/api/ifm/presence?mode=all", { cache: "no-store" });
+      const r = await fetch("/api/ifm/presence?mode=all", { credentials: "same-origin", cache: "no-store" });
       const d = (await r.json()) as { peers?: IfmPeer[]; error?: string };
       if (!r.ok) throw new Error(d.error || "Could not load IFM peers");
       setPeers(Array.isArray(d.peers) ? d.peers : []);
@@ -165,6 +176,7 @@ export function IfmMapClient() {
     try {
       const r = await fetch("/api/ifm/friends", {
         method: "POST",
+        credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ contact: v }),
       });
@@ -182,6 +194,7 @@ export function IfmMapClient() {
     try {
       const r = await fetch(`/api/ifm/friends?kind=${encodeURIComponent(f.kind)}&value=${encodeURIComponent(f.value)}`, {
         method: "DELETE",
+        credentials: "same-origin",
       });
       const d = (await r.json()) as { ok?: boolean; friends?: FriendRow[]; error?: string };
       if (!r.ok || d.ok === false) throw new Error(d.error || "Could not remove friend");
@@ -278,7 +291,12 @@ export function IfmMapClient() {
                 const next = !sharing;
                 setSharing(next);
                 if (!next) {
-                  void fetch("/api/ifm/presence", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ share: false }) });
+                  void fetch("/api/ifm/presence", {
+                    method: "POST",
+                    credentials: "same-origin",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ share: false }),
+                  });
                 } else {
                   void sharePresence();
                 }

@@ -1,0 +1,12 @@
+{
+  "pyrotech999@hotmail.co.uk": {
+    "uid": "44066841a0fd3370bee8e1dfc008d6bc",
+    "email": "pyrotech999@hotmail.co.uk",
+    "password": {
+      "saltHex": "6fa3780896691e1c30d302b0f4381bcf",
+      "hashHex": "321c9ee54fda4fc73b75323ff3e6d9363b8048285b8e403df5baf70f06bb069b83ff9a051b95b4e923af0a1efa8ba9986768ff86898fa5c84008c9776f64dfb3"
+    },
+    "createdAt": "2026-05-01T08:43:24.175Z",
+    "updatedAt": "2026-05-01T08:43:24.175Z"
+  }
+}

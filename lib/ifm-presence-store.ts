@@ -1,8 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 import { distanceMiles } from "@/lib/geo-haversine";
+import { canUseKv, kvGetJson, kvSetJson } from "@/lib/kv-json";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 const DATA_PATH = path.join(process.cwd(), "data", "ifm-presence.json");
+const KV_KEY = "sealink:ifm-presence:v1";
 
 export type IfmPresenceRecord = {
   uid: string;
@@ -38,7 +42,7 @@ function enqueue<T>(fn: () => Promise<T>): Promise<T> {
   return next;
 }
 
-function readRaw(): IfmPresenceRecord[] {
+function readRawFile(): IfmPresenceRecord[] {
   try {
     if (!existsSync(DATA_PATH)) return [];
     const raw = readFileSync(DATA_PATH, "utf-8");
@@ -50,13 +54,12 @@ function readRaw(): IfmPresenceRecord[] {
   }
 }
 
-function writeRaw(list: IfmPresenceRecord[]): void {
+function writeRawFile(list: IfmPresenceRecord[]): void {
   mkdirSync(path.dirname(DATA_PATH), { recursive: true });
   writeFileSync(DATA_PATH, JSON.stringify(list, null, 2), "utf-8");
 }
 
 function staleMs(): number {
-  // 20 minutes feels reasonable for a "world map" view.
   return 20 * 60 * 1000;
 }
 
@@ -78,6 +81,116 @@ function toPeer(r: IfmPresenceRecord): IfmPeer {
   };
 }
 
+function rowDbToRecord(r: Record<string, unknown>): IfmPresenceRecord | null {
+  if (typeof r.uid !== "string") return null;
+  return {
+    uid: r.uid,
+    lat: typeof r.lat === "number" ? r.lat : Number(r.lat),
+    lng: typeof r.lng === "number" ? r.lng : Number(r.lng),
+    fullName: typeof r.full_name === "string" ? r.full_name : "",
+    boatName: typeof r.boat_name === "string" ? r.boat_name : "",
+    avatarDataUrl: typeof r.avatar_data_url === "string" ? r.avatar_data_url : "",
+    phoneNorm: typeof r.phone_norm === "string" ? r.phone_norm : "",
+    updatedAt: typeof r.updated_at === "string" ? r.updated_at : new Date().toISOString(),
+    share: r.share === true,
+  };
+}
+
+async function readRawUnified(now: Date): Promise<IfmPresenceRecord[]> {
+  const cutoffIso = new Date(now.getTime() - staleMs()).toISOString();
+
+  if (isSupabaseConfigured()) {
+    const sb = supabaseAdmin();
+    const { data, error } = await sb
+      .from("ifm_presence")
+      .select("*")
+      .eq("share", true)
+      .gte("updated_at", cutoffIso);
+    if (error) throw new Error(error.message);
+    return (data ?? []).map((row) => rowDbToRecord(row as Record<string, unknown>)).filter(Boolean) as IfmPresenceRecord[];
+  }
+
+  if (canUseKv()) {
+    const raw = (await kvGetJson<IfmPresenceRecord[]>(KV_KEY, [])) ?? [];
+    return prune(raw, now);
+  }
+
+  const raw = readRawFile();
+  return prune(raw, now);
+}
+
+/** File/KV: merge one user into full list. Supabase: single-row upsert or delete. */
+async function upsertUnified(
+  uid: string,
+  patch: {
+    lat: number;
+    lng: number;
+    fullName: string;
+    boatName: string;
+    avatarDataUrl: string;
+    phoneNorm: string;
+    share: boolean;
+  },
+): Promise<void> {
+  const now = new Date();
+
+  if (isSupabaseConfigured()) {
+    const sb = supabaseAdmin();
+    if (!patch.share) {
+      const { error } = await sb.from("ifm_presence").delete().eq("uid", uid);
+      if (error) throw new Error(error.message);
+      return;
+    }
+    const row = {
+      uid,
+      lat: patch.lat,
+      lng: patch.lng,
+      full_name: patch.fullName,
+      boat_name: patch.boatName,
+      avatar_data_url: patch.avatarDataUrl,
+      phone_norm: patch.phoneNorm,
+      updated_at: now.toISOString(),
+      share: true,
+    };
+    const { error } = await sb.from("ifm_presence").upsert(row, { onConflict: "uid" });
+    if (error) throw new Error(error.message);
+    return;
+  }
+
+  let list = await readRawUnified(now);
+  if (!patch.share) {
+    list = list.filter((r) => r.uid !== uid);
+    if (canUseKv()) await kvSetJson(KV_KEY, list);
+    else writeRawFile(list);
+    return;
+  }
+
+  const next: IfmPresenceRecord = {
+    uid,
+    lat: patch.lat,
+    lng: patch.lng,
+    fullName: patch.fullName,
+    boatName: patch.boatName,
+    avatarDataUrl: patch.avatarDataUrl,
+    phoneNorm: patch.phoneNorm,
+    updatedAt: now.toISOString(),
+    share: true,
+  };
+  const idx = list.findIndex((r) => r.uid === uid);
+  if (idx >= 0) list[idx] = next;
+  else list.push(next);
+  if (canUseKv()) await kvSetJson(KV_KEY, list);
+  else writeRawFile(list);
+}
+
+async function persistPrunedFileIfNeeded(raw: IfmPresenceRecord[], pruned: IfmPresenceRecord[]): Promise<void> {
+  if (isSupabaseConfigured()) return;
+  if (raw.length !== pruned.length) {
+    if (canUseKv()) await kvSetJson(KV_KEY, pruned);
+    else writeRawFile(pruned);
+  }
+}
+
 export async function upsertIfmPresence(
   uid: string,
   patch: {
@@ -91,36 +204,23 @@ export async function upsertIfmPresence(
   },
 ): Promise<void> {
   return enqueue(async () => {
-    let list = prune(readRaw(), new Date());
-    if (!patch.share) {
-      list = list.filter((r) => r.uid !== uid);
-      writeRaw(list);
-      return;
-    }
-
-    const next: IfmPresenceRecord = {
-      uid,
-      lat: patch.lat,
-      lng: patch.lng,
-      fullName: patch.fullName,
-      boatName: patch.boatName,
-      avatarDataUrl: patch.avatarDataUrl,
-      phoneNorm: patch.phoneNorm,
-      updatedAt: new Date().toISOString(),
-      share: true,
-    };
-    const idx = list.findIndex((r) => r.uid === uid);
-    if (idx >= 0) list[idx] = next;
-    else list.push(next);
-    writeRaw(list);
+    await upsertUnified(uid, patch);
   });
 }
 
 export async function listAllIfmPeers(excludeUid: string, now = new Date()): Promise<IfmPeer[]> {
   return enqueue(async () => {
-    const raw = readRaw();
+    if (isSupabaseConfigured()) {
+      const list = await readRawUnified(now);
+      return list
+        .filter((r) => r.share && r.uid !== excludeUid)
+        .map(toPeer)
+        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    }
+
+    const raw = canUseKv() ? ((await kvGetJson<IfmPresenceRecord[]>(KV_KEY, [])) ?? []) : readRawFile();
     const list = prune(raw, now);
-    if (list.length !== raw.length) writeRaw(list);
+    await persistPrunedFileIfNeeded(raw, list);
     return list
       .filter((r) => r.share && r.uid !== excludeUid)
       .map(toPeer)
@@ -136,9 +236,16 @@ export async function listIfmPeersLocal(
   now = new Date(),
 ): Promise<IfmPeer[]> {
   return enqueue(async () => {
-    const raw = readRaw();
-    const list = prune(raw, now);
-    if (list.length !== raw.length) writeRaw(list);
+    const list =
+      isSupabaseConfigured() || canUseKv()
+        ? await readRawUnified(now)
+        : (() => {
+            const raw = readRawFile();
+            const p = prune(raw, now);
+            if (p.length !== raw.length) writeRawFile(p);
+            return p;
+          })();
+
     const out: IfmPeer[] = [];
     for (const r of list) {
       if (!r.share) continue;
@@ -159,13 +266,20 @@ export async function listIfmPeersByContacts(
   return enqueue(async () => {
     const uidSet = new Set(wantUids.filter(Boolean));
     const phoneSet = new Set(wantPhones.filter(Boolean));
-    const raw = readRaw();
-    const list = prune(raw, now);
-    if (list.length !== raw.length) writeRaw(list);
+
+    const list =
+      isSupabaseConfigured() || canUseKv()
+        ? await readRawUnified(now)
+        : (() => {
+            const raw = readRawFile();
+            const p = prune(raw, now);
+            if (p.length !== raw.length) writeRawFile(p);
+            return p;
+          })();
+
     return list
       .filter((r) => r.share && r.uid !== excludeUid && (uidSet.has(r.uid) || (r.phoneNorm && phoneSet.has(r.phoneNorm))))
       .map(toPeer)
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   });
 }
-
