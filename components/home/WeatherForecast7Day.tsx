@@ -55,7 +55,11 @@ function WindDirectionDisc({ fromDeg, title }: { fromDeg: number | null; title: 
           style={{ transform: `rotate(${toward}deg)`, transformOrigin: "12px 12px" }}
           aria-hidden
         >
-          <path fill="currentColor" d="M12 4 19.5 19.5h-15L12 4z" />
+          {/* Full arrow: narrow shaft + smaller head; points up = downwind before rotation */}
+          <path
+            fill="currentColor"
+            d="M12 5.5 13.35 10.25H12.55V20h-1.1v-9.75H10.65L12 5.5z"
+          />
         </svg>
       ) : (
         <span className="text-sm font-medium opacity-45" aria-hidden>
