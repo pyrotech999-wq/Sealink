@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getLastKnownPosition } from "@/lib/map-last-known";
 import { startMobSiren, stopMobSiren } from "@/lib/mob-siren";
 import { MOB_CANCEL_BROADCAST_INTRO } from "@/lib/map-broadcast-constants";
-import { firstMapUrlInText, LinkifiedPlainText } from "@/components/LinkifiedPlainText";
+import { LinkifiedPlainText } from "@/components/LinkifiedPlainText";
+import { mapHrefPreferCoords } from "@/lib/map-links";
 
 const WATERLINE_KEY = "sealink_mob_incoming_waterline_v1";
 const DISMISSED_KEY = "sealink_mob_dismissed_ids_v1";
@@ -14,6 +15,8 @@ const GEO_MAX_AGE_MS = 2 * 60 * 60 * 1000;
 type ApiMsg = {
   id: string;
   authorUid: string;
+  lat: number;
+  lng: number;
   body: string;
   createdAt: string;
   isMine: boolean;
@@ -174,7 +177,7 @@ export function MobIncomingAlertHost() {
 
   const phone = typeof msg.mobPhone === "string" ? msg.mobPhone.trim() : "";
   const callHref = phone ? telHref(phone) : "";
-  const mapHref = firstMapUrlInText(msg.body);
+  const mapHref = mapHrefPreferCoords(msg.body, msg.lat, msg.lng);
 
   return (
     <div className="fixed inset-0 z-[1400] flex items-end justify-center p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center sm:p-6">
@@ -208,7 +211,7 @@ export function MobIncomingAlertHost() {
               rel="noopener noreferrer"
               className="inline-flex h-12 flex-1 items-center justify-center rounded-xl bg-sky-600 text-center text-sm font-bold text-white hover:bg-sky-500"
             >
-              Open position on map
+              Open sender position on map
             </a>
           ) : null}
           {callHref ? (

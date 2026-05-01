@@ -2,6 +2,8 @@
 
 import type { ReactNode } from "react";
 
+export { firstMapUrlInText } from "@/lib/map-links";
+
 const URL_SPLIT = /(https?:\/\/[^\s<>]+)/gi;
 
 function isHttpUrl(s: string): boolean {
@@ -26,25 +28,6 @@ export function linkLabelForUrl(url: string): string {
     /* */
   }
   return url;
-}
-
-/** First URL in text that looks like a map link (for primary buttons). */
-export function firstMapUrlInText(text: string): string | null {
-  const re = /https?:\/\/[^\s<>]+/gi;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(text)) !== null) {
-    const raw = m[0];
-    const lower = raw.toLowerCase();
-    if (
-      lower.includes("google.com/maps") ||
-      lower.includes("maps.google") ||
-      lower.includes("goo.gl/maps") ||
-      lower.includes("maps.apple.com")
-    ) {
-      return raw;
-    }
-  }
-  return null;
 }
 
 type Props = {

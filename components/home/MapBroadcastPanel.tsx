@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useBroadcastToast } from "@/components/BroadcastToastProvider";
 import { VicinityChatDrawer } from "@/components/home/VicinityChatDrawer";
 import { LinkifiedPlainText } from "@/components/LinkifiedPlainText";
+import { mapHrefPreferCoords } from "@/lib/map-links";
 import { MAP_BROADCAST_RETENTION_HOURS } from "@/lib/map-broadcast-constants";
 
 const WATERLINE_KEY = "sealink_broadcast_toast_waterline_v1";
@@ -106,6 +107,8 @@ type VicinityInboxRowApi = {
 export type BroadcastMsg = {
   id: string;
   authorUid: string;
+  lat: number;
+  lng: number;
   body: string;
   createdAt: string;
   isMine: boolean;
@@ -402,63 +405,76 @@ export function MapBroadcastPanel({
         ) : messages.length === 0 ? (
           <p className="px-2 py-3 text-xs text-indigo-800/80 dark:text-indigo-200/80">No broadcasts in this area yet.</p>
         ) : (
-          messages.map((m) => (
-            <article
-              key={m.id}
-              className={`rounded-md border px-2.5 py-2 text-sm dark:bg-zinc-900/80 ${
-                m.isMob
-                  ? "border-red-400/90 bg-red-50/90 dark:border-red-800/70 dark:bg-red-950/35"
-                  : "border-indigo-100/80 bg-white dark:border-indigo-900/30"
-              }`}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <p className="text-[10px] font-medium text-indigo-600 dark:text-indigo-400">
-                  {fmtTime(m.createdAt)}
-                  {m.isMob ? (
-                    <span className="ml-2 rounded bg-red-600 px-1 py-0.5 font-bold text-white dark:bg-red-700">
-                      MOB
-                    </span>
-                  ) : null}
-                  {m.isGlobal ? (
-                    <span className="ml-2 rounded bg-amber-100 px-1 py-0.5 text-amber-950 dark:bg-amber-900/50 dark:text-amber-100">
-                      All areas
-                    </span>
-                  ) : null}
-                  {m.isMine ? (
-                    <span className="ml-2 rounded bg-indigo-100 px-1 py-0.5 text-indigo-900 dark:bg-indigo-900/60 dark:text-indigo-100">
-                      You
-                    </span>
-                  ) : null}
-                </p>
-                <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
-                  {signedIn && !m.isMine && m.authorUid ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setChatContext(m.body.trim().split(/\r?\n/)[0]?.slice(0, 120) ?? "");
-                        setChatPeerUid(m.authorUid);
-                      }}
-                      className="rounded-md border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-900 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-100 dark:hover:bg-indigo-900/40"
-                    >
-                      Reply
-                    </button>
-                  ) : null}
-                  {m.canDelete ? (
-                    <button
-                      type="button"
-                      onClick={() => void onDelete(m.id)}
-                      className="rounded-md border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-800 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950/55"
-                    >
-                      Delete
-                    </button>
-                  ) : null}
+          messages.map((m) => {
+            const mobMapHref = m.isMob ? mapHrefPreferCoords(m.body, m.lat, m.lng) : null;
+            return (
+              <article
+                key={m.id}
+                className={`rounded-md border px-2.5 py-2 text-sm dark:bg-zinc-900/80 ${
+                  m.isMob
+                    ? "border-red-400/90 bg-red-50/90 dark:border-red-800/70 dark:bg-red-950/35"
+                    : "border-indigo-100/80 bg-white dark:border-indigo-900/30"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-[10px] font-medium text-indigo-600 dark:text-indigo-400">
+                    {fmtTime(m.createdAt)}
+                    {m.isMob ? (
+                      <span className="ml-2 rounded bg-red-600 px-1 py-0.5 font-bold text-white dark:bg-red-700">
+                        MOB
+                      </span>
+                    ) : null}
+                    {m.isGlobal ? (
+                      <span className="ml-2 rounded bg-amber-100 px-1 py-0.5 text-amber-950 dark:bg-amber-900/50 dark:text-amber-100">
+                        All areas
+                      </span>
+                    ) : null}
+                    {m.isMine ? (
+                      <span className="ml-2 rounded bg-indigo-100 px-1 py-0.5 text-indigo-900 dark:bg-indigo-900/60 dark:text-indigo-100">
+                        You
+                      </span>
+                    ) : null}
+                  </p>
+                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+                    {signedIn && !m.isMine && m.authorUid ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setChatContext(m.body.trim().split(/\r?\n/)[0]?.slice(0, 120) ?? "");
+                          setChatPeerUid(m.authorUid);
+                        }}
+                        className="rounded-md border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-900 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-100 dark:hover:bg-indigo-900/40"
+                      >
+                        Reply
+                      </button>
+                    ) : null}
+                    {m.canDelete ? (
+                      <button
+                        type="button"
+                        onClick={() => void onDelete(m.id)}
+                        className="rounded-md border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-800 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950/55"
+                      >
+                        Delete
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
-              <div className="mt-1 whitespace-pre-wrap leading-snug text-zinc-800 dark:text-zinc-200">
-                <LinkifiedPlainText text={m.body} />
-              </div>
-            </article>
-          ))
+                {mobMapHref ? (
+                  <a
+                    href={mobMapHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-flex w-full items-center justify-center rounded-lg bg-sky-600 py-2 text-center text-xs font-bold text-white hover:bg-sky-500 sm:text-sm"
+                  >
+                    Open sender position on map
+                  </a>
+                ) : null}
+                <div className="mt-1 whitespace-pre-wrap leading-snug text-zinc-800 dark:text-zinc-200">
+                  <LinkifiedPlainText text={m.body} />
+                </div>
+              </article>
+            );
+          })
         )}
         </div>
       </div>
