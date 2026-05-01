@@ -1,3 +1,10 @@
+const KM_PER_MI = 1.609344;
+
+/** Great-circle distance in kilometres (same model as {@link distanceMiles}). */
+export function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  return distanceMiles(lat1, lon1, lat2, lon2) * KM_PER_MI;
+}
+
 /** Great-circle distance in miles (WGS84 mean Earth radius). */
 export function distanceMiles(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 3958.8;

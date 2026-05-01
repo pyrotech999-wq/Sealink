@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAuthUser } from "@/lib/auth";
-import { getMarinaById } from "@/lib/marina-demo-catalog";
+import { getMarinaById } from "@/lib/marina-catalog";
 import { createMarinaBerthRequest, listMarinaBerthRequestsForUser } from "@/lib/marina-berth-requests-store";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 

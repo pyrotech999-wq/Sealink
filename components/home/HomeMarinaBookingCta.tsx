@@ -17,8 +17,8 @@ export function HomeMarinaBookingCta({ className }: Props) {
               Book a berth like Navily
             </h2>
             <p className="mt-2 max-w-xl text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-              Search harbours, compare facilities and nightly rates, then send an availability request. SeaLink is
-              building partner checkout — for now you can draft enquiries from your search.
+              Browse harbours worldwide by country, text search, or your current location, then draft an enquiry or save a
+              request. Partner checkout is on the roadmap.
             </p>
           </div>
           <Link

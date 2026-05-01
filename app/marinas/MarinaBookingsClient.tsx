@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { MARINA_DEMO_CATALOG, marinaTelHref, type MarinaListing } from "@/lib/marina-demo-catalog";
+import { MARINA_WORLD_CATALOG, marinaCountriesSorted, marinaTelHref, type MarinaListing } from "@/lib/marina-catalog";
+import { distanceKm, distanceMiles } from "@/lib/geo-haversine";
 
 function todayIso(): string {
   const d = new Date();
@@ -56,10 +57,18 @@ export function MarinaBookingsClient() {
   const [selected, setSelected] = useState<MarinaListing | null>(null);
   const [copyHint, setCopyHint] = useState<string | null>(null);
 
+  const [countryFilter, setCountryFilter] = useState("");
+  const [userPos, setUserPos] = useState<{ lat: number; lng: number } | null>(null);
+  const [geoLoading, setGeoLoading] = useState(false);
+  const [geoError, setGeoError] = useState<string | null>(null);
+  /** Max distance from user when “Near me” is active (statute miles). Large value = no practical limit but still sorted. */
+  const [radiusMi, setRadiusMi] = useState(250);
+
   const [signedIn, setSignedIn] = useState(false);
   const [meChecked, setMeChecked] = useState(false);
   const [savedRequests, setSavedRequests] = useState<SavedBerthRequest[]>([]);
-  const [persistence, setPersistence] = useState<boolean | null>(null);
+  /** From `/api/marinas/config` — server has both URL + service role (not inferred from berth-requests fetch errors). */
+  const [supabaseReady, setSupabaseReady] = useState<boolean | null>(null);
 
   const [submitLoading, setSubmitLoading] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -72,12 +81,26 @@ export function MarinaBookingsClient() {
   const refreshRequests = useCallback(async () => {
     try {
       const r = await fetch("/api/marinas/berth-requests", { credentials: "same-origin" });
-      const data = (await r.json()) as { requests?: SavedBerthRequest[]; persistence?: boolean; error?: string };
-      if (data.requests) setSavedRequests(data.requests);
-      if (typeof data.persistence === "boolean") setPersistence(data.persistence);
+      const data = (await r.json()) as { requests?: SavedBerthRequest[]; error?: string };
+      if (r.ok && Array.isArray(data.requests)) setSavedRequests(data.requests);
     } catch {
-      setPersistence(false);
+      /* keep existing list */
     }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/marinas/config")
+      .then((res) => res.json() as Promise<{ supabaseConfigured?: boolean }>)
+      .then((d) => {
+        if (!cancelled && typeof d.supabaseConfigured === "boolean") setSupabaseReady(d.supabaseConfigured);
+      })
+      .catch(() => {
+        /* leave supabaseReady null */
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -99,12 +122,15 @@ export function MarinaBookingsClient() {
     };
   }, [refreshRequests]);
 
+  const countries = useMemo(() => marinaCountriesSorted(), []);
+
   const filtered = useMemo(() => {
     const q = locationQ.trim().toLowerCase();
     const len = lengthM.trim() === "" ? null : Number(lengthM);
     const lenOk = len !== null && !Number.isNaN(len) && len > 0;
 
-    return MARINA_DEMO_CATALOG.filter((m) => {
+    let list = MARINA_WORLD_CATALOG.filter((m) => {
+      if (countryFilter && m.country !== countryFilter) return false;
       if (q) {
         const blob = `${m.name} ${m.harbour} ${m.region} ${m.country}`.toLowerCase();
         if (!blob.includes(q)) return false;
@@ -112,7 +138,40 @@ export function MarinaBookingsClient() {
       if (lenOk && len! > m.maxLengthM) return false;
       return true;
     });
-  }, [locationQ, lengthM]);
+
+    if (userPos) {
+      const tagged = list.map((m) => ({
+        m,
+        mi: distanceMiles(userPos.lat, userPos.lng, m.lat, m.lng),
+      }));
+      const within =
+        radiusMi >= 9000 ? tagged : tagged.filter((t) => t.mi <= radiusMi);
+      within.sort((a, b) => a.mi - b.mi);
+      return within.map((t) => t.m);
+    }
+
+    return list;
+  }, [locationQ, lengthM, countryFilter, userPos, radiusMi]);
+
+  function requestNearMe() {
+    if (!navigator.geolocation) {
+      setGeoError("Geolocation is not supported in this browser.");
+      return;
+    }
+    setGeoLoading(true);
+    setGeoError(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setGeoLoading(false);
+        setUserPos({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      },
+      (err) => {
+        setGeoLoading(false);
+        setGeoError(err.message || "Could not read your location (check permissions).");
+      },
+      { enableHighAccuracy: false, maximumAge: 120_000, timeout: 20_000 },
+    );
+  }
 
   async function copyEnquiry(m: MarinaListing) {
     setCopyHint(null);
@@ -153,7 +212,6 @@ export function MarinaBookingsClient() {
       }
       if (data.request) {
         setLastSaved(data.request);
-        setPersistence(true);
         await refreshRequests();
       }
     } catch {
@@ -188,11 +246,9 @@ export function MarinaBookingsClient() {
       <header className="max-w-2xl">
         <h1 className="text-3xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Marina berths</h1>
         <p className="mt-3 text-base leading-7 text-zinc-600 dark:text-zinc-400">
-          Search harbours, set dates, then <strong className="font-medium text-zinc-800 dark:text-zinc-200">save a berth request</strong>{" "}
-          (signed-in users, Supabase required) or copy an enquiry. Each listing includes a{" "}
-          <strong className="font-medium text-zinc-800 dark:text-zinc-200">marina phone number</strong> so you can call to
-          confirm — a saved request is <strong className="font-medium text-zinc-800 dark:text-zinc-200">not</strong> a
-          confirmed booking until the harbour agrees.
+          Browse {MARINA_WORLD_CATALOG.length}+ harbours worldwide — filter by <strong className="font-medium text-zinc-800 dark:text-zinc-200">country</strong>,{" "}
+          text search, boat length, or <strong className="font-medium text-zinc-800 dark:text-zinc-200">near me</strong>. Save a berth request when signed in
+          (Supabase), or copy an enquiry and call the marina. Numbers and rates are indicative; always confirm with the office.
         </p>
       </header>
 
@@ -205,29 +261,109 @@ export function MarinaBookingsClient() {
         </p>
       ) : null}
 
-      {persistence === false && signedIn ? (
+      {signedIn && supabaseReady === false ? (
         <p className="mt-6 rounded-xl border border-zinc-200 bg-zinc-100 px-4 py-3 text-sm text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200">
-          Supabase isn’t configured on this server — requests won’t be stored. Use <strong>Copy enquiry</strong> and call
-          the marina, or set{" "}
-          <code className="rounded bg-white px-1 dark:bg-zinc-950">NEXT_PUBLIC_SUPABASE_URL</code> and{" "}
-          <code className="rounded bg-white px-1 dark:bg-zinc-950">SUPABASE_SERVICE_ROLE_KEY</code> and run migration{" "}
-          <code className="rounded bg-white px-1 dark:bg-zinc-950">004_marina_berth_requests.sql</code>.
+          <strong>This deployment</strong> doesn’t have Supabase credentials, so berth requests won’t be saved. Use{" "}
+          <strong>Copy enquiry</strong> and call the marina, or configure the server:
         </p>
+      ) : null}
+      {signedIn && supabaseReady === false ? (
+        <ul className="mt-2 list-inside list-disc rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300">
+          <li>
+            Set <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">NEXT_PUBLIC_SUPABASE_URL</code> and{" "}
+            <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">SUPABASE_SERVICE_ROLE_KEY</code> (Settings → API
+            → Project URL + <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">service_role</code> secret — not
+            the anon key).
+          </li>
+          <li>
+            On <strong>Vercel / your host</strong>, add the same variables for Production (and Preview if needed), then{" "}
+            <strong>redeploy</strong> — <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">.env.local</code> only
+            applies on your laptop.
+          </li>
+          <li>
+            In Supabase SQL Editor, run{" "}
+            <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">004_marina_berth_requests.sql</code> (and earlier
+            migrations if you haven’t).
+          </li>
+        </ul>
       ) : null}
 
       <section className="mt-8 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 sm:p-6">
         <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Search</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <label className="block sm:col-span-2">
+            <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Country</span>
+            <select
+              value={countryFilter}
+              onChange={(e) => setCountryFilter(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-600/20 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
+            >
+              <option value="">All countries</option>
+              {countries.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block sm:col-span-2">
             <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Place or marina</span>
             <input
               type="search"
               value={locationQ}
               onChange={(e) => setLocationQ(e.target.value)}
-              placeholder="e.g. La Rochelle, Cornwall, Portugal…"
+              placeholder="e.g. La Rochelle, Cornwall, Phuket…"
               className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-emerald-600/0 transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-600/20 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
             />
           </label>
+          <div className="sm:col-span-2">
+            <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Near me</span>
+            <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+              <button
+                type="button"
+                onClick={() => void requestNearMe()}
+                disabled={geoLoading}
+                className="inline-flex h-10 items-center justify-center rounded-lg bg-emerald-600 px-4 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60 dark:hover:bg-emerald-500"
+              >
+                {geoLoading ? "Locating…" : userPos ? "Update my location" : "Use my location"}
+              </button>
+              {userPos ? (
+                <>
+                  <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                    <span className="whitespace-nowrap text-xs text-zinc-500 dark:text-zinc-400">Within</span>
+                    <select
+                      value={radiusMi}
+                      onChange={(e) => setRadiusMi(Number(e.target.value))}
+                      className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
+                    >
+                      <option value={100}>100 mi</option>
+                      <option value={250}>250 mi</option>
+                      <option value={500}>500 mi</option>
+                      <option value={1500}>1 500 mi</option>
+                      <option value={9999}>Worldwide (sort only)</option>
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUserPos(null);
+                      setGeoError(null);
+                    }}
+                    className="text-sm font-medium text-zinc-600 underline-offset-2 hover:underline dark:text-zinc-400"
+                  >
+                    Clear location
+                  </button>
+                </>
+              ) : null}
+            </div>
+            {geoError ? <p className="mt-2 text-xs text-amber-800 dark:text-amber-300">{geoError}</p> : null}
+            {userPos ? (
+              <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+                Sorted by distance from your position. Marinas outside the radius are hidden unless you choose “Worldwide
+                (sort only)”.
+              </p>
+            ) : null}
+          </div>
           <label className="block">
             <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Arrival</span>
             <input
@@ -281,6 +417,10 @@ export function MarinaBookingsClient() {
             type="button"
             onClick={() => {
               setLocationQ("");
+              setCountryFilter("");
+              setUserPos(null);
+              setGeoError(null);
+              setRadiusMi(250);
               setArrival("");
               setDeparture("");
               setLengthM("");
@@ -304,6 +444,8 @@ export function MarinaBookingsClient() {
         <ul className="mt-4 flex flex-col gap-4">
           {filtered.map((m) => {
             const tel = marinaTelHref(m.phone);
+            const distKm =
+              userPos != null ? Math.round(distanceKm(userPos.lat, userPos.lng, m.lat, m.lng)) : null;
             return (
               <li key={m.id}>
                 <article className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 sm:p-6">
@@ -313,6 +455,11 @@ export function MarinaBookingsClient() {
                       <p className="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">
                         {m.harbour} · {m.region}, {m.country}
                       </p>
+                      {distKm != null ? (
+                        <p className="mt-1 text-xs font-medium text-emerald-800 dark:text-emerald-400">
+                          ~{distKm} km from your position
+                        </p>
+                      ) : null}
                       {m.phone ? (
                         <p className="mt-2 text-sm">
                           <span className="text-zinc-500 dark:text-zinc-400">Marina phone: </span>
@@ -381,7 +528,10 @@ export function MarinaBookingsClient() {
           })}
         </ul>
         {filtered.length === 0 ? (
-          <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">No marinas match — try a broader place or length.</p>
+          <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
+            No marinas match — try another country or search, relax boat length, or increase the “Near me” radius /
+            choose Worldwide (sort only).
+          </p>
         ) : null}
       </section>
 
@@ -441,7 +591,7 @@ export function MarinaBookingsClient() {
             <div className="mt-4 flex flex-wrap gap-2">
               <button
                 type="button"
-                disabled={!canSubmit || submitLoading || persistence === false}
+                disabled={!canSubmit || submitLoading || supabaseReady === false}
                 onClick={() => void submitBerthRequest()}
                 className="inline-flex h-10 items-center justify-center rounded-lg bg-emerald-700 px-4 text-sm font-medium text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-emerald-600 dark:hover:bg-emerald-500"
               >
@@ -507,7 +657,10 @@ export function MarinaBookingsClient() {
       ) : null}
 
       <p className="mt-10 pb-4 text-center text-[11px] text-zinc-500 dark:text-zinc-400">
-        Listings are demos for product design — confirm all details and pricing with the marina.
+        Curated worldwide seed list ({MARINA_WORLD_CATALOG.length} harbours) — not exhaustive. Regenerate{" "}
+        <code className="rounded bg-zinc-200/80 px-1 dark:bg-zinc-800">data/marinas-world.json</code> with{" "}
+        <code className="rounded bg-zinc-200/80 px-1 dark:bg-zinc-800">npm run marinas:build-catalog</code>. Confirm all
+        details with each marina.
       </p>
     </div>
   );

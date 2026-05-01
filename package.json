@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "migrate:supabase": "tsx scripts/migrate-json-to-supabase.ts",
-    "migrate:supabase:dry": "tsx scripts/migrate-json-to-supabase.ts --dry-run"
+    "migrate:supabase:dry": "tsx scripts/migrate-json-to-supabase.ts --dry-run",
+    "marinas:build-catalog": "tsx scripts/build-marinas-world-json.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.1",
