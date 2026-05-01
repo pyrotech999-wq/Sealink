@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useBroadcastToast } from "@/components/BroadcastToastProvider";
 import { VicinityChatDrawer } from "@/components/home/VicinityChatDrawer";
+import { LinkifiedPlainText } from "@/components/LinkifiedPlainText";
 import { MAP_BROADCAST_RETENTION_HOURS } from "@/lib/map-broadcast-constants";
 
 const WATERLINE_KEY = "sealink_broadcast_toast_waterline_v1";
@@ -453,7 +454,9 @@ export function MapBroadcastPanel({
                   ) : null}
                 </div>
               </div>
-              <p className="mt-1 whitespace-pre-wrap leading-snug text-zinc-800 dark:text-zinc-200">{m.body}</p>
+              <div className="mt-1 whitespace-pre-wrap leading-snug text-zinc-800 dark:text-zinc-200">
+                <LinkifiedPlainText text={m.body} />
+              </div>
             </article>
           ))
         )}

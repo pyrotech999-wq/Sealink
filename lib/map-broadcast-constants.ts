@@ -12,3 +12,7 @@ export const MAP_MOB_RATE_PER_HOUR = 3;
 
 /** Max characters for MOB broadcast body (includes contact block). */
 export const MAP_MOB_BODY_MAX = 2500;
+
+/** First line of server-built MOB cancellation broadcasts (recipient clients match on this). */
+export const MOB_CANCEL_BROADCAST_INTRO =
+  "✅ MOB CANCELLED — person secure / emergency no longer active";

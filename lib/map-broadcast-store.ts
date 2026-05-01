@@ -30,6 +30,8 @@ export type BroadcastMessageRow = {
   isMob: boolean;
   /** Sender phone for MOB tel: link (digits / E.164). */
   mobPhone: string | null;
+  /** Non-MOB message that still uses {@link MAP_MOB_RADIUS_MI} (e.g. MOB cancellation). */
+  wideAreaReach: boolean;
 };
 
 let queue: Promise<unknown> = Promise.resolve();
@@ -106,8 +108,10 @@ function normaliseRow(row: unknown): BroadcastMessageRow | null {
         ? (r as { mob_phone: string }).mob_phone
         : "";
   const mobPhone = mp.trim().slice(0, 40) || null;
+  const wideAreaReach =
+    r.wideAreaReach === true || (r as { wide_area_reach?: unknown }).wide_area_reach === true;
   if (!id || !authorUid || !Number.isFinite(lat) || !Number.isFinite(lng) || !createdAt) return null;
-  return { id, authorUid, lat, lng, body, createdAt, isGlobal, isMob, mobPhone };
+  return { id, authorUid, lat, lng, body, createdAt, isGlobal, isMob, mobPhone, wideAreaReach };
 }
 
 function rowToPublic(
@@ -153,7 +157,7 @@ async function readRawUnified(now: Date): Promise<BroadcastMessageRow[]> {
     await sb.from("map_broadcasts").delete().lt("created_at", cIso);
     const { data, error } = await sb
       .from("map_broadcasts")
-      .select("id, author_uid, lat, lng, body, created_at, is_global, is_mob, mob_phone")
+      .select("id, author_uid, lat, lng, body, created_at, is_global, is_mob, mob_phone, wide_area_reach")
       .order("created_at", { ascending: false })
       .limit(1000);
     if (error) throw new Error(error.message);
@@ -187,8 +191,9 @@ function dbRowToInternal(r: Record<string, unknown>): BroadcastMessageRow | null
   const isMob = r.is_mob === true;
   const mobRaw = typeof r.mob_phone === "string" ? r.mob_phone.trim().slice(0, 40) : "";
   const mobPhone = mobRaw.length > 0 ? mobRaw : null;
+  const wideAreaReach = r.wide_area_reach === true;
   if (!id || !authorUid || !createdAt || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  return { id, authorUid, lat, lng, body, createdAt, isGlobal, isMob, mobPhone };
+  return { id, authorUid, lat, lng, body, createdAt, isGlobal, isMob, mobPhone, wideAreaReach };
 }
 
 export async function listBroadcastsNear(
@@ -209,7 +214,7 @@ export async function listBroadcastsNear(
         continue;
       }
       const d = distanceMiles(lat, lng, m.lat, m.lng);
-      const limitMi = m.isMob ? MAP_MOB_RADIUS_MI : maxMi;
+      const limitMi = m.isMob || m.wideAreaReach ? MAP_MOB_RADIUS_MI : maxMi;
       if (d > limitMi) continue;
       out.push(rowToPublic(m, viewerUid, viewerIsAdmin));
     }
@@ -223,10 +228,11 @@ export async function appendBroadcast(
   lat: number,
   lng: number,
   body: string,
-  opts: { isGlobal?: boolean } = {},
+  opts: { isGlobal?: boolean; wideAreaReach?: boolean } = {},
   now = new Date(),
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   const isGlobal = opts.isGlobal === true;
+  const wideAreaReach = opts.wideAreaReach === true && !isGlobal;
   return enqueue(async () => {
     const hourAgo = now.getTime() - 60 * 60 * 1000;
     const hourAgoIso = new Date(hourAgo).toISOString();
@@ -248,7 +254,14 @@ export async function appendBroadcast(
 
       const { data, error } = await sb
         .from("map_broadcasts")
-        .insert({ author_uid: authorUid, lat, lng, body, is_global: isGlobal })
+        .insert({
+          author_uid: authorUid,
+          lat,
+          lng,
+          body,
+          is_global: isGlobal,
+          wide_area_reach: wideAreaReach,
+        })
         .select("id")
         .single();
       if (error) return { ok: false, error: error.message };
@@ -275,6 +288,7 @@ export async function appendBroadcast(
       isGlobal,
       isMob: false,
       mobPhone: null,
+      wideAreaReach,
     };
     const next = [...list, row];
     if (canUseKv()) await kvSetJson(KV_KEY, next);
@@ -325,6 +339,7 @@ export async function appendMobBroadcast(
           is_global: false,
           is_mob: true,
           mob_phone: phoneVal,
+          wide_area_reach: false,
         })
         .select("id")
         .single();
@@ -355,6 +370,7 @@ export async function appendMobBroadcast(
       isGlobal: false,
       isMob: true,
       mobPhone: mobPhone && mobPhone.trim() ? mobPhone.trim().slice(0, 40) : null,
+      wideAreaReach: false,
     };
     const next = [...list, row];
     if (canUseKv()) await kvSetJson(KV_KEY, next);

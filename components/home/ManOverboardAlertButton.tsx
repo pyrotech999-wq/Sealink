@@ -2,31 +2,12 @@
 
 import { useCallback, useState } from "react";
 import { getBoatName, getFullName, getProfilePhone } from "@/lib/map-profile-storage";
-import { getLastKnownPosition } from "@/lib/map-last-known";
+import { getMobPosition } from "@/lib/map-mob-position";
 import { MOB_SENDER_ACTIVE_UNTIL_KEY, MOB_SENDER_SENT_EVENT } from "@/components/MobSenderActiveBanner";
 
 type Props = {
   signedIn: boolean;
 };
-
-function getMobPosition(): Promise<{ lat: number; lng: number }> {
-  return new Promise((resolve, reject) => {
-    const fallback = getLastKnownPosition(2 * 60 * 60 * 1000);
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
-      if (fallback) resolve({ lat: fallback.lat, lng: fallback.lng });
-      else reject(new Error("Location not available"));
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
-      () => {
-        if (fallback) resolve({ lat: fallback.lat, lng: fallback.lng });
-        else reject(new Error("Could not get GPS. Allow location or use the map to fix position first."));
-      },
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 25_000 },
-    );
-  });
-}
 
 export function ManOverboardAlertButton({ signedIn }: Props) {
   const [confirmOpen, setConfirmOpen] = useState(false);

@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getLastKnownPosition } from "@/lib/map-last-known";
 import { startMobSiren, stopMobSiren } from "@/lib/mob-siren";
+import { MOB_CANCEL_BROADCAST_INTRO } from "@/lib/map-broadcast-constants";
+import { firstMapUrlInText, LinkifiedPlainText } from "@/components/LinkifiedPlainText";
 
 const WATERLINE_KEY = "sealink_mob_incoming_waterline_v1";
 const DISMISSED_KEY = "sealink_mob_dismissed_ids_v1";
@@ -11,6 +13,7 @@ const GEO_MAX_AGE_MS = 2 * 60 * 60 * 1000;
 
 type ApiMsg = {
   id: string;
+  authorUid: string;
   body: string;
   createdAt: string;
   isMine: boolean;
@@ -69,6 +72,13 @@ export function MobIncomingAlertHost() {
   const [msg, setMsg] = useState<ApiMsg | null>(null);
   const [sessionOk, setSessionOk] = useState(false);
   const dismissedRef = useRef(readDismissed());
+  const msgRef = useRef<ApiMsg | null>(null);
+  const openRef = useRef(false);
+
+  useEffect(() => {
+    msgRef.current = msg;
+    openRef.current = open;
+  }, [msg, open]);
 
   const silence = useCallback((id: string) => {
     stopMobSiren();
@@ -127,6 +137,20 @@ export function MobIncomingAlertHost() {
           }
 
           const dismissed = dismissedRef.current;
+          const cur = msgRef.current;
+          const openNow = openRef.current;
+          if (cur && openNow) {
+            const off = messages.find(
+              (m) =>
+                !m.isMob &&
+                !m.isMine &&
+                m.authorUid === cur.authorUid &&
+                new Date(m.createdAt) > new Date(cur.createdAt) &&
+                m.body.startsWith(MOB_CANCEL_BROADCAST_INTRO),
+            );
+            if (off) silence(cur.id);
+          }
+
           for (const m of messages) {
             if (new Date(m.createdAt) <= new Date(wl)) break;
             if (!m.isMob || m.isMine || dismissed.has(m.id)) continue;
@@ -144,12 +168,13 @@ export function MobIncomingAlertHost() {
     tick();
     const id = window.setInterval(tick, POLL_MS);
     return () => window.clearInterval(id);
-  }, [sessionOk]);
+  }, [sessionOk, silence]);
 
   if (!open || !msg) return null;
 
   const phone = typeof msg.mobPhone === "string" ? msg.mobPhone.trim() : "";
   const callHref = phone ? telHref(phone) : "";
+  const mapHref = firstMapUrlInText(msg.body);
 
   return (
     <div className="fixed inset-0 z-[1400] flex items-end justify-center p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center sm:p-6">
@@ -169,13 +194,23 @@ export function MobIncomingAlertHost() {
           Man overboard nearby
         </h2>
         <p className="mt-1 text-xs font-medium text-red-300/90">Emergency broadcast from a vessel in your area</p>
-        <pre className="mt-4 max-h-[40vh] overflow-auto whitespace-pre-wrap break-words rounded-xl border border-zinc-800 bg-black/40 p-3 text-sm text-zinc-100">
-          {msg.body}
-        </pre>
+        <div className="mt-4 max-h-[40vh] overflow-auto whitespace-pre-wrap break-words rounded-xl border border-zinc-800 bg-black/40 p-3 text-sm text-zinc-100">
+          <LinkifiedPlainText text={msg.body} />
+        </div>
         <p className="mt-3 text-xs text-zinc-500">
           Alarm runs up to five minutes. Use Silence to stop sound on this device (others are unchanged).
         </p>
         <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+          {mapHref ? (
+            <a
+              href={mapHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-12 flex-1 items-center justify-center rounded-xl bg-sky-600 text-center text-sm font-bold text-white hover:bg-sky-500"
+            >
+              Open position on map
+            </a>
+          ) : null}
           {callHref ? (
             <a
               href={callHref}
