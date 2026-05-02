@@ -26,8 +26,8 @@ export default async function MessagingPage() {
           Messages
         </h1>
         <p className="mt-2 max-w-3xl text-base leading-7 text-zinc-600 dark:text-zinc-400">
-          Area broadcasts and vicinity replies use larger type here for easier reading. Lists follow your last known map
-          position when sharing is on; open the{" "}
+          Area broadcasts and vicinity replies use slightly larger type here than on the home map. Lists follow your last
+          known map position when sharing is on; open the{" "}
           <Link href="/" className="font-medium text-green-800 underline-offset-2 hover:underline dark:text-green-400">
             home map
           </Link>{" "}

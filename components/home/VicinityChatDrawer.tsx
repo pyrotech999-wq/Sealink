@@ -153,24 +153,24 @@ export function VicinityChatDrawer({ open, onClose, peerUid, contextLine, textSc
           <div className="min-w-0">
             <h3
               id="vicinity-chat-title"
-              className={`font-semibold text-zinc-900 dark:text-zinc-50 ${R ? "text-2xl sm:text-3xl" : "text-base"}`}
+              className={`font-semibold text-zinc-900 dark:text-zinc-50 ${R ? "text-xl sm:text-2xl" : "text-sm"}`}
             >
               Direct message
             </h3>
-            <p className={`mt-0.5 text-zinc-500 dark:text-zinc-400 ${R ? "text-lg" : "text-xs"}`}>
+            <p className={`mt-0.5 text-zinc-500 dark:text-zinc-400 ${R ? "text-base" : "text-[11px]"}`}>
               Boater id{" "}
-              <span className={`font-mono text-zinc-600 dark:text-zinc-300 ${R ? "text-lg" : "text-xs"}`} title={peerUid}>
+              <span className={`font-mono text-zinc-600 dark:text-zinc-300 ${R ? "text-base" : "text-[11px]"}`} title={peerUid}>
                 {peerUid.length > 14 ? `${peerUid.slice(0, 14)}…` : peerUid}
               </span>
             </p>
             {contextLine ? (
               <p
-                className={`mt-1 line-clamp-2 font-medium text-zinc-700 dark:text-zinc-200 ${R ? "text-xl" : "text-xs"}`}
+                className={`mt-1 line-clamp-2 font-medium text-zinc-700 dark:text-zinc-200 ${R ? "text-lg" : "text-[11px]"}`}
               >
                 Re: {contextLine}
               </p>
             ) : null}
-            <p className={`mt-1 leading-snug text-zinc-500 dark:text-zinc-400 ${R ? "text-lg" : "text-xs"}`}>
+            <p className={`mt-1 leading-snug text-zinc-500 dark:text-zinc-400 ${R ? "text-base" : "text-[11px]"}`}>
               About two messages show at once — scroll inside the list for the rest (newest at bottom). Seen closes this
               chat (messages stay); tap the thread row under Vicinity replies to reopen.
             </p>
@@ -180,7 +180,7 @@ export function VicinityChatDrawer({ open, onClose, peerUid, contextLine, textSc
               type="button"
               onClick={onClose}
               className={`rounded-lg border border-zinc-200 font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-900 ${
-                R ? "px-3 py-2 text-lg" : "px-2 py-1 text-sm"
+                R ? "px-3 py-2 text-base" : "px-2 py-1 text-xs"
               }`}
             >
               Close
@@ -190,7 +190,7 @@ export function VicinityChatDrawer({ open, onClose, peerUid, contextLine, textSc
               disabled={!threadId || deleting}
               onClick={() => void onDeleteConversation()}
               className={`rounded-lg border border-red-200 bg-red-50 font-semibold text-red-800 hover:bg-red-100 disabled:opacity-50 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950/55 ${
-                R ? "px-3 py-2 text-lg" : "px-2 py-1 text-sm"
+                R ? "px-3 py-2 text-base" : "px-2 py-1 text-xs"
               }`}
             >
               {deleting ? "Deleting…" : "Delete chat"}
@@ -202,7 +202,7 @@ export function VicinityChatDrawer({ open, onClose, peerUid, contextLine, textSc
           {messages.length > 2 && !loading ? (
             <p
               className={`border-b border-zinc-200 bg-zinc-50/80 px-2 py-1 text-center text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-300 ${
-                R ? "text-lg" : "text-xs"
+                R ? "text-base" : "text-[11px]"
               }`}
             >
               Newest at bottom — scroll up for earlier ({messages.length} in thread)
@@ -215,12 +215,12 @@ export function VicinityChatDrawer({ open, onClose, peerUid, contextLine, textSc
             }`}
           >
             {loading && messages.length === 0 ? (
-              <p className={`text-zinc-500 ${R ? "text-xl" : "text-sm"}`}>Loading…</p>
+              <p className={`text-zinc-500 ${R ? "text-lg" : "text-xs"}`}>Loading…</p>
             ) : null}
             {err ? (
               <p
                 className={`rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 ${
-                  R ? "text-xl" : "text-sm"
+                  R ? "text-lg" : "text-xs"
                 }`}
               >
                 {err}
@@ -230,7 +230,7 @@ export function VicinityChatDrawer({ open, onClose, peerUid, contextLine, textSc
               <div
                 key={m.id}
                 className={`max-w-[88%] rounded-xl px-2.5 py-2 leading-snug ${
-                  R ? "px-3 py-3 text-3xl sm:text-4xl" : "text-base"
+                  R ? "px-3 py-3 text-2xl sm:text-3xl" : "text-sm"
                 } ${
                   m.isMine
                     ? "ml-auto bg-indigo-600 text-white"
@@ -238,7 +238,7 @@ export function VicinityChatDrawer({ open, onClose, peerUid, contextLine, textSc
                 }`}
               >
                 <p className="whitespace-pre-wrap">{m.body}</p>
-                <p className={`mt-1 opacity-70 ${R ? "text-lg" : "text-xs"}`}>
+                <p className={`mt-1 opacity-70 ${R ? "text-base" : "text-[11px]"}`}>
                   {new Date(m.createdAt).toLocaleString("en-GB", {
                     day: "numeric",
                     month: "short",
@@ -259,7 +259,7 @@ export function VicinityChatDrawer({ open, onClose, peerUid, contextLine, textSc
             maxLength={4000}
             placeholder="Write a message…"
             className={`w-full rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-zinc-900 outline-none focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 ${
-              R ? "py-3 text-2xl sm:text-3xl" : "text-base"
+              R ? "py-3 text-xl sm:text-2xl" : "text-sm"
             }`}
           />
           <div className="mt-2 flex gap-2">
@@ -267,7 +267,7 @@ export function VicinityChatDrawer({ open, onClose, peerUid, contextLine, textSc
               type="button"
               onClick={onClose}
               className={`shrink-0 rounded-lg border border-zinc-300 bg-white font-semibold text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800 ${
-                R ? "h-12 px-4 text-lg" : "h-9 px-3 text-sm"
+                R ? "h-12 px-4 text-base" : "h-9 px-3 text-xs"
               }`}
             >
               Seen
@@ -276,7 +276,7 @@ export function VicinityChatDrawer({ open, onClose, peerUid, contextLine, textSc
               type="submit"
               disabled={sending || !draft.trim()}
               className={`min-w-0 flex-1 rounded-lg bg-indigo-600 font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 dark:bg-indigo-600 ${
-                R ? "h-12 text-xl" : "h-9 text-base"
+                R ? "h-12 text-lg" : "h-9 text-sm"
               }`}
             >
               {sending ? "Sending…" : "Send"}
