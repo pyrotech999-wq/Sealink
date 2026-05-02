@@ -1,8 +1,16 @@
+function openAiV1Base(): string {
+  const raw = process.env.OPENAI_BASE_URL?.trim();
+  return raw ? raw.replace(/\/$/, "") : "https://api.openai.com/v1";
+}
+
 /** OpenAI-compatible chat completions URL (supports OPENAI_BASE_URL override). */
 export function openAiChatCompletionsUrl(): string {
-  const raw = process.env.OPENAI_BASE_URL?.trim();
-  const base = raw ? raw.replace(/\/$/, "") : "https://api.openai.com/v1";
-  return `${base}/chat/completions`;
+  return `${openAiV1Base()}/chat/completions`;
+}
+
+/** OpenAI Responses API (web search tools, etc.). */
+export function openAiResponsesUrl(): string {
+  return `${openAiV1Base()}/responses`;
 }
 
 export async function parseOpenAiErrorBody(res: Response): Promise<string> {

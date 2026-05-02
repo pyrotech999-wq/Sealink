@@ -4,6 +4,7 @@ import { resolveSeaTideContext, tideDisplayTimeZone } from "@/lib/sea-tide-conte
 import type { TideTableEvent } from "@/lib/tide-table-types";
 import { tideFactsNarrative, type TideFact } from "@/lib/tide-ai-narrative";
 import { summarizeTideExtremes } from "@/lib/tide-height-summary";
+import { fetchTideScheduleFromWebSearch } from "@/lib/tide-ai-web-schedule";
 
 export const runtime = "nodejs";
 
@@ -61,20 +62,6 @@ function dirText(deg: number | null): string | null {
   const i = Math.round((((deg % 360) + 360) % 360) / 45) % 8;
   return dirs[i] ?? null;
 }
-
-type TideEvent = { kind: "high" | "low"; t: string; v: number };
-type TideEventOut = {
-  kind: "high" | "low";
-  t: string;
-  // Raw model output: sea level relative to global mean sea level (can be negative).
-  vMsl: number;
-  // Relative to local mean (centred around 0).
-  vRelMean: number;
-  // Relative to local modelled low over the returned window (positive, “tide-table-ish”).
-  vAboveLow: number;
-  /** Open‑Meteo model sea level (m) at the tide grid + TIDE_ESTIMATED_MSL_OFFSET_METERS — primary display height. */
-  vAbsEstM: number;
-};
 
 export type TideHeightSummary = ReturnType<typeof summarizeTideExtremes>;
 
@@ -223,36 +210,6 @@ async function noaaTideTable(coords: { lat: number; lng: number }): Promise<{
   };
 }
 
-function findNextTides(times: string[], sea: number[], nowMs: number, limit = 4): TideEvent[] {
-  const out: TideEvent[] = [];
-  for (let i = 1; i < sea.length - 1; i++) {
-    const t = times[i];
-    if (!t) continue;
-    const ms = new Date(t).getTime();
-    if (!Number.isFinite(ms) || ms <= nowMs) continue;
-    const a = sea[i - 1]!;
-    const b = sea[i]!;
-    const c = sea[i + 1]!;
-    if (!Number.isFinite(a) || !Number.isFinite(b) || !Number.isFinite(c)) continue;
-    if (b >= a && b >= c) out.push({ kind: "high", t, v: b });
-    else if (b <= a && b <= c) out.push({ kind: "low", t, v: b });
-    if (out.length >= limit) break;
-  }
-  return out;
-}
-
-function meanFinite(vals: number[]): number | null {
-  let sum = 0;
-  let n = 0;
-  for (const v of vals) {
-    if (!Number.isFinite(v)) continue;
-    sum += v;
-    n += 1;
-  }
-  if (!n) return null;
-  return sum / n;
-}
-
 function minMaxFinite(vals: number[]): { min: number; max: number } | null {
   let min = Number.POSITIVE_INFINITY;
   let max = Number.NEGATIVE_INFINITY;
@@ -364,12 +321,11 @@ export async function GET(req: Request): Promise<Response> {
   const coords = clampLatLng(lat, lng);
   if (!coords) return NextResponse.json({ error: "lat and lng required" }, { status: 400 });
 
-  const hourlyFull = [
+  const hourlyMarine = [
     "wave_height",
     "wave_period",
     "wave_direction",
     "sea_surface_temperature",
-    "sea_level_height_msl",
   ] as const;
 
   try {
@@ -380,12 +336,8 @@ export async function GET(req: Request): Promise<Response> {
     const seaTideContext = await resolveSeaTideContext(coords.lat, coords.lng, req.signal);
     const tq = seaTideContext.tideQuery;
     const tideCoords = { lat: tq.lat, lng: tq.lng };
-    const useAnchoredSea =
-      tq.source === "marina" &&
-      (Math.abs(tq.lat - coords.lat) > 1e-5 || Math.abs(tq.lng - coords.lng) > 1e-5);
 
-    const marineUserUrl = openMeteoMarineUrl(coords.lat, coords.lng, [...hourlyFull]);
-    const marineTideOnlyUrl = openMeteoMarineUrl(tq.lat, tq.lng, ["sea_level_height_msl"]);
+    const marineUserUrl = openMeteoMarineUrl(coords.lat, coords.lng, [...hourlyMarine]);
 
     const [noaaFull, stormglassFull, tideTableFull, rUser] = await Promise.all([
       noaaTideTable(tideCoords),
@@ -394,26 +346,11 @@ export async function GET(req: Request): Promise<Response> {
       fetch(marineUserUrl, { cache: "no-store", signal: req.signal }),
     ]);
 
-    const rTide = useAnchoredSea ? await fetch(marineTideOnlyUrl, { cache: "no-store", signal: req.signal }) : null;
-
     if (!rUser.ok) return NextResponse.json({ error: `Marine request failed (${rUser.status})` }, { status: 502 });
     const dataUser = (await rUser.json()) as MarineResp;
     const hUser = dataUser.hourly;
     const timesUser = (hUser?.time ?? []) as string[];
     if (!timesUser.length) return NextResponse.json({ error: "No marine data returned" }, { status: 502 });
-
-    let tideTimes = timesUser;
-    let sea = (hUser?.sea_level_height_msl ?? []) as number[];
-    if (useAnchoredSea && rTide?.ok) {
-      const dataTide = (await rTide.json()) as MarineResp;
-      const hT = dataTide.hourly;
-      const tt = (hT?.time ?? []) as string[];
-      const st = (hT?.sea_level_height_msl ?? []) as number[];
-      if (Array.isArray(st) && st.length === tt.length && st.length) {
-        tideTimes = tt;
-        sea = st;
-      }
-    }
 
     function shrinkEventsTable<T extends { events: TideTableEvent[] }>(full: T | null, nowMs: number): T | null {
       if (!full?.events?.length) return full;
@@ -426,7 +363,6 @@ export async function GET(req: Request): Promise<Response> {
     const stormglassTideTable = shrinkEventsTable(stormglassFull, tideNow);
     const tideTable = shrinkEventsTable(tideTableFull, tideNow);
 
-    // Find nearest hour index (waves / SST at user position).
     const now = tideNow;
     let idx = 0;
     let best = Number.POSITIVE_INFINITY;
@@ -443,31 +379,30 @@ export async function GET(req: Request): Promise<Response> {
     const waveP = numAt(hUser?.wave_period, idx);
     const waveD = numAt(hUser?.wave_direction, idx);
     const sst = numAt(hUser?.sea_surface_temperature, idx);
-    const seaTimes = tideTimes;
-
-    const tides =
-      Array.isArray(sea) && sea.length === seaTimes.length ? findNextTides(seaTimes, sea, now, 4) : [];
-    const seaStats =
-      Array.isArray(sea) && sea.length === seaTimes.length
-        ? { mean: meanFinite(sea), mm: minMaxFinite(sea) }
-        : { mean: null, mm: null };
-    const relMean0 = seaStats.mean ?? 0;
-    const relLow0 = seaStats.mm?.min ?? 0;
-    const mslOff = tideMslOffsetMeters();
-    const tideEvents: TideEventOut[] = tides.map((e) => {
-      const vRelMean = e.v - relMean0;
-      return {
-        kind: e.kind,
-        t: e.t,
-        vMsl: e.v,
-        vRelMean,
-        vAboveLow: e.v - relLow0,
-        vAbsEstM: e.v + mslOff,
-      };
-    });
-    const rangeM = seaStats.mm ? seaStats.mm.max - seaStats.mm.min : null;
 
     const tz = tideDisplayTimeZone(seaTideContext);
+    const hasOfficialTides =
+      Boolean(noaa?.events?.length) ||
+      Boolean(stormglassTideTable?.events?.length) ||
+      Boolean(tideTable?.events?.length);
+
+    let tideWebSearch = !hasOfficialTides
+      ? await fetchTideScheduleFromWebSearch({
+          displayLabel: seaTideContext.displayLabel,
+          detail: seaTideContext.detail,
+          nearestMarinaName: seaTideContext.nearestMarina?.name ?? null,
+          lat: tideCoords.lat,
+          lng: tideCoords.lng,
+          timeZone: tz,
+          signal: req.signal,
+        })
+      : null;
+
+    const webEvents = tideWebSearch?.events ?? [];
+    const webHeightsMm = webEvents.length ? minMaxFinite(webEvents.map((e) => e.heightM)) : null;
+    const rangeM = webHeightsMm ? webHeightsMm.max - webHeightsMm.min : null;
+
+    const mslOff = tideMslOffsetMeters();
     const aiFacts: TideFact[] = [];
     if (noaa?.events?.length) {
       for (const e of noaa.events.slice(0, 10)) {
@@ -487,27 +422,28 @@ export async function GET(req: Request): Promise<Response> {
         if (!Number.isFinite(ms)) continue;
         aiFacts.push({ kind: e.kind, t: new Date(ms).toISOString(), heightM: e.heightM });
       }
-    } else {
-      for (const e of tideEvents.slice(0, 8)) {
+    } else if (webEvents.length) {
+      for (const e of webEvents.slice(0, 10)) {
         const ms = parseTideInstant(e.t);
         if (!Number.isFinite(ms)) continue;
         aiFacts.push({
           kind: e.kind,
           t: new Date(ms).toISOString(),
-          heightM: e.vAbsEstM,
-          sourceNote: "Open-Meteo marine model sea level (m) at grid + optional offset; not chart datum",
+          heightM: e.heightM,
+          sourceNote: "Web search — verify against official tables",
         });
       }
     }
 
+    const useWebTable = Boolean(tideWebSearch?.events?.length);
     const tideAiNarrative =
-      aiFacts.length >= 2
-        ? await tideFactsNarrative({
+      useWebTable || aiFacts.length < 2
+        ? null
+        : await tideFactsNarrative({
             placeLabel: seaTideContext.displayLabel,
             timeZone: tz,
             facts: aiFacts,
-          })
-        : null;
+          });
 
     const parts: string[] = [];
     if (waveM != null) {
@@ -518,26 +454,26 @@ export async function GET(req: Request): Promise<Response> {
       );
     }
     if (sst != null) parts.push(`Sea surface temperature is about ${sst.toFixed(1)}°C.`);
-    if (tides.length) {
-      const fmt = (iso: string) =>
-        new Date(iso).toLocaleString("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit" });
-      const tideBits = tides
-        .slice(0, 2)
-        .map((e) => `${e.kind === "high" ? "High" : "Low"} tide ~${fmt(e.t)}`);
-      const rangeTxt = rangeM != null ? ` Range ~${rangeM.toFixed(1)}m.` : "";
-      parts.push(`${tideBits.join(" · ")} (modelled).${rangeTxt}`);
+    if (useWebTable) {
+      parts.push(
+        `Today's high and low waters for ${seaTideContext.displayLabel} are from a live web search — double‑check before navigation.`,
+      );
+    } else if (hasOfficialTides) {
+      parts.push(`Tide times use an official or licensed prediction source for ${seaTideContext.displayLabel}.`);
     } else {
-      parts.push("Tide estimate unavailable for this area.");
+      parts.push(
+        "Tide times unavailable: set OPENAI_API_KEY for web-search tides, or add NOAA / Stormglass / WorldTides keys.",
+      );
     }
 
-    const modelledExtremesForSummary: TideTableEvent[] = tideEvents.map((e) => ({
-      kind: e.kind,
-      t: e.t,
-      heightM: e.vAbsEstM,
-    }));
-    const modelledHeightSummary = summarizeTideExtremes(modelledExtremesForSummary, now);
-
     const text = parts.join(" ");
+
+    const tideWebSearchOut =
+      tideWebSearch && tideWebSearch.events.length
+        ? { ...tideWebSearch, heightSummary: summarizeTideExtremes(tideWebSearch.events, now) }
+        : null;
+    const webHeightSummary = tideWebSearchOut?.heightSummary ?? null;
+
     return NextResponse.json({
       ok: true,
       text,
@@ -552,12 +488,13 @@ export async function GET(req: Request): Promise<Response> {
       seaTideContext,
       tideDisplayTimeZone: tz,
       tideAiNarrative,
+      tideWebSearch: tideWebSearchOut,
       tide: {
-        events: tideEvents,
-        rangeM,
-        datum: "msl",
+        events: [],
+        rangeM: useWebTable ? rangeM : null,
+        datum: useWebTable ? "web_search" : "msl",
         mslOffsetM: mslOff,
-        heightSummary: modelledHeightSummary,
+        heightSummary: webHeightSummary,
       },
       tideTable: withHeightSummary(tideTable, now),
       stormglassTideTable: withHeightSummary(stormglassTideTable, now),

@@ -88,6 +88,13 @@ type ApiOk = {
     events: { kind: "high" | "low"; t: string; heightM: number }[];
     heightSummary?: TideHeightSummary;
   } | null;
+  tideWebSearch?: {
+    source: "openai_web_search";
+    regionLine: string;
+    datum: string | null;
+    events: { kind: "high" | "low"; t: string; heightM: number }[];
+    heightSummary?: TideHeightSummary;
+  } | null;
 };
 type ApiFail = { error: string };
 
@@ -146,10 +153,7 @@ function TideHeightsSummaryBlock({
 
 export function SeaStateSummaryBox() {
   const [text, setText] = useState<string | null>(null);
-  const [tides, setTides] = useState<
-    { kind: "high" | "low"; t: string; vMsl: number; vRelMean: number; vAboveLow: number; vAbsEstM: number }[]
-  >([]);
-  const [tideRangeM, setTideRangeM] = useState<number | null>(null);
+  const [tideWebSearch, setTideWebSearch] = useState<ApiOk["tideWebSearch"]>(null);
   const [tideTable, setTideTable] = useState<ApiOk["tideTable"]>(null);
   const [noaaTideTable, setNoaaTideTable] = useState<ApiOk["noaaTideTable"]>(null);
   const [stormglassTideTable, setStormglassTideTable] = useState<ApiOk["stormglassTideTable"]>(null);
@@ -161,7 +165,6 @@ export function SeaStateSummaryBox() {
   const [err, setErr] = useState<string | null>(null);
   const [bstOn, setBstOn] = useState(true);
   const [tideMslOffsetM, setTideMslOffsetM] = useState(0);
-  const [modelledHeightSummary, setModelledHeightSummary] = useState<TideHeightSummary | null>(null);
 
   const loc = useMemo(() => (typeof window !== "undefined" ? getLastKnownPosition() : null), []);
   const hasLoc = Boolean(loc && Number.isFinite(loc.lat) && Number.isFinite(loc.lng));
@@ -191,12 +194,12 @@ export function SeaStateSummaryBox() {
         const f = d as ApiFail;
         setErr(f.error || "Could not load sea state");
         setText(null);
+        setTideWebSearch(null);
         return;
       }
       const ok = d as ApiOk;
       setText(ok.text);
-      setTides(Array.isArray(ok.tide?.events) ? ok.tide!.events! : []);
-      setTideRangeM(typeof ok.tide?.rangeM === "number" && Number.isFinite(ok.tide.rangeM) ? ok.tide.rangeM : null);
+      setTideWebSearch(ok.tideWebSearch ?? null);
       setTideTable(ok.tideTable ?? null);
       setNoaaTideTable(ok.noaaTideTable ?? null);
       setStormglassTideTable(ok.stormglassTideTable ?? null);
@@ -204,14 +207,12 @@ export function SeaStateSummaryBox() {
       setTideDisplayTimeZone(ok.tideDisplayTimeZone?.trim() || "Europe/London");
       setTideAiNarrative(typeof ok.tideAiNarrative === "string" && ok.tideAiNarrative.trim() ? ok.tideAiNarrative.trim() : null);
       setTideMslOffsetM(typeof ok.tide?.mslOffsetM === "number" && Number.isFinite(ok.tide.mslOffsetM) ? ok.tide.mslOffsetM : 0);
-      setModelledHeightSummary((ok.tide?.heightSummary as TideHeightSummary | undefined) ?? null);
     } catch (e: unknown) {
       if (e instanceof DOMException && e.name === "AbortError") return;
       if (e instanceof Error && e.name === "AbortError") return;
       setErr("Network error");
       setText(null);
-      setTides([]);
-      setTideRangeM(null);
+      setTideWebSearch(null);
       setTideTable(null);
       setMeteo(null);
       setNoaaTideTable(null);
@@ -219,7 +220,6 @@ export function SeaStateSummaryBox() {
       setSeaTideContext(null);
       setTideAiNarrative(null);
       setTideMslOffsetM(0);
-      setModelledHeightSummary(null);
     } finally {
       setLoading(false);
     }
@@ -248,10 +248,11 @@ export function SeaStateSummaryBox() {
       <div className="mb-3">
         <h3 className="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Sea state near you</h3>
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          Waves and temperature from your last map fix. If a listed harbour or marina is within about{" "}
-          <span className="font-medium">25 miles</span>, tides are fetched for that place first; otherwise they follow
-          your GPS fix. With API keys we use real stations (NOAA, Stormglass, WorldTides); otherwise Open‑Meteo model
-          sea level in metres (not chart datum).
+          Waves and temperature from your last map fix (Open‑Meteo marine, no tide heights). If a listed harbour or
+          marina is within about <span className="font-medium">25 miles</span>, we name that place first; otherwise
+          tides follow your GPS fix. Tide tables use NOAA, Stormglass, or WorldTides when configured; otherwise a live
+          web search via OpenAI (set <code className="rounded bg-zinc-200/80 px-0.5 dark:bg-zinc-800">OPENAI_API_KEY</code>
+          ).
         </p>
         {seaTideContext ? (
           <p className="mt-1 text-xs text-sky-900/90 dark:text-sky-100/90">
@@ -516,15 +517,10 @@ export function SeaStateSummaryBox() {
                   <p className="mt-1 text-[10px] leading-4 text-zinc-500 dark:text-zinc-400">{tideTable.copyright}</p>
                 ) : null}
               </div>
-            ) : tides.length ? (
+            ) : tideWebSearch?.events?.length ? (
               <div className="mt-3 rounded-lg border border-sky-100 bg-sky-50/70 px-3 py-2 dark:border-sky-900/40 dark:bg-sky-950/20">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs font-semibold text-sky-950 dark:text-sky-100">
-                    Tide Times{bstOn ? " (local)" : " (UTC)"}:{" "}
-                    <span className="font-normal text-zinc-600 dark:text-zinc-300">
-                      {bstOn ? tideDisplayTimeZone : "UTC"} · modelled
-                    </span>
-                  </p>
+                  <p className="text-xs font-semibold text-sky-950 dark:text-sky-100">Web search tides</p>
                   <label className="flex select-none items-center gap-2 text-[11px] text-zinc-700 dark:text-zinc-200">
                     <span>Local TZ</span>
                     <input
@@ -535,54 +531,51 @@ export function SeaStateSummaryBox() {
                     />
                   </label>
                 </div>
-                <p className="mt-0.5 text-[10px] text-zinc-500 dark:text-zinc-400">
-                  <span className="font-semibold">Modelled tides</span> from Open‑Meteo marine at the harbour/GPS grid
-                  point. Values are <span className="font-medium">sea level in metres</span> (global model MSL), not
-                  chart datum. Optional server offset adjusts every height equally.
-                  {tideRangeM != null ? (
-                    <>
-                      {" "}
-                      Full window vertical spread ~<span className="font-medium">{tideRangeM.toFixed(2)} m</span>.
-                    </>
-                  ) : null}
-                </p>
-                <TideHeightsSummaryBlock
-                  summary={modelledHeightSummary ?? undefined}
-                  mslOffsetM={tideMslOffsetM}
-                  datumNote="model MSL + optional offset"
-                  modelledNote
-                />
-                <div className="mt-2 overflow-hidden rounded-md border border-sky-100 bg-white/70 dark:border-sky-900/40 dark:bg-zinc-950/40">
-                  <div className="grid grid-cols-3 gap-2 border-b border-sky-100 px-2 py-1.5 text-[11px] font-semibold text-zinc-700 dark:border-sky-900/40 dark:text-zinc-200">
-                    <div>High / Low</div>
-                    <div>Time</div>
-                    <div className="text-right">Sea level (m)</div>
-                  </div>
-                  <div className="divide-y divide-sky-100 text-xs dark:divide-sky-900/40">
-                    {tides.slice(0, 6).map((e) => {
+                <div className="mt-2 space-y-1.5 text-sm leading-relaxed text-zinc-800 dark:text-zinc-200">
+                  <p>
+                    {seaTideContext?.nearestMarina?.name ? (
+                      <>
+                        Nearest marina:{" "}
+                        <span className="font-semibold text-zinc-900 dark:text-zinc-50">{seaTideContext.nearestMarina.name}</span>
+                      </>
+                    ) : (
+                      <>
+                        Tide reference:{" "}
+                        <span className="font-semibold text-zinc-900 dark:text-zinc-50">
+                          {seaTideContext?.displayLabel ?? "Your area"}
+                        </span>
+                      </>
+                    )}
+                  </p>
+                  <p className="font-medium">
+                    <span aria-hidden>📅</span> Today&apos;s tides ({tideWebSearch.regionLine})
+                  </p>
+                  <ul className="list-none space-y-1 pl-0">
+                    {tideWebSearch.events.slice(0, 8).map((e) => {
                       const tz = bstOn ? tideDisplayTimeZone : "UTC";
-                      const time = new Date(e.t).toLocaleTimeString("en-GB", {
+                      const hhmm = new Date(e.t).toLocaleTimeString("en-GB", {
                         hour: "2-digit",
                         minute: "2-digit",
+                        hour12: false,
                         timeZone: tz,
                       });
+                      const label = e.kind === "high" ? "High tide" : "Low tide";
                       return (
-                        <div key={`${e.kind}:${e.t}`} className="grid grid-cols-3 gap-2 px-2 py-1.5 text-zinc-800 dark:text-zinc-200">
-                          <div className={`font-semibold ${e.kind === "high" ? "text-emerald-700 dark:text-emerald-300" : "text-amber-700 dark:text-amber-300"}`}>
-                            {e.kind === "high" ? "High" : "Low"}
-                          </div>
-                          <div className="tabular-nums">{time}</div>
-                          <div className="text-right tabular-nums font-medium">{e.vAbsEstM.toFixed(2)}</div>
-                        </div>
+                        <li key={`${e.kind}:${e.t}:${e.heightM}`} className="tabular-nums">
+                          {label}: {hhmm} — {e.heightM.toFixed(2)} m
+                        </li>
                       );
                     })}
-                  </div>
+                  </ul>
                 </div>
-                <p className="mt-1 text-[10px] text-zinc-500 dark:text-zinc-400">
-                  “Sea level (m)” is the model value at the tide grid plus{" "}
-                  <code className="rounded bg-zinc-200/80 px-0.5 dark:bg-zinc-800">TIDE_ESTIMATED_MSL_OFFSET_METERS</code>{" "}
-                  ({tideMslOffsetM.toFixed(2)} m) when set. For chart‑datum tables use NOAA / Stormglass / WorldTides
-                  with keys configured.
+                <TideHeightsSummaryBlock
+                  summary={tideWebSearch.heightSummary}
+                  mslOffsetM={tideMslOffsetM}
+                  datumNote={tideWebSearch.datum?.trim() || "as published on web sources"}
+                />
+                <p className="mt-2 text-[10px] leading-4 text-zinc-500 dark:text-zinc-400">
+                  Times from OpenAI web search ({bstOn ? tideDisplayTimeZone : "UTC"}). Verify against an official tide
+                  table or almanac before navigation.
                 </p>
               </div>
             ) : null}
