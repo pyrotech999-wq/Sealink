@@ -772,7 +772,7 @@ export function WeatherSeaMap() {
       () => {
         /* ignore */
       },
-      { enableHighAccuracy: false, maximumAge: 60_000, timeout: 12_000 },
+      { enableHighAccuracy: true, maximumAge: 120_000, timeout: 22_000 },
     );
     return () => {
       disposed = true;

@@ -36,6 +36,7 @@ import {
 } from "@/lib/map-profile-storage";
 import { getAnchorAlertConfig, setAnchorAlertConfig } from "@/lib/anchor-alert-storage";
 import { getDeviceName, getOrCreateDeviceId } from "@/lib/device-id";
+import { clampGeoAccuracyM, humanGeolocationMessage } from "@/lib/geolocation-utils";
 
 const DEFAULT_CENTER: [number, number] = [DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng];
 const DEFAULT_ZOOM = 6;
@@ -622,6 +623,7 @@ export default function HomeLocationMap({
     let watchId: number | undefined;
     /** Avoid restarting watchPosition on every visibility tick — iOS/Android often drop the fix briefly when we do. */
     let geoTrackingMode: "off" | "watch" | "poll" = "off";
+    let lastDocHidden = typeof document !== "undefined" ? document.hidden : false;
 
     const nav = navigator as Navigator & {
       getBattery?: () => Promise<{ level: number; charging: boolean; addEventListener: (k: string, fn: () => void) => void; removeEventListener: (k: string, fn: () => void) => void }>;
@@ -661,12 +663,31 @@ export default function HomeLocationMap({
 
     const optsFor = (intervalMs: number | null): PositionOptions => {
       const maxAge = intervalMs == null ? 60_000 : Math.min(intervalMs, 15 * 60_000);
+      const high = anchorCfg.armed;
       return {
-        enableHighAccuracy: false,
+        enableHighAccuracy: high,
         maximumAge: maxAge,
-        timeout: 8_000,
+        timeout: high ? 25_000 : 15_000,
       };
     };
+
+    function kickFreshFix() {
+      navigator.geolocation.getCurrentPosition(
+        (p) => {
+          if (disposed) return;
+          setGeoError(null);
+          setPos({
+            lat: p.coords.latitude,
+            lng: p.coords.longitude,
+            accuracyM: clampGeoAccuracyM(p.coords.accuracy),
+          });
+        },
+        () => {
+          /* watch/poll still active; avoid noisy errors on resume */
+        },
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 35_000 },
+      );
+    }
 
     function stopWatch() {
       if (watchId != null) {
@@ -684,14 +705,14 @@ export default function HomeLocationMap({
           setPos({
             lat: p.coords.latitude,
             lng: p.coords.longitude,
-            accuracyM: Math.min(Math.max(p.coords.accuracy || 0, 8), 1200),
+            accuracyM: clampGeoAccuracyM(p.coords.accuracy),
           });
         },
         (e) => {
           if (disposed) return;
-          setGeoError(e.message || "Location error");
+          setGeoError(humanGeolocationMessage(e));
         },
-        { enableHighAccuracy: true, maximumAge: 15_000, timeout: 20_000 },
+        { enableHighAccuracy: true, maximumAge: 20_000, timeout: 30_000 },
       );
     }
 
@@ -752,21 +773,27 @@ export default function HomeLocationMap({
           setPos({
             lat: p.coords.latitude,
             lng: p.coords.longitude,
-            accuracyM: Math.min(Math.max(p.coords.accuracy || 0, 8), 1200),
+            accuracyM: clampGeoAccuracyM(p.coords.accuracy),
           });
           pollTimer.current = window.setTimeout(tick, intervalMs);
         },
         (e) => {
           polling.current = false;
           if (disposed) return;
-          setGeoError(e.message || "Location error");
+          setGeoError(humanGeolocationMessage(e));
           pollTimer.current = window.setTimeout(tick, intervalMs);
         },
         optsFor(intervalMs),
       );
     }
 
-    const onVisibility = () => syncTracking();
+    const onVisibility = () => {
+      const hidden = typeof document !== "undefined" && document.hidden;
+      const becameVisible = lastDocHidden && !hidden;
+      lastDocHidden = hidden;
+      syncTracking();
+      if (becameVisible) kickFreshFix();
+    };
 
     const onBattery = () => {
       if (!battery) return;

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { MARINA_WORLD_CATALOG, marinaTelHref, type MarinaListing } from "@/lib/marina-catalog";
 import { distanceKm } from "@/lib/geo-haversine";
+import { humanGeolocationMessage } from "@/lib/geolocation-utils";
 
 const DEFAULT_COUNTRY = "United Kingdom";
 const LIST_PAGE_SIZE = 10;
@@ -66,7 +67,7 @@ export function MarinaBookingsClient() {
   const [geoLoading, setGeoLoading] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
   /** Max distance from user when “Near me” is active (statute miles). Large value = no practical limit but still sorted. */
-  const [radiusMi, setRadiusMi] = useState(250);
+  const [radiusMi, setRadiusMi] = useState(10);
 
   const [signedIn, setSignedIn] = useState(false);
   const [meChecked, setMeChecked] = useState(false);
@@ -228,9 +229,9 @@ export function MarinaBookingsClient() {
       },
       (err) => {
         setGeoLoading(false);
-        setGeoError(err.message || "Could not read your location (check permissions).");
+        setGeoError(humanGeolocationMessage(err));
       },
-      { enableHighAccuracy: false, maximumAge: 120_000, timeout: 20_000 },
+      { enableHighAccuracy: true, maximumAge: 120_000, timeout: 28_000 },
     );
   }
 
@@ -434,6 +435,9 @@ export function MarinaBookingsClient() {
                       onChange={(e) => setRadiusMi(Number(e.target.value))}
                       className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
                     >
+                      <option value={10}>10 mi</option>
+                      <option value={25}>25 mi</option>
+                      <option value={50}>50 mi</option>
                       <option value={100}>100 mi</option>
                       <option value={250}>250 mi</option>
                       <option value={500}>500 mi</option>
@@ -518,7 +522,7 @@ export function MarinaBookingsClient() {
               setCountryFilter(DEFAULT_COUNTRY);
               setUserPos(null);
               setGeoError(null);
-              setRadiusMi(250);
+              setRadiusMi(10);
               setArrival("");
               setDeparture("");
               setLengthM("");

@@ -6,6 +6,7 @@ import { LAST_SIGNIN_EMAIL_STORAGE_KEY, normaliseEmail } from "@/lib/email-norma
 import { getBoatName, setAvatarDataUrl, setBoatName, setFullName, setProfilePhone } from "@/lib/map-profile-storage";
 import { normalisePhone } from "@/lib/phone-normalise";
 import { getDeviceName, getOrCreateDeviceId } from "@/lib/device-id";
+import { humanGeolocationMessage } from "@/lib/geolocation-utils";
 import { compressProfilePhoto } from "@/lib/client/compress-profile-photo";
 
 type Step = 1 | 2 | 3 | 4;
@@ -232,8 +233,8 @@ export function SignUpForm() {
         setGeoHint(
           "Location works for this browser session. Your \"always\" vs \"while using\" choice is saved for the native app.",
         ),
-      (err) => setGeoHint(err.message ? `Could not read location: ${err.message}` : "Location permission was blocked or unavailable."),
-      { enableHighAccuracy: true, timeout: 12_000 },
+      (err) => setGeoHint(humanGeolocationMessage(err)),
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 22_000 },
     );
   }
 

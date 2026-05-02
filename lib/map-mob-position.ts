@@ -1,3 +1,4 @@
+import { humanGeolocationMessage } from "@/lib/geolocation-utils";
 import { getLastKnownPosition } from "@/lib/map-last-known";
 
 /** GPS for MOB / cancel: current fix, or last known within 2h. */
@@ -11,11 +12,11 @@ export function getMobPosition(): Promise<{ lat: number; lng: number }> {
     }
     navigator.geolocation.getCurrentPosition(
       (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
-      () => {
+      (err) => {
         if (fallback) resolve({ lat: fallback.lat, lng: fallback.lng });
-        else reject(new Error("Could not get GPS. Allow location or use the map to fix position first."));
+        else reject(new Error(`${humanGeolocationMessage(err)} Or set your position on the map first.`));
       },
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 25_000 },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 40_000 },
     );
   });
 }

@@ -19,10 +19,27 @@ type MeteoOk = {
 };
 type MeteoFail = { error: string };
 
+type SeaTideContextOut = {
+  displayLabel: string;
+  detail: string;
+  via: "marina" | "place";
+  nearestMarina: {
+    name: string;
+    harbour: string;
+    region: string;
+    country: string;
+    distanceKm: number;
+  } | null;
+  nominatim: { label: string; country?: string } | null;
+};
+
 type ApiOk = {
   ok: true;
   text: string;
   snapshot?: { wave_height_m: number | null; sea_surface_temp_c: number | null };
+  seaTideContext?: SeaTideContextOut;
+  tideDisplayTimeZone?: string;
+  tideAiNarrative?: string | null;
   tide?: {
     events?: { kind: "high" | "low"; t: string; vMsl: number; vRelMean: number; vAboveLow: number }[];
     rangeM?: number | null;
@@ -35,6 +52,13 @@ type ApiOk = {
     distanceKm: number;
     datum: string;
     timeZone: "lst_ldt";
+    events: { kind: "high" | "low"; t: string; heightM: number }[];
+  } | null;
+  stormglassTideTable?: {
+    source: "stormglass";
+    stationName: string;
+    distanceKm: number | null;
+    datum: string;
     events: { kind: "high" | "low"; t: string; heightM: number }[];
   } | null;
   tideTable?: {
@@ -55,6 +79,10 @@ export function SeaStateSummaryBox() {
   const [tideRangeM, setTideRangeM] = useState<number | null>(null);
   const [tideTable, setTideTable] = useState<ApiOk["tideTable"]>(null);
   const [noaaTideTable, setNoaaTideTable] = useState<ApiOk["noaaTideTable"]>(null);
+  const [stormglassTideTable, setStormglassTideTable] = useState<ApiOk["stormglassTideTable"]>(null);
+  const [seaTideContext, setSeaTideContext] = useState<SeaTideContextOut | null>(null);
+  const [tideDisplayTimeZone, setTideDisplayTimeZone] = useState<string>("Europe/London");
+  const [tideAiNarrative, setTideAiNarrative] = useState<string | null>(null);
   const [meteo, setMeteo] = useState<MeteoOk | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -96,6 +124,10 @@ export function SeaStateSummaryBox() {
       setTideRangeM(typeof ok.tide?.rangeM === "number" && Number.isFinite(ok.tide.rangeM) ? ok.tide.rangeM : null);
       setTideTable(ok.tideTable ?? null);
       setNoaaTideTable(ok.noaaTideTable ?? null);
+      setStormglassTideTable(ok.stormglassTideTable ?? null);
+      setSeaTideContext(ok.seaTideContext ?? null);
+      setTideDisplayTimeZone(ok.tideDisplayTimeZone?.trim() || "Europe/London");
+      setTideAiNarrative(typeof ok.tideAiNarrative === "string" && ok.tideAiNarrative.trim() ? ok.tideAiNarrative.trim() : null);
     } catch (e: unknown) {
       if (e instanceof DOMException && e.name === "AbortError") return;
       if (e instanceof Error && e.name === "AbortError") return;
@@ -106,6 +138,9 @@ export function SeaStateSummaryBox() {
       setTideTable(null);
       setMeteo(null);
       setNoaaTideTable(null);
+      setStormglassTideTable(null);
+      setSeaTideContext(null);
+      setTideAiNarrative(null);
     } finally {
       setLoading(false);
     }
@@ -134,8 +169,23 @@ export function SeaStateSummaryBox() {
       <div className="mb-3">
         <h3 className="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Sea state near you</h3>
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          Waves, water temperature, and modelled tides based on your last known map position.
+          Waves and temperature from your last map fix. Tide tables use nearby marinas/harbours from our catalogue when
+          close, then the nearest coastal place; we prefer real tide stations (NOAA, Stormglass, WorldTides) when keys
+          are configured, otherwise a modelled curve.
         </p>
+        {seaTideContext ? (
+          <p className="mt-1 text-xs text-sky-900/90 dark:text-sky-100/90">
+            Tide reference: <span className="font-semibold">{seaTideContext.displayLabel}</span>
+            {seaTideContext.nearestMarina ? (
+              <span className="text-zinc-600 dark:text-zinc-300">
+                {" "}
+                · nearest listed marina ~{seaTideContext.nearestMarina.distanceKm}km (
+                {seaTideContext.nearestMarina.name})
+              </span>
+            ) : null}
+            <span className="block text-[11px] text-zinc-500 dark:text-zinc-400">{seaTideContext.detail}</span>
+          </p>
+        ) : null}
       </div>
 
       <div className="rounded-xl border border-sky-200 bg-sky-50/80 p-4 shadow-sm dark:border-sky-900/50 dark:bg-sky-950/30">
@@ -148,6 +198,11 @@ export function SeaStateSummaryBox() {
         {text ? (
           <div className="rounded-lg border border-sky-200/80 bg-white/90 px-4 py-3 text-sm leading-7 text-zinc-800 dark:border-sky-800/60 dark:bg-zinc-950/80 dark:text-zinc-200">
             <p>{text}</p>
+            {tideAiNarrative ? (
+              <p className="mt-2 rounded-md border border-sky-100/80 bg-sky-50/50 px-3 py-2 text-xs italic leading-5 text-zinc-700 dark:border-sky-900/30 dark:bg-sky-950/25 dark:text-zinc-200">
+                {tideAiNarrative}
+              </p>
+            ) : null}
             {meteo ? (
               <div className="mt-3 rounded-lg border border-sky-100 bg-sky-50/70 px-3 py-2 dark:border-sky-900/40 dark:bg-sky-950/20">
                 <p className="text-xs font-semibold text-sky-950 dark:text-sky-100">Nearest meteo station</p>
@@ -233,17 +288,71 @@ export function SeaStateSummaryBox() {
                   </div>
                 </div>
               </div>
+            ) : stormglassTideTable?.events?.length ? (
+              <div className="mt-3 rounded-lg border border-sky-100 bg-sky-50/70 px-3 py-2 dark:border-sky-900/40 dark:bg-sky-950/20">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs font-semibold text-sky-950 dark:text-sky-100">
+                    Tide Times{bstOn ? " (local)" : " (UTC)"}:{" "}
+                    <span className="font-normal text-zinc-600 dark:text-zinc-300">
+                      {bstOn ? tideDisplayTimeZone : "UTC"}
+                    </span>
+                  </p>
+                  <label className="flex select-none items-center gap-2 text-[11px] text-zinc-700 dark:text-zinc-200">
+                    <span>Local TZ</span>
+                    <input
+                      type="checkbox"
+                      checked={bstOn}
+                      onChange={(e) => setBstOn(e.target.checked)}
+                      className="h-4 w-4 accent-sky-600"
+                    />
+                  </label>
+                </div>
+                <p className="mt-0.5 text-[10px] text-zinc-500 dark:text-zinc-400">
+                  Source: <span className="font-semibold">Stormglass</span> · Datum:{" "}
+                  <span className="font-semibold">{stormglassTideTable.datum}</span> · Station:{" "}
+                  <span className="font-semibold">{stormglassTideTable.stationName}</span>
+                  {stormglassTideTable.distanceKm != null ? (
+                    <span className="text-zinc-400"> (~{stormglassTideTable.distanceKm.toFixed(1)}km)</span>
+                  ) : null}
+                </p>
+                <div className="mt-2 overflow-hidden rounded-md border border-sky-100 bg-white/70 dark:border-sky-900/40 dark:bg-zinc-950/40">
+                  <div className="grid grid-cols-3 gap-2 border-b border-sky-100 px-2 py-1 text-[11px] font-semibold text-zinc-700 dark:border-sky-900/40 dark:text-zinc-200">
+                    <div>Hi/Lo</div>
+                    <div>Time</div>
+                    <div className="text-right">Height</div>
+                  </div>
+                  <div className="divide-y divide-sky-100 text-xs dark:divide-sky-900/40">
+                    {stormglassTideTable.events.slice(0, 8).map((e) => {
+                      const tz = bstOn ? tideDisplayTimeZone : "UTC";
+                      const time = new Date(e.t).toLocaleTimeString("en-GB", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        timeZone: tz,
+                      });
+                      return (
+                        <div key={`${e.kind}:${e.t}:${e.heightM}`} className="grid grid-cols-3 gap-2 px-2 py-1 text-zinc-700 dark:text-zinc-200">
+                          <div className={`font-semibold ${e.kind === "high" ? "text-emerald-700 dark:text-emerald-300" : "text-amber-700 dark:text-amber-300"}`}>
+                            {e.kind === "high" ? "High" : "Low"}
+                          </div>
+                          <div className="tabular-nums">{time}</div>
+                          <div className="text-right tabular-nums">{e.heightM.toFixed(2)}m</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
             ) : tideTable?.events?.length ? (
               <div className="mt-3 rounded-lg border border-sky-100 bg-sky-50/70 px-3 py-2 dark:border-sky-900/40 dark:bg-sky-950/20">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-xs font-semibold text-sky-950 dark:text-sky-100">
-                    Tide Times{bstOn ? "BST" : "UTC"}:{" "}
+                    Tide Times{bstOn ? " (local)" : " (UTC)"}:{" "}
                     <span className="font-normal text-zinc-600 dark:text-zinc-300">
-                      British Summer Time on/off
+                      {bstOn ? tideDisplayTimeZone : "UTC"}
                     </span>
                   </p>
                   <label className="flex select-none items-center gap-2 text-[11px] text-zinc-700 dark:text-zinc-200">
-                    <span>BST</span>
+                    <span>Local TZ</span>
                     <input
                       type="checkbox"
                       checked={bstOn}
@@ -275,7 +384,7 @@ export function SeaStateSummaryBox() {
                   </div>
                   <div className="divide-y divide-sky-100 text-xs dark:divide-sky-900/40">
                     {tideTable.events.slice(0, 8).map((e) => {
-                      const tz = bstOn ? "Europe/London" : "UTC";
+                      const tz = bstOn ? tideDisplayTimeZone : "UTC";
                       const time = new Date(e.t).toLocaleTimeString("en-GB", {
                         hour: "2-digit",
                         minute: "2-digit",
@@ -301,13 +410,13 @@ export function SeaStateSummaryBox() {
               <div className="mt-3 rounded-lg border border-sky-100 bg-sky-50/70 px-3 py-2 dark:border-sky-900/40 dark:bg-sky-950/20">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-xs font-semibold text-sky-950 dark:text-sky-100">
-                    Tide Times{bstOn ? "BST" : "UTC"}:{" "}
+                    Tide Times{bstOn ? " (local)" : " (UTC)"}:{" "}
                     <span className="font-normal text-zinc-600 dark:text-zinc-300">
-                      British Summer Time on/off
+                      {bstOn ? tideDisplayTimeZone : "UTC"} · modelled
                     </span>
                   </p>
                   <label className="flex select-none items-center gap-2 text-[11px] text-zinc-700 dark:text-zinc-200">
-                    <span>BST</span>
+                    <span>Local TZ</span>
                     <input
                       type="checkbox"
                       checked={bstOn}
@@ -328,7 +437,7 @@ export function SeaStateSummaryBox() {
                   </div>
                   <div className="divide-y divide-sky-100 text-xs dark:divide-sky-900/40">
                     {tides.slice(0, 4).map((e) => {
-                      const tz = bstOn ? "Europe/London" : "UTC";
+                      const tz = bstOn ? tideDisplayTimeZone : "UTC";
                       const time = new Date(e.t).toLocaleTimeString("en-GB", {
                         hour: "2-digit",
                         minute: "2-digit",

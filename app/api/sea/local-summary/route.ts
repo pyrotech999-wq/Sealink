@@ -1,4 +1,8 @@
 import { NextResponse } from "next/server";
+import { fetchStormglassTideExtremes } from "@/lib/stormglass-tide";
+import { resolveSeaTideContext, tideDisplayTimeZone } from "@/lib/sea-tide-context";
+import type { TideTableEvent } from "@/lib/tide-table-types";
+import { tideFactsNarrative, type TideFact } from "@/lib/tide-ai-narrative";
 
 export const runtime = "nodejs";
 
@@ -68,8 +72,6 @@ type TideEventOut = {
   // Relative to local modelled low over the returned window (positive, “tide-table-ish”).
   vAboveLow: number;
 };
-
-type TideTableEvent = { kind: "high" | "low"; t: string; heightM: number };
 
 function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
   const R = 6371;
@@ -233,6 +235,97 @@ function minMaxFinite(vals: number[]): { min: number; max: number } | null {
   return ok ? { min, max } : null;
 }
 
+const UPCOMING_MS = 36 * 60 * 60 * 1000;
+const PAST_GRACE_MS = 25 * 60 * 1000;
+
+function parseTideInstant(t: string): number {
+  const isoish = t.includes("T") ? t : t.replace(" ", "T");
+  return new Date(isoish).getTime();
+}
+
+function sortTideEvents(events: TideTableEvent[]): TideTableEvent[] {
+  return [...events].sort((a, b) => parseTideInstant(a.t) - parseTideInstant(b.t));
+}
+
+/** Emphasise highs/lows across roughly the next 36h (and a short past grace). */
+function windowUpcomingExtremes(events: TideTableEvent[], nowMs: number): TideTableEvent[] {
+  if (!events.length) return [];
+  const sorted = sortTideEvents(events);
+  const t0 = nowMs - PAST_GRACE_MS;
+  const t1 = nowMs + UPCOMING_MS;
+  const win = sorted.filter((e) => {
+    const ms = parseTideInstant(e.t);
+    return Number.isFinite(ms) && ms >= t0 && ms <= t1;
+  });
+  if (win.length >= 3) return win;
+  return sorted.filter((e) => parseTideInstant(e.t) >= nowMs).slice(0, 10);
+}
+
+type WorldTidesTable = {
+  source: "worldtides";
+  datum: string;
+  timezone: string | null;
+  atlas: string | null;
+  station: string | null;
+  copyright: string | null;
+  events: TideTableEvent[];
+};
+
+async function fetchWorldTidesTable(coords: { lat: number; lng: number }): Promise<WorldTidesTable | null> {
+  const worldTidesKey = process.env.WORLD_TIDES_API_KEY;
+  if (!(typeof worldTidesKey === "string" && worldTidesKey.trim())) return null;
+
+  const wt = new URL("https://www.worldtides.info/api/v3");
+  wt.searchParams.set("extremes", "");
+  wt.searchParams.set("datum", "CD");
+  wt.searchParams.set("date", "today");
+  wt.searchParams.set("days", "3");
+  wt.searchParams.set("localtime", "");
+  wt.searchParams.set("stationDistance", "85");
+  wt.searchParams.set("units", "meters");
+  wt.searchParams.set("lat", String(coords.lat));
+  wt.searchParams.set("lon", String(coords.lng));
+  wt.searchParams.set("key", worldTidesKey.trim());
+
+  try {
+    const wr = await fetch(wt.toString(), { cache: "no-store" });
+    if (!wr.ok) return null;
+    const wj = (await wr.json()) as WorldTidesResp;
+    if (wj && typeof wj === "object" && wj.status === 200 && Array.isArray(wj.extremes)) {
+      const events: TideTableEvent[] = wj.extremes
+        .map((e) => {
+          if (!e || typeof e !== "object") return null;
+          const t = typeof e.date === "string" ? e.date : null;
+          const h = typeof e.height === "number" && Number.isFinite(e.height) ? e.height : null;
+          const typ = typeof e.type === "string" ? e.type : "";
+          if (!t || h == null) return null;
+          const kind: "high" | "low" | null = typ.toLowerCase().includes("high")
+            ? "high"
+            : typ.toLowerCase().includes("low")
+              ? "low"
+              : null;
+          if (!kind) return null;
+          const isoish = t.includes("T") ? t : t.replace(" ", "T");
+          return { kind, t: isoish, heightM: h };
+        })
+        .filter((x): x is TideTableEvent => Boolean(x));
+
+      return {
+        source: "worldtides",
+        datum: typeof wj.responseDatum === "string" && wj.responseDatum ? wj.responseDatum : "CD",
+        timezone: typeof wj.timezone === "string" ? wj.timezone : null,
+        atlas: typeof wj.atlas === "string" ? wj.atlas : null,
+        station: typeof wj.station === "string" ? wj.station : null,
+        copyright: typeof wj.copyright === "string" ? wj.copyright : null,
+        events,
+      };
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
 export async function GET(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const lat = Number(url.searchParams.get("lat"));
@@ -258,79 +351,37 @@ export async function GET(req: Request): Promise<Response> {
   api.searchParams.set("length_unit", "metric");
 
   try {
-    const noaa = await noaaTideTable(coords);
-    const worldTidesKey = process.env.WORLD_TIDES_API_KEY;
-    let tideTable: {
-      source: "worldtides";
-      datum: string;
-      timezone: string | null;
-      atlas: string | null;
-      station: string | null;
-      copyright: string | null;
-      events: TideTableEvent[];
-    } | null = null;
+    const tideNow = Date.now();
+    const tideNowD = new Date(tideNow);
+    const stormEnd = new Date(tideNow + 50 * 3600 * 1000);
 
-    if (typeof worldTidesKey === "string" && worldTidesKey.trim()) {
-      const wt = new URL("https://www.worldtides.info/api/v3");
-      wt.searchParams.set("extremes", "");
-      wt.searchParams.set("datum", "CD");
-      wt.searchParams.set("date", "today");
-      wt.searchParams.set("days", "2");
-      wt.searchParams.set("localtime", "");
-      // Prefer a real tidal gauge station when one is nearby.
-      wt.searchParams.set("stationDistance", "50");
-      wt.searchParams.set("units", "meters");
-      wt.searchParams.set("lat", String(coords.lat));
-      wt.searchParams.set("lon", String(coords.lng));
-      wt.searchParams.set("key", worldTidesKey.trim());
+    const [seaTideContext, noaaFull, stormglassFull, tideTableFull, r] = await Promise.all([
+      resolveSeaTideContext(coords.lat, coords.lng, req.signal),
+      noaaTideTable(coords),
+      fetchStormglassTideExtremes(coords.lat, coords.lng, tideNowD, stormEnd, req.signal),
+      fetchWorldTidesTable(coords),
+      fetch(api.toString(), { cache: "no-store", signal: req.signal }),
+    ]);
 
-      try {
-        const wr = await fetch(wt.toString(), { cache: "no-store" });
-        if (wr.ok) {
-          const wj = (await wr.json()) as WorldTidesResp;
-          if (wj && typeof wj === "object" && wj.status === 200 && Array.isArray(wj.extremes)) {
-            const events: TideTableEvent[] = wj.extremes
-              .map((e) => {
-                if (!e || typeof e !== "object") return null;
-                const t = typeof e.date === "string" ? e.date : null;
-                const h = typeof e.height === "number" && Number.isFinite(e.height) ? e.height : null;
-                const typ = typeof e.type === "string" ? e.type : "";
-                if (!t || h == null) return null;
-                const kind: "high" | "low" | null = typ.toLowerCase().includes("high")
-                  ? "high"
-                  : typ.toLowerCase().includes("low")
-                    ? "low"
-                    : null;
-                if (!kind) return null;
-                return { kind, t, heightM: h };
-              })
-              .filter((x): x is TideTableEvent => Boolean(x));
-
-            tideTable = {
-              source: "worldtides",
-              datum: typeof wj.responseDatum === "string" && wj.responseDatum ? wj.responseDatum : "CD",
-              timezone: typeof wj.timezone === "string" ? wj.timezone : null,
-              atlas: typeof wj.atlas === "string" ? wj.atlas : null,
-              station: typeof wj.station === "string" ? wj.station : null,
-              copyright: typeof wj.copyright === "string" ? wj.copyright : null,
-              events,
-            };
-          }
-        }
-      } catch {
-        // Ignore WorldTides errors and fall back to modelled tide levels.
-      }
-    }
-
-    const r = await fetch(api.toString(), { cache: "no-store" });
     if (!r.ok) return NextResponse.json({ error: `Marine request failed (${r.status})` }, { status: 502 });
     const data = (await r.json()) as MarineResp;
     const h = data.hourly;
     const times = (h?.time ?? []) as string[];
     if (!times.length) return NextResponse.json({ error: "No marine data returned" }, { status: 502 });
 
+    function shrinkEventsTable<T extends { events: TideTableEvent[] }>(full: T | null, nowMs: number): T | null {
+      if (!full?.events?.length) return full;
+      const win = windowUpcomingExtremes(full.events, nowMs);
+      const events = win.length ? win : sortTideEvents(full.events).slice(0, 8);
+      return { ...full, events };
+    }
+
+    const noaa = shrinkEventsTable(noaaFull, tideNow);
+    const stormglassTideTable = shrinkEventsTable(stormglassFull, tideNow);
+    const tideTable = shrinkEventsTable(tideTableFull, tideNow);
+
     // Find nearest hour index.
-    const now = Date.now();
+    const now = tideNow;
     let idx = 0;
     let best = Number.POSITIVE_INFINITY;
     for (let i = 0; i < times.length; i++) {
@@ -366,6 +417,48 @@ export async function GET(req: Request): Promise<Response> {
     }));
     const rangeM = seaStats.mm ? seaStats.mm.max - seaStats.mm.min : null;
 
+    const tz = tideDisplayTimeZone(seaTideContext);
+    const aiFacts: TideFact[] = [];
+    if (noaa?.events?.length) {
+      for (const e of noaa.events.slice(0, 10)) {
+        const ms = parseTideInstant(e.t);
+        if (!Number.isFinite(ms)) continue;
+        aiFacts.push({ kind: e.kind, t: new Date(ms).toISOString(), heightM: e.heightM });
+      }
+    } else if (stormglassTideTable?.events?.length) {
+      for (const e of stormglassTideTable.events.slice(0, 10)) {
+        const ms = parseTideInstant(e.t);
+        if (!Number.isFinite(ms)) continue;
+        aiFacts.push({ kind: e.kind, t: new Date(ms).toISOString(), heightM: e.heightM });
+      }
+    } else if (tideTable?.events?.length) {
+      for (const e of tideTable.events.slice(0, 10)) {
+        const ms = parseTideInstant(e.t);
+        if (!Number.isFinite(ms)) continue;
+        aiFacts.push({ kind: e.kind, t: new Date(ms).toISOString(), heightM: e.heightM });
+      }
+    } else {
+      for (const e of tideEvents.slice(0, 8)) {
+        const ms = parseTideInstant(e.t);
+        if (!Number.isFinite(ms)) continue;
+        aiFacts.push({
+          kind: e.kind,
+          t: new Date(ms).toISOString(),
+          heightM: e.vMsl,
+          sourceNote: "Open-Meteo marine model (not chart datum)",
+        });
+      }
+    }
+
+    const tideAiNarrative =
+      aiFacts.length >= 2
+        ? await tideFactsNarrative({
+            placeLabel: seaTideContext.displayLabel,
+            timeZone: tz,
+            facts: aiFacts,
+          })
+        : null;
+
     const parts: string[] = [];
     if (waveM != null) {
       const lbl = waveLabel(waveM);
@@ -399,15 +492,19 @@ export async function GET(req: Request): Promise<Response> {
         wave_direction_deg: waveD,
         sea_surface_temp_c: sst,
       },
+      seaTideContext,
+      tideDisplayTimeZone: tz,
+      tideAiNarrative,
       tide: {
         events: tideEvents,
         rangeM,
         datum: "msl",
       },
       tideTable,
+      stormglassTideTable,
       noaaTideTable: noaa,
     });
-  } catch (e: unknown) {
+  } catch {
     return NextResponse.json({ error: "Network error" }, { status: 502 });
   }
 }

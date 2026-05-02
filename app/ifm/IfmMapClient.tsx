@@ -9,6 +9,7 @@ import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 import { SeaLinkBrandFooter } from "@/components/SeaLinkBrandFooter";
 import { distanceMiles } from "@/lib/geo-haversine";
+import { clampGeoAccuracyM, humanGeolocationMessage } from "@/lib/geolocation-utils";
 import { getAvatarDataUrl, getBoatName, getFullName, getProfilePhone } from "@/lib/map-profile-storage";
 
 const IFM_SHARE_CONTACT_KEY = "sealink_ifm_share_contact_v1";
@@ -139,28 +140,28 @@ export function IfmMapClient() {
       return;
     }
     let disposed = false;
-    const tick = () => {
-      navigator.geolocation.getCurrentPosition(
-        (p) => {
-          if (disposed) return;
-          const next = { lat: p.coords.latitude, lng: p.coords.longitude, accuracyM: p.coords.accuracy || 0 };
-          setPos(next);
-          if (!initialCenter) setInitialCenter([next.lat, next.lng]);
-          setErr(null);
-        },
-        () => {
-          if (!disposed) setErr("Could not get your location. Allow location permissions to use IFM.");
-        },
-        { enableHighAccuracy: false, maximumAge: 30_000, timeout: 15_000 },
-      );
-    };
-    tick();
-    const id = window.setInterval(tick, 60_000);
+    const watchId = navigator.geolocation.watchPosition(
+      (p) => {
+        if (disposed) return;
+        const next = {
+          lat: p.coords.latitude,
+          lng: p.coords.longitude,
+          accuracyM: clampGeoAccuracyM(p.coords.accuracy),
+        };
+        setPos(next);
+        setInitialCenter((c) => (c ? c : [next.lat, next.lng]));
+        setErr(null);
+      },
+      (e) => {
+        if (!disposed) setErr(humanGeolocationMessage(e));
+      },
+      { enableHighAccuracy: true, maximumAge: 45_000, timeout: 35_000 },
+    );
     return () => {
       disposed = true;
-      window.clearInterval(id);
+      navigator.geolocation.clearWatch(watchId);
     };
-  }, [initialCenter]);
+  }, []);
 
   const sharePresence = useCallback(async () => {
     if (!sharing) return;
