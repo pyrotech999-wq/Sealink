@@ -2,8 +2,8 @@
 
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { useEffect, useMemo, useState } from "react";
-import { MapContainer, TileLayer, useMap } from "react-leaflet";
+import { startTransition, useEffect, useMemo, useState } from "react";
+import { MapContainer, ScaleControl, TileLayer, useMap } from "react-leaflet";
 
 type LayerMode = "wind" | "waves" | "rain" | "pressure";
 type BaseMapMode = "streets" | "light" | "satellite";
@@ -112,7 +112,9 @@ function Legend({ mode }: { mode: LayerMode }) {
     return (
       <div className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-700 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
         <p className="font-semibold text-zinc-900 dark:text-zinc-100">Legend · Wind (ECMWF IFS)</p>
-        <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">Particles show direction; colour shows speed.</p>
+        <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+          Particles show flow direction; colour shows speed (ECMWF IFS via Open‑Meteo, sampled across the view).
+        </p>
         <div className="mt-2 flex items-center gap-2">
           <div
             className="h-3 w-full rounded-full border border-zinc-200 dark:border-zinc-800"
@@ -706,30 +708,82 @@ function WmsOverlay({ mode, opacity, timeIso }: { mode: LayerMode; opacity: numb
   return null;
 }
 
-function WmsWindBarbsOverlay({ enabled, opacity, timeIso }: { enabled: boolean; opacity: number; timeIso: string }) {
+function MapToolbar({
+  pos,
+  mode,
+  timeIso,
+  insightLoading,
+  onStartInsight,
+  onEndInsight,
+  onInsightText,
+  onInsightError,
+  onInsightHint,
+}: {
+  pos: { lat: number; lng: number } | null;
+  mode: LayerMode;
+  timeIso: string;
+  insightLoading: boolean;
+  onStartInsight: () => void;
+  onEndInsight: () => void;
+  onInsightText: (t: string) => void;
+  onInsightError: (e: string) => void;
+  onInsightHint: (h: string) => void;
+}) {
   const map = useMap();
 
-  useEffect(() => {
-    if (!enabled) return;
-    const windUrl =
-      "https://pae-paha.pacioos.hawaii.edu/thredds/wms/ncep_global/NCEP_Global_Atmospheric_Model_best.ncd";
-    const layer = L.tileLayer.wms(windUrl, {
-      layers: "wind",
-      styles: "barb/jet",
-      format: "image/png",
-      transparent: true,
-      opacity,
-      version: "1.3.0",
-      time: timeIso,
-    } as L.WMSOptions & { time: string });
-    layer.setZIndex(450);
-    layer.addTo(map);
-    return () => {
-      map.removeLayer(layer);
-    };
-  }, [map, enabled, opacity, timeIso]);
-
-  return null;
+  return (
+    <div className="leaflet-top leaflet-right" style={{ pointerEvents: "auto" }}>
+      <div className="pointer-events-auto mt-14 mr-2 flex flex-col items-end gap-2">
+        {pos ? (
+          <button
+            type="button"
+            onClick={() => map.flyTo([pos.lat, pos.lng], Math.max(map.getZoom(), 7), { duration: 1.1 })}
+            className="rounded-lg border border-zinc-200 bg-white/95 px-2.5 py-1.5 text-xs font-semibold text-zinc-800 shadow-md backdrop-blur-sm hover:bg-white dark:border-zinc-600 dark:bg-zinc-900/95 dark:text-zinc-100 dark:hover:bg-zinc-800"
+          >
+            My location
+          </button>
+        ) : null}
+        <button
+          type="button"
+          disabled={insightLoading}
+          onClick={() => {
+            void (async () => {
+              onStartInsight();
+              try {
+                const c = map.getCenter();
+                const r = await fetch("/api/weather/map-insight", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ lat: c.lat, lng: c.lng, mode, timeIso }),
+                });
+                const j = (await r.json()) as { text?: string; error?: string; hint?: string };
+                if (!r.ok) {
+                  onInsightError(j.error || "Request failed");
+                  return;
+                }
+                if (typeof j.hint === "string" && j.hint.trim() && !j.text) {
+                  onInsightHint(j.hint.trim());
+                  return;
+                }
+                if (typeof j.text === "string" && j.text.trim()) {
+                  onInsightText(j.text.trim());
+                  return;
+                }
+                onInsightError("No outlook returned");
+              } catch {
+                onInsightError("Network error");
+              } finally {
+                onEndInsight();
+              }
+            })();
+          }}
+          className="rounded-lg border border-indigo-200 bg-indigo-50/95 px-2.5 py-1.5 text-xs font-semibold text-indigo-950 shadow-md backdrop-blur-sm hover:bg-indigo-100 disabled:opacity-60 dark:border-indigo-800 dark:bg-indigo-950/90 dark:text-indigo-100 dark:hover:bg-indigo-900"
+        >
+          {insightLoading ? "…" : "AI outlook"}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function roundTo3hUtc(d: Date): Date {
@@ -758,6 +812,10 @@ export function WeatherSeaMap() {
   const frames = useMemo(() => buildFrames4d(), []);
   const [frameIdx, setFrameIdx] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [insightLoading, setInsightLoading] = useState(false);
+  const [insightText, setInsightText] = useState<string | null>(null);
+  const [insightErr, setInsightErr] = useState<string | null>(null);
+  const [insightHint, setInsightHint] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
@@ -793,6 +851,14 @@ export function WeatherSeaMap() {
     }, 900);
     return () => window.clearInterval(id);
   }, [playing, frames.length]);
+
+  useEffect(() => {
+    startTransition(() => {
+      setInsightText(null);
+      setInsightErr(null);
+      setInsightHint(null);
+    });
+  }, [mode, frameIdx, base]);
 
   return (
     <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
@@ -925,7 +991,7 @@ export function WeatherSeaMap() {
         </div>
       </div>
 
-      <div className="h-[min(70vh,620px)] w-full bg-zinc-100 dark:bg-zinc-900">
+      <div className="h-[min(78vh,720px)] w-full bg-zinc-100 dark:bg-zinc-900">
         <MapContainer
           center={center}
           zoom={pos ? 7 : 2}
@@ -934,6 +1000,23 @@ export function WeatherSeaMap() {
           scrollWheelZoom
           attributionControl
         >
+          <ScaleControl position="bottomleft" metric imperial />
+          <MapToolbar
+            pos={pos}
+            mode={mode}
+            timeIso={timeIso}
+            insightLoading={insightLoading}
+            onStartInsight={() => {
+              setInsightLoading(true);
+              setInsightText(null);
+              setInsightErr(null);
+              setInsightHint(null);
+            }}
+            onEndInsight={() => setInsightLoading(false)}
+            onInsightText={(t) => setInsightText(t)}
+            onInsightError={(e) => setInsightErr(e)}
+            onInsightHint={(h) => setInsightHint(h)}
+          />
           {base === "satellite" ? (
             <TileLayer
               attribution='Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics'
@@ -956,18 +1039,40 @@ export function WeatherSeaMap() {
               detectRetina
             />
           )}
-          {/* Use Open-Meteo raster for waves to ensure coverage in enclosed seas like the Mediterranean. */}
+          <WindParticlesOverlay
+            enabled={mode === "wind"}
+            timeIso={timeIso}
+            opacity={opacity}
+            motionScale={playing ? 1 : 0.32}
+          />
+          {/* Open-Meteo marine raster — good coverage in enclosed seas (e.g. Mediterranean). */}
           <OpenMeteoWavesOverlay enabled={mode === "waves"} timeIso={timeIso} opacity={opacity} />
-          {/* Wind: fall back to reliable WMS wind barbs (avoids client fetch/CORS issues). */}
-          <WmsWindBarbsOverlay enabled={mode === "wind"} timeIso={timeIso} opacity={opacity} />
           <WmsOverlay mode={mode} opacity={opacity} timeIso={timeIso} />
         </MapContainer>
       </div>
       <div className="grid gap-2 border-t border-zinc-200 px-3 py-2 dark:border-zinc-800">
         <Legend mode={mode} />
+        {insightLoading ? (
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">Generating outlook for map centre…</p>
+        ) : insightErr ? (
+          <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+            {insightErr}
+          </p>
+        ) : insightHint ? (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
+            {insightHint}
+          </p>
+        ) : insightText ? (
+          <div className="rounded-lg border border-indigo-200 bg-indigo-50/80 px-3 py-2 text-xs leading-relaxed text-indigo-950 dark:border-indigo-900/50 dark:bg-indigo-950/40 dark:text-indigo-100">
+            <p className="font-semibold text-indigo-900 dark:text-indigo-200">Outlook (map centre)</p>
+            <p className="mt-1 whitespace-pre-wrap">{insightText}</p>
+          </div>
+        ) : null}
         <p className="text-xs text-zinc-600 dark:text-zinc-400">
           <span className="font-semibold text-zinc-800 dark:text-zinc-200">Tip:</span> drag/zoom anywhere in the world —
-          this map won’t snap back to you. Use Play to step through the next 4 days of model frames.
+          this map won’t snap back to you. Use Play to animate the timeline;{" "}
+          <span className="font-medium text-zinc-700 dark:text-zinc-300">AI outlook</span> uses the centre of the map and
+          the selected frame.
         </p>
       </div>
     </div>
