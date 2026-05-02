@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { BroadcastAwayToasts } from "@/components/BroadcastAwayToasts";
 import { BroadcastToastProvider } from "@/components/BroadcastToastProvider";
 import { BottomNav } from "@/components/BottomNav";
+import { BOTTOM_DOCK_OFFSET } from "@/lib/bottom-dock-offset";
 import { AppLoadSplash } from "@/components/AppLoadSplash";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import { SessionDeviceRegistrar } from "@/components/SessionDeviceRegistrar";
@@ -71,8 +72,11 @@ export default function RootLayout({
       style={{ backgroundColor: "#000000" }}
     >
       <body
-        className="flex min-h-full flex-col bg-black pb-[calc(4.25rem+env(safe-area-inset-bottom))] text-zinc-100"
-        style={{ backgroundColor: "#000000" }}
+        className="flex min-h-full flex-col bg-black text-zinc-100"
+        style={{
+          backgroundColor: "#000000",
+          paddingBottom: `calc(${BOTTOM_DOCK_OFFSET} + env(safe-area-inset-bottom))`,
+        }}
       >
         <BroadcastToastProvider>
           <AppLoadSplash />

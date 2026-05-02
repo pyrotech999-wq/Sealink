@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { paypalAccessToken, paypalBaseUrl, paypalClientId } from "@/app/api/vessels/classifieds/paypal/_paypal";
 import { getAuthUser } from "@/lib/auth";
+import { PAYPAL_ACCESS_STATUSES } from "@/lib/subscription-access";
 import { upsertPayPalSubscription } from "@/lib/paypal-subscription-store";
 
 export const runtime = "nodejs";
@@ -38,8 +39,9 @@ export async function POST(req: Request) {
 
   const data = (await res.json()) as { status?: string; plan_id?: string };
   const status = String(data.status ?? "").toUpperCase();
-  const ok = status === "ACTIVE" || status === "APPROVAL_PENDING";
-  if (!ok) return NextResponse.json({ error: `Subscription status ${status || "unknown"}` }, { status: 400 });
+  if (!status || !PAYPAL_ACCESS_STATUSES.has(status)) {
+    return NextResponse.json({ error: `Subscription status ${status || "unknown"}` }, { status: 400 });
+  }
 
   const user = await getAuthUser().catch(() => null);
   if (user) {

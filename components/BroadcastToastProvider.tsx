@@ -8,8 +8,9 @@ import {
   useMemo,
   useState,
 } from "react";
-import { getBroadcastAlertsSilenced, setBroadcastAlertsSilenced } from "@/lib/broadcast-alert-preferences";
+import { getBroadcastAlertsSilenced } from "@/lib/broadcast-alert-preferences";
 import { playBroadcastAlertSound } from "@/lib/broadcast-alert-sound";
+import { BOTTOM_DOCK_OFFSET } from "@/lib/bottom-dock-offset";
 import {
   filterActiveAlerts,
   loadBroadcastAlerts,
@@ -37,9 +38,6 @@ export function BroadcastToastProvider({ children }: { children: React.ReactNode
   const [alerts, setAlerts] = useState<PersistedBroadcastAlert[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [hydrated, setHydrated] = useState(false);
-  const [silenced, setSilenced] = useState(() =>
-    typeof window !== "undefined" ? getBroadcastAlertsSilenced() : false,
-  );
 
   useEffect(() => {
     const next = loadBroadcastAlerts();
@@ -143,7 +141,8 @@ export function BroadcastToastProvider({ children }: { children: React.ReactNode
     <BroadcastToastCtx.Provider value={value}>
       {children}
       <div
-        className="pointer-events-none fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-[95] flex flex-col items-center gap-2 px-3 sm:bottom-[calc(5rem+env(safe-area-inset-bottom))]"
+        className="pointer-events-none fixed inset-x-0 z-[95] flex flex-col items-center gap-2 px-3"
+        style={{ bottom: `calc(${BOTTOM_DOCK_OFFSET} + env(safe-area-inset-bottom))` }}
         aria-live="polite"
       >
         {current ? (
@@ -211,22 +210,6 @@ export function BroadcastToastProvider({ children }: { children: React.ReactNode
         ) : null}
       </div>
 
-      <div className="pointer-events-none fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] left-0 z-[96] max-w-[min(100vw,18rem)] p-3 sm:bottom-[calc(5rem+env(safe-area-inset-bottom))]">
-        <label className="pointer-events-auto flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-300/90 bg-white/95 px-2.5 py-2 text-[11px] font-medium leading-snug text-zinc-800 shadow-md backdrop-blur-sm dark:border-zinc-600 dark:bg-zinc-900/95 dark:text-zinc-200">
-          <input
-            type="checkbox"
-            className="h-3.5 w-3.5 shrink-0 rounded border-zinc-400 text-zinc-700"
-            checked={silenced}
-            onChange={(e) => {
-              const on = e.target.checked;
-              setSilenced(on);
-              setBroadcastAlertsSilenced(on);
-            }}
-            aria-label="Silence sound for new broadcast message alerts"
-          />
-          <span>Silence message alerts (no sound)</span>
-        </label>
-      </div>
     </BroadcastToastCtx.Provider>
   );
 }

@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { Suspense } from "react";
+
+import { PaymentSuccessClient } from "./PaymentSuccessClient";
 
 export const metadata: Metadata = {
   title: "Subscription started",
@@ -24,15 +26,13 @@ export default async function PaymentSuccessPage({ searchParams }: Props) {
             ? "PayPal has recorded your subscription. You won’t be charged until the trial ends. You can manage billing from your PayPal account."
             : "Your subscription is active. You won’t be charged until the trial ends."}
         </p>
-        {subId ? (
-          <p className="mt-2 break-all font-mono text-[11px] text-zinc-400 dark:text-zinc-500">PayPal subscription {subId}</p>
-        ) : null}
-        <Link
-          href="/"
-          className="mt-8 inline-flex h-11 items-center justify-center rounded-lg bg-green-600 px-6 text-sm font-medium text-white hover:bg-green-700"
+        <Suspense
+          fallback={
+            <p className="mt-8 text-sm text-zinc-500 dark:text-zinc-400">Loading…</p>
+          }
         >
-          Back to app
-        </Link>
+          <PaymentSuccessClient isPayPal={isPayPal} subscriptionIdFromServer={subId ?? null} />
+        </Suspense>
       </div>
     </div>
   );

@@ -80,10 +80,16 @@ export function PaymentClient({ showCanceled = false, planRequired = false }: Pr
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan }),
       });
-      const data = (await res.json()) as { approveUrl?: string; error?: string };
+      const data = (await res.json()) as { approveUrl?: string; subscriptionId?: string | null; error?: string };
       if (!res.ok || !data.approveUrl) {
         setCheckoutError(data.error ?? "PayPal checkout could not be started");
         return;
+      }
+      try {
+        const sid = typeof data.subscriptionId === "string" ? data.subscriptionId.trim() : "";
+        if (sid) sessionStorage.setItem("sealink_paypal_subscription_pending", sid);
+      } catch {
+        /* private mode etc. */
       }
       window.location.assign(data.approveUrl);
     } catch {
