@@ -23,6 +23,9 @@ function clamp(n: number, a: number, b: number): number {
   return Math.max(a, Math.min(b, n));
 }
 
+/** Cap Stormglass point calls per map move (same key as tide STORMGLASS_API_KEY). */
+const STORMGLASS_GRID_CAP = 48;
+
 function wavesColor(m: number): string {
   // 0..6m -> blue->cyan->green->yellow->orange->red
   const t = clamp(m / 6, 0, 1);
@@ -102,7 +105,8 @@ function Legend({ mode }: { mode: LayerMode }) {
           <span>6m+</span>
         </div>
         <p className="mt-2 text-[10px] text-zinc-500 dark:text-zinc-400">
-          Waves layer is derived from Open‑Meteo Marine API (sampled across the viewport).
+          Waves use Stormglass when <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">STORMGLASS_API_KEY</code>{" "}
+          is set (server); otherwise Open‑Meteo Marine (viewport sample grid).
         </p>
       </div>
     );
@@ -113,7 +117,8 @@ function Legend({ mode }: { mode: LayerMode }) {
       <div className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-700 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
         <p className="font-semibold text-zinc-900 dark:text-zinc-100">Legend · Wind (ECMWF IFS)</p>
         <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
-          Particles show flow direction; colour shows speed (ECMWF IFS via Open‑Meteo, sampled across the view).
+          Particles show flow direction; colour shows speed. With a Stormglass server key, wind is sampled from
+          Stormglass; otherwise ECMWF IFS via Open‑Meteo.
         </p>
         <div className="mt-2 flex items-center gap-2">
           <div
@@ -259,6 +264,47 @@ function WindParticlesOverlay({
       const key = `${sw.lat.toFixed(2)},${sw.lng.toFixed(2)},${ne.lat.toFixed(2)},${ne.lng.toFixed(2)}|${timeIso}|${cols}x${rows}`;
       if (key === lastFetchKey) return;
       lastFetchKey = key;
+
+      const gridPoints = lats.map((lat, i) => ({ lat, lng: lngs[i]! }));
+
+      try {
+        const sgRes = await fetch("/api/weather/stormglass-grid", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            timeIso,
+            layer: "wind",
+            points: gridPoints.slice(0, STORMGLASS_GRID_CAP),
+          }),
+        });
+        if (sgRes.ok) {
+          const sg = (await sgRes.json()) as {
+            ok?: boolean;
+            points?: { lat: number; lng: number; windSpeed?: number; windDirection?: number }[];
+          };
+          if (sg.ok && Array.isArray(sg.points) && sg.points.length) {
+            const next: WindPoint[] = [];
+            for (const p of sg.points) {
+              const spd = p.windSpeed;
+              const dir = p.windDirection;
+              if (typeof spd !== "number" || typeof dir !== "number" || !Number.isFinite(spd) || !Number.isFinite(dir)) {
+                continue;
+              }
+              const rad = ((dir + 180) * Math.PI) / 180;
+              const u = spd * Math.sin(rad);
+              const v = spd * Math.cos(rad);
+              next.push({ lat: p.lat, lng: p.lng, u, v });
+            }
+            if (next.length) {
+              field = next;
+              rebuildFieldPx();
+              return;
+            }
+          }
+        }
+      } catch {
+        /* fall through to Open‑Meteo */
+      }
 
       const api = new URL("https://api.open-meteo.com/v1/forecast");
       api.searchParams.set("latitude", lats.join(","));
@@ -522,6 +568,75 @@ function OpenMeteoWavesOverlay({ enabled, timeIso, opacity }: { enabled: boolean
           }
         }
 
+        const publishWaveRaster = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
+          const smooth = document.createElement("canvas");
+          smooth.width = canvas.width;
+          smooth.height = canvas.height;
+          const sctx = smooth.getContext("2d");
+          if (sctx) {
+            const sctx2 = sctx as CanvasRenderingContext2D & { filter?: string };
+            sctx.imageSmoothingEnabled = true;
+            sctx.clearRect(0, 0, smooth.width, smooth.height);
+            sctx2.filter = "blur(10px)";
+            sctx.drawImage(canvas, 0, 0, smooth.width, smooth.height);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            (ctx as CanvasRenderingContext2D & { filter?: string }).filter = "none";
+            ctx.imageSmoothingEnabled = true;
+            ctx.drawImage(smooth, 0, 0);
+          }
+          const url = canvas.toDataURL("image/png");
+          const imgBounds = L.latLngBounds([sw.lat, sw.lng], [ne.lat, ne.lng]);
+          if (overlay) {
+            overlay.setUrl(url);
+            overlay.setBounds(imgBounds);
+          } else {
+            overlay = L.imageOverlay(url, imgBounds, { opacity: 1 });
+            overlay.addTo(map);
+          }
+        };
+
+        try {
+          const sgRes = await fetch("/api/weather/stormglass-grid", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              timeIso,
+              layer: "waves",
+              points: req.slice(0, STORMGLASS_GRID_CAP),
+            }),
+          });
+          if (sgRes.ok) {
+            const sg = (await sgRes.json()) as { ok?: boolean; points?: { waveHeight?: number }[] };
+            if (sg.ok && Array.isArray(sg.points) && sg.points.length) {
+              const canvas = document.createElement("canvas");
+              canvas.width = cols * 24;
+              canvas.height = rows * 24;
+              const sgCtx = canvas.getContext("2d");
+              if (sgCtx) {
+                sgCtx.clearRect(0, 0, canvas.width, canvas.height);
+                const cell = 24;
+                const alpha = clamp(opacity, 0.2, 0.95);
+                let painted = false;
+                for (let i = 0; i < sg.points.length; i++) {
+                  const v = sg.points[i]?.waveHeight;
+                  if (typeof v !== "number" || !Number.isFinite(v)) continue;
+                  painted = true;
+                  const x = i % cols;
+                  const y = Math.floor(i / cols);
+                  sgCtx.fillStyle = wavesColor(v).replace(/,0\.68\)$/, `,${alpha})`);
+                  sgCtx.fillRect(x * cell, y * cell, cell, cell);
+                }
+                if (painted) {
+                  publishWaveRaster(sgCtx, canvas);
+                  return;
+                }
+              }
+            }
+          }
+        } catch {
+          /* Open‑Meteo marine */
+        }
+
         const api = new URL("https://marine-api.open-meteo.com/v1/marine");
         api.searchParams.set("latitude", lats.join(","));
         api.searchParams.set("longitude", lngs.join(","));
@@ -587,35 +702,7 @@ function OpenMeteoWavesOverlay({ enabled, timeIso, opacity }: { enabled: boolean
           ctx.fillRect(x * cell, y * cell, cell, cell);
         }
 
-        // Smooth upscale to reduce blockiness.
-        const smooth = document.createElement("canvas");
-        smooth.width = canvas.width;
-        smooth.height = canvas.height;
-        const sctx = smooth.getContext("2d");
-        if (sctx) {
-          const sctx2 = sctx as CanvasRenderingContext2D & { filter?: string };
-          sctx.imageSmoothingEnabled = true;
-          sctx.clearRect(0, 0, smooth.width, smooth.height);
-          // blur slightly while upscaling to mimic shaded field
-          sctx2.filter = "blur(10px)";
-          sctx.drawImage(canvas, 0, 0, smooth.width, smooth.height);
-          // copy back
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          (ctx as CanvasRenderingContext2D & { filter?: string }).filter = "none";
-          ctx.imageSmoothingEnabled = true;
-          ctx.drawImage(smooth, 0, 0);
-        }
-
-        const url = canvas.toDataURL("image/png");
-        const imgBounds = L.latLngBounds([sw.lat, sw.lng], [ne.lat, ne.lng]);
-
-        if (overlay) {
-          overlay.setUrl(url);
-          overlay.setBounds(imgBounds);
-        } else {
-          overlay = L.imageOverlay(url, imgBounds, { opacity: 1 });
-          overlay.addTo(map);
-        }
+        publishWaveRaster(ctx, canvas);
       } catch {
         /* ignore */
       }

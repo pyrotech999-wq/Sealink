@@ -20,9 +20,7 @@
     "marinas:import:osm:dry": "tsx scripts/import-marinas-osm.ts --dry-run",
     "cap:sync": "cap sync",
     "cap:open:android": "cap open android",
-    "cap:open:ios": "cap open ios",
-    "cap:run:android": "cap run android",
-    "app:ios": "cap add ios"
+    "cap:run:android": "cap run android"
   },
   "dependencies": {
     "@capacitor/core": "^7.6.2",
@@ -41,7 +39,6 @@
   "devDependencies": {
     "@capacitor/android": "^7.6.2",
     "@capacitor/cli": "^7.6.2",
-    "@capacitor/ios": "^7.6.2",
     "@tailwindcss/postcss": "^4",
     "@types/leaflet": "^1.9.21",
     "@types/node": "^20",

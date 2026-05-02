@@ -43,6 +43,11 @@ import {
   type AnchorGpsQuality,
 } from "@/lib/anchor-gps-stabilizer";
 import { getAnchorAlertConfig, setAnchorAlertConfig } from "@/lib/anchor-alert-storage";
+import {
+  GPS_REFINE_MAX_MS,
+  GPS_REFINE_TARGET_ACCURACY_M,
+  GPS_REFINE_WATCH_OPTIONS,
+} from "@/lib/gps-refinement";
 import { isLikelyIOS } from "@/lib/location-env";
 import { getNativeLocationBridge } from "@/lib/native-location-bridge";
 import { getDeviceName, getOrCreateDeviceId } from "@/lib/device-id";
@@ -221,6 +226,10 @@ export default function HomeLocationMap({
   const [anchorLocQuality, setAnchorLocQuality] = useState<AnchorGpsQuality | null>(null);
   /** Reported horizontal accuracy from the last sensor sample (unclamped), for anchor arm gating. */
   const [geoAccuracyRawM, setGeoAccuracyRawM] = useState<number | null>(null);
+  /** Browser-only: short aggressive GPS lock until accuracy ≤ target or time cap (native shell skips this). */
+  const [gpsRefining, setGpsRefining] = useState(false);
+  const gpsRefinementActiveRef = useRef(false);
+  const gpsRefinementStartedAtRef = useRef(0);
   const anchorGpsStabilizerRef = useRef(createAnchorGpsStabilizer());
   const nativeLocWatchRef = useRef<{ remove: () => void } | null>(null);
   const anchorCfgRef = useRef(anchorCfg);
@@ -645,12 +654,24 @@ export default function HomeLocationMap({
 
   useEffect(() => {
     if (!sharing) {
+      gpsRefinementActiveRef.current = false;
+      queueMicrotask(() => setGpsRefining(false));
       stopPolling();
       queueMicrotask(() => setLocMode(null));
       return;
     }
     if (typeof navigator === "undefined" || !navigator.geolocation) {
       return;
+    }
+
+    const useNativeShell = Boolean(getNativeLocationBridge());
+    if (!useNativeShell) {
+      gpsRefinementActiveRef.current = true;
+      gpsRefinementStartedAtRef.current = Date.now();
+      queueMicrotask(() => setGpsRefining(true));
+    } else {
+      gpsRefinementActiveRef.current = false;
+      queueMicrotask(() => setGpsRefining(false));
     }
 
     let disposed = false;
@@ -696,6 +717,9 @@ export default function HomeLocationMap({
     };
 
     const optsFor = (intervalMs: number | null): PositionOptions => {
+      if (gpsRefinementActiveRef.current && !getNativeLocationBridge()) {
+        return GPS_REFINE_WATCH_OPTIONS;
+      }
       const armed = anchorCfgRef.current.armed;
       const maxAge =
         intervalMs == null
@@ -710,25 +734,41 @@ export default function HomeLocationMap({
       };
     };
 
-    const rawAccuracyFromCoords = (accuracy: number | null | undefined): number => {
-      if (accuracy == null || !Number.isFinite(accuracy) || accuracy <= 0) {
-        // Rare API gaps: treat as threshold so arming isn’t permanently blocked.
-        return ANCHOR_MAX_HORIZ_ACCURACY_M;
-      }
+    const readHorizontalAccuracyM = (accuracy: number | null | undefined): number | null => {
+      if (accuracy == null || !Number.isFinite(accuracy) || accuracy <= 0) return null;
       return accuracy;
     };
 
-    const applyGeoSample = (lat: number, lng: number, accuracyRaw: number, timestampMs: number) => {
+    const accuracyForStabilizer = (accuracyRaw: number | null): number =>
+      accuracyRaw ?? ANCHOR_MAX_HORIZ_ACCURACY_M;
+
+    let tryFinishRefinement: (accuracyRaw: number | null) => void = () => {};
+
+    const applyGeoSample = (lat: number, lng: number, accuracyRaw: number | null, timestampMs: number) => {
       if (disposed) return;
       setGeoError(null);
       setGeoAccuracyRawM(accuracyRaw);
-      const sample = { lat, lng, accuracyM: accuracyRaw, t: timestampMs };
+      const accProc = accuracyForStabilizer(accuracyRaw);
+      const sample = { lat, lng, accuracyM: accProc, t: timestampMs };
       const armed = anchorCfgRef.current.armed;
-      const r = processAnchorGeoSample(anchorGpsStabilizerRef.current, sample, {
-        armed,
-        maxAccuracyM: ANCHOR_MAX_HORIZ_ACCURACY_M,
-      });
+      const refining = gpsRefinementActiveRef.current && !getNativeLocationBridge();
+
+      if (armed && refining) {
+        setAnchorLocQuality(null);
+        setPos({
+          lat: sample.lat,
+          lng: sample.lng,
+          accuracyM: clampGeoAccuracyM(sample.accuracyM),
+        });
+        tryFinishRefinement(accuracyRaw);
+        return;
+      }
+
       if (armed) {
+        const r = processAnchorGeoSample(anchorGpsStabilizerRef.current, sample, {
+          armed: true,
+          maxAccuracyM: ANCHOR_MAX_HORIZ_ACCURACY_M,
+        });
         if (r.quality != null) setAnchorLocQuality(r.quality);
         if (r.fix) {
           setPos({
@@ -739,31 +779,37 @@ export default function HomeLocationMap({
         }
         return;
       }
+
       setAnchorLocQuality(null);
       setPos({
         lat: sample.lat,
         lng: sample.lng,
         accuracyM: clampGeoAccuracyM(sample.accuracyM),
       });
+      tryFinishRefinement(accuracyRaw);
     };
 
     function kickFreshFix() {
+      const refining = gpsRefinementActiveRef.current && !getNativeLocationBridge();
       const armed = anchorCfgRef.current.armed;
+      const opts: PositionOptions = refining
+        ? GPS_REFINE_WATCH_OPTIONS
+        : {
+            enableHighAccuracy: true,
+            maximumAge: 0,
+            timeout: armed ? 55_000 : 35_000,
+          };
       navigator.geolocation.getCurrentPosition(
         (p) => {
           if (disposed) return;
-          const acc = rawAccuracyFromCoords(p.coords.accuracy);
+          const acc = readHorizontalAccuracyM(p.coords.accuracy);
           const t = Number.isFinite(p.timestamp) ? p.timestamp : Date.now();
           applyGeoSample(p.coords.latitude, p.coords.longitude, acc, t);
         },
         () => {
           /* watch/poll still active; avoid noisy errors on resume */
         },
-        {
-          enableHighAccuracy: true,
-          maximumAge: 0,
-          timeout: armed ? 55_000 : 35_000,
-        },
+        opts,
       );
     }
 
@@ -790,14 +836,17 @@ export default function HomeLocationMap({
         );
         return;
       }
+      const refining = gpsRefinementActiveRef.current && !getNativeLocationBridge();
       const armed = anchorCfgRef.current.armed;
-      const watchOpts: PositionOptions = armed
-        ? { enableHighAccuracy: true, maximumAge: 0, timeout: 50_000 }
-        : { enableHighAccuracy: true, maximumAge: 20_000, timeout: 30_000 };
+      const watchOpts: PositionOptions = refining
+        ? GPS_REFINE_WATCH_OPTIONS
+        : armed
+          ? { enableHighAccuracy: true, maximumAge: 0, timeout: 50_000 }
+          : { enableHighAccuracy: true, maximumAge: 20_000, timeout: 30_000 };
       watchId = navigator.geolocation.watchPosition(
         (p) => {
           if (disposed) return;
-          const acc = rawAccuracyFromCoords(p.coords.accuracy);
+          const acc = readHorizontalAccuracyM(p.coords.accuracy);
           const t = Number.isFinite(p.timestamp) ? p.timestamp : Date.now();
           applyGeoSample(p.coords.latitude, p.coords.longitude, acc, t);
         },
@@ -808,6 +857,19 @@ export default function HomeLocationMap({
         watchOpts,
       );
     }
+
+    tryFinishRefinement = (accuracyRaw: number | null) => {
+      if (!gpsRefinementActiveRef.current || getNativeLocationBridge()) return;
+      const elapsed = Date.now() - gpsRefinementStartedAtRef.current;
+      const good = accuracyRaw != null && accuracyRaw <= GPS_REFINE_TARGET_ACCURACY_M;
+      if (!good && elapsed < GPS_REFINE_MAX_MS) return;
+      gpsRefinementActiveRef.current = false;
+      queueMicrotask(() => setGpsRefining(false));
+      if (typeof document !== "undefined" && !document.hidden && geoTrackingMode === "watch") {
+        stopWatch();
+        startWatch();
+      }
+    };
 
     function syncTracking() {
       if (disposed) return;
@@ -862,7 +924,7 @@ export default function HomeLocationMap({
         (p) => {
           polling.current = false;
           if (disposed) return;
-          const acc = rawAccuracyFromCoords(p.coords.accuracy);
+          const acc = readHorizontalAccuracyM(p.coords.accuracy);
           const t = Number.isFinite(p.timestamp) ? p.timestamp : Date.now();
           applyGeoSample(p.coords.latitude, p.coords.longitude, acc, t);
           pollTimer.current = window.setTimeout(tick, intervalMs);
@@ -976,6 +1038,8 @@ export default function HomeLocationMap({
       setPos(null);
       setGeoAccuracyRawM(null);
       setAnchorLocQuality(null);
+      gpsRefinementActiveRef.current = false;
+      setGpsRefining(false);
       setGeoError(null);
       setShareOnMap(false);
       setSharing(false);
@@ -1432,17 +1496,38 @@ export default function HomeLocationMap({
             <p className="text-sm text-zinc-700 dark:text-zinc-300">
               Map location sharing is{" "}
               <span className="font-semibold text-zinc-900 dark:text-zinc-50">{sharing ? "on" : "off"}</span>
-              {sharing && pos ? (
+              {sharing && (pos || gpsRefining) ? (
                 <>
-                  {" · GPS active"}
-                  {geoAccuracyRawM != null && Number.isFinite(geoAccuracyRawM)
-                    ? ` · ±${Math.round(geoAccuracyRawM)}m`
-                    : null}
+                  {pos ? " · GPS active" : " · Acquiring GPS"}
+                  {geoAccuracyRawM != null && Number.isFinite(geoAccuracyRawM) ? (
+                    <>
+                      {" · live horizontal accuracy "}
+                      <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+                        {Math.round(geoAccuracyRawM)} m
+                      </span>
+                    </>
+                  ) : gpsRefining ? (
+                    " · live accuracy …"
+                  ) : null}
                   .
                 </>
               ) : null}
-              {sharing && !pos ? " · Waiting for GPS…" : null}
+              {sharing && !pos && !gpsRefining ? " · Waiting for GPS…" : null}
             </p>
+            {sharing && gpsRefining ? (
+              <p className="mt-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-950 dark:border-sky-900/50 dark:bg-sky-950/35 dark:text-sky-100">
+                <span className="font-semibold text-sky-900 dark:text-sky-50">GPS lock (browser):</span> high-accuracy
+                fixes only, 2s timeout per read, no cached positions. Updates until accuracy is about{" "}
+                {GPS_REFINE_TARGET_ACCURACY_M} m or better, or for {GPS_REFINE_MAX_MS / 1000} seconds — whichever comes
+                first. Current:{" "}
+                <span className="font-semibold">
+                  {geoAccuracyRawM != null && Number.isFinite(geoAccuracyRawM)
+                    ? `${Math.round(geoAccuracyRawM)} m`
+                    : "…"}
+                </span>
+                .
+              </p>
+            ) : null}
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
               Open map sharing settings to choose pin options and turn sharing on or off.
             </p>

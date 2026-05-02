@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ANCHOR_MAX_HORIZ_ACCURACY_M, type AnchorGpsQuality } from "@/lib/anchor-gps-stabilizer";
+import { GPS_REFINE_TARGET_ACCURACY_M } from "@/lib/gps-refinement";
 import { isLikelyAndroid } from "@/lib/location-env";
 import { getDeviceName, setDeviceName } from "@/lib/device-id";
 
@@ -84,7 +85,7 @@ export function AnchorAlertModal({
 
   const acc = horizontalAccuracyM;
   const accuracyOkForArm =
-    acc == null || !Number.isFinite(acc) ? hasFix && pos != null : acc <= ANCHOR_MAX_HORIZ_ACCURACY_M;
+    acc == null || !Number.isFinite(acc) ? hasFix && pos != null : acc <= GPS_REFINE_TARGET_ACCURACY_M;
   const canSet = sharing && hasFix && pos != null && accuracyOkForArm;
   const hasAnchor = config.lat != null && config.lng != null;
   const showAndroidPreciseHint = isLikelyAndroid();
@@ -92,8 +93,8 @@ export function AnchorAlertModal({
   const hint = useMemo(() => {
     if (!sharing) return "Turn on “Share my location on this map” first.";
     if (!hasFix) return "Waiting for a GPS fix…";
-    if (acc != null && Number.isFinite(acc) && acc > ANCHOR_MAX_HORIZ_ACCURACY_M) {
-      return `GPS accuracy is about ±${Math.round(acc)}m. Wait until it’s about ±${ANCHOR_MAX_HORIZ_ACCURACY_M}m or better before arming (open sky, still water).`;
+    if (acc != null && Number.isFinite(acc) && acc > GPS_REFINE_TARGET_ACCURACY_M) {
+      return `GPS accuracy is about ±${Math.round(acc)}m. Wait until it’s about ±${GPS_REFINE_TARGET_ACCURACY_M}m or better before arming (open sky, still water), or until the 30s lock phase ends and try again.`;
     }
     return null;
   }, [sharing, hasFix, acc]);
