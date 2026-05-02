@@ -125,6 +125,23 @@ export async function getUserByEmail(email: string): Promise<UserRow | null> {
 }
 
 /** For admin tooling only — list recent accounts (server must enforce admin). */
+export async function getUserEmailByUid(uid: string): Promise<string | null> {
+  return enqueue(async () => {
+    if (isSupabaseConfigured()) {
+      const sb = supabaseAdmin();
+      const { data, error } = await sb.from("user_accounts").select("email").eq("uid", uid).maybeSingle();
+      if (error || !data) return null;
+      const e = (data as { email?: string }).email;
+      return typeof e === "string" && e.trim() ? e : null;
+    }
+    const store = canUseKv() ? await kvGetJson<StoreShape>(KV_KEY, {}) : readStore();
+    for (const row of Object.values(store)) {
+      if (row.uid === uid) return row.email;
+    }
+    return null;
+  });
+}
+
 export async function listUserAccountsBrief(): Promise<{ uid: string; email: string; createdAt: string }[]> {
   return enqueue(async () => {
     if (isSupabaseConfigured()) {

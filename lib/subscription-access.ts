@@ -1,10 +1,14 @@
 import { getPayPalSubscriptionByUser } from "@/lib/paypal-subscription-store";
 import { getAdminGrantedFreeAccess } from "@/lib/admin-free-access-store";
+import { isReservedOwner } from "@/lib/reserved-admin";
+import { getUserEmailByUid } from "@/lib/users-store";
 
 /** PayPal billing subscription states that count as paid/trial access for in-app benefits. */
 const PAYPAL_ACCESS_STATUSES = new Set(["ACTIVE", "APPROVED", "TRIALING"]);
 
 export async function hasAppSubscriptionAccess(userUid: string): Promise<boolean> {
+  const email = await getUserEmailByUid(userUid);
+  if (email && (await isReservedOwner(email, userUid))) return true;
   if (await getAdminGrantedFreeAccess(userUid)) return true;
   const sub = await getPayPalSubscriptionByUser(userUid);
   if (!sub?.status) return false;
@@ -13,12 +17,16 @@ export async function hasAppSubscriptionAccess(userUid: string): Promise<boolean
 
 export type SubscriptionAccessDetail = {
   hasAccess: boolean;
-  source: "admin_grant" | "paypal" | "none";
+  source: "reserved" | "admin_grant" | "paypal" | "none";
   paypalStatus: string | null;
   freeAccessGranted: boolean;
 };
 
 export async function getSubscriptionAccessDetail(userUid: string): Promise<SubscriptionAccessDetail> {
+  const email = await getUserEmailByUid(userUid);
+  if (email && (await isReservedOwner(email, userUid))) {
+    return { hasAccess: true, source: "reserved", paypalStatus: null, freeAccessGranted: false };
+  }
   const free = await getAdminGrantedFreeAccess(userUid);
   if (free) {
     return { hasAccess: true, source: "admin_grant", paypalStatus: null, freeAccessGranted: true };

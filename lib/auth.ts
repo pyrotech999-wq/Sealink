@@ -2,10 +2,12 @@ import { cookies } from "next/headers";
 import { createHash } from "crypto";
 import { DEMO_SESSION_COOKIE, DEMO_SESSION_VALUE } from "@/lib/demo-session";
 import { normaliseEmail } from "@/lib/email-normalise";
+import { isReservedOwner } from "@/lib/reserved-admin";
 
 export { normaliseEmail };
 export const AUTH_EMAIL_COOKIE = "sealink_email";
 
+/** Default when `SEALINK_ADMIN_EMAIL` unset — same as {@link RESERVED_OWNER_EMAIL} in reserved-admin. */
 const DEFAULT_ADMIN = "pyrotech999@hotmail.co.uk";
 
 export type AuthUser = {
@@ -40,7 +42,9 @@ export async function getAuthUser(): Promise<AuthUser | null> {
   if (!email) return null;
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
 
-  return { email, uid: uidFromEmail(email), isAdmin: isAdminEmail(email) };
+  const uid = uidFromEmail(email);
+  const isAdmin = isAdminEmail(email) || (await isReservedOwner(email, uid));
+  return { email, uid, isAdmin };
 }
 
 export async function requireAuthUser(): Promise<AuthUser> {

@@ -73,7 +73,8 @@ export function AdminAccessClient() {
       <h1 className="mt-4 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Subscription access</h1>
       <p className="mt-2 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
         Only you (site admin) see this page. Grant or revoke <span className="font-semibold">complimentary full access</span>{" "}
-        for any user without PayPal. They keep normal sign-in; this only waives the subscription check for in-app benefits.
+        for any user without PayPal. The built-in reserved owner (primary admin email and matching UK profile phone) always
+        has access without toggling here. Users keep normal sign-in; this only waives the subscription check for in-app benefits.
       </p>
       <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
         For production card payments, set <code className="rounded bg-zinc-200 px-1 dark:bg-zinc-800">PAYPAL_ENV=live</code> and

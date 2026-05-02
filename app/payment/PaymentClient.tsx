@@ -15,7 +15,7 @@ export function PaymentClient({ showCanceled = false }: Props) {
   const [paypalConfigured, setPaypalConfigured] = useState<boolean | null>(null);
   const [access, setAccess] = useState<{
     hasAccess: boolean;
-    source: "admin_grant" | "paypal" | "none";
+    source: "reserved" | "admin_grant" | "paypal" | "none";
   } | null>(null);
 
   useEffect(() => {
@@ -35,14 +35,16 @@ export function PaymentClient({ showCanceled = false }: Props) {
           setAccess(null);
           return null;
         }
-        return (await r.json()) as { hasAccess?: boolean; source?: "admin_grant" | "paypal" | "none" };
+        return (await r.json()) as { hasAccess?: boolean; source?: "reserved" | "admin_grant" | "paypal" | "none" };
       })
       .then((d) => {
         if (!d || typeof d.hasAccess !== "boolean") {
           setAccess(null);
           return;
         }
-        setAccess({ hasAccess: d.hasAccess, source: d.source === "paypal" || d.source === "admin_grant" ? d.source : "none" });
+        const src =
+          d.source === "paypal" || d.source === "admin_grant" || d.source === "reserved" ? d.source : "none";
+        setAccess({ hasAccess: d.hasAccess, source: src });
       })
       .catch(() => setAccess(null));
   }, []);
@@ -96,7 +98,9 @@ export function PaymentClient({ showCanceled = false }: Props) {
         {access?.hasAccess ? (
           <p className="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-950 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-100">
             You already have full access
-            {access.source === "admin_grant" ? " (complimentary)" : " via your PayPal subscription"}.
+            {access.source === "paypal"
+              ? " via your PayPal subscription"
+              : " (complimentary — reserved owner or admin grant)"}.
             You don&apos;t need to subscribe again unless you change accounts.
           </p>
         ) : null}
