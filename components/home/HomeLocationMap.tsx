@@ -36,7 +36,15 @@ import {
   setShareNearbyPeers,
   setShareOnMap,
 } from "@/lib/map-profile-storage";
+import {
+  ANCHOR_MAX_HORIZ_ACCURACY_M,
+  createAnchorGpsStabilizer,
+  processAnchorGeoSample,
+  type AnchorGpsQuality,
+} from "@/lib/anchor-gps-stabilizer";
 import { getAnchorAlertConfig, setAnchorAlertConfig } from "@/lib/anchor-alert-storage";
+import { isLikelyIOS } from "@/lib/location-env";
+import { getNativeLocationBridge } from "@/lib/native-location-bridge";
 import { getDeviceName, getOrCreateDeviceId } from "@/lib/device-id";
 import { clampGeoAccuracyM, humanGeolocationMessage } from "@/lib/geolocation-utils";
 
@@ -52,6 +60,16 @@ function clearMapPresence(keepalive = false) {
     headers: { "Content-Type": "application/json" },
     keepalive,
     body: JSON.stringify({ shareNearby: false }),
+  });
+}
+
+/** Fixed anchor point for geofence (orange ⚓ — drawn under your moving boat pin). */
+function buildAnchorGeofenceCenterIcon(): L.DivIcon {
+  return L.divIcon({
+    className: "sealink-anchor-geofence-pin",
+    html: `<div style="width:28px;height:28px;border-radius:9999px;background:#d97706;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;font-size:15px;line-height:1" aria-hidden="true">⚓</div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
   });
 }
 
@@ -200,6 +218,11 @@ export default function HomeLocationMap({
   const [anchorCfg, setAnchorCfg] = useState(() =>
     typeof window !== "undefined" ? getAnchorAlertConfig() : getAnchorAlertConfig(),
   );
+  const [anchorLocQuality, setAnchorLocQuality] = useState<AnchorGpsQuality | null>(null);
+  /** Reported horizontal accuracy from the last sensor sample (unclamped), for anchor arm gating. */
+  const [geoAccuracyRawM, setGeoAccuracyRawM] = useState<number | null>(null);
+  const anchorGpsStabilizerRef = useRef(createAnchorGpsStabilizer());
+  const nativeLocWatchRef = useRef<{ remove: () => void } | null>(null);
   const anchorCfgRef = useRef(anchorCfg);
   const [activeAnchorAlert, setActiveAnchorAlert] = useState<{ id: string; message: string; createdAt: string; kind?: string } | null>(
     null,
@@ -291,6 +314,11 @@ export default function HomeLocationMap({
   useEffect(() => {
     anchorCfgRef.current = anchorCfg;
   }, [anchorCfg]);
+
+  useEffect(() => {
+    anchorGpsStabilizerRef.current = createAnchorGpsStabilizer();
+    if (!anchorCfg.armed) queueMicrotask(() => setAnchorLocQuality(null));
+  }, [anchorCfg.armed]);
 
   // If monitoring another device, pull its latest fix periodically.
   useEffect(() => {
@@ -661,41 +689,87 @@ export default function HomeLocationMap({
     const calcIntervalMs = () => {
       if (typeof document !== "undefined" && document.hidden) {
         if (!bgConsent) return null;
-        if (anchorCfg.armed) return 180_000;
+        if (anchorCfgRef.current.armed) return 60_000;
         return batteryLow || saveData ? 15 * 60_000 : 4 * 60_000;
       }
       return 60_000;
     };
 
     const optsFor = (intervalMs: number | null): PositionOptions => {
-      const maxAge = intervalMs == null ? 60_000 : Math.min(intervalMs, 15 * 60_000);
-      const high = anchorCfg.armed;
+      const armed = anchorCfgRef.current.armed;
+      const maxAge =
+        intervalMs == null
+          ? 60_000
+          : armed
+            ? Math.min(10_000, intervalMs)
+            : Math.min(intervalMs, 15 * 60_000);
       return {
-        enableHighAccuracy: high,
+        enableHighAccuracy: armed,
         maximumAge: maxAge,
-        timeout: high ? 25_000 : 15_000,
+        timeout: armed ? 45_000 : 15_000,
       };
     };
 
+    const rawAccuracyFromCoords = (accuracy: number | null | undefined): number => {
+      if (accuracy == null || !Number.isFinite(accuracy) || accuracy <= 0) {
+        // Rare API gaps: treat as threshold so arming isn’t permanently blocked.
+        return ANCHOR_MAX_HORIZ_ACCURACY_M;
+      }
+      return accuracy;
+    };
+
+    const applyGeoSample = (lat: number, lng: number, accuracyRaw: number, timestampMs: number) => {
+      if (disposed) return;
+      setGeoError(null);
+      setGeoAccuracyRawM(accuracyRaw);
+      const sample = { lat, lng, accuracyM: accuracyRaw, t: timestampMs };
+      const armed = anchorCfgRef.current.armed;
+      const r = processAnchorGeoSample(anchorGpsStabilizerRef.current, sample, {
+        armed,
+        maxAccuracyM: ANCHOR_MAX_HORIZ_ACCURACY_M,
+      });
+      if (armed) {
+        if (r.quality != null) setAnchorLocQuality(r.quality);
+        if (r.fix) {
+          setPos({
+            lat: r.fix.lat,
+            lng: r.fix.lng,
+            accuracyM: clampGeoAccuracyM(r.fix.accuracyM),
+          });
+        }
+        return;
+      }
+      setAnchorLocQuality(null);
+      setPos({
+        lat: sample.lat,
+        lng: sample.lng,
+        accuracyM: clampGeoAccuracyM(sample.accuracyM),
+      });
+    };
+
     function kickFreshFix() {
+      const armed = anchorCfgRef.current.armed;
       navigator.geolocation.getCurrentPosition(
         (p) => {
           if (disposed) return;
-          setGeoError(null);
-          setPos({
-            lat: p.coords.latitude,
-            lng: p.coords.longitude,
-            accuracyM: clampGeoAccuracyM(p.coords.accuracy),
-          });
+          const acc = rawAccuracyFromCoords(p.coords.accuracy);
+          const t = Number.isFinite(p.timestamp) ? p.timestamp : Date.now();
+          applyGeoSample(p.coords.latitude, p.coords.longitude, acc, t);
         },
         () => {
           /* watch/poll still active; avoid noisy errors on resume */
         },
-        { enableHighAccuracy: true, maximumAge: 0, timeout: 35_000 },
+        {
+          enableHighAccuracy: true,
+          maximumAge: 0,
+          timeout: armed ? 55_000 : 35_000,
+        },
       );
     }
 
     function stopWatch() {
+      nativeLocWatchRef.current?.remove();
+      nativeLocWatchRef.current = null;
       if (watchId != null) {
         navigator.geolocation.clearWatch(watchId);
         watchId = undefined;
@@ -704,21 +778,34 @@ export default function HomeLocationMap({
 
     function startWatch() {
       stopWatch();
+      const bridge = getNativeLocationBridge();
+      if (bridge) {
+        nativeLocWatchRef.current = bridge.watchPosition(
+          (fix) => {
+            applyGeoSample(fix.latitude, fix.longitude, Math.max(1, fix.accuracyM), fix.timestampMs);
+          },
+          (_code, msg) => {
+            if (!disposed) setGeoError(msg || "Native location error");
+          },
+        );
+        return;
+      }
+      const armed = anchorCfgRef.current.armed;
+      const watchOpts: PositionOptions = armed
+        ? { enableHighAccuracy: true, maximumAge: 0, timeout: 50_000 }
+        : { enableHighAccuracy: true, maximumAge: 20_000, timeout: 30_000 };
       watchId = navigator.geolocation.watchPosition(
         (p) => {
           if (disposed) return;
-          setGeoError(null);
-          setPos({
-            lat: p.coords.latitude,
-            lng: p.coords.longitude,
-            accuracyM: clampGeoAccuracyM(p.coords.accuracy),
-          });
+          const acc = rawAccuracyFromCoords(p.coords.accuracy);
+          const t = Number.isFinite(p.timestamp) ? p.timestamp : Date.now();
+          applyGeoSample(p.coords.latitude, p.coords.longitude, acc, t);
         },
         (e) => {
           if (disposed) return;
           setGeoError(humanGeolocationMessage(e));
         },
-        { enableHighAccuracy: true, maximumAge: 20_000, timeout: 30_000 },
+        watchOpts,
       );
     }
 
@@ -775,12 +862,9 @@ export default function HomeLocationMap({
         (p) => {
           polling.current = false;
           if (disposed) return;
-          setGeoError(null);
-          setPos({
-            lat: p.coords.latitude,
-            lng: p.coords.longitude,
-            accuracyM: clampGeoAccuracyM(p.coords.accuracy),
-          });
+          const acc = rawAccuracyFromCoords(p.coords.accuracy);
+          const t = Number.isFinite(p.timestamp) ? p.timestamp : Date.now();
+          applyGeoSample(p.coords.latitude, p.coords.longitude, acc, t);
           pollTimer.current = window.setTimeout(tick, intervalMs);
         },
         (e) => {
@@ -890,6 +974,8 @@ export default function HomeLocationMap({
       setShareNearby(false);
       setNearbyPeers([]);
       setPos(null);
+      setGeoAccuracyRawM(null);
+      setAnchorLocQuality(null);
       setGeoError(null);
       setShareOnMap(false);
       setSharing(false);
@@ -1018,8 +1104,16 @@ export default function HomeLocationMap({
     setShowAvatarState(on);
   }
 
-  const center: [number, number] = mapPinPos ? [mapPinPos.lat, mapPinPos.lng] : DEFAULT_CENTER;
-  const zoom = mapPinPos ? 14 : DEFAULT_ZOOM;
+  const anchorGeofenceIcon = useMemo(() => buildAnchorGeofenceCenterIcon(), []);
+
+  const hasAnchorGeofence =
+    anchorCfg.armed && anchorCfg.lat != null && anchorCfg.lng != null && Number.isFinite(anchorCfg.radiusM);
+  const center: [number, number] = mapPinPos
+    ? [mapPinPos.lat, mapPinPos.lng]
+    : hasAnchorGeofence
+      ? [anchorCfg.lat!, anchorCfg.lng!]
+      : DEFAULT_CENTER;
+  const zoom = mapPinPos ? 14 : hasAnchorGeofence ? 17 : DEFAULT_ZOOM;
 
   const sharingSettingsPanel = (
     <div className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
@@ -1185,6 +1279,13 @@ export default function HomeLocationMap({
                 </span>
               ) : null}
             </button>
+            {anchorCfg.armed && anchorLocQuality && anchorLocQuality !== "ok" ? (
+              <p className="max-w-xl rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-snug text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+                {anchorLocQuality === "poor_accuracy"
+                  ? `GPS accuracy is coarser than about ±${ANCHOR_MAX_HORIZ_ACCURACY_M}m — drift alerts are paused until the fix improves (open sky, wait, or enable Precise Location on iPhone).`
+                  : "Stabilizing GPS for the anchor — hold steady a few seconds so the geofence isn’t thrown off by jitter."}
+              </p>
+            ) : null}
           </div>
           <button
             type="button"
@@ -1228,6 +1329,34 @@ export default function HomeLocationMap({
                     icon={windIcon}
                     zIndexOffset={650}
                   />
+                ) : null}
+                {hasAnchorGeofence ? (
+                  <>
+                    <Circle
+                      center={[anchorCfg.lat!, anchorCfg.lng!]}
+                      radius={anchorCfg.radiusM}
+                      pathOptions={{
+                        color: "#d97706",
+                        fillColor: "#f59e0b",
+                        fillOpacity: 0.1,
+                        weight: 2,
+                        dashArray: "10 8",
+                      }}
+                    />
+                    <Marker
+                      position={[anchorCfg.lat!, anchorCfg.lng!]}
+                      icon={anchorGeofenceIcon}
+                      zIndexOffset={580}
+                    >
+                      <Popup maxWidth={220}>
+                        <p className="m-0 text-xs font-semibold text-zinc-900">Anchor geofence</p>
+                        <p className="mt-1 m-0 text-xs text-zinc-600">
+                          Allowed radius {anchorCfg.radiusM}m. Alert fires if the monitored device leaves this circle
+                          (plus GPS buffer).
+                        </p>
+                      </Popup>
+                    </Marker>
+                  </>
                 ) : null}
                 {mapPinPos ? (
                   <>
@@ -1303,7 +1432,15 @@ export default function HomeLocationMap({
             <p className="text-sm text-zinc-700 dark:text-zinc-300">
               Map location sharing is{" "}
               <span className="font-semibold text-zinc-900 dark:text-zinc-50">{sharing ? "on" : "off"}</span>
-              {sharing && pos ? " · GPS active." : null}
+              {sharing && pos ? (
+                <>
+                  {" · GPS active"}
+                  {geoAccuracyRawM != null && Number.isFinite(geoAccuracyRawM)
+                    ? ` · ±${Math.round(geoAccuracyRawM)}m`
+                    : null}
+                  .
+                </>
+              ) : null}
               {sharing && !pos ? " · Waiting for GPS…" : null}
             </p>
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
@@ -1407,6 +1544,9 @@ export default function HomeLocationMap({
         sharing={sharing}
         hasFix={Boolean(pos)}
         pos={pos ? { lat: pos.lat, lng: pos.lng } : null}
+        horizontalAccuracyM={geoAccuracyRawM}
+        anchorGpsQuality={anchorCfg.armed ? anchorLocQuality : null}
+        showIOSPreciseHint={isLikelyIOS()}
         deviceId={deviceId}
         monitor={anchorMonitor}
         config={{

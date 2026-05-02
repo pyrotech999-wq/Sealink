@@ -63,7 +63,17 @@ export async function POST(req: Request): Promise<Response> {
     await setAdminGrantedFreeAccess(uid, granted);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Update failed";
-    return NextResponse.json({ error: msg }, { status: 500 });
+    const missingColumn =
+      /admin_granted_free_access/i.test(msg) &&
+      (/schema cache/i.test(msg) || /column/i.test(msg) || /Could not find/i.test(msg));
+    return NextResponse.json(
+      {
+        error: missingColumn
+          ? `${msg} Run the SQL in supabase/migrations/014_profiles_admin_granted_free_access.sql in the Supabase SQL Editor, then try again (schema cache may take a short moment to refresh).`
+          : msg,
+      },
+      { status: 500 },
+    );
   }
 
   return NextResponse.json({ ok: true as const, uid, granted, paypalCancelled });

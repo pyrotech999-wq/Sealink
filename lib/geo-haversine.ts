@@ -34,3 +34,8 @@ export function angleDiffDeg(a: number, b: number): number {
   const d = Math.abs(((a - b + 540) % 360) - 180);
   return d;
 }
+
+/** Great-circle distance in metres (WGS84). */
+export function distanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  return distanceKm(lat1, lon1, lat2, lon2) * 1000;
+}

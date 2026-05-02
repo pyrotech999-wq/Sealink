@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { ANCHOR_MAX_HORIZ_ACCURACY_M, type AnchorGpsQuality } from "@/lib/anchor-gps-stabilizer";
+import { isLikelyAndroid } from "@/lib/location-env";
 import { getDeviceName, setDeviceName } from "@/lib/device-id";
 
 async function registerSessionDevice(currentDeviceId: string): Promise<void> {
@@ -23,6 +25,12 @@ type Props = {
   sharing: boolean;
   hasFix: boolean;
   pos: { lat: number; lng: number } | null;
+  /** Last horizontal accuracy from the device (m), unclamped — used to gate arming. */
+  horizontalAccuracyM?: number | null;
+  /** While armed: stabilizer / accuracy state for copy. */
+  anchorGpsQuality?: AnchorGpsQuality | null;
+  /** Show iOS precise-location guidance (heuristic from user agent). */
+  showIOSPreciseHint?: boolean;
   deviceId: string;
   config: {
     armed: boolean;
@@ -49,7 +57,20 @@ type Props = {
 const ANGLE_OFF = 360;
 const ANGLE_DEFAULT_ON = 45;
 
-export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, deviceId, config, monitor, onUpdate }: Props) {
+export function AnchorAlertModal({
+  open,
+  onClose,
+  sharing,
+  hasFix,
+  pos,
+  horizontalAccuracyM = null,
+  anchorGpsQuality = null,
+  showIOSPreciseHint = false,
+  deviceId,
+  config,
+  monitor,
+  onUpdate,
+}: Props) {
   const [radius, setRadius] = useState<string>(String(config.radiusM));
   const [angleDeg, setAngleDeg] = useState<string>(String(config.angleDeg ?? ANGLE_OFF));
   /** When false, angle-change alerts are disabled (stored as 360°). */
@@ -61,14 +82,21 @@ export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, deviceId
   const [alertMode, setAlertMode] = useState<"this" | "other" | "both">("both");
   const [alertOtherId, setAlertOtherId] = useState<string>("");
 
-  const canSet = sharing && hasFix && pos != null;
+  const acc = horizontalAccuracyM;
+  const accuracyOkForArm =
+    acc == null || !Number.isFinite(acc) ? hasFix && pos != null : acc <= ANCHOR_MAX_HORIZ_ACCURACY_M;
+  const canSet = sharing && hasFix && pos != null && accuracyOkForArm;
   const hasAnchor = config.lat != null && config.lng != null;
+  const showAndroidPreciseHint = isLikelyAndroid();
 
   const hint = useMemo(() => {
     if (!sharing) return "Turn on “Share my location on this map” first.";
     if (!hasFix) return "Waiting for a GPS fix…";
+    if (acc != null && Number.isFinite(acc) && acc > ANCHOR_MAX_HORIZ_ACCURACY_M) {
+      return `GPS accuracy is about ±${Math.round(acc)}m. Wait until it’s about ±${ANCHOR_MAX_HORIZ_ACCURACY_M}m or better before arming (open sky, still water).`;
+    }
     return null;
-  }, [sharing, hasFix]);
+  }, [sharing, hasFix, acc]);
 
   useEffect(() => {
     if (!open) return;
@@ -132,9 +160,11 @@ export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, deviceId
       <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-800 dark:bg-zinc-950">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Anchor alert</h3>
+            <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Anchor alert & geofence</h3>
             <p className="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-400">
-              Set an anchor point and we’ll warn if you drift outside the radius while the app is running.
+              Drop an anchor at your current GPS position and choose a circular geofence. While armed, the map shows an
+              orange ring; you get an alert if the monitored device moves outside that circle (plus a small GPS buffer)
+              while this app stays open.
             </p>
           </div>
           <button
@@ -149,6 +179,32 @@ export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, deviceId
         {hint ? (
           <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
             {hint}
+          </p>
+        ) : null}
+
+        {showIOSPreciseHint ? (
+          <p className="mt-3 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-950 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-100">
+            <span className="font-semibold text-sky-900 dark:text-sky-50">iPhone / iPad:</span> Settings → SeaLink →
+            Location → turn on <strong className="font-semibold">Precise Location</strong>. Reduced accuracy makes small
+            geofences unreliable; Apple only improves accuracy when permission allows.
+          </p>
+        ) : null}
+
+        {showAndroidPreciseHint && !showIOSPreciseHint ? (
+          <p className="mt-3 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-950 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-100">
+            <span className="font-semibold text-sky-900 dark:text-sky-50">Android:</span> Allow{" "}
+            <strong className="font-semibold">precise</strong> location for your browser. Chrome uses the fused location
+            stack; a native SeaLink app can call <code className="rounded bg-sky-100/80 px-1 dark:bg-sky-900/60">FusedLocationProviderClient</code>{" "}
+            with <code className="rounded bg-sky-100/80 px-1 dark:bg-sky-900/60">PRIORITY_HIGH_ACCURACY</code> for the
+            tightest fixes.
+          </p>
+        ) : null}
+
+        {config.armed && anchorGpsQuality && anchorGpsQuality !== "ok" ? (
+          <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+            {anchorGpsQuality === "poor_accuracy"
+              ? `Monitoring uses fixes with horizontal accuracy about ±${ANCHOR_MAX_HORIZ_ACCURACY_M}m or better. Current readings are worse — alerts may be delayed until GPS improves.`
+              : "Hold steady: we’re averaging a few high-quality fixes so anchor drift isn’t triggered by GPS noise."}
           </p>
         ) : null}
 
@@ -274,7 +330,7 @@ export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, deviceId
           </div>
 
           <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-            Drift distance
+            Geofence radius
             <select
               value={radius}
               onChange={(e) => {
@@ -289,7 +345,9 @@ export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, deviceId
               <option value="40">40m</option>
               <option value="50">50m</option>
             </select>
-            <span className="mt-1 block text-[11px] text-zinc-500">Alert if the monitored device drifts beyond this distance.</span>
+            <span className="mt-1 block text-[11px] text-zinc-500">
+              Monitored position must stay inside this circle around the anchor (geofence), or an alert fires.
+            </span>
           </label>
 
           <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900/50">
@@ -378,7 +436,7 @@ export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, deviceId
               }}
               className="h-9 rounded-lg bg-green-600 px-3 text-sm font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Set anchor at current position
+              Arm geofence at current position
             </button>
             <button
               type="button"
@@ -395,6 +453,7 @@ export function AnchorAlertModal({ open, onClose, sharing, hasFix, pos, deviceId
             <p className="mt-1">
               {config.armed && hasAnchor ? "Armed" : "Not armed"} · Distance {config.radiusM}m · Bearing change{" "}
               {(config.angleDeg ?? ANGLE_OFF) >= ANGLE_OFF ? "off" : `≤${config.angleDeg}°`}
+              {acc != null && Number.isFinite(acc) ? ` · GPS ±${Math.round(acc)}m` : null}
             </p>
             {hasAnchor ? (
               <p className="mt-1 text-[11px] opacity-80">

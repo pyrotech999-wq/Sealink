@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { BroadcastAwayToasts } from "@/components/BroadcastAwayToasts";
 import { BroadcastToastProvider } from "@/components/BroadcastToastProvider";
 import { BottomNav } from "@/components/BottomNav";
+import { CapacitorAppShell } from "@/components/CapacitorAppShell";
 import { BOTTOM_DOCK_OFFSET } from "@/lib/bottom-dock-offset";
 import { AppLoadSplash } from "@/components/AppLoadSplash";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
@@ -79,6 +80,7 @@ export default function RootLayout({
         }}
       >
         <BroadcastToastProvider>
+          <CapacitorAppShell />
           <AppLoadSplash />
           <ServiceWorkerRegister />
           <SessionDeviceRegistrar />
