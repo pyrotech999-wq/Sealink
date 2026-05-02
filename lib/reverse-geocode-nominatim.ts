@@ -14,7 +14,7 @@ export async function reverseGeocodePlace(
   url.searchParams.set("lon", String(lng));
   url.searchParams.set("format", "json");
   url.searchParams.set("addressdetails", "1");
-  url.searchParams.set("zoom", "10");
+  url.searchParams.set("zoom", "12");
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://localhost";
   const res = await fetch(url.toString(), {
@@ -38,8 +38,18 @@ export async function reverseGeocodePlace(
     return dn ? { label: dn } : null;
   }
 
+  /** Prefer smaller localities so coastal fixes are not swallowed by a distant admin city. */
   const town =
-    a.city || a.town || a.village || a.hamlet || a.municipality || a.county || a.state_district || a.state;
+    a.hamlet ||
+    a.village ||
+    a.town ||
+    a.suburb ||
+    a.neighbourhood ||
+    a.city ||
+    a.municipality ||
+    a.county ||
+    a.state_district ||
+    a.state;
   const country = a.country;
   if (town && country && town !== country) {
     return { label: `${town}, ${country}`, country };

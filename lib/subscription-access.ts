@@ -4,7 +4,7 @@ import { isReservedOwner } from "@/lib/reserved-admin";
 import { getUserEmailByUid } from "@/lib/users-store";
 
 /** PayPal billing subscription states that count as paid/trial access for in-app benefits. */
-const PAYPAL_ACCESS_STATUSES = new Set(["ACTIVE", "APPROVED", "TRIALING"]);
+export const PAYPAL_ACCESS_STATUSES = new Set(["ACTIVE", "APPROVED", "TRIALING"]);
 
 export async function hasAppSubscriptionAccess(userUid: string): Promise<boolean> {
   const email = await getUserEmailByUid(userUid);
@@ -13,6 +13,11 @@ export async function hasAppSubscriptionAccess(userUid: string): Promise<boolean
   const sub = await getPayPalSubscriptionByUser(userUid);
   if (!sub?.status) return false;
   return PAYPAL_ACCESS_STATUSES.has(sub.status.trim().toUpperCase());
+}
+
+export function paypalSubscriptionIsActiveForBilling(status: string | null | undefined): boolean {
+  if (!status?.trim()) return false;
+  return PAYPAL_ACCESS_STATUSES.has(status.trim().toUpperCase());
 }
 
 export type SubscriptionAccessDetail = {

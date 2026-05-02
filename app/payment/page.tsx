@@ -7,15 +7,16 @@ export const metadata: Metadata = {
     "SeaLink — 14-day trial, then monthly or annual billing. Voucher codes validated on the server.",
 };
 
-type Props = { searchParams: Promise<{ canceled?: string }> };
+type Props = { searchParams: Promise<{ canceled?: string; required?: string }> };
 
 export default async function PaymentPage({ searchParams }: Props) {
-  const { canceled } = await searchParams;
+  const { canceled, required } = await searchParams;
   const showCanceled = canceled === "1";
+  const planRequired = required === "1";
 
   return (
     <div className="flex flex-1 flex-col bg-black">
-      <PaymentClient showCanceled={showCanceled} />
+      <PaymentClient showCanceled={showCanceled} planRequired={planRequired} />
     </div>
   );
 }

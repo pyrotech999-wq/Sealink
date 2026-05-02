@@ -3,6 +3,7 @@ import { fetchStormglassTideExtremes } from "@/lib/stormglass-tide";
 import { resolveSeaTideContext, tideDisplayTimeZone } from "@/lib/sea-tide-context";
 import type { TideTableEvent } from "@/lib/tide-table-types";
 import { tideFactsNarrative, type TideFact } from "@/lib/tide-ai-narrative";
+import { summarizeTideExtremes } from "@/lib/tide-height-summary";
 
 export const runtime = "nodejs";
 
@@ -71,7 +72,37 @@ type TideEventOut = {
   vRelMean: number;
   // Relative to local modelled low over the returned window (positive, “tide-table-ish”).
   vAboveLow: number;
+  /** Open‑Meteo model sea level (m) at the tide grid + TIDE_ESTIMATED_MSL_OFFSET_METERS — primary display height. */
+  vAbsEstM: number;
 };
+
+export type TideHeightSummary = ReturnType<typeof summarizeTideExtremes>;
+
+function tideMslOffsetMeters(): number {
+  const raw = process.env.TIDE_ESTIMATED_MSL_OFFSET_METERS?.trim();
+  if (!raw) return 0;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function openMeteoMarineUrl(lat: number, lng: number, hourlyFields: string[]): string {
+  const api = new URL("https://marine-api.open-meteo.com/v1/marine");
+  api.searchParams.set("latitude", String(lat));
+  api.searchParams.set("longitude", String(lng));
+  api.searchParams.set("hourly", hourlyFields.join(","));
+  api.searchParams.set("timezone", "auto");
+  api.searchParams.set("forecast_days", "3");
+  api.searchParams.set("length_unit", "metric");
+  return api.toString();
+}
+
+function withHeightSummary<T extends { events: TideTableEvent[] }>(
+  full: T | null,
+  nowMs: number,
+): (T & { heightSummary: TideHeightSummary }) | null {
+  if (!full || !full.events.length) return null;
+  return { ...full, heightSummary: summarizeTideExtremes(full.events, nowMs) };
+}
 
 function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
   const R = 6371;
@@ -281,7 +312,7 @@ async function fetchWorldTidesTable(coords: { lat: number; lng: number }): Promi
   wt.searchParams.set("date", "today");
   wt.searchParams.set("days", "3");
   wt.searchParams.set("localtime", "");
-  wt.searchParams.set("stationDistance", "85");
+  wt.searchParams.set("stationDistance", "18");
   wt.searchParams.set("units", "meters");
   wt.searchParams.set("lat", String(coords.lat));
   wt.searchParams.set("lon", String(coords.lng));
@@ -333,41 +364,56 @@ export async function GET(req: Request): Promise<Response> {
   const coords = clampLatLng(lat, lng);
   if (!coords) return NextResponse.json({ error: "lat and lng required" }, { status: 400 });
 
-  const api = new URL("https://marine-api.open-meteo.com/v1/marine");
-  api.searchParams.set("latitude", String(coords.lat));
-  api.searchParams.set("longitude", String(coords.lng));
-  api.searchParams.set(
-    "hourly",
-    [
-      "wave_height",
-      "wave_period",
-      "wave_direction",
-      "sea_surface_temperature",
-      "sea_level_height_msl",
-    ].join(","),
-  );
-  api.searchParams.set("timezone", "auto");
-  api.searchParams.set("forecast_days", "3");
-  api.searchParams.set("length_unit", "metric");
+  const hourlyFull = [
+    "wave_height",
+    "wave_period",
+    "wave_direction",
+    "sea_surface_temperature",
+    "sea_level_height_msl",
+  ] as const;
 
   try {
     const tideNow = Date.now();
     const tideNowD = new Date(tideNow);
     const stormEnd = new Date(tideNow + 50 * 3600 * 1000);
 
-    const [seaTideContext, noaaFull, stormglassFull, tideTableFull, r] = await Promise.all([
-      resolveSeaTideContext(coords.lat, coords.lng, req.signal),
-      noaaTideTable(coords),
-      fetchStormglassTideExtremes(coords.lat, coords.lng, tideNowD, stormEnd, req.signal),
-      fetchWorldTidesTable(coords),
-      fetch(api.toString(), { cache: "no-store", signal: req.signal }),
+    const seaTideContext = await resolveSeaTideContext(coords.lat, coords.lng, req.signal);
+    const tq = seaTideContext.tideQuery;
+    const tideCoords = { lat: tq.lat, lng: tq.lng };
+    const useAnchoredSea =
+      tq.source === "marina" &&
+      (Math.abs(tq.lat - coords.lat) > 1e-5 || Math.abs(tq.lng - coords.lng) > 1e-5);
+
+    const marineUserUrl = openMeteoMarineUrl(coords.lat, coords.lng, [...hourlyFull]);
+    const marineTideOnlyUrl = openMeteoMarineUrl(tq.lat, tq.lng, ["sea_level_height_msl"]);
+
+    const [noaaFull, stormglassFull, tideTableFull, rUser] = await Promise.all([
+      noaaTideTable(tideCoords),
+      fetchStormglassTideExtremes(tideCoords.lat, tideCoords.lng, tideNowD, stormEnd, req.signal),
+      fetchWorldTidesTable(tideCoords),
+      fetch(marineUserUrl, { cache: "no-store", signal: req.signal }),
     ]);
 
-    if (!r.ok) return NextResponse.json({ error: `Marine request failed (${r.status})` }, { status: 502 });
-    const data = (await r.json()) as MarineResp;
-    const h = data.hourly;
-    const times = (h?.time ?? []) as string[];
-    if (!times.length) return NextResponse.json({ error: "No marine data returned" }, { status: 502 });
+    const rTide = useAnchoredSea ? await fetch(marineTideOnlyUrl, { cache: "no-store", signal: req.signal }) : null;
+
+    if (!rUser.ok) return NextResponse.json({ error: `Marine request failed (${rUser.status})` }, { status: 502 });
+    const dataUser = (await rUser.json()) as MarineResp;
+    const hUser = dataUser.hourly;
+    const timesUser = (hUser?.time ?? []) as string[];
+    if (!timesUser.length) return NextResponse.json({ error: "No marine data returned" }, { status: 502 });
+
+    let tideTimes = timesUser;
+    let sea = (hUser?.sea_level_height_msl ?? []) as number[];
+    if (useAnchoredSea && rTide?.ok) {
+      const dataTide = (await rTide.json()) as MarineResp;
+      const hT = dataTide.hourly;
+      const tt = (hT?.time ?? []) as string[];
+      const st = (hT?.sea_level_height_msl ?? []) as number[];
+      if (Array.isArray(st) && st.length === tt.length && st.length) {
+        tideTimes = tt;
+        sea = st;
+      }
+    }
 
     function shrinkEventsTable<T extends { events: TideTableEvent[] }>(full: T | null, nowMs: number): T | null {
       if (!full?.events?.length) return full;
@@ -380,12 +426,12 @@ export async function GET(req: Request): Promise<Response> {
     const stormglassTideTable = shrinkEventsTable(stormglassFull, tideNow);
     const tideTable = shrinkEventsTable(tideTableFull, tideNow);
 
-    // Find nearest hour index.
+    // Find nearest hour index (waves / SST at user position).
     const now = tideNow;
     let idx = 0;
     let best = Number.POSITIVE_INFINITY;
-    for (let i = 0; i < times.length; i++) {
-      const ms = new Date(times[i]!).getTime();
+    for (let i = 0; i < timesUser.length; i++) {
+      const ms = new Date(timesUser[i]!).getTime();
       const d = Math.abs(ms - now);
       if (d < best) {
         best = d;
@@ -393,12 +439,11 @@ export async function GET(req: Request): Promise<Response> {
       }
     }
 
-    const waveM = numAt(h?.wave_height, idx);
-    const waveP = numAt(h?.wave_period, idx);
-    const waveD = numAt(h?.wave_direction, idx);
-    const sst = numAt(h?.sea_surface_temperature, idx);
-    const sea = (h?.sea_level_height_msl ?? []) as number[];
-    const seaTimes = times;
+    const waveM = numAt(hUser?.wave_height, idx);
+    const waveP = numAt(hUser?.wave_period, idx);
+    const waveD = numAt(hUser?.wave_direction, idx);
+    const sst = numAt(hUser?.sea_surface_temperature, idx);
+    const seaTimes = tideTimes;
 
     const tides =
       Array.isArray(sea) && sea.length === seaTimes.length ? findNextTides(seaTimes, sea, now, 4) : [];
@@ -408,13 +453,18 @@ export async function GET(req: Request): Promise<Response> {
         : { mean: null, mm: null };
     const relMean0 = seaStats.mean ?? 0;
     const relLow0 = seaStats.mm?.min ?? 0;
-    const tideEvents: TideEventOut[] = tides.map((e) => ({
-      kind: e.kind,
-      t: e.t,
-      vMsl: e.v,
-      vRelMean: e.v - relMean0,
-      vAboveLow: e.v - relLow0,
-    }));
+    const mslOff = tideMslOffsetMeters();
+    const tideEvents: TideEventOut[] = tides.map((e) => {
+      const vRelMean = e.v - relMean0;
+      return {
+        kind: e.kind,
+        t: e.t,
+        vMsl: e.v,
+        vRelMean,
+        vAboveLow: e.v - relLow0,
+        vAbsEstM: e.v + mslOff,
+      };
+    });
     const rangeM = seaStats.mm ? seaStats.mm.max - seaStats.mm.min : null;
 
     const tz = tideDisplayTimeZone(seaTideContext);
@@ -444,8 +494,8 @@ export async function GET(req: Request): Promise<Response> {
         aiFacts.push({
           kind: e.kind,
           t: new Date(ms).toISOString(),
-          heightM: e.vMsl,
-          sourceNote: "Open-Meteo marine model (not chart datum)",
+          heightM: e.vAbsEstM,
+          sourceNote: "Open-Meteo marine model sea level (m) at grid + optional offset; not chart datum",
         });
       }
     }
@@ -480,12 +530,19 @@ export async function GET(req: Request): Promise<Response> {
       parts.push("Tide estimate unavailable for this area.");
     }
 
+    const modelledExtremesForSummary: TideTableEvent[] = tideEvents.map((e) => ({
+      kind: e.kind,
+      t: e.t,
+      heightM: e.vAbsEstM,
+    }));
+    const modelledHeightSummary = summarizeTideExtremes(modelledExtremesForSummary, now);
+
     const text = parts.join(" ");
     return NextResponse.json({
       ok: true,
       text,
       now: new Date(now).toISOString(),
-      hourly_units: data.hourly_units ?? {},
+      hourly_units: dataUser.hourly_units ?? {},
       snapshot: {
         wave_height_m: waveM,
         wave_period_s: waveP,
@@ -499,10 +556,12 @@ export async function GET(req: Request): Promise<Response> {
         events: tideEvents,
         rangeM,
         datum: "msl",
+        mslOffsetM: mslOff,
+        heightSummary: modelledHeightSummary,
       },
-      tideTable,
-      stormglassTideTable,
-      noaaTideTable: noaa,
+      tideTable: withHeightSummary(tideTable, now),
+      stormglassTideTable: withHeightSummary(stormglassTideTable, now),
+      noaaTideTable: withHeightSummary(noaa, now),
     });
   } catch {
     return NextResponse.json({ error: "Network error" }, { status: 502 });

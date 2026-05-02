@@ -882,7 +882,6 @@ export default function HomeLocationMap({
     if (!on) {
       clearMapPresence();
       setShareNearby(false);
-      setShareNearbyPeers(false);
       setNearbyPeers([]);
       setPos(null);
       setGeoError(null);
@@ -899,6 +898,7 @@ export default function HomeLocationMap({
     if (seed) setHeldSharingPos(seed);
     setShareOnMap(true);
     setSharing(true);
+    setShareNearby(getShareNearbyPeers());
   }
 
   const pinIconVisible = useMemo(
@@ -1174,24 +1174,73 @@ export default function HomeLocationMap({
               className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 outline-none focus:border-green-600 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
             />
           </label>
+          <p className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+            Map sharing choices (defaults on — set before or after you press Share). Nearby peers need a GPS fix after
+            sharing starts.
+          </p>
+
           <label
-            className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 text-[11px] leading-snug ${
-              sharing
-                ? "border-zinc-200 bg-zinc-50 text-zinc-800 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-200"
-                : "cursor-not-allowed border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-500"
-            }`}
+            className="flex cursor-pointer items-start gap-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-[11px] leading-snug text-zinc-800 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-200"
           >
             <input
               type="checkbox"
-              className="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-400 text-green-600 disabled:opacity-50"
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-400 text-green-600"
               checked={showAvatar}
-              disabled={!sharing}
               onChange={(e) => persistShowAvatar(e.target.checked)}
             />
             <span>
               <span className="font-semibold">Show profile image on map pin</span>
               <span className="mt-1 block opacity-90">
                 Uses the profile photo you added on sign-up/profile. Turn off if you prefer a plain “You” marker.
+              </span>
+            </span>
+          </label>
+
+          <label
+            className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 text-[11px] leading-snug ${
+              sharing && !pos
+                ? "cursor-wait border-blue-200/80 bg-blue-50/50 text-blue-900 dark:border-blue-900/40 dark:bg-blue-950/25 dark:text-blue-100"
+                : "border-blue-200 bg-blue-50/90 text-blue-950 dark:border-blue-900/50 dark:bg-blue-950/35 dark:text-blue-100"
+            }`}
+          >
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-400 text-blue-600 disabled:opacity-50"
+              checked={shareNearby}
+              disabled={Boolean(sharing && !pos)}
+              onChange={(e) => {
+                const on = e.target.checked;
+                setShareNearby(on);
+                setShareNearbyPeers(on);
+                if (!on) clearMapPresence();
+              }}
+            />
+            <span>
+              <span className="font-semibold">Show me to nearby SeaLink users (~5 mi)</span>
+              <span className="mt-1 block opacity-90">
+                On by default. Other members who also leave this on can appear as blue pins when you share. Turn off to
+                stay private on the shared map.
+              </span>
+            </span>
+          </label>
+
+          <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-[11px] leading-snug text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-400 text-amber-700"
+              checked={bgConsent}
+              onChange={(e) => {
+                const on = e.target.checked;
+                setBackgroundLocationConsent(on);
+                setBgConsentState(on);
+              }}
+            />
+            <span>
+              <span className="font-semibold">Keep updating in the background</span>
+              <span className="mt-1 block opacity-90">
+                On by default: we keep requesting your position on a slower cadence while this tab stays open, even if
+                you switch apps (browser may still throttle GPS). Turn this off to only update while this tab is visible.
+                Fully closing the browser stops tracking.
               </span>
             </span>
           </label>
@@ -1218,61 +1267,6 @@ export default function HomeLocationMap({
               {locMode}
             </p>
           ) : null}
-
-          <label
-            className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 text-[11px] leading-snug ${
-              sharing && pos
-                ? "border-blue-200 bg-blue-50/90 text-blue-950 dark:border-blue-900/50 dark:bg-blue-950/35 dark:text-blue-100"
-                : "cursor-not-allowed border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-500"
-            }`}
-          >
-            <input
-              type="checkbox"
-              className="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-400 text-blue-600 disabled:opacity-50"
-              checked={shareNearby}
-              disabled={!sharing || !pos}
-              onChange={(e) => {
-                const on = e.target.checked;
-                setShareNearby(on);
-                setShareNearbyPeers(on);
-                if (!on) clearMapPresence();
-              }}
-            />
-            <span>
-              <span className="font-semibold">Show me to nearby SeaLink users (~5 mi)</span>
-              <span className="mt-1 block opacity-90">
-                Only members who also turn this on appear on your map (blue pins).
-              </span>
-            </span>
-          </label>
-
-          <label
-            className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 text-[11px] leading-snug ${
-              sharing
-                ? "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100"
-                : "cursor-not-allowed border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-500"
-            }`}
-          >
-            <input
-              type="checkbox"
-              className="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-400 text-amber-700 disabled:opacity-50"
-              checked={bgConsent}
-              disabled={!sharing}
-              onChange={(e) => {
-                const on = e.target.checked;
-                setBackgroundLocationConsent(on);
-                setBgConsentState(on);
-              }}
-            />
-            <span>
-              <span className="font-semibold">Keep updating in the background</span>
-              <span className="mt-1 block opacity-90">
-                On by default: we keep requesting your position on a slower cadence while this tab stays open, even if
-                you switch apps (browser may still throttle GPS). Turn this off to only update while this tab is visible.
-                Fully closing the browser stops tracking.
-              </span>
-            </span>
-          </label>
         </div>
       </div>
 

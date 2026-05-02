@@ -6,7 +6,7 @@ export const MAP_PROFILE = {
   avatar: "sealink_map_avatar_dataurl",
   showAvatar: "sealink_map_show_avatar",
   bgConsent: "sealink_map_bg_location_consent",
-  /** Opt in to appear on other members’ maps when within ~5 mi and sharing GPS. */
+  /** Opt in to appear on other members’ maps when within ~5 mi and sharing GPS (default on; `"0"` = off). */
   shareNearby: "sealink_map_share_nearby",
   /** Share GPS on the home map (persisted; user can turn off anytime). */
   shareOnMap: "sealink_map_share_location",
@@ -93,14 +93,14 @@ export function setBackgroundLocationConsent(on: boolean): void {
 }
 
 export function getShareNearbyPeers(): boolean {
-  if (typeof window === "undefined") return false;
-  return localStorage.getItem(MAP_PROFILE.shareNearby) === "1";
+  if (typeof window === "undefined") return true;
+  return localStorage.getItem(MAP_PROFILE.shareNearby) !== "0";
 }
 
 export function setShareNearbyPeers(on: boolean): void {
   if (typeof window === "undefined") return;
-  if (on) localStorage.setItem(MAP_PROFILE.shareNearby, "1");
-  else localStorage.removeItem(MAP_PROFILE.shareNearby);
+  if (on) localStorage.removeItem(MAP_PROFILE.shareNearby);
+  else localStorage.setItem(MAP_PROFILE.shareNearby, "0");
 }
 
 export function getShareOnMap(): boolean {

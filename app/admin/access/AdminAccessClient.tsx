@@ -16,6 +16,7 @@ export function AdminAccessClient() {
   const [users, setUsers] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [successNotice, setSuccessNotice] = useState<string | null>(null);
   const [busyUid, setBusyUid] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -45,6 +46,7 @@ export function AdminAccessClient() {
   async function setGrant(uid: string, granted: boolean) {
     setBusyUid(uid);
     setErr(null);
+    setSuccessNotice(null);
     try {
       const r = await fetch("/api/admin/grant-free-access", {
         method: "POST",
@@ -52,10 +54,16 @@ export function AdminAccessClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ uid, granted }),
       });
-      const d = (await r.json()) as { error?: string };
+      const d = (await r.json()) as { error?: string; paypalCancelled?: boolean };
       if (!r.ok) {
         setErr(d.error ?? "Update failed");
         return;
+      }
+      if (granted && d.paypalCancelled) {
+        setSuccessNotice(
+          "Complimentary access enabled. Their active PayPal subscription was cancelled so they are not charged while on complimentary access.",
+        );
+        setTimeout(() => setSuccessNotice(null), 10000);
       }
       await load();
     } catch {
@@ -85,6 +93,11 @@ export function AdminAccessClient() {
       {err ? (
         <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
           {err}
+        </p>
+      ) : null}
+      {successNotice ? (
+        <p className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-100">
+          {successNotice}
         </p>
       ) : null}
 

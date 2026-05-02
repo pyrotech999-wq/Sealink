@@ -41,3 +41,21 @@ export async function paypalAccessToken(): Promise<string> {
   return data.access_token;
 }
 
+/** Cancel a billing subscription (e.g. before granting admin complimentary access). 404 = already cancelled. */
+export async function cancelPayPalBillingSubscription(subscriptionId: string, reason: string): Promise<void> {
+  const token = await paypalAccessToken();
+  const res = await fetch(`${paypalBaseUrl()}/v1/billing/subscriptions/${encodeURIComponent(subscriptionId)}/cancel`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ reason: reason.slice(0, 127) }),
+  });
+  if (res.status === 404 || res.status === 204) return;
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(`PayPal cancel ${res.status}: ${t.slice(0, 400)}`);
+  }
+}
+

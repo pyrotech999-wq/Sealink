@@ -5,9 +5,9 @@ import Link from "next/link";
 import type { BillingPlan } from "@/lib/pricing";
 import { ANNUAL_GBP, MONTHLY_GBP, recurringPriceGbp, TRIAL_DAYS } from "@/lib/pricing";
 
-type Props = { showCanceled?: boolean };
+type Props = { showCanceled?: boolean; planRequired?: boolean };
 
-export function PaymentClient({ showCanceled = false }: Props) {
+export function PaymentClient({ showCanceled = false, planRequired = false }: Props) {
   const [plan, setPlan] = useState<BillingPlan>("monthly");
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
@@ -76,11 +76,33 @@ export function PaymentClient({ showCanceled = false }: Props) {
 
   return (
     <div className="mx-auto w-full max-w-lg px-4 py-8 sm:px-6 sm:py-10">
-      <Link href="/" className="text-sm font-medium text-green-800 hover:underline dark:text-green-400">
-        ← Home
-      </Link>
+      {access === null ? (
+        planRequired ? (
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">Checking your account…</p>
+        ) : (
+          <Link href="/" className="text-sm font-medium text-green-800 hover:underline dark:text-green-400">
+            ← Home
+          </Link>
+        )
+      ) : access.hasAccess ? (
+        <Link href="/" className="text-sm font-medium text-green-800 hover:underline dark:text-green-400">
+          ← Home
+        </Link>
+      ) : planRequired ? (
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">Choose a plan below to continue.</p>
+      ) : (
+        <Link href="/" className="text-sm font-medium text-green-800 hover:underline dark:text-green-400">
+          ← Home
+        </Link>
+      )}
 
       <div className="mt-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 sm:p-8">
+        {planRequired && access !== null && !access.hasAccess ? (
+          <p className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-950 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100">
+            A subscription (or your {TRIAL_DAYS}-day trial after you start PayPal checkout) is required to use the app.
+            The only exception is complimentary access granted by an admin for your account.
+          </p>
+        ) : null}
         {paypalEnv != null && paypalConfigured ? (
           <p
             className={`mb-4 rounded-lg border px-3 py-2 text-xs font-medium ${

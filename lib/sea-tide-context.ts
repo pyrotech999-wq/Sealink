@@ -3,8 +3,19 @@ import { MARINA_WORLD_CATALOG, type MarinaListing } from "@/lib/marina-catalog";
 import { reverseGeocodePlace } from "@/lib/reverse-geocode-nominatim";
 
 const MAX_MARINA_KM = 100;
-/** Prefer marina/harbour name on the tide card when this close. */
-const MARINA_LABEL_PRIORITY_KM = 40;
+/** Marinas within this radius (miles) anchor tide API queries and get label priority over generic reverse-geocode. */
+export const TIDE_NEARBY_MARINA_RADIUS_MILES = 25;
+const TIDE_NEARBY_MARINA_RADIUS_KM = TIDE_NEARBY_MARINA_RADIUS_MILES * 1.609344;
+
+export type TideQueryPoint = {
+  lat: number;
+  lng: number;
+  /** Tide APIs use marina coordinates when within ~25 mi; otherwise the user’s fix. */
+  source: "user" | "marina";
+  marinaName: string | null;
+  /** Distance from user fix to this point (km). */
+  offsetKm: number;
+};
 
 export type SeaTideContext = {
   /** Primary label for tides (harbour, marina, or town). */
@@ -20,6 +31,7 @@ export type SeaTideContext = {
     distanceKm: number;
   } | null;
   nominatim: { label: string; country?: string } | null;
+  tideQuery: TideQueryPoint;
 };
 
 function nearestMarina(lat: number, lng: number): (MarinaListing & { distanceKm: number }) | null {
@@ -36,16 +48,30 @@ function nearestMarina(lat: number, lng: number): (MarinaListing & { distanceKm:
   return best;
 }
 
-/** Harbour / town context for tide copy — marinas & harbours first, then Nominatim place. */
+function tideQueryFor(lat: number, lng: number, marina: (MarinaListing & { distanceKm: number }) | null): TideQueryPoint {
+  if (marina && marina.distanceKm <= TIDE_NEARBY_MARINA_RADIUS_KM) {
+    return {
+      lat: marina.lat,
+      lng: marina.lng,
+      source: "marina",
+      marinaName: marina.name.trim() || null,
+      offsetKm: Math.round(marina.distanceKm * 100) / 100,
+    };
+  }
+  return { lat, lng, source: "user", marinaName: null, offsetKm: 0 };
+}
+
+/** Harbour / town context for tide copy — marinas & harbours within ~25 mi first, then Nominatim place. */
 export async function resolveSeaTideContext(
   lat: number,
   lng: number,
   signal?: AbortSignal,
 ): Promise<SeaTideContext> {
   const marina = nearestMarina(lat, lng);
+  const tideQuery = tideQueryFor(lat, lng, marina);
   const nom = await reverseGeocodePlace(lat, lng, signal);
 
-  if (marina && marina.distanceKm <= MARINA_LABEL_PRIORITY_KM) {
+  if (marina && marina.distanceKm <= TIDE_NEARBY_MARINA_RADIUS_KM) {
     const harbour = marina.harbour.trim();
     const name = marina.name.trim();
     const label = (harbour || name).trim() || "Marina";
@@ -65,6 +91,7 @@ export async function resolveSeaTideContext(
         distanceKm: Math.round(marina.distanceKm * 10) / 10,
       },
       nominatim: nom,
+      tideQuery,
     };
   }
 
@@ -85,6 +112,7 @@ export async function resolveSeaTideContext(
           }
         : null,
       nominatim: nom,
+      tideQuery,
     };
   }
 
@@ -105,6 +133,7 @@ export async function resolveSeaTideContext(
         distanceKm: Math.round(marina.distanceKm * 10) / 10,
       },
       nominatim: null,
+      tideQuery,
     };
   }
 
@@ -114,6 +143,7 @@ export async function resolveSeaTideContext(
     via: "place",
     nearestMarina: null,
     nominatim: null,
+    tideQuery,
   };
 }
 
