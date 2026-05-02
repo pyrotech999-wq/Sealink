@@ -249,10 +249,8 @@ export function SeaStateSummaryBox() {
         <h3 className="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Sea state near you</h3>
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
           Waves and temperature from your last map fix (Open‑Meteo marine, no tide heights). If a listed harbour or
-          marina is within about <span className="font-medium">25 miles</span>, we name that place first; otherwise
-          tides follow your GPS fix. Tide tables use NOAA, Stormglass, or WorldTides when configured; otherwise a live
-          web search via OpenAI (set <code className="rounded bg-zinc-200/80 px-0.5 dark:bg-zinc-800">OPENAI_API_KEY</code>
-          ).
+          marina is within about <span className="font-medium">25 miles</span>, we name that place first; otherwise tides
+          follow your GPS fix.
         </p>
         {seaTideContext ? (
           <p className="mt-1 text-xs text-sky-900/90 dark:text-sky-100/90">

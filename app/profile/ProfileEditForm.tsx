@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { compressProfilePhoto } from "@/lib/client/compress-profile-photo";
 import {
   getAvatarDataUrl,
   getBoatName,
@@ -17,14 +18,35 @@ import {
 import { normalisePhone } from "@/lib/phone-normalise";
 
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+/** Stay under map-profile-storage max (~450k chars) after base64 growth. */
+const MAX_AVATAR_DATA_URL_CHARS = 430_000;
 
 type Props = {
   signedIn: boolean;
   accountEmail: string;
 };
 
+async function shrinkAvatarDataUrlForStorage(dataUrl: string): Promise<string> {
+  const trimmed = dataUrl.trim();
+  if (!trimmed) return "";
+  if (trimmed.length <= MAX_AVATAR_DATA_URL_CHARS) return trimmed;
+  const res = await fetch(trimmed);
+  const blob = await res.blob();
+  const file = new File([blob], "profile.jpg", {
+    type: blob.type && blob.type.startsWith("image/") ? blob.type : "image/jpeg",
+  });
+  const small = await compressProfilePhoto(file);
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Could not process photo. Try a smaller image."));
+    reader.readAsDataURL(small);
+  });
+}
+
 export function ProfileEditForm({ signedIn, accountEmail }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const statusRef = useRef<HTMLDivElement>(null);
   const [fullName, setFullNameState] = useState("");
   const [boatName, setBoatNameState] = useState("");
   const [phone, setPhoneState] = useState("");
@@ -32,14 +54,25 @@ export function ProfileEditForm({ signedIn, accountEmail }: Props) {
   const [avatarDataUrl, setAvatarDataUrlState] = useState("");
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setFullNameState(getFullName());
-    setBoatNameState(getBoatName());
-    setPhoneState(getProfilePhone());
-    setShowAvatarState(getShowAvatar());
-    setAvatarDataUrlState(getAvatarDataUrl());
+    queueMicrotask(() => {
+      setFullNameState(getFullName());
+      setBoatNameState(getBoatName());
+      setPhoneState(getProfilePhone());
+      setShowAvatarState(getShowAvatar());
+      setAvatarDataUrlState(getAvatarDataUrl());
+    });
   }, []);
+
+  useEffect(() => {
+    if (!saved && !error) return;
+    const id = requestAnimationFrame(() => {
+      statusRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [saved, error]);
 
   function onPickPhoto(ev: React.ChangeEvent<HTMLInputElement>) {
     const file = ev.target.files?.[0];
@@ -73,20 +106,27 @@ export function ProfileEditForm({ signedIn, accountEmail }: Props) {
     if (fileRef.current) fileRef.current.value = "";
   }
 
-  function onSave(ev: React.FormEvent) {
+  async function onSave(ev: React.FormEvent) {
     ev.preventDefault();
     setError("");
     setSaved(false);
+    setSaving(true);
     try {
+      const nextAvatar = await shrinkAvatarDataUrlForStorage(avatarDataUrl);
+      if (nextAvatar !== avatarDataUrl) {
+        setAvatarDataUrlState(nextAvatar);
+      }
       setBoatName(boatName);
       setFullName(fullName);
       setProfilePhone(normalisePhone(phone));
-      if (avatarDataUrl) setAvatarDataUrl(avatarDataUrl);
+      if (nextAvatar) setAvatarDataUrl(nextAvatar);
       else setAvatarDataUrl(null);
       setShowAvatar(showAvatar);
       setSaved(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save profile.");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -120,17 +160,6 @@ export function ProfileEditForm({ signedIn, accountEmail }: Props) {
           to tie posting and adverts to your email. You can still update how you appear on the map below.
         </p>
       )}
-
-      {error ? (
-        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
-          {error}
-        </p>
-      ) : null}
-      {saved ? (
-        <p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-900 dark:border-green-900/40 dark:bg-green-950/30 dark:text-green-200">
-          Profile saved. It will show on your home map and IFM pin.
-        </p>
-      ) : null}
 
       <div>
         <label htmlFor="profile-full" className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
@@ -228,11 +257,25 @@ export function ProfileEditForm({ signedIn, accountEmail }: Props) {
         <span className="text-sm text-zinc-700 dark:text-zinc-300">Show profile photo on map pin (when a photo is saved)</span>
       </label>
 
+      <div ref={statusRef} className="space-y-3">
+        {error ? (
+          <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+            {error}
+          </p>
+        ) : null}
+        {saved ? (
+          <p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-900 dark:border-green-900/40 dark:bg-green-950/30 dark:text-green-200">
+            Profile saved. It will show on your home map and IFM pin.
+          </p>
+        ) : null}
+      </div>
+
       <button
         type="submit"
-        className="flex h-10 w-full items-center justify-center rounded-lg bg-green-600 text-sm font-medium text-white hover:bg-green-700 sm:w-auto sm:min-w-[140px]"
+        disabled={saving}
+        className="flex h-10 w-full items-center justify-center rounded-lg bg-green-600 text-sm font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[140px]"
       >
-        Save changes
+        {saving ? "Saving…" : "Save changes"}
       </button>
     </form>
   );

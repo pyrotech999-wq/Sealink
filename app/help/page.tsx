@@ -396,6 +396,12 @@ export default function HelpPage() {
                 may use marina proximity or place search — set or adjust context in the UI when offered so tides match your
                 berth or anchorage as closely as the data allows.
               </p>
+              <p>
+                Tide tables use NOAA, Stormglass, or WorldTides when those integrations are configured on the server;
+                otherwise the app can fall back to a live web search via OpenAI. For that fallback, set{" "}
+                <span className="font-mono text-sm text-zinc-300">OPENAI_API_KEY</span> in the deployment environment (see{" "}
+                <span className="font-mono text-sm text-zinc-300">.env.example</span>).
+              </p>
               <p className="rounded-lg border border-zinc-700/80 bg-zinc-950/60 px-3 py-2 text-xs text-zinc-400">
                 <strong className="text-zinc-300">Tip:</strong> If tides look wrong, check the displayed datum / station
                 distance — always verify with official tide tables for pilotage.
