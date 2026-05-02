@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { AiForecast48hBox } from "@/components/home/AiForecast48hBox";
 import { DEFAULT_MAP_CENTER } from "@/lib/map-constants";
-import { type DailyForecastRow, fetchSevenDayDailyForecast } from "@/lib/open-meteo-forecast";
+import { type DailyForecastRow, fetchDailyForecast, HOME_DAILY_FORECAST_DAYS } from "@/lib/open-meteo-forecast";
 import { wmoWeatherEmoji, wmoWeatherLabel } from "@/lib/wmo-weather";
 import { windFromCompass16 } from "@/lib/wind-compass";
 import { mphToKnots, seaStateForMaxWindMph } from "@/lib/wind-tiers";
@@ -154,7 +154,7 @@ export function WeatherForecast7Day({ lat, lng }: Props) {
     const t = window.setTimeout(() => {
       setLoading(true);
       setErr(null);
-      fetchSevenDayDailyForecast(useLat, useLng, ac.signal)
+      fetchDailyForecast(useLat, useLng, ac.signal)
         .then((data) => {
           if (ac.signal.aborted) return;
           setRows(data);
@@ -179,7 +179,7 @@ export function WeatherForecast7Day({ lat, lng }: Props) {
       <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h3 className="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-            7-day wind forecast
+            Next {HOME_DAILY_FORECAST_DAYS}-day wind forecast
           </h3>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
             Daily maximum wind at 10 m with dominant direction (map timeline uses 3-hour steps). Each card’s arrow points{" "}
@@ -206,9 +206,9 @@ export function WeatherForecast7Day({ lat, lng }: Props) {
         </p>
       )}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
         {loading
-          ? Array.from({ length: 7 }, (_, i) => (
+          ? Array.from({ length: HOME_DAILY_FORECAST_DAYS }, (_, i) => (
               <div
                 key={i}
                 className="h-36 animate-pulse rounded-xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900"
@@ -271,16 +271,16 @@ export function WeatherForecast7Day({ lat, lng }: Props) {
       <div className="mt-8">
         <div className="mb-3">
           <h3 className="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-            7-day conditions
+            Next {HOME_DAILY_FORECAST_DAYS}-day conditions
           </h3>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
             Daily summary: dominant weather code, temperatures, rain and totals, sunshine duration, humidity, pressure,
             and dew point when the API provides them.
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
           {loading
-            ? Array.from({ length: 7 }, (_, i) => (
+            ? Array.from({ length: HOME_DAILY_FORECAST_DAYS }, (_, i) => (
                 <div
                   key={`c-${i}`}
                   className="h-52 animate-pulse rounded-xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900"

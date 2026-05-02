@@ -36,7 +36,10 @@ function arr(d: OpenMeteoDaily["daily"], key: string): number[] | undefined {
   return Array.isArray(v) ? (v as number[]) : undefined;
 }
 
-export async function fetchSevenDayDailyForecast(
+/** Number of daily steps requested from Open-Meteo for the home forecast strip. */
+export const HOME_DAILY_FORECAST_DAYS = 8;
+
+export async function fetchDailyForecast(
   lat: number,
   lng: number,
   signal?: AbortSignal,
@@ -44,7 +47,7 @@ export async function fetchSevenDayDailyForecast(
   const url = new URL("https://api.open-meteo.com/v1/forecast");
   url.searchParams.set("latitude", String(lat));
   url.searchParams.set("longitude", String(lng));
-  url.searchParams.set("forecast_days", "7");
+  url.searchParams.set("forecast_days", String(HOME_DAILY_FORECAST_DAYS));
   url.searchParams.set("wind_speed_unit", "mph");
   url.searchParams.set("temperature_unit", "celsius");
   url.searchParams.set("timezone", "auto");
@@ -101,7 +104,10 @@ export async function fetchSevenDayDailyForecast(
   });
 }
 
-/** @deprecated use fetchSevenDayDailyForecast — kept for any external imports */
+/** @deprecated use fetchDailyForecast */
+export const fetchSevenDayDailyForecast = fetchDailyForecast;
+
+/** @deprecated use fetchDailyForecast — kept for any external imports */
 export type DailyWindMax = { date: string; maxMph: number };
 
 export async function fetchSevenDayMaxWindMph(
@@ -109,6 +115,6 @@ export async function fetchSevenDayMaxWindMph(
   lng: number,
   signal?: AbortSignal,
 ): Promise<DailyWindMax[]> {
-  const rows = await fetchSevenDayDailyForecast(lat, lng, signal);
+  const rows = await fetchDailyForecast(lat, lng, signal);
   return rows.map((r) => ({ date: r.date, maxMph: r.maxMph }));
 }
