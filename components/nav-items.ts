@@ -1,8 +1,15 @@
-export const NAV_ITEMS: readonly { href: string; label: string; short: string; sub?: string }[] = [
+export const NAV_ITEMS: readonly {
+  href: string;
+  label: string;
+  short: string;
+  sub?: string;
+  /** Treat these paths as this tab active (e.g. sale sub-routes). */
+  alsoActiveFor?: readonly string[];
+}[] = [
   { href: "/", label: "Home", short: "Home" },
   { href: "/ifm", label: "IFM", short: "IFM", sub: "International Friends Map" },
+  { href: "/messaging", label: "Messages", short: "Messages", sub: "Broadcasts & vicinity chat" },
   { href: "/local-map", label: "Weather & sea", short: "Weather", sub: "Weather & sea" },
-  { href: "/gear", label: "Boat gear", short: "Gear", sub: "Buy & sell kit" },
-  { href: "/vessels", label: "Vessels for sale", short: "Vessels", sub: "For sale" },
+  { href: "/for-sale", label: "For sale", short: "For sale", sub: "Boats & gear", alsoActiveFor: ["/vessels", "/gear"] },
 ];
 

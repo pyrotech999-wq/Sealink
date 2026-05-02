@@ -55,6 +55,9 @@ export async function POST(req: Request) {
 
   const mobBody = `🆘 MAN OVERBOARD — assistance requested
 
+Sender location when this alert was sent (WGS84, decimal degrees):
+Latitude: ${coords.lat.toFixed(6)}
+Longitude: ${coords.lng.toFixed(6)}
 Position (decimal): ${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}
 Open map: ${mapsUrl}
 

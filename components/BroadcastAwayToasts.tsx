@@ -33,7 +33,7 @@ export function BroadcastAwayToasts() {
 
   useEffect(() => {
     if (!toast) return;
-    if (pathname === "/" || pathname === "") return;
+    if (pathname === "/" || pathname === "" || pathname === "/messaging") return;
 
     const tick = () => {
       const geo = getLastKnownPosition();

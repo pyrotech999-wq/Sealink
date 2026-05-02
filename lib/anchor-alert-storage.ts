@@ -1,8 +1,14 @@
+/** Allowed geofence radii (metres). */
+export const ANCHOR_RADIUS_METRES_OPTIONS = [10, 20, 40, 50, 100, 150, 200] as const;
+export type AnchorRadiusM = (typeof ANCHOR_RADIUS_METRES_OPTIONS)[number];
+
+const ALLOWED_RADIUS = new Set<number>(ANCHOR_RADIUS_METRES_OPTIONS);
+
 export type AnchorAlertConfig = {
   armed: boolean;
   lat: number | null;
   lng: number | null;
-  radiusM: 10 | 20 | 40 | 50;
+  radiusM: AnchorRadiusM;
   /** Allowed bearing change (0..360). 360 = off. */
   angleDeg: number;
   monitorDeviceId: string; // "this" or a registered device id
@@ -24,6 +30,12 @@ const DEFAULTS: AnchorAlertConfig = {
   lastAlertAt: null,
 };
 
+export function parseAnchorRadiusM(value: unknown): AnchorRadiusM {
+  const n = typeof value === "number" && Number.isFinite(value) ? Math.round(value) : Number.NaN;
+  if (ALLOWED_RADIUS.has(n)) return n as AnchorRadiusM;
+  return DEFAULTS.radiusM;
+}
+
 export function getAnchorAlertConfig(): AnchorAlertConfig {
   if (typeof window === "undefined") return DEFAULTS;
   try {
@@ -31,10 +43,7 @@ export function getAnchorAlertConfig(): AnchorAlertConfig {
     if (!raw) return DEFAULTS;
     const parsed = JSON.parse(raw) as Partial<AnchorAlertConfig> | null;
     if (!parsed || typeof parsed !== "object") return DEFAULTS;
-    const radiusPick = typeof parsed.radiusM === "number" ? Math.round(parsed.radiusM) : DEFAULTS.radiusM;
-    const radiusM = (radiusPick === 10 || radiusPick === 20 || radiusPick === 40 || radiusPick === 50
-      ? radiusPick
-      : DEFAULTS.radiusM) as AnchorAlertConfig["radiusM"];
+    const radiusM = parseAnchorRadiusM(parsed.radiusM);
     const angleRaw = typeof parsed.angleDeg === "number" && Number.isFinite(parsed.angleDeg) ? Math.round(parsed.angleDeg) : DEFAULTS.angleDeg;
     const angleDeg = Math.max(0, Math.min(360, angleRaw));
     return {

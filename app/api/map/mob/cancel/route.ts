@@ -59,6 +59,9 @@ export async function POST(req: Request) {
 
 This cancels a man overboard alert from this vessel. Person secure — emergency no longer active.
 
+Sender location when this message was sent (WGS84, decimal degrees):
+Latitude: ${coords.lat.toFixed(6)}
+Longitude: ${coords.lng.toFixed(6)}
 Position (decimal): ${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}
 Open map: ${mapsUrl}
 

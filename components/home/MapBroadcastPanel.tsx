@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useBroadcastToast } from "@/components/BroadcastToastProvider";
 import { VicinityChatDrawer } from "@/components/home/VicinityChatDrawer";
@@ -130,6 +131,8 @@ type Props = {
   canSend: boolean;
   sendLat: number | null;
   sendLng: number | null;
+  /** `messaging`: larger type for broadcast + inbox (Messaging page). */
+  layout?: "map" | "messaging";
 };
 
 export function MapBroadcastPanel({
@@ -140,7 +143,9 @@ export function MapBroadcastPanel({
   canSend,
   sendLat,
   sendLng,
+  layout = "map",
 }: Props) {
+  const L = layout === "messaging";
   const toast = useBroadcastToast();
   const [messages, setMessages] = useState<BroadcastMsg[]>([]);
   const [draft, setDraft] = useState("");
@@ -158,11 +163,20 @@ export function MapBroadcastPanel({
   );
 
   const coordsRef = useRef({ readLat, readLng });
-  coordsRef.current = { readLat, readLng };
   const toastRef = useRef(toast);
-  toastRef.current = toast;
   const soundOnRef = useRef(soundOn);
-  soundOnRef.current = soundOn;
+
+  useEffect(() => {
+    coordsRef.current = { readLat, readLng };
+  }, [readLat, readLng]);
+
+  useEffect(() => {
+    toastRef.current = toast;
+  }, [toast]);
+
+  useEffect(() => {
+    soundOnRef.current = soundOn;
+  }, [soundOn]);
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent === true;
@@ -265,8 +279,8 @@ export function MapBroadcastPanel({
 
   useEffect(() => {
     if (!signedIn) return;
-    void fetchInbox();
-    const id = window.setInterval(() => void fetchInbox(), 55_000);
+    queueMicrotask(() => void fetchInbox());
+    const id = window.setInterval(() => queueMicrotask(() => void fetchInbox()), 55_000);
     return () => window.clearInterval(id);
   }, [signedIn, fetchInbox]);
 
@@ -392,12 +406,26 @@ export function MapBroadcastPanel({
     });
 
   return (
-    <section className="rounded-xl border border-indigo-200/80 bg-indigo-50/40 p-4 dark:border-indigo-900/50 dark:bg-indigo-950/25">
-      <h3 className="text-lg font-semibold tracking-tight text-indigo-950 dark:text-indigo-100">
+    <section
+      className={`rounded-xl border border-indigo-200/80 bg-indigo-50/40 p-4 dark:border-indigo-900/50 dark:bg-indigo-950/25 ${
+        L ? "mx-auto max-w-4xl p-5 sm:p-6" : ""
+      }`}
+    >
+      <h3
+        className={
+          L
+            ? "text-3xl font-bold tracking-tight text-indigo-950 sm:text-4xl dark:text-indigo-100"
+            : "text-lg font-semibold tracking-tight text-indigo-950 dark:text-indigo-100"
+        }
+      >
         Area broadcasts (~5 mi)
       </h3>
 
-      <label className="mt-2 inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-indigo-900 dark:text-indigo-200">
+      <label
+        className={`mt-2 inline-flex cursor-pointer items-center gap-2 font-medium text-indigo-900 dark:text-indigo-200 ${
+          L ? "text-xl" : "text-sm"
+        }`}
+      >
         <input
           type="checkbox"
           checked={soundOn}
@@ -413,17 +441,25 @@ export function MapBroadcastPanel({
       </label>
 
       {err ? (
-        <p className="mt-2 rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+        <p
+          className={`mt-2 rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 ${
+            L ? "px-3 py-2 text-xl" : "text-sm"
+          }`}
+        >
           {err}
         </p>
       ) : null}
 
       <div className="mt-3 overflow-hidden rounded-lg border border-indigo-200/60 bg-white/90 dark:border-indigo-900/40 dark:bg-zinc-950/60">
-        <div className="max-h-[11rem] min-h-[4.5rem] space-y-2 overflow-y-auto scroll-smooth p-2 sm:max-h-[12rem]">
+        <div
+          className={`min-h-[4.5rem] space-y-2 overflow-y-auto scroll-smooth p-2 ${
+            L ? "max-h-[min(55vh,28rem)] sm:max-h-[min(60vh,32rem)]" : "max-h-[11rem] sm:max-h-[12rem]"
+          }`}
+        >
         {loading ? (
-          <p className="px-2 py-3 text-sm text-indigo-700 dark:text-indigo-300">Loading…</p>
+          <p className={`px-2 py-3 text-indigo-700 dark:text-indigo-300 ${L ? "text-xl" : "text-sm"}`}>Loading…</p>
         ) : visibleMessages.length === 0 ? (
-          <p className="px-2 py-3 text-sm text-indigo-800/80 dark:text-indigo-200/80">
+          <p className={`px-2 py-3 text-indigo-800/80 dark:text-indigo-200/80 ${L ? "text-xl" : "text-sm"}`}>
             {messages.length === 0
               ? "No broadcasts in this area yet."
               : "No messages shown — hidden on this device. Others may still see them."}
@@ -437,7 +473,7 @@ export function MapBroadcastPanel({
             return (
               <article
                 key={m.id}
-                className={`rounded-md border px-2.5 py-2 text-base dark:bg-zinc-900/80 ${
+                className={`rounded-md border px-2.5 py-2 dark:bg-zinc-900/80 ${L ? "px-3 py-3" : "text-base"} ${
                   m.isMob
                     ? "border-red-400/90 bg-red-50/90 dark:border-red-800/70 dark:bg-red-950/35"
                     : allClear
@@ -446,25 +482,35 @@ export function MapBroadcastPanel({
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <p className="text-xs font-medium text-indigo-600 dark:text-indigo-400">
+                  <p
+                    className={`font-medium text-indigo-600 dark:text-indigo-400 ${L ? "text-lg leading-snug" : "text-xs"}`}
+                  >
                     {fmtTime(m.createdAt)}
                     {m.isMob ? (
-                      <span className="ml-2 rounded bg-red-600 px-1 py-0.5 font-bold text-white dark:bg-red-700">
+                      <span
+                        className={`ml-2 rounded bg-red-600 font-bold text-white dark:bg-red-700 ${L ? "px-2 py-1 text-base" : "px-1 py-0.5"}`}
+                      >
                         MOB
                       </span>
                     ) : null}
                     {allClear ? (
-                      <span className="ml-2 rounded bg-emerald-700 px-1 py-0.5 font-bold text-white dark:bg-emerald-800">
+                      <span
+                        className={`ml-2 rounded bg-emerald-700 font-bold text-white dark:bg-emerald-800 ${L ? "px-2 py-1 text-base" : "px-1 py-0.5"}`}
+                      >
                         All clear
                       </span>
                     ) : null}
                     {m.isGlobal ? (
-                      <span className="ml-2 rounded bg-amber-100 px-1 py-0.5 text-amber-950 dark:bg-amber-900/50 dark:text-amber-100">
+                      <span
+                        className={`ml-2 rounded bg-amber-100 text-amber-950 dark:bg-amber-900/50 dark:text-amber-100 ${L ? "px-2 py-1 text-base" : "px-1 py-0.5"}`}
+                      >
                         All areas
                       </span>
                     ) : null}
                     {m.isMine ? (
-                      <span className="ml-2 rounded bg-indigo-100 px-1 py-0.5 text-indigo-900 dark:bg-indigo-900/60 dark:text-indigo-100">
+                      <span
+                        className={`ml-2 rounded bg-indigo-100 text-indigo-900 dark:bg-indigo-900/60 dark:text-indigo-100 ${L ? "px-2 py-1 text-base" : "px-1 py-0.5"}`}
+                      >
                         You
                       </span>
                     ) : null}
@@ -477,7 +523,9 @@ export function MapBroadcastPanel({
                           setChatContext(m.body.trim().split(/\r?\n/)[0]?.slice(0, 120) ?? "");
                           setChatPeerUid(m.authorUid);
                         }}
-                        className="rounded-md border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-900 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-100 dark:hover:bg-indigo-900/40"
+                        className={`rounded-md border border-indigo-200 bg-indigo-50 font-semibold text-indigo-900 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-100 dark:hover:bg-indigo-900/40 ${
+                          L ? "px-3 py-2 text-lg" : "px-2 py-0.5 text-xs"
+                        }`}
                       >
                         Reply
                       </button>
@@ -489,7 +537,9 @@ export function MapBroadcastPanel({
                           onHideOnDevice(m.id);
                         }
                       }}
-                      className="rounded-md border border-zinc-300 bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-800 hover:bg-zinc-200 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
+                      className={`rounded-md border border-zinc-300 bg-zinc-100 font-semibold text-zinc-800 hover:bg-zinc-200 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700 ${
+                        L ? "px-3 py-2 text-lg" : "px-2 py-0.5 text-xs"
+                      }`}
                     >
                       Hide
                     </button>
@@ -497,7 +547,9 @@ export function MapBroadcastPanel({
                       <button
                         type="button"
                         onClick={() => void onAdminDelete(m)}
-                        className="rounded-md border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-800 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950/55"
+                        className={`rounded-md border border-red-200 bg-red-50 font-semibold text-red-800 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950/55 ${
+                          L ? "px-3 py-2 text-lg" : "px-2 py-0.5 text-xs"
+                        }`}
                       >
                         Admin delete
                       </button>
@@ -509,12 +561,18 @@ export function MapBroadcastPanel({
                     href={mobMapHref}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="mt-2 inline-flex w-full items-center justify-center rounded-lg bg-sky-600 py-2 text-center text-sm font-bold text-white hover:bg-sky-500 sm:text-base"
+                    className={`mt-2 inline-flex w-full items-center justify-center rounded-lg bg-sky-600 py-2 text-center font-bold text-white hover:bg-sky-500 ${
+                      L ? "py-3 text-2xl" : "text-sm sm:text-base"
+                    }`}
                   >
                     Open sender position on map
                   </a>
                 ) : null}
-                <div className="mt-1 whitespace-pre-wrap leading-snug text-zinc-800 dark:text-zinc-200">
+                <div
+                  className={`mt-1 whitespace-pre-wrap leading-snug text-zinc-800 dark:text-zinc-200 ${
+                    L ? "text-3xl leading-snug sm:text-4xl" : ""
+                  }`}
+                >
                   <LinkifiedPlainText text={m.body} />
                 </div>
               </article>
@@ -526,18 +584,20 @@ export function MapBroadcastPanel({
 
       {signedIn ? (
         <div className="mt-4 rounded-lg border border-indigo-200/50 bg-white/50 p-3 dark:border-indigo-900/40 dark:bg-zinc-950/50">
-          <h4 className="text-sm font-semibold text-indigo-950 dark:text-indigo-100">
+          <h4 className={`font-semibold text-indigo-950 dark:text-indigo-100 ${L ? "text-2xl" : "text-sm"}`}>
             Vicinity replies (direct messages)
           </h4>
-          <p className="mt-1 text-xs leading-snug text-indigo-900/75 dark:text-indigo-200/80">
+          <p
+            className={`mt-1 leading-snug text-indigo-900/75 dark:text-indigo-200/80 ${L ? "text-lg" : "text-xs"}`}
+          >
             <strong className="font-semibold">Seen</strong> closes the chat but keeps all messages;{" "}
             <strong className="font-semibold">tap this row</strong> (preview) to reopen.{" "}
             <strong className="font-semibold">Delete</strong> removes the whole thread for both people.
           </p>
           {inboxRows.length === 0 ? (
-            <p className="mt-2 text-xs text-indigo-800/60 dark:text-indigo-300/70">No DM threads yet.</p>
+            <p className={`mt-2 text-indigo-800/60 dark:text-indigo-300/70 ${L ? "text-lg" : "text-xs"}`}>No DM threads yet.</p>
           ) : (
-            <ul className="mt-2 max-h-40 space-y-1.5 overflow-y-auto">
+            <ul className={`mt-2 space-y-1.5 overflow-y-auto ${L ? "max-h-72" : "max-h-40"}`}>
               {inboxRows.map((row) => (
                 <li key={row.threadId} className="flex gap-1.5">
                   <button
@@ -547,9 +607,13 @@ export function MapBroadcastPanel({
                       setChatContext(row.lastBody.trim().split(/\r?\n/)[0]?.slice(0, 120));
                       setChatPeerUid(row.peerUid);
                     }}
-                    className="flex min-w-0 flex-1 flex-col rounded-md border border-indigo-100 bg-white px-2 py-2 text-left text-sm hover:bg-indigo-50/80 dark:border-indigo-900/35 dark:bg-zinc-900/70 dark:hover:bg-zinc-900"
+                    className={`flex min-w-0 flex-1 flex-col rounded-md border border-indigo-100 bg-white px-2 py-2 text-left hover:bg-indigo-50/80 dark:border-indigo-900/35 dark:bg-zinc-900/70 dark:hover:bg-zinc-900 ${
+                      L ? "px-3 py-3" : "text-sm"
+                    }`}
                   >
-                    <span className="font-mono text-xs text-indigo-700/80 dark:text-indigo-300/90">
+                    <span
+                      className={`font-mono text-indigo-700/80 dark:text-indigo-300/90 ${L ? "text-lg" : "text-xs"}`}
+                    >
                       {row.peerUid.length > 14 ? `${row.peerUid.slice(0, 14)}…` : row.peerUid}
                       {row.lastIsMine ? (
                         <span className="ml-2 font-sans font-normal text-zinc-500 dark:text-zinc-400">· You last</span>
@@ -557,14 +621,22 @@ export function MapBroadcastPanel({
                         <span className="ml-2 font-sans font-semibold text-amber-700 dark:text-amber-400">· Awaiting you</span>
                       )}
                     </span>
-                    <span className="mt-0.5 line-clamp-2 text-zinc-800 dark:text-zinc-200">{row.lastBody}</span>
-                    <span className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{fmtTime(row.lastAt)}</span>
+                    <span
+                      className={`mt-0.5 line-clamp-2 text-zinc-800 dark:text-zinc-200 ${L ? "text-2xl leading-snug sm:text-3xl" : ""}`}
+                    >
+                      {row.lastBody}
+                    </span>
+                    <span className={`mt-0.5 text-zinc-500 dark:text-zinc-400 ${L ? "text-lg" : "text-xs"}`}>
+                      {fmtTime(row.lastAt)}
+                    </span>
                   </button>
                   <button
                     type="button"
                     disabled={deletingThreadId === row.threadId}
                     onClick={(e) => void onDeleteDmThread(row, e)}
-                    className="shrink-0 self-stretch rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs font-semibold text-red-800 hover:bg-red-100 disabled:opacity-50 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950/55"
+                    className={`shrink-0 self-stretch rounded-md border border-red-200 bg-red-50 font-semibold text-red-800 hover:bg-red-100 disabled:opacity-50 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950/55 ${
+                      L ? "px-3 py-2 text-lg" : "px-2 py-1 text-xs"
+                    }`}
                   >
                     {deletingThreadId === row.threadId ? "…" : "Delete"}
                   </button>
@@ -578,7 +650,11 @@ export function MapBroadcastPanel({
       {canSend && sendLat != null && sendLng != null ? (
         <form onSubmit={(e) => void onSend(e)} className="mt-3 space-y-2">
           {canSendGlobalBroadcast ? (
-            <label className="flex cursor-pointer items-start gap-2 text-sm font-medium text-indigo-900 dark:text-indigo-200">
+            <label
+              className={`flex cursor-pointer items-start gap-2 font-medium text-indigo-900 dark:text-indigo-200 ${
+                L ? "text-xl" : "text-sm"
+              }`}
+            >
               <input
                 type="checkbox"
                 checked={broadcastAllAreas}
@@ -590,28 +666,41 @@ export function MapBroadcastPanel({
               </span>
             </label>
           ) : null}
-          <label className="block text-sm font-medium text-indigo-900 dark:text-indigo-200">
+          <label
+            className={`block font-medium text-indigo-900 dark:text-indigo-200 ${L ? "text-xl" : "text-sm"}`}
+          >
             {broadcastAllAreas && canSendGlobalBroadcast ? "Broadcast (all areas)" : "Broadcast to ~5 mi"}
             <textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              rows={3}
+              rows={L ? 4 : 3}
               maxLength={500}
               placeholder="Short heads-up for nearby boaters…"
-              className="mt-1 w-full rounded-lg border border-indigo-200 bg-white px-2 py-1.5 text-base text-zinc-900 outline-none focus:border-indigo-500 dark:border-indigo-800 dark:bg-zinc-950 dark:text-zinc-50"
+              className={`mt-1 w-full rounded-lg border border-indigo-200 bg-white px-2 py-1.5 text-zinc-900 outline-none focus:border-indigo-500 dark:border-indigo-800 dark:bg-zinc-950 dark:text-zinc-50 ${
+                L ? "py-3 text-2xl sm:text-3xl" : "text-base"
+              }`}
             />
           </label>
           <button
             type="submit"
             disabled={posting || !draft.trim()}
-            className="h-9 rounded-lg bg-indigo-700 px-3 text-base font-semibold text-white hover:bg-indigo-800 disabled:opacity-50 dark:bg-indigo-600 dark:hover:bg-indigo-500"
+            className={`rounded-lg bg-indigo-700 px-3 font-semibold text-white hover:bg-indigo-800 disabled:opacity-50 dark:bg-indigo-600 dark:hover:bg-indigo-500 ${
+              L ? "h-12 text-xl" : "h-9 text-base"
+            }`}
           >
             {posting ? "Sending…" : broadcastAllAreas && canSendGlobalBroadcast ? "Send to all areas" : "Send broadcast"}
           </button>
         </form>
       ) : (
-        <p className="mt-3 text-sm text-indigo-900/85 dark:text-indigo-200/80">
-          Turn on <strong>Share my location on this map</strong> to send a broadcast from your current position.
+        <p className={`mt-3 text-indigo-900/85 dark:text-indigo-200/80 ${L ? "text-xl leading-relaxed" : "text-sm"}`}>
+          Turn on <strong>Share my location on this map</strong> on the{" "}
+          <Link
+            href="/"
+            className="font-semibold text-green-800 underline underline-offset-2 hover:text-green-700 dark:text-green-400"
+          >
+            home map
+          </Link>{" "}
+          to send a broadcast from your current position.
         </p>
       )}
 
@@ -620,6 +709,7 @@ export function MapBroadcastPanel({
           open
           peerUid={chatPeerUid}
           contextLine={chatContext}
+          textScale={L ? "readable" : "default"}
           onClose={() => {
             setChatPeerUid(null);
             setChatContext(undefined);

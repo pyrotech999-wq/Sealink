@@ -1,10 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ANCHOR_MAX_HORIZ_ACCURACY_M, type AnchorGpsQuality } from "@/lib/anchor-gps-stabilizer";
 import { GPS_REFINE_TARGET_ACCURACY_M } from "@/lib/gps-refinement";
 import { isLikelyAndroid, openAndroidLocationAppDetailsSettings } from "@/lib/location-env";
 import { getDeviceName, setDeviceName } from "@/lib/device-id";
+import {
+  ANCHOR_RADIUS_METRES_OPTIONS,
+  type AnchorRadiusM,
+  parseAnchorRadiusM,
+} from "@/lib/anchor-alert-storage";
 
 async function registerSessionDevice(currentDeviceId: string): Promise<void> {
   if (!currentDeviceId || currentDeviceId === "server") return;
@@ -37,7 +43,7 @@ type Props = {
     armed: boolean;
     lat: number | null;
     lng: number | null;
-    radiusM: 10 | 20 | 40 | 50;
+    radiusM: AnchorRadiusM;
     angleDeg: number;
     monitorDeviceId: string;
   };
@@ -49,7 +55,7 @@ type Props = {
     armed: boolean;
     lat: number | null;
     lng: number | null;
-    radiusM: 10 | 20 | 40 | 50;
+    radiusM: AnchorRadiusM;
     angleDeg: number;
     monitorDeviceId: string;
   }) => void;
@@ -82,6 +88,10 @@ export function AnchorAlertModal({
   const [monitorDeviceId, setMonitorDeviceId] = useState<string>(config.monitorDeviceId || "this");
   const [alertMode, setAlertMode] = useState<"this" | "other" | "both">("both");
   const [alertOtherId, setAlertOtherId] = useState<string>("");
+  const [androidSettingsDidntOpen, setAndroidSettingsDidntOpen] = useState(false);
+  const openRef = useRef(open);
+  const androidSettingsTimerRef = useRef<number | null>(null);
+  const androidNavCleanupRef = useRef<(() => void) | null>(null);
 
   const acc = horizontalAccuracyM;
   const accuracyOkForArm =
@@ -147,6 +157,21 @@ export function AnchorAlertModal({
   }, [open, monitor?.alertDeviceIds, deviceId]);
 
   useEffect(() => {
+    openRef.current = open;
+  }, [open]);
+
+  useEffect(() => {
+    if (open) return;
+    if (androidSettingsTimerRef.current != null) {
+      window.clearTimeout(androidSettingsTimerRef.current);
+      androidSettingsTimerRef.current = null;
+    }
+    androidNavCleanupRef.current?.();
+    androidNavCleanupRef.current = null;
+    queueMicrotask(() => setAndroidSettingsDidntOpen(false));
+  }, [open]);
+
+  useEffect(() => {
     if (!open) return;
     const deg = config.angleDeg ?? ANGLE_OFF;
     const on = deg < ANGLE_OFF;
@@ -155,6 +180,16 @@ export function AnchorAlertModal({
       setAngleDeg(String(on ? deg : ANGLE_DEFAULT_ON));
     });
   }, [open, config.angleDeg]);
+
+  useEffect(() => {
+    if (!open) return;
+    queueMicrotask(() => setMonitorDeviceId(config.monitorDeviceId || "this"));
+  }, [open, config.monitorDeviceId]);
+
+  useEffect(() => {
+    if (!open) return;
+    queueMicrotask(() => setRadius(String(config.radiusM)));
+  }, [open, config.radiusM]);
 
   if (!open) return null;
 
@@ -207,17 +242,72 @@ export function AnchorAlertModal({
               anchor rings need a tight GPS fix; if location is blurred for privacy, alerts can misfire.
             </p>
             <p className="mt-2 text-[11px] leading-snug opacity-90">
-              Android does not let websites turn precise location on automatically — only you can, in Settings. The button
-              below tries to open the right app so you can set Location / accuracy there (works on many devices; if nothing
-              opens, use Settings → Apps → your browser or SeaLink → Permissions → Location).
+              Android does not let websites turn precise location on automatically — only you can, in Settings. Use{" "}
+              <strong className="font-semibold">Settings → Apps → your browser or SeaLink → Permissions → Location</strong>
+              .
             </p>
             <button
               type="button"
-              onClick={() => openAndroidLocationAppDetailsSettings()}
+              onClick={() => {
+                setAndroidSettingsDidntOpen(false);
+                if (androidSettingsTimerRef.current != null) {
+                  window.clearTimeout(androidSettingsTimerRef.current);
+                  androidSettingsTimerRef.current = null;
+                }
+                androidNavCleanupRef.current?.();
+                androidNavCleanupRef.current = null;
+
+                let navigatedAway = false;
+                const markAway = () => {
+                  if (document.visibilityState === "hidden") navigatedAway = true;
+                };
+                const onPageHide = () => {
+                  navigatedAway = true;
+                };
+                document.addEventListener("visibilitychange", markAway);
+                window.addEventListener("pagehide", onPageHide);
+                const cleanupListeners = () => {
+                  document.removeEventListener("visibilitychange", markAway);
+                  window.removeEventListener("pagehide", onPageHide);
+                };
+                androidNavCleanupRef.current = cleanupListeners;
+
+                openAndroidLocationAppDetailsSettings();
+
+                androidSettingsTimerRef.current = window.setTimeout(() => {
+                  androidSettingsTimerRef.current = null;
+                  cleanupListeners();
+                  androidNavCleanupRef.current = null;
+                  if (!navigatedAway && openRef.current) setAndroidSettingsDidntOpen(true);
+                }, 2000);
+              }}
               className="mt-2 inline-flex h-9 w-full items-center justify-center rounded-lg border border-sky-300 bg-white px-3 text-sm font-semibold text-sky-950 hover:bg-sky-100 dark:border-sky-700 dark:bg-sky-900/50 dark:text-sky-50 dark:hover:bg-sky-800/80 sm:w-auto"
             >
               Open in Android settings
             </button>
+            {androidSettingsDidntOpen ? (
+              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 dark:border-amber-900/50 dark:bg-amber-950/35">
+                <p className="text-[11px] leading-snug text-amber-950 dark:text-amber-100">
+                  Settings may not have opened. Use the path above, or open the full guide in Help (same steps as on this
+                  page).
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <Link
+                    href="/help#anchor-android-location"
+                    className="inline-flex h-9 items-center justify-center rounded-lg bg-amber-800 px-3 text-xs font-semibold text-white hover:bg-amber-900 dark:bg-amber-700 dark:hover:bg-amber-600"
+                  >
+                    Android location in Help
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => setAndroidSettingsDidntOpen(false)}
+                    className="inline-flex h-9 items-center justify-center rounded-lg border border-amber-300 bg-white px-3 text-xs font-semibold text-amber-950 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-900/60 dark:text-amber-50 dark:hover:bg-amber-800/80"
+                  >
+                    Close message
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -346,14 +436,15 @@ export function AnchorAlertModal({
               onChange={(e) => {
                 const v = e.target.value;
                 setRadius(v);
-                onUpdate({ ...config, radiusM: Number(v) as 10 | 20 | 40 | 50, monitorDeviceId });
+                onUpdate({ ...config, radiusM: parseAnchorRadiusM(Number(v)), monitorDeviceId });
               }}
               className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
             >
-              <option value="10">10m</option>
-              <option value="20">20m</option>
-              <option value="40">40m</option>
-              <option value="50">50m</option>
+              {ANCHOR_RADIUS_METRES_OPTIONS.map((m) => (
+                <option key={m} value={String(m)}>
+                  {m}m
+                </option>
+              ))}
             </select>
             <span className="mt-1 block text-[11px] text-zinc-500">
               Monitored position must stay inside this circle around the anchor (geofence), or an alert fires.
@@ -419,7 +510,7 @@ export function AnchorAlertModal({
               type="button"
               disabled={!canSet}
               onClick={() => {
-                const n = (Number(radius) as 10 | 20 | 40 | 50) || config.radiusM;
+                const n = parseAnchorRadiusM(Number(radius));
                 const a = angleEnabled
                   ? Math.max(0, Math.min(359, Math.round(Number(angleDeg) || ANGLE_DEFAULT_ON)))
                   : ANGLE_OFF;
@@ -450,9 +541,12 @@ export function AnchorAlertModal({
             </button>
             <button
               type="button"
-              disabled={!hasAnchor}
-              onClick={() => onUpdate({ ...config, armed: false, monitorDeviceId })}
-              className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              disabled={!config.armed}
+              onClick={() => {
+                onUpdate({ ...config, armed: false });
+                onClose();
+              }}
+              className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
             >
               Disarm
             </button>

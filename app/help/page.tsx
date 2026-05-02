@@ -4,7 +4,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Help | SeaLink",
   description:
-    "How to use SeaLink: home map, sharing, weather, IFM, gear, vessels, marinas, anchor watch, broadcasts, and more.",
+    "How to use SeaLink: home map, sharing, weather, IFM, for sale (boats & gear), marinas, anchor watch, broadcasts, and more.",
 };
 
 const DEV_EMAIL = "pyrotech999@hotmail.co.uk";
@@ -26,9 +26,10 @@ const toc: { id: string; label: string }[] = [
   { id: "profile", label: "Profile & pin" },
   { id: "weather", label: "Weather & sea" },
   { id: "ifm", label: "IFM (friends map)" },
-  { id: "marketplace", label: "Gear, vessels & marinas" },
+  { id: "marketplace", label: "For sale, gear & marinas" },
   { id: "broadcasts", label: "Broadcasts & chat" },
   { id: "anchor", label: "Anchor watch" },
+  { id: "anchor-android-location", label: "Android location (anchor)" },
   { id: "sea-summary", label: "Sea state on Home" },
   { id: "mob", label: "Man overboard (MOB)" },
   { id: "plans", label: "Plans & payment" },
@@ -130,7 +131,7 @@ export default function HelpPage() {
                   Sign in
                 </Link>{" "}
                 if you already have one. Use the <strong className="text-zinc-200">top navigation bar</strong> (Home, IFM,
-                Weather, Gear, Vessels) on every screen size — it stays visible while you scroll.
+                Weather, Messages, For sale) on every screen size — it stays visible while you scroll.
               </p>
               <ul className="list-disc space-y-1 pl-5 text-zinc-400">
                 <li>
@@ -144,7 +145,7 @@ export default function HelpPage() {
                   <strong className="text-zinc-300">IFM</strong> — International Friends Map for seeing other users.
                 </li>
                 <li>
-                  <strong className="text-zinc-300">Gear / Vessels</strong> — classifieds (kit vs whole boats).
+                  <strong className="text-zinc-300">For sale</strong> — hub for boat gear and boats for sale.
                 </li>
               </ul>
               <p className="rounded-lg border border-emerald-900/40 bg-emerald-950/30 px-3 py-2 text-xs leading-5 text-emerald-100/90">
@@ -157,7 +158,8 @@ export default function HelpPage() {
             <Section id="navigation" title="Finding your way around">
               <p>
                 <strong className="text-zinc-200">Top navigation</strong> (desktop / tablet): quick jumps to Home, IFM,
-                Weather &amp; sea, Boat gear, and Vessels for sale. The active page is highlighted in green.
+                Weather &amp; sea, Messages, and For sale (then choose boats or gear). The active page is highlighted in
+                green.
               </p>
               <p>
                 <strong className="text-zinc-200">Home header</strong> (black bar on Home): Plans, Admin (if you are an
@@ -330,21 +332,31 @@ export default function HelpPage() {
               </p>
             </Section>
 
-            <Section id="marketplace" title="Boat gear, vessels &amp; marinas">
+            <Section id="marketplace" title="For sale, boat gear &amp; marinas">
               <p>
-                <strong className="text-zinc-200">Boat gear</strong> (
-                <Link href="/gear" className="font-medium text-emerald-400 hover:underline">
-                  /gear
-                </Link>
-                ): member listings for chandlery, kit, and spares — not whole boats. Search and filter by category; your
-                posts can be extended or marked sold according to the on-screen rules.
-              </p>
-              <p>
-                <strong className="text-zinc-200">Vessels for sale</strong> (
+                Start from{" "}
+                <Link href="/for-sale" className="font-medium text-emerald-400 hover:underline">
+                  For sale
+                </Link>{" "}
+                (<span className="font-mono text-zinc-400">/for-sale</span>) to open either{" "}
+                <strong className="text-zinc-200">boats for sale</strong> (
                 <Link href="/vessels" className="font-medium text-emerald-400 hover:underline">
                   /vessels
                 </Link>
-                ): paid or featured classifieds flow for boats — follow prompts for posting, payment, and renewals.
+                ) or <strong className="text-zinc-200">boat gear</strong> (
+                <Link href="/gear" className="font-medium text-emerald-400 hover:underline">
+                  /gear
+                </Link>
+                ).
+              </p>
+              <p>
+                <strong className="text-zinc-200">Boat gear</strong>: member listings for chandlery, kit, and spares — not
+                whole boats. Search and filter by category; your posts can be extended or marked sold according to the
+                on-screen rules.
+              </p>
+              <p>
+                <strong className="text-zinc-200">Boats for sale</strong>: paid classifieds for boats — follow prompts for
+                posting, payment, and renewals.
               </p>
               <p>
                 <strong className="text-zinc-200">Marina berths</strong> (
@@ -356,7 +368,7 @@ export default function HelpPage() {
               </p>
               <p className="rounded-lg border border-zinc-700/80 bg-zinc-950/60 px-3 py-2 text-xs text-zinc-400">
                 <strong className="text-zinc-300">Hint:</strong> Treat all listings as &quot;caveat emptor&quot; — meet
-                sellers safely, inspect gear, and verify documentation for vessels independently.
+                sellers safely, inspect gear, and verify documentation for boats independently.
               </p>
             </Section>
 
@@ -387,6 +399,24 @@ export default function HelpPage() {
               </ul>
               <p className="rounded-lg border border-amber-900/40 bg-amber-950/25 px-3 py-2 text-xs leading-5 text-amber-100/90">
                 Anchor alerts depend on phone GPS and internet. Never rely on them as your only drag alarm.
+              </p>
+            </Section>
+
+            <Section id="anchor-android-location" title="Android: location for anchor watch">
+              <p>
+                <strong className="text-zinc-200">Android:</strong> In system settings, allow{" "}
+                <strong className="text-zinc-200">precise</strong> (high-accuracy) location for SeaLink or your browser.
+                Small anchor rings need a tight GPS fix; if location is blurred for privacy, alerts can misfire.
+              </p>
+              <p>
+                Android does not let websites turn precise location on automatically — only you can, in Settings. Use{" "}
+                <strong className="text-zinc-200">Settings → Apps → your browser or SeaLink → Permissions → Location</strong>
+                .
+              </p>
+              <p className="text-xs text-zinc-400">
+                In the anchor dialog, <strong className="text-zinc-300">Open in Android settings</strong> tries to jump to
+                app details for your browser or the SeaLink app. If nothing opens, use the path above — the same steps are
+                offered in the app when that button does not launch Settings.
               </p>
             </Section>
 

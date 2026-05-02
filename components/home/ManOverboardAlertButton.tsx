@@ -45,7 +45,9 @@ export function ManOverboardAlertButton({ signedIn, variant = "page" }: Props) {
       } catch {
         /* */
       }
-      setBanner("MOB alert sent to nearby boaters (within ~10 miles).");
+      setBanner(
+        `MOB alert sent to nearby boaters (within ~10 miles). Included latitude ${lat.toFixed(5)}°, longitude ${lng.toFixed(5)}° (WGS84).`,
+      );
       setConfirmOpen(false);
     } catch (e) {
       setBanner(e instanceof Error ? e.message : "Could not send alert");

@@ -3,7 +3,7 @@ import { HomeHeader } from "@/components/HomeHeader";
 import { HomeLocationMapLoader } from "@/components/home/HomeLocationMapLoader";
 import { SeaLinkBrandFooter } from "@/components/SeaLinkBrandFooter";
 import { DEMO_SESSION_COOKIE, DEMO_SESSION_VALUE } from "@/lib/demo-session";
-import { canSendGlobalAreaBroadcast, getAuthUser } from "@/lib/auth";
+import { getAuthUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +11,6 @@ export default async function MapSharingSettingsPage() {
   const jar = await cookies();
   const signedIn = jar.get(DEMO_SESSION_COOKIE)?.value === DEMO_SESSION_VALUE;
   const authUser = await getAuthUser();
-  const canSendGlobalBroadcast = authUser ? canSendGlobalAreaBroadcast(authUser.email) : false;
 
   return (
     <div className="flex flex-1 flex-col bg-black">
@@ -24,11 +23,7 @@ export default async function MapSharingSettingsPage() {
           or off. The live map is on the home page.
         </p>
 
-        <HomeLocationMapLoader
-          signedIn={signedIn}
-          canSendGlobalBroadcast={canSendGlobalBroadcast}
-          sharingUiMode="settings"
-        />
+        <HomeLocationMapLoader signedIn={signedIn} sharingUiMode="settings" />
 
         <SeaLinkBrandFooter />
       </main>

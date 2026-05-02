@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AttributionControl, Circle, MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import { LifeOnSeasDailyModal } from "@/components/home/LifeOnSeasDailyModal";
 import { AnchorAlertModal } from "@/components/home/AnchorAlertModal";
-import { MapBroadcastPanel } from "@/components/home/MapBroadcastPanel";
+import { HomeMessagesCtaButton } from "@/components/home/HomeMessagesCtaButton";
 import { WeatherForecast7Day } from "@/components/home/WeatherForecast7Day";
 import {
   markLifeOnSeasPopupShownToday,
@@ -186,11 +186,9 @@ function buildPinIcon(boat: string, avatarUrl: string, peekAvatar: boolean): L.D
 
 export default function HomeLocationMap({
   signedIn = false,
-  canSendGlobalBroadcast = false,
   sharingUiMode = "home",
 }: {
   signedIn?: boolean;
-  canSendGlobalBroadcast?: boolean;
   /** `home`: map + link to settings. `settings`: options + share toggle only (no map). */
   sharingUiMode?: "home" | "settings";
 }) {
@@ -1550,17 +1548,7 @@ export default function HomeLocationMap({
       )}
 
       {!isSettings ? (
-      <div className="mt-4">
-        <MapBroadcastPanel
-          signedIn={signedIn}
-          canSendGlobalBroadcast={canSendGlobalBroadcast}
-          readLat={pos?.lat ?? DEFAULT_MAP_CENTER.lat}
-          readLng={pos?.lng ?? DEFAULT_MAP_CENTER.lng}
-          canSend={Boolean(sharing && pos)}
-          sendLat={pos?.lat ?? null}
-          sendLng={pos?.lng ?? null}
-        />
-      </div>
+        <HomeMessagesCtaButton signedIn={signedIn} readLat={forecastLat} readLng={forecastLng} />
       ) : null}
 
       {!isSettings ? (

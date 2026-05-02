@@ -19,7 +19,9 @@ export function TopNav() {
             const active =
               item.href === "/"
                 ? pathname === "/" || pathname === ""
-                : pathname === item.href || pathname.startsWith(`${item.href}/`);
+                : pathname === item.href ||
+                  pathname.startsWith(`${item.href}/`) ||
+                  Boolean(item.alsoActiveFor?.some((p) => pathname === p || pathname.startsWith(`${p}/`)));
             return (
               <li key={item.href} className="min-w-0">
                 <Link

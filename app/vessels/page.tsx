@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { VesselClassifiedsClient } from "./VesselClassifiedsClient";
 
 export const metadata: Metadata = {
-  title: "Vessel classifieds",
-  description: "Paid vessel classifieds on SeaLink",
+  title: "Boats for sale",
+  description: "Paid boat classifieds on SeaLink.",
 };
 
 export default function VesselsPage() {
