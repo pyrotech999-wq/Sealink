@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { TRIAL_DAYS, type BillingPlan } from "@/lib/pricing";
 import { getAppBaseUrl } from "@/lib/app-base-url";
+import { getAuthUser } from "@/lib/auth";
+import { hasAppSubscriptionAccess } from "@/lib/subscription-access";
 import { paypalAccessToken, paypalBaseUrl, paypalClientId } from "@/app/api/vessels/classifieds/paypal/_paypal";
 
 /** Accept legacy clients that still send `yearly`. */
@@ -22,6 +24,14 @@ export async function POST(req: Request) {
           "PayPal plans are not configured. Set PAYPAL_CLIENT_ID, PAYPAL_SECRET, PAYPAL_PLAN_MONTHLY and PAYPAL_PLAN_ANNUAL in .env.local.",
       },
       { status: 503 },
+    );
+  }
+
+  const auth = await getAuthUser().catch(() => null);
+  if (auth && (await hasAppSubscriptionAccess(auth.uid))) {
+    return NextResponse.json(
+      { error: "You already have active or complimentary access. No new subscription is needed." },
+      { status: 400 },
     );
   }
 

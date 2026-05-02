@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useState } from "react";
 
-type Props = { signedIn: boolean };
+type Props = { signedIn: boolean; isAdmin?: boolean };
 
-export function HomeHeader({ signedIn }: Props) {
+export function HomeHeader({ signedIn, isAdmin = false }: Props) {
   const [busy, setBusy] = useState(false);
 
   async function signOutDemo() {
@@ -45,6 +45,14 @@ export function HomeHeader({ signedIn }: Props) {
           >
             Plans
           </Link>
+          {isAdmin ? (
+            <Link
+              href="/admin/access"
+              className="text-sm font-medium text-amber-400/90 hover:text-amber-300"
+            >
+              Admin
+            </Link>
+          ) : null}
           {signedIn ? (
             <>
               <span className="hidden text-xs text-zinc-400 sm:inline">Signed in</span>

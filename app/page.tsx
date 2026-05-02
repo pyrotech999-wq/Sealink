@@ -20,7 +20,7 @@ export default async function Home() {
 
   return (
     <div className="flex flex-1 flex-col bg-black">
-      <HomeHeader signedIn={signedIn} />
+      <HomeHeader signedIn={signedIn} isAdmin={authUser?.isAdmin ?? false} />
 
       <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col px-4 py-8 sm:px-6 sm:py-10">
         <h1 className="text-3xl font-semibold tracking-tight text-zinc-50">

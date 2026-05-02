@@ -62,3 +62,4 @@ next-env.d.ts
 /data/account-devices.json
 /data/ifm-presence.json
 /data/ifm-friends.json
+/data/admin-grants.json

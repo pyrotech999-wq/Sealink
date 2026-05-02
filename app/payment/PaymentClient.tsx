@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { BillingPlan } from "@/lib/pricing";
 import { ANNUAL_GBP, MONTHLY_GBP, recurringPriceGbp, TRIAL_DAYS } from "@/lib/pricing";
@@ -11,6 +11,41 @@ export function PaymentClient({ showCanceled = false }: Props) {
   const [plan, setPlan] = useState<BillingPlan>("monthly");
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [paypalEnv, setPaypalEnv] = useState<"live" | "sandbox" | null>(null);
+  const [paypalConfigured, setPaypalConfigured] = useState<boolean | null>(null);
+  const [access, setAccess] = useState<{
+    hasAccess: boolean;
+    source: "admin_grant" | "paypal" | "none";
+  } | null>(null);
+
+  useEffect(() => {
+    void fetch("/api/paypal/mode", { cache: "no-store" })
+      .then((r) => r.json() as Promise<{ env?: string; configured?: boolean }>)
+      .then((d) => {
+        setPaypalEnv(d.env === "live" ? "live" : "sandbox");
+        setPaypalConfigured(Boolean(d.configured));
+      })
+      .catch(() => {
+        setPaypalEnv(null);
+        setPaypalConfigured(null);
+      });
+    void fetch("/api/me/subscription", { credentials: "same-origin", cache: "no-store" })
+      .then(async (r) => {
+        if (!r.ok) {
+          setAccess(null);
+          return null;
+        }
+        return (await r.json()) as { hasAccess?: boolean; source?: "admin_grant" | "paypal" | "none" };
+      })
+      .then((d) => {
+        if (!d || typeof d.hasAccess !== "boolean") {
+          setAccess(null);
+          return;
+        }
+        setAccess({ hasAccess: d.hasAccess, source: d.source === "paypal" || d.source === "admin_grant" ? d.source : "none" });
+      })
+      .catch(() => setAccess(null));
+  }, []);
 
   const base = recurringPriceGbp(plan);
   const finalPrice = useMemo(() => base, [base]);
@@ -44,6 +79,27 @@ export function PaymentClient({ showCanceled = false }: Props) {
       </Link>
 
       <div className="mt-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 sm:p-8">
+        {paypalEnv != null && paypalConfigured ? (
+          <p
+            className={`mb-4 rounded-lg border px-3 py-2 text-xs font-medium ${
+              paypalEnv === "live"
+                ? "border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100"
+                : "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100"
+            }`}
+          >
+            PayPal is in <span className="font-semibold">{paypalEnv === "live" ? "live" : "sandbox"}</span> mode
+            {paypalEnv === "sandbox"
+              ? " (test only — set PAYPAL_ENV=live and live keys on your host for real charges)."
+              : " (real charges after trial)."}
+          </p>
+        ) : null}
+        {access?.hasAccess ? (
+          <p className="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-950 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-100">
+            You already have full access
+            {access.source === "admin_grant" ? " (complimentary)" : " via your PayPal subscription"}.
+            You don&apos;t need to subscribe again unless you change accounts.
+          </p>
+        ) : null}
         {showCanceled && (
           <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
             Checkout was canceled. You can try again when you&apos;re ready.
@@ -109,11 +165,11 @@ export function PaymentClient({ showCanceled = false }: Props) {
         {checkoutError && <p className="mt-4 text-center text-sm text-red-600">{checkoutError}</p>}
         <button
           type="button"
-          disabled={checkoutLoading}
+          disabled={checkoutLoading || access?.hasAccess === true}
           onClick={() => void startCheckout()}
           className="mt-6 flex h-11 w-full items-center justify-center rounded-lg bg-green-600 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-60"
         >
-          {checkoutLoading ? "Redirecting…" : `Start ${TRIAL_DAYS}-day free trial`}
+          {checkoutLoading ? "Redirecting…" : access?.hasAccess ? "Already subscribed" : `Start ${TRIAL_DAYS}-day free trial`}
         </button>
         <p className="mt-3 text-center text-[11px] text-zinc-500">
           You will not be charged until the trial ends. Cancel anytime during the trial.
