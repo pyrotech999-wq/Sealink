@@ -13,12 +13,49 @@ export function PaymentClient({ showCanceled = false, planRequired = false }: Pr
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [paypalEnv, setPaypalEnv] = useState<"live" | "sandbox" | null>(null);
   const [paypalConfigured, setPaypalConfigured] = useState<boolean | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [access, setAccess] = useState<{
     hasAccess: boolean;
     source: "reserved" | "admin_grant" | "paypal" | "none";
   } | null>(null);
 
   useEffect(() => {
+    void fetch("/api/me/subscription", { credentials: "same-origin", cache: "no-store" })
+      .then(async (r) => {
+        if (!r.ok) {
+          setAccess(null);
+          setIsAdmin(false);
+          return null;
+        }
+        return (await r.json()) as {
+          hasAccess?: boolean;
+          isAdmin?: boolean;
+          source?: "reserved" | "admin_grant" | "paypal" | "none";
+        };
+      })
+      .then((d) => {
+        if (!d || typeof d.hasAccess !== "boolean") {
+          setAccess(null);
+          setIsAdmin(false);
+          return;
+        }
+        const src =
+          d.source === "paypal" || d.source === "admin_grant" || d.source === "reserved" ? d.source : "none";
+        setAccess({ hasAccess: d.hasAccess, source: src });
+        setIsAdmin(Boolean(d.isAdmin));
+      })
+      .catch(() => {
+        setAccess(null);
+        setIsAdmin(false);
+      });
+  }, []);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setPaypalEnv(null);
+      setPaypalConfigured(null);
+      return;
+    }
     void fetch("/api/paypal/mode", { cache: "no-store" })
       .then((r) => r.json() as Promise<{ env?: string; configured?: boolean }>)
       .then((d) => {
@@ -29,25 +66,7 @@ export function PaymentClient({ showCanceled = false, planRequired = false }: Pr
         setPaypalEnv(null);
         setPaypalConfigured(null);
       });
-    void fetch("/api/me/subscription", { credentials: "same-origin", cache: "no-store" })
-      .then(async (r) => {
-        if (!r.ok) {
-          setAccess(null);
-          return null;
-        }
-        return (await r.json()) as { hasAccess?: boolean; source?: "reserved" | "admin_grant" | "paypal" | "none" };
-      })
-      .then((d) => {
-        if (!d || typeof d.hasAccess !== "boolean") {
-          setAccess(null);
-          return;
-        }
-        const src =
-          d.source === "paypal" || d.source === "admin_grant" || d.source === "reserved" ? d.source : "none";
-        setAccess({ hasAccess: d.hasAccess, source: src });
-      })
-      .catch(() => setAccess(null));
-  }, []);
+  }, [isAdmin]);
 
   const base = recurringPriceGbp(plan);
   const finalPrice = useMemo(() => base, [base]);
@@ -100,10 +119,12 @@ export function PaymentClient({ showCanceled = false, planRequired = false }: Pr
         {planRequired && access !== null && !access.hasAccess ? (
           <p className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-950 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100">
             A subscription (or your {TRIAL_DAYS}-day trial after you start PayPal checkout) is required to use the app.
-            The only exception is complimentary access granted by an admin for your account.
+            {isAdmin ? (
+              <> The only exception is complimentary access granted by an admin for your account.</>
+            ) : null}
           </p>
         ) : null}
-        {paypalEnv != null && paypalConfigured ? (
+        {isAdmin && paypalEnv != null && paypalConfigured ? (
           <p
             className={`mb-4 rounded-lg border px-3 py-2 text-xs font-medium ${
               paypalEnv === "live"
@@ -121,8 +142,10 @@ export function PaymentClient({ showCanceled = false, planRequired = false }: Pr
           <p className="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-950 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-100">
             You already have full access
             {access.source === "paypal"
-              ? " via your PayPal subscription"
-              : " (complimentary — reserved owner or admin grant)"}.
+              ? " via your PayPal subscription."
+              : isAdmin
+                ? " (complimentary — reserved owner or admin grant)."
+                : "."}{" "}
             You don&apos;t need to subscribe again unless you change accounts.
           </p>
         ) : null}
