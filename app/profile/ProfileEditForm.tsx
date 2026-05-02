@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { compressProfilePhoto } from "@/lib/client/compress-profile-photo";
 import {
@@ -45,6 +46,7 @@ async function shrinkAvatarDataUrlForStorage(dataUrl: string): Promise<string> {
 }
 
 export function ProfileEditForm({ signedIn, accountEmail }: Props) {
+  const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
   const statusRef = useRef<HTMLDivElement>(null);
   const [fullName, setFullNameState] = useState("");
@@ -53,7 +55,6 @@ export function ProfileEditForm({ signedIn, accountEmail }: Props) {
   const [showAvatar, setShowAvatarState] = useState(true);
   const [avatarDataUrl, setAvatarDataUrlState] = useState("");
   const [error, setError] = useState("");
-  const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -67,12 +68,12 @@ export function ProfileEditForm({ signedIn, accountEmail }: Props) {
   }, []);
 
   useEffect(() => {
-    if (!saved && !error) return;
+    if (!error) return;
     const id = requestAnimationFrame(() => {
       statusRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     });
     return () => cancelAnimationFrame(id);
-  }, [saved, error]);
+  }, [error]);
 
   function onPickPhoto(ev: React.ChangeEvent<HTMLInputElement>) {
     const file = ev.target.files?.[0];
@@ -91,7 +92,6 @@ export function ProfileEditForm({ signedIn, accountEmail }: Props) {
       try {
         const url = String(reader.result || "");
         setAvatarDataUrlState(url);
-        setSaved(false);
       } catch {
         setError("Could not read that image. Try another file.");
       }
@@ -102,14 +102,12 @@ export function ProfileEditForm({ signedIn, accountEmail }: Props) {
   function removePhoto() {
     setAvatarDataUrlState("");
     setError("");
-    setSaved(false);
     if (fileRef.current) fileRef.current.value = "";
   }
 
   async function onSave(ev: React.FormEvent) {
     ev.preventDefault();
     setError("");
-    setSaved(false);
     setSaving(true);
     try {
       const nextAvatar = await shrinkAvatarDataUrlForStorage(avatarDataUrl);
@@ -122,7 +120,7 @@ export function ProfileEditForm({ signedIn, accountEmail }: Props) {
       if (nextAvatar) setAvatarDataUrl(nextAvatar);
       else setAvatarDataUrl(null);
       setShowAvatar(showAvatar);
-      setSaved(true);
+      router.push("/");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save profile.");
     } finally {
@@ -171,7 +169,6 @@ export function ProfileEditForm({ signedIn, accountEmail }: Props) {
           value={fullName}
           onChange={(e) => {
             setFullNameState(e.target.value);
-            setSaved(false);
           }}
           className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
         />
@@ -186,7 +183,6 @@ export function ProfileEditForm({ signedIn, accountEmail }: Props) {
           value={boatName}
           onChange={(e) => {
             setBoatNameState(e.target.value);
-            setSaved(false);
           }}
           className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
         />
@@ -204,7 +200,6 @@ export function ProfileEditForm({ signedIn, accountEmail }: Props) {
           value={phone}
           onChange={(e) => {
             setPhoneState(e.target.value);
-            setSaved(false);
           }}
           className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
         />
@@ -250,7 +245,6 @@ export function ProfileEditForm({ signedIn, accountEmail }: Props) {
           checked={showAvatar}
           onChange={(e) => {
             setShowAvatarState(e.target.checked);
-            setSaved(false);
           }}
           className="mt-1 size-4 rounded border-zinc-300 text-green-700 focus:ring-green-600"
         />
@@ -261,11 +255,6 @@ export function ProfileEditForm({ signedIn, accountEmail }: Props) {
         {error ? (
           <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
             {error}
-          </p>
-        ) : null}
-        {saved ? (
-          <p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-900 dark:border-green-900/40 dark:bg-green-950/30 dark:text-green-200">
-            Profile saved. It will show on your home map and IFM pin.
           </p>
         ) : null}
       </div>
