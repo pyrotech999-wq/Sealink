@@ -41,3 +41,44 @@ export function playBroadcastAlertSound(): void {
     /* suspended until user gesture — ignore */
   });
 }
+
+/** Two short chimes (double ping) for new private vicinity / DM alerts on phone and desktop. */
+export function playVicinityDmAlertSound(): void {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  const run = () => {
+    const t0 = ctx.currentTime;
+    const tone = (freq: number, start: number, dur: number) => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "sine";
+      o.frequency.setValueAtTime(freq, t0 + start);
+      g.gain.setValueAtTime(0.0001, t0 + start);
+      g.gain.exponentialRampToValueAtTime(0.1, t0 + start + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + start + dur);
+      o.connect(g);
+      g.connect(ctx.destination);
+      o.start(t0 + start);
+      o.stop(t0 + start + dur + 0.02);
+    };
+    tone(880, 0, 0.1);
+    tone(660, 0.12, 0.12);
+  };
+
+  void ctx
+    .resume()
+    .then(() => {
+      run();
+      window.setTimeout(() => {
+        try {
+          run();
+        } catch {
+          /* */
+        }
+      }, 400);
+    })
+    .catch(() => {
+      /* suspended until user gesture — ignore */
+    });
+}

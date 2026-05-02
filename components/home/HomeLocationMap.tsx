@@ -1293,8 +1293,7 @@ export default function HomeLocationMap({
             ) : (
               <>
                 GPS updates while this page is open, including in the background while the tab stays open (you can pause
-                that in map sharing settings). Standard browsers cannot keep GPS after you fully quit the browser — use a
-                native app for that, or leave a tab open.
+                that in map sharing settings).
               </>
             )}
           </p>

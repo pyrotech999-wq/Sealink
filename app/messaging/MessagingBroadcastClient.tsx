@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { MapBroadcastPanel } from "@/components/home/MapBroadcastPanel";
 import { DEFAULT_MAP_CENTER } from "@/lib/map-constants";
 import { getLastKnownPosition } from "@/lib/map-last-known";
@@ -13,6 +14,9 @@ type Props = {
 };
 
 export function MessagingBroadcastClient({ signedIn, canSendGlobalBroadcast }: Props) {
+  const searchParams = useSearchParams();
+  const openPeer = searchParams.get("open")?.trim() || null;
+
   const [sharing, setSharing] = useState(false);
   const [, setTick] = useState(0);
 
@@ -51,6 +55,7 @@ export function MessagingBroadcastClient({ signedIn, canSendGlobalBroadcast }: P
       sendLat={sendLat}
       sendLng={sendLng}
       layout="messaging"
+      initialOpenPeerUid={openPeer}
     />
   );
 }

@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { getBroadcastAlertsSilenced, getMessageAlertSoundOn } from "@/lib/broadcast-alert-preferences";
+import { playVicinityDmAlertSound } from "@/lib/broadcast-alert-sound";
 import {
   getMessagingLastVisitIso,
   MESSAGING_LAST_VISIT_STORAGE_KEY,
@@ -17,6 +19,8 @@ type BroadcastRow = {
 
 type InboxRow = {
   threadId: string;
+  peerUid: string;
+  lastMessageId: string;
   lastAt: string;
   lastIsMine: boolean;
 };
@@ -38,6 +42,9 @@ type Props = {
 
 export function HomeMessagesCtaButton({ signedIn, readLat, readLng }: Props) {
   const [hasNew, setHasNew] = useState(false);
+  /** Peer to deep-link when the “new” state is from an incoming private message (not broadcast-only). */
+  const [openPeerUid, setOpenPeerUid] = useState<string | null>(null);
+  const lastDmChimeAtMs = useRef(0);
 
   const check = useCallback(async () => {
     const visit = getMessagingLastVisitIso();
@@ -70,29 +77,57 @@ export function HomeMessagesCtaButton({ signedIn, readLat, readLng }: Props) {
 
     if (!visit) {
       setMessagingLastVisitIso(baseline);
-      queueMicrotask(() => setHasNew(false));
+      queueMicrotask(() => {
+        setHasNew(false);
+        setOpenPeerUid(null);
+      });
       return;
     }
 
     const v = new Date(visit).getTime();
-    let newFlag = false;
+    let newFromBroadcast = false;
     for (const m of broadcasts) {
       if (m.isMine) continue;
       if (new Date(m.createdAt).getTime() > v) {
-        newFlag = true;
+        newFromBroadcast = true;
         break;
       }
     }
-    if (!newFlag && signedIn) {
+
+    let newestIncomingDmAt = 0;
+    let newestIncomingDmPeer: string | null = null;
+    if (signedIn) {
       for (const row of inbox) {
         if (row.lastIsMine) continue;
-        if (new Date(row.lastAt).getTime() > v) {
-          newFlag = true;
-          break;
+        const t = new Date(row.lastAt).getTime();
+        if (t > v && t >= newestIncomingDmAt) {
+          newestIncomingDmAt = t;
+          newestIncomingDmPeer = row.peerUid;
         }
       }
     }
-    queueMicrotask(() => setHasNew(newFlag));
+
+    const newFromDm = newestIncomingDmAt > 0;
+    const newFlag = newFromBroadcast || newFromDm;
+
+    if (
+      newFromDm &&
+      newestIncomingDmAt > lastDmChimeAtMs.current &&
+      !getBroadcastAlertsSilenced() &&
+      getMessageAlertSoundOn()
+    ) {
+      try {
+        playVicinityDmAlertSound();
+      } catch {
+        /* */
+      }
+      lastDmChimeAtMs.current = newestIncomingDmAt;
+    }
+
+    queueMicrotask(() => {
+      setHasNew(newFlag);
+      setOpenPeerUid(newFromDm && newestIncomingDmPeer ? newestIncomingDmPeer : null);
+    });
   }, [readLat, readLng, signedIn]);
 
   useEffect(() => {
@@ -123,18 +158,30 @@ export function HomeMessagesCtaButton({ signedIn, readLat, readLng }: Props) {
     };
   }, [check]);
 
+  const href =
+    hasNew && openPeerUid
+      ? `/messaging?open=${encodeURIComponent(openPeerUid)}`
+      : "/messaging";
+
   return (
     <div className="mt-6">
       <Link
-        href="/messaging"
-        className={`flex min-h-[4rem] w-full items-center justify-center rounded-xl border-2 px-4 py-4 text-center text-lg font-bold tracking-tight shadow-lg transition-colors sm:min-h-[4.25rem] sm:text-xl ${
+        href={href}
+        className={`flex min-h-[4rem] w-full flex-col items-center justify-center gap-0.5 rounded-xl border-2 px-4 py-3 text-center font-bold tracking-tight shadow-lg transition-colors sm:min-h-[4.25rem] sm:py-4 ${
           hasNew
-            ? "border-red-400 bg-red-600 text-white hover:bg-red-500 dark:border-red-500 dark:bg-red-600 dark:hover:bg-red-500"
+            ? "border-green-600 bg-green-600 text-white hover:bg-green-500 dark:border-green-500 dark:bg-green-600 dark:hover:bg-green-500"
             : "border-sky-500 bg-sky-600 text-white hover:bg-sky-500 dark:border-sky-600 dark:bg-sky-600 dark:hover:bg-sky-500"
         }`}
         aria-live="polite"
       >
-        {hasNew ? "New messages" : "Messages"}
+        {hasNew ? (
+          <>
+            <span className="text-lg sm:text-xl">New messages</span>
+            <span className="text-base font-semibold leading-tight opacity-95 sm:text-lg">Click here</span>
+          </>
+        ) : (
+          <span className="text-lg sm:text-xl">Messages</span>
+        )}
       </Link>
     </div>
   );

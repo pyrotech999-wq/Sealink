@@ -14,7 +14,13 @@ type Msg = {
 type Props = {
   open: boolean;
   onClose: () => void;
+  /** Other party (private DM) or original broadcast author uid (for display when using broadcast replies). */
   peerUid: string;
+  /** When set, shared thread for this area broadcast — anyone who could see the original can read and post. */
+  broadcastId?: string | null;
+  /** Viewer position for server-side access checks (same as map / messaging reads). */
+  readLat: number;
+  readLng: number;
   /** Short preview (e.g. first line) for subtitle / fallback. */
   contextLine?: string;
   /** Full area-broadcast text when chat was opened via Reply (shown at top of thread). */
@@ -36,11 +42,15 @@ export function VicinityChatDrawer({
   open,
   onClose,
   peerUid,
+  broadcastId = null,
+  readLat,
+  readLng,
   contextLine,
   broadcastBody,
   textScale = "default",
 }: Props) {
   const R = textScale === "readable";
+  const isBroadcastThread = Boolean(broadcastId?.trim());
   const [messages, setMessages] = useState<Msg[]>([]);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -65,11 +75,28 @@ export function VicinityChatDrawer({
   }, []);
 
   const load = useCallback(async () => {
-    if (!open || !peerUid) return;
+    if (!open) return;
+    const brId = broadcastId?.trim() ?? "";
     setLoading(true);
     setErr(null);
+    if (brId) {
+      if (!Number.isFinite(readLat) || !Number.isFinite(readLng)) {
+        setErr("Location needed to load broadcast replies.");
+        setMessages([]);
+        setThreadId(null);
+        setLoading(false);
+        return;
+      }
+    } else if (!peerUid) {
+      setLoading(false);
+      return;
+    }
     try {
-      const r = await fetch(`/api/vicinity-chat/messages?peerUid=${encodeURIComponent(peerUid)}`);
+      const r = brId
+        ? await fetch(
+            `/api/broadcast-replies/messages?broadcastId=${encodeURIComponent(brId)}&lat=${encodeURIComponent(String(readLat))}&lng=${encodeURIComponent(String(readLng))}`,
+          )
+        : await fetch(`/api/vicinity-chat/messages?peerUid=${encodeURIComponent(peerUid)}`);
       const d = (await r.json()) as { threadId?: string; messages?: Msg[]; error?: string };
       if (!r.ok) {
         setErr(d.error ?? "Could not load chat");
@@ -86,7 +113,7 @@ export function VicinityChatDrawer({
     } finally {
       setLoading(false);
     }
-  }, [open, peerUid]);
+  }, [open, peerUid, broadcastId, readLat, readLng]);
 
   useEffect(() => {
     if (!open) {
@@ -110,13 +137,22 @@ export function VicinityChatDrawer({
     ev.preventDefault();
     const text = draft.trim();
     if (!text) return;
+    const brId = broadcastId?.trim() ?? "";
+    if (brId && (!Number.isFinite(readLat) || !Number.isFinite(readLng))) {
+      setErr("Location needed to send.");
+      return;
+    }
     setSending(true);
     setErr(null);
     try {
-      const r = await fetch("/api/vicinity-chat/messages", {
+      const r = await fetch(brId ? "/api/broadcast-replies/messages" : "/api/vicinity-chat/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ peerUid, text }),
+        body: JSON.stringify(
+          brId
+            ? { broadcastId: brId, text, lat: readLat, lng: readLng }
+            : { peerUid, text },
+        ),
       });
       const d = (await r.json()) as { error?: string };
       if (!r.ok) {
@@ -134,7 +170,7 @@ export function VicinityChatDrawer({
   };
 
   const onDeleteConversation = async () => {
-    if (!threadId) return;
+    if (isBroadcastThread || !threadId) return;
     if (
       !window.confirm(
         "Delete this entire conversation? All messages are removed for you and the other boater.",
@@ -166,6 +202,8 @@ export function VicinityChatDrawer({
   if (!open) return null;
 
   const peerShort = peerUid.length > 22 ? `${peerUid.slice(0, 22)}…` : peerUid;
+  const senderLabel = (m: Msg) =>
+    m.isMine ? "You" : `Boater ${m.senderUid.length > 12 ? `${m.senderUid.slice(0, 12)}…` : m.senderUid}`;
   const bubbleText = R ? "text-lg leading-relaxed sm:text-xl" : "text-sm leading-relaxed";
   const metaText = R ? "text-sm" : "text-[11px]";
 
@@ -187,13 +225,29 @@ export function VicinityChatDrawer({
               id="vicinity-chat-title"
               className={`font-bold tracking-tight text-indigo-950 dark:text-indigo-100 ${R ? "text-xl sm:text-2xl" : "text-base"}`}
             >
-              Private chat
+              {isBroadcastThread ? "Broadcast replies" : "Private chat"}
             </h3>
             <p className={`mt-0.5 text-zinc-600 dark:text-zinc-400 ${R ? "text-sm" : "text-xs"}`}>
-              With <span className="font-mono font-medium text-zinc-800 dark:text-zinc-200" title={peerUid}>{peerShort}</span>
+              {isBroadcastThread ? (
+                <>
+                  Original poster{" "}
+                  <span className="font-mono font-medium text-zinc-800 dark:text-zinc-200" title={peerUid}>
+                    {peerShort}
+                  </span>
+                </>
+              ) : (
+                <>
+                  With{" "}
+                  <span className="font-mono font-medium text-zinc-800 dark:text-zinc-200" title={peerUid}>
+                    {peerShort}
+                  </span>
+                </>
+              )}
             </p>
             <p className={`mt-1 text-zinc-500 dark:text-zinc-400 ${R ? "text-sm" : "text-[11px] leading-snug"}`}>
-              Only the two of you can read this thread. Your messages and theirs stay together here.
+              {isBroadcastThread
+                ? "Everyone who could see the original area broadcast can read and reply here — same friends / distance rules as the post."
+                : "Only the two of you can read this thread. Your messages and theirs stay together here."}
             </p>
           </div>
           <div className="flex shrink-0 flex-col items-end gap-1.5">
@@ -206,16 +260,18 @@ export function VicinityChatDrawer({
             >
               Done
             </button>
-            <button
-              type="button"
-              disabled={!threadId || deleting}
-              onClick={() => void onDeleteConversation()}
-              className={`rounded-lg border border-red-200 bg-red-50 font-semibold text-red-800 hover:bg-red-100 disabled:opacity-50 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950/55 ${
-                R ? "px-3 py-2 text-sm" : "px-2 py-1 text-xs"
-              }`}
-            >
-              {deleting ? "Deleting…" : "Delete chat"}
-            </button>
+            {!isBroadcastThread ? (
+              <button
+                type="button"
+                disabled={!threadId || deleting}
+                onClick={() => void onDeleteConversation()}
+                className={`rounded-lg border border-red-200 bg-red-50 font-semibold text-red-800 hover:bg-red-100 disabled:opacity-50 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950/55 ${
+                  R ? "px-3 py-2 text-sm" : "px-2 py-1 text-xs"
+                }`}
+              >
+                {deleting ? "Deleting…" : "Delete chat"}
+              </button>
+            ) : null}
           </div>
         </div>
 
@@ -223,7 +279,7 @@ export function VicinityChatDrawer({
         <div className="flex min-h-0 flex-1 flex-col border-b border-zinc-200 bg-zinc-50/80 dark:border-zinc-800 dark:bg-zinc-950/80">
           <div
             ref={scrollRef}
-            className={`min-h-0 flex-1 space-y-3 overflow-y-auto scroll-smooth px-3 py-3 sm:px-4 ${
+            className={`sealink-thread-scroll min-h-0 flex-1 space-y-3 overflow-y-auto scroll-smooth py-3 pl-3 pr-2 sm:px-4 sm:pr-3 ${
               R ? "max-h-[min(52vh,26rem)] sm:max-h-[min(56vh,28rem)]" : "max-h-[min(48vh,20rem)] sm:max-h-[min(50vh,22rem)]"
             }`}
           >
@@ -233,7 +289,7 @@ export function VicinityChatDrawer({
                   Original area broadcast
                 </p>
                 <div
-                  className={`mt-2 max-h-36 overflow-y-auto whitespace-pre-wrap text-zinc-900 dark:text-zinc-100 ${R ? "text-base" : "text-xs"}`}
+                  className={`sealink-thread-scroll mt-2 max-h-36 overflow-y-auto whitespace-pre-wrap pr-1 text-zinc-900 dark:text-zinc-100 ${R ? "text-base" : "text-xs"}`}
                 >
                   <LinkifiedPlainText text={broadcastBody} />
                 </div>
@@ -269,7 +325,7 @@ export function VicinityChatDrawer({
                 <span
                   className={`mb-0.5 px-1 font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 ${R ? "text-xs" : "text-[10px]"}`}
                 >
-                  {m.isMine ? "You" : "Other boater"}
+                  {senderLabel(m)}
                 </span>
                 <div
                   className={`max-w-[92%] rounded-2xl px-3 py-2.5 shadow-sm ${bubbleText} ${

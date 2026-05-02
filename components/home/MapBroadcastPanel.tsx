@@ -136,6 +136,8 @@ type Props = {
   sendLng: number | null;
   /** `messaging`: slightly larger type for broadcast + inbox (Messaging page). */
   layout?: "map" | "messaging";
+  /** From `/messaging?open=` — opens private chat once for that peer. */
+  initialOpenPeerUid?: string | null;
 };
 
 export function MapBroadcastPanel({
@@ -147,6 +149,7 @@ export function MapBroadcastPanel({
   sendLat,
   sendLng,
   layout = "map",
+  initialOpenPeerUid = null,
 }: Props) {
   const L = layout === "messaging";
   const toast = useBroadcastToast();
@@ -157,6 +160,8 @@ export function MapBroadcastPanel({
   const [err, setErr] = useState<string | null>(null);
   const [soundOn, setSoundOn] = useState(() => (typeof window !== "undefined" ? readSoundOn() : true));
   const [chatPeerUid, setChatPeerUid] = useState<string | null>(null);
+  /** When set, VicinityChatDrawer loads the shared thread for this area broadcast (same visibility as the post). */
+  const [chatBroadcastId, setChatBroadcastId] = useState<string | null>(null);
   const [chatContext, setChatContext] = useState<string | undefined>(undefined);
   /** Full broadcast text when opening chat via Reply on a broadcast (so the thread shows the original). */
   const [chatBroadcastBody, setChatBroadcastBody] = useState<string | null>(null);
@@ -183,6 +188,20 @@ export function MapBroadcastPanel({
   useEffect(() => {
     soundOnRef.current = soundOn;
   }, [soundOn]);
+
+  useEffect(() => {
+    const uid = initialOpenPeerUid?.trim();
+    if (!uid || !signedIn) return;
+    setChatPeerUid(uid);
+    setChatBroadcastId(null);
+    setChatContext("Conversation");
+    setChatBroadcastBody(null);
+    queueMicrotask(() => {
+      if (typeof window !== "undefined") {
+        window.history.replaceState(null, "", "/messaging");
+      }
+    });
+  }, [signedIn, initialOpenPeerUid]);
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent === true;
@@ -326,6 +345,7 @@ export function MapBroadcastPanel({
       }
       if (chatPeerUid === row.peerUid) {
         setChatPeerUid(null);
+        setChatBroadcastId(null);
         setChatContext(undefined);
         setChatBroadcastBody(null);
       }
@@ -460,7 +480,7 @@ export function MapBroadcastPanel({
 
       <div className="mt-3 overflow-hidden rounded-lg border border-indigo-200/60 bg-white/90 dark:border-indigo-900/40 dark:bg-zinc-950/60">
         <div
-          className={`min-h-[4.5rem] space-y-2 overflow-y-auto scroll-smooth p-2 ${
+          className={`sealink-thread-scroll min-h-[4.5rem] space-y-2 overflow-y-auto scroll-smooth p-2 pr-1.5 ${
             L ? "max-h-[min(55vh,28rem)] sm:max-h-[min(60vh,32rem)]" : "max-h-[11rem] sm:max-h-[12rem]"
           }`}
         >
@@ -540,13 +560,14 @@ export function MapBroadcastPanel({
                     ) : null}
                   </p>
                   <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
-                    {signedIn && !m.isMine && m.authorUid ? (
+                    {signedIn && m.authorUid ? (
                       <button
                         type="button"
                         onClick={() => {
                           const full = m.body.trim();
                           setChatBroadcastBody(full.slice(0, 2500));
                           setChatContext(full.split(/\r?\n/)[0]?.slice(0, 120) ?? "");
+                          setChatBroadcastId(m.id);
                           setChatPeerUid(m.authorUid);
                         }}
                         className={`rounded-md border border-indigo-200 bg-indigo-50 font-semibold text-indigo-900 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-100 dark:hover:bg-indigo-900/40 ${
@@ -616,8 +637,8 @@ export function MapBroadcastPanel({
           <p
             className={`mt-1 leading-snug text-indigo-900/75 dark:text-indigo-200/85 ${L ? "text-base" : "text-[11px]"}`}
           >
-            Each row is one conversation — you and one other boater. Everything you send and receive stays in that same
-            thread. <strong className="font-semibold text-indigo-950 dark:text-indigo-100">Delete</strong> removes the
+            Each row is one conversation — you and one other boater.{" "}
+            <strong className="font-semibold text-indigo-950 dark:text-indigo-100">Delete</strong> removes the
             whole chat for both of you.
           </p>
           {inboxRows.length === 0 ? (
@@ -626,7 +647,7 @@ export function MapBroadcastPanel({
               to start one.
             </p>
           ) : (
-            <ul className={`mt-3 space-y-2 overflow-y-auto ${L ? "max-h-72" : "max-h-44"}`}>
+            <ul className={`sealink-thread-scroll mt-3 space-y-2 overflow-y-auto pr-1 ${L ? "max-h-72" : "max-h-44"}`}>
               {inboxRows.map((row) => (
                 <li key={row.threadId} className="flex gap-2">
                   <button
@@ -634,6 +655,7 @@ export function MapBroadcastPanel({
                     aria-label="Open private chat with this boater"
                     onClick={() => {
                       setChatBroadcastBody(null);
+                      setChatBroadcastId(null);
                       setChatContext(row.lastBody.trim().split(/\r?\n/)[0]?.slice(0, 120));
                       setChatPeerUid(row.peerUid);
                     }}
@@ -755,8 +777,7 @@ export function MapBroadcastPanel({
                 </span>
               </label>
               <p className={`text-indigo-800/85 dark:text-indigo-200/75 ${L ? "text-sm pl-6" : "text-[10px] leading-snug pl-6"}`}>
-                Manage friends on the IFM map. Phone-based friends match when your IFM presence includes a normalised phone
-                number the app can compare.
+                Manage friends on the IFM map.
               </p>
             </fieldset>
           ) : null}
@@ -818,15 +839,19 @@ export function MapBroadcastPanel({
         </p>
       )}
 
-      {chatPeerUid ? (
+      {chatPeerUid || chatBroadcastId ? (
         <VicinityChatDrawer
           open
-          peerUid={chatPeerUid}
+          peerUid={chatPeerUid ?? ""}
+          broadcastId={chatBroadcastId}
+          readLat={readLat}
+          readLng={readLng}
           contextLine={chatContext}
           broadcastBody={chatBroadcastBody}
           textScale={L ? "readable" : "default"}
           onClose={() => {
             setChatPeerUid(null);
+            setChatBroadcastId(null);
             setChatContext(undefined);
             setChatBroadcastBody(null);
             void fetchInbox();

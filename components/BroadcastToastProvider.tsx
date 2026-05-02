@@ -8,8 +8,8 @@ import {
   useMemo,
   useState,
 } from "react";
-import { getBroadcastAlertsSilenced } from "@/lib/broadcast-alert-preferences";
-import { playBroadcastAlertSound } from "@/lib/broadcast-alert-sound";
+import { getBroadcastAlertsSilenced, getMessageAlertSoundOn } from "@/lib/broadcast-alert-preferences";
+import { playBroadcastAlertSound, playVicinityDmAlertSound } from "@/lib/broadcast-alert-sound";
 import { BOTTOM_DOCK_OFFSET } from "@/lib/bottom-dock-offset";
 import {
   filterActiveAlerts,
@@ -90,9 +90,10 @@ export function BroadcastToastProvider({ children }: { children: React.ReactNode
       if (existing?.deleted) return next;
       if (existing) return next;
 
-      if (!getBroadcastAlertsSilenced()) {
+      if (!getBroadcastAlertsSilenced() && getMessageAlertSoundOn()) {
         try {
-          playBroadcastAlertSound();
+          if (variant === "vicinity") playVicinityDmAlertSound();
+          else playBroadcastAlertSound();
         } catch {
           /* */
         }

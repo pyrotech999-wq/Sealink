@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
+import { Suspense } from "react";
 import { MessagingBroadcastClient } from "./MessagingBroadcastClient";
 import { DEMO_SESSION_COOKIE, DEMO_SESSION_VALUE } from "@/lib/demo-session";
 import { canSendGlobalAreaBroadcast, getAuthUser } from "@/lib/auth";
@@ -27,7 +28,9 @@ export default async function MessagingPage() {
         </h1>
 
         <div className="mt-8">
-          <MessagingBroadcastClient signedIn={signedIn} canSendGlobalBroadcast={canSendGlobalBroadcast} />
+          <Suspense fallback={<p className="text-sm text-zinc-500">Loading messages…</p>}>
+            <MessagingBroadcastClient signedIn={signedIn} canSendGlobalBroadcast={canSendGlobalBroadcast} />
+          </Suspense>
         </div>
       </main>
     </div>

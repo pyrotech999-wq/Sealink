@@ -63,3 +63,4 @@ next-env.d.ts
 /data/ifm-presence.json
 /data/ifm-friends.json
 /data/admin-grants.json
+.env*.local

@@ -312,6 +312,49 @@ export async function listBroadcastsNear(
   });
 }
 
+/** Latest row for a broadcast id (for shared reply threads). */
+export async function getBroadcastRowById(id: string, now = new Date()): Promise<BroadcastMessageRow | null> {
+  return enqueue(async () => {
+    const raw = await readRawUnified(now);
+    const bid = id.trim();
+    return raw.find((m) => m.id === bid) ?? null;
+  });
+}
+
+/**
+ * Whether a signed-in viewer may read/post in the reply thread for this broadcast
+ * (same rules as {@link listBroadcastsNear} for seeing the original post).
+ */
+export async function viewerMayAccessBroadcastReplyThread(
+  m: BroadcastMessageRow,
+  viewerUid: string | null,
+  viewerLat: number,
+  viewerLng: number,
+): Promise<boolean> {
+  if (!viewerUid) return false;
+  if (m.isGlobal) return true;
+
+  const maxMi = radiusMi();
+  const d = distanceMiles(viewerLat, viewerLng, m.lat, m.lng);
+  const limitMi = m.isMob || m.wideAreaReach ? MAP_MOB_RADIUS_MI : maxMi;
+
+  if (m.isMob || m.wideAreaReach) {
+    return d <= limitMi;
+  }
+
+  const aud = m.audience ?? "all_nearby";
+  if (aud === "friends_nearby" || aud === "friends_global") {
+    if (viewerUid === m.authorUid) return true;
+    const viewerPhoneNorm = await getIfmPhoneNormForUid(viewerUid);
+    const friends = await listIfmFriends(m.authorUid);
+    if (!viewerMatchesIfmFriendsList(friends, viewerUid, viewerPhoneNorm)) return false;
+    if (aud === "friends_nearby" && d > maxMi) return false;
+    return true;
+  }
+
+  return d <= maxMi;
+}
+
 export async function appendBroadcast(
   authorUid: string,
   lat: number,
