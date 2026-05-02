@@ -305,3 +305,21 @@ export async function listIfmPeersByContacts(
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   });
 }
+
+/** Last stored IFM `phone_norm` for a user (matches IFM friends added by phone). Empty if none. */
+export async function getIfmPhoneNormForUid(uid: string): Promise<string> {
+  if (!uid) return "";
+  if (isSupabaseConfigured()) {
+    const sb = supabaseAdmin();
+    const { data, error } = await sb.from("ifm_presence").select("phone_norm").eq("uid", uid).maybeSingle();
+    if (error || !data) return "";
+    const p =
+      typeof (data as { phone_norm?: string }).phone_norm === "string"
+        ? (data as { phone_norm: string }).phone_norm
+        : "";
+    return p.trim();
+  }
+  const raw = canUseKv() ? ((await kvGetJson<IfmPresenceRecord[]>(KV_KEY, [])) ?? []) : readRawFile();
+  const row = raw.find((r) => r.uid === uid);
+  return (row?.phoneNorm ?? "").trim();
+}

@@ -28,6 +28,7 @@ const toc: { id: string; label: string }[] = [
   { id: "ifm", label: "IFM (friends map)" },
   { id: "marketplace", label: "Buy & Sell, gear & marinas" },
   { id: "broadcasts", label: "Broadcasts & chat" },
+  { id: "messages-broadcast-audience", label: "Messages — who sees broadcasts" },
   { id: "anchor", label: "Anchor watch" },
   { id: "anchor-android-location", label: "Android location (anchor)" },
   { id: "sea-summary", label: "Sea state on Home" },
@@ -385,6 +386,45 @@ export default function HelpPage() {
                 <li>Broadcasts are not emergency services — use VHF/DSC and phone to999/112/911 for distress.</li>
                 <li>If sending fails, confirm sharing is on and you have network connectivity.</li>
               </ul>
+              <h3
+                id="messages-broadcast-audience"
+                className="scroll-mt-24 pt-2 text-base font-semibold tracking-tight text-zinc-100"
+              >
+                Messages: who sees an area broadcast
+              </h3>
+              <p>
+                On the home map and the <strong className="text-zinc-200">Messaging</strong> page, when you send an area
+                broadcast (not a private reply thread), you can choose the <strong className="text-zinc-200">audience</strong>{" "}
+                before you send — as long as you are not using the admin-only “all map areas” option, which always reaches
+                everyone in range on every map view.
+              </p>
+              <ul className="list-disc space-y-1 pl-5 text-zinc-400">
+                <li>
+                  <strong className="text-zinc-300">Everyone nearby</strong> — any user who is signed in and loads
+                  broadcasts from within the usual vicinity radius (~5 miles by default) can see the message, same as a
+                  classic area heads-up.
+                </li>
+                <li>
+                  <strong className="text-zinc-300">IFM friends nearby</strong> — only people on{" "}
+                  <strong className="text-zinc-300">your</strong> IFM friends list, and only if they are also within that
+                  same ~5 mi radius of the broadcast. Others in the anchorage will not see it.
+                </li>
+                <li>
+                  <strong className="text-zinc-300">IFM friends worldwide</strong> — only your IFM friends, no matter where
+                  they are. They still open broadcasts from their own position in the app; the server only delivers the
+                  message to accounts on your friends list.
+                </li>
+              </ul>
+              <p>
+                Build and edit your friends list on the <Link href="/ifm" className="font-medium text-emerald-400 hover:underline">IFM</Link>{" "}
+                (friends) map. Email-based friends match by account; phone-based friends need compatible IFM presence so
+                the app can match a normalised number — if a friend never appears for restricted broadcasts, check that
+                they are on your list and using IFM with a comparable identity.
+              </p>
+              <p className="text-xs text-zinc-500">
+                Sent messages may show small badges such as “Friends nearby” or “Friends worldwide” so you can tell which
+                option you used.
+              </p>
             </Section>
 
             <Section id="anchor" title="Anchor watch &amp; geofence">

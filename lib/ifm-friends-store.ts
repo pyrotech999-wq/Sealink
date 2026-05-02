@@ -100,6 +100,21 @@ export function friendTargets(rows: IfmFriendRow[]): { uids: string[]; phones: s
   return { uids, phones };
 }
 
+/** True if the signed-in viewer matches this IFM friends list (by email-derived uid or normalised phone). */
+export function viewerMatchesIfmFriendsList(
+  rows: IfmFriendRow[],
+  viewerUid: string | null,
+  viewerPhoneNorm: string,
+): boolean {
+  if (!viewerUid) return false;
+  const phone = viewerPhoneNorm.trim();
+  for (const r of rows) {
+    if (r.kind === "email" && uidFromEmail(r.value) === viewerUid) return true;
+    if (r.kind === "phone" && phone.length > 0 && r.value === phone) return true;
+  }
+  return false;
+}
+
 export async function listIfmFriends(uid: string): Promise<IfmFriendRow[]> {
   return enqueue(async () => fetchFriendsForUser(uid));
 }

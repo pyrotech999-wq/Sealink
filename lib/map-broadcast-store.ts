@@ -11,13 +11,21 @@ import {
   MAP_MOB_RATE_PER_HOUR,
 } from "@/lib/map-broadcast-constants";
 import { MAP_NEARBY_RADIUS_MI } from "@/lib/map-nearby-constants";
+import {
+  listIfmFriends,
+  type IfmFriendRow,
+  viewerMatchesIfmFriendsList,
+} from "@/lib/ifm-friends-store";
+import { getIfmPhoneNormForUid } from "@/lib/ifm-presence-store";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 const DATA_PATH = path.join(process.cwd(), "data", "map-broadcast-messages.json");
 const KV_KEY = "sealink:map-broadcasts:v1";
 
-/** Supabase columns for map_broadcasts reads (wide_area_reach needs migration 013). */
+/** Supabase columns for map_broadcasts reads (audience needs migration 016). */
+const MAP_BROADCAST_SELECT_FULL =
+  "id, author_uid, lat, lng, body, created_at, is_global, is_mob, mob_phone, wide_area_reach, audience";
 const MAP_BROADCAST_SELECT_WITH_WIDE =
   "id, author_uid, lat, lng, body, created_at, is_global, is_mob, mob_phone, wide_area_reach";
 const MAP_BROADCAST_SELECT_LEGACY =
@@ -28,6 +36,20 @@ function isWideAreaReachSchemaError(err: { message?: string } | null | undefined
   if (m.includes("wide_area_reach")) return true;
   /* PostgREST: column missing from schema cache */
   return m.includes("wide_area") && m.includes("schema cache");
+}
+
+function isAudienceSchemaError(err: { message?: string } | null | undefined): boolean {
+  const m = (err?.message ?? "").toLowerCase();
+  if (m.includes("audience")) return true;
+  return m.includes("schema cache") && m.includes("audience");
+}
+
+export const MAP_BROADCAST_AUDIENCES = ["all_nearby", "friends_nearby", "friends_global"] as const;
+export type MapBroadcastAudience = (typeof MAP_BROADCAST_AUDIENCES)[number];
+
+export function parseMapBroadcastAudience(v: unknown): MapBroadcastAudience {
+  if (v === "friends_nearby" || v === "friends_global") return v;
+  return "all_nearby";
 }
 
 export type BroadcastMessageRow = {
@@ -45,6 +67,8 @@ export type BroadcastMessageRow = {
   mobPhone: string | null;
   /** Non-MOB message that still uses {@link MAP_MOB_RADIUS_MI} (e.g. MOB cancellation). */
   wideAreaReach: boolean;
+  /** Who can see this broadcast (IFM friends lists are per sender). */
+  audience: MapBroadcastAudience;
 };
 
 let queue: Promise<unknown> = Promise.resolve();
@@ -123,8 +147,9 @@ function normaliseRow(row: unknown): BroadcastMessageRow | null {
   const mobPhone = mp.trim().slice(0, 40) || null;
   const wideAreaReach =
     r.wideAreaReach === true || (r as { wide_area_reach?: unknown }).wide_area_reach === true;
+  const audience = parseMapBroadcastAudience((r as { audience?: unknown }).audience);
   if (!id || !authorUid || !Number.isFinite(lat) || !Number.isFinite(lng) || !createdAt) return null;
-  return { id, authorUid, lat, lng, body, createdAt, isGlobal, isMob, mobPhone, wideAreaReach };
+  return { id, authorUid, lat, lng, body, createdAt, isGlobal, isMob, mobPhone, wideAreaReach, audience };
 }
 
 function rowToPublic(
@@ -142,6 +167,7 @@ function rowToPublic(
     isGlobal: m.isGlobal,
     isMob: m.isMob,
     mobPhone: m.mobPhone,
+    audience: m.audience,
     isMine: viewerUid != null && m.authorUid === viewerUid,
     /** Only site admin may DELETE on the server (removes for all users). */
     canAdminDelete: viewerIsAdmin,
@@ -159,6 +185,7 @@ export type BroadcastMessagePublic = {
   isGlobal: boolean;
   isMob: boolean;
   mobPhone: string | null;
+  audience: MapBroadcastAudience;
   isMine: boolean;
   canAdminDelete: boolean;
 };
@@ -171,9 +198,18 @@ async function readRawUnified(now: Date): Promise<BroadcastMessageRow[]> {
     await sb.from("map_broadcasts").delete().lt("created_at", cIso);
     let { data, error } = await sb
       .from("map_broadcasts")
-      .select(MAP_BROADCAST_SELECT_WITH_WIDE)
+      .select(MAP_BROADCAST_SELECT_FULL)
       .order("created_at", { ascending: false })
       .limit(1000);
+    if (error && isAudienceSchemaError(error)) {
+      const retryA = await sb
+        .from("map_broadcasts")
+        .select(MAP_BROADCAST_SELECT_WITH_WIDE)
+        .order("created_at", { ascending: false })
+        .limit(1000);
+      data = retryA.data as typeof data;
+      error = retryA.error;
+    }
     if (error && isWideAreaReachSchemaError(error)) {
       const retry = await sb
         .from("map_broadcasts")
@@ -215,8 +251,9 @@ function dbRowToInternal(r: Record<string, unknown>): BroadcastMessageRow | null
   const mobRaw = typeof r.mob_phone === "string" ? r.mob_phone.trim().slice(0, 40) : "";
   const mobPhone = mobRaw.length > 0 ? mobRaw : null;
   const wideAreaReach = r.wide_area_reach === true;
+  const audience = parseMapBroadcastAudience(r.audience);
   if (!id || !authorUid || !createdAt || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  return { id, authorUid, lat, lng, body, createdAt, isGlobal, isMob, mobPhone, wideAreaReach };
+  return { id, authorUid, lat, lng, body, createdAt, isGlobal, isMob, mobPhone, wideAreaReach, audience };
 }
 
 export async function listBroadcastsNear(
@@ -230,15 +267,44 @@ export async function listBroadcastsNear(
     const raw = await readRawUnified(now);
 
     const maxMi = radiusMi();
+    const viewerPhoneNorm = viewerUid ? await getIfmPhoneNormForUid(viewerUid) : "";
+    const friendCache = new Map<string, IfmFriendRow[]>();
+    const friendsFor = async (authorUid: string) => {
+      if (!friendCache.has(authorUid)) {
+        friendCache.set(authorUid, await listIfmFriends(authorUid));
+      }
+      return friendCache.get(authorUid)!;
+    };
+
     const out: BroadcastMessagePublic[] = [];
     for (const m of raw) {
       if (m.isGlobal) {
         out.push(rowToPublic(m, viewerUid, viewerIsAdmin));
         continue;
       }
+
       const d = distanceMiles(lat, lng, m.lat, m.lng);
       const limitMi = m.isMob || m.wideAreaReach ? MAP_MOB_RADIUS_MI : maxMi;
-      if (d > limitMi) continue;
+
+      if (m.isMob || m.wideAreaReach) {
+        if (d > limitMi) continue;
+        out.push(rowToPublic(m, viewerUid, viewerIsAdmin));
+        continue;
+      }
+
+      const aud = m.audience ?? "all_nearby";
+      if (aud === "friends_nearby" || aud === "friends_global") {
+        if (viewerUid == null) continue;
+        if (viewerUid !== m.authorUid) {
+          const friends = await friendsFor(m.authorUid);
+          if (!viewerMatchesIfmFriendsList(friends, viewerUid, viewerPhoneNorm)) continue;
+        }
+        if (aud === "friends_nearby" && d > maxMi) continue;
+        out.push(rowToPublic(m, viewerUid, viewerIsAdmin));
+        continue;
+      }
+
+      if (d > maxMi) continue;
       out.push(rowToPublic(m, viewerUid, viewerIsAdmin));
     }
     out.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -251,11 +317,12 @@ export async function appendBroadcast(
   lat: number,
   lng: number,
   body: string,
-  opts: { isGlobal?: boolean; wideAreaReach?: boolean } = {},
+  opts: { isGlobal?: boolean; wideAreaReach?: boolean; audience?: MapBroadcastAudience } = {},
   now = new Date(),
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   const isGlobal = opts.isGlobal === true;
   const wideAreaReach = opts.wideAreaReach === true && !isGlobal;
+  const audience: MapBroadcastAudience = isGlobal ? "all_nearby" : parseMapBroadcastAudience(opts.audience);
   return enqueue(async () => {
     const hourAgo = now.getTime() - 60 * 60 * 1000;
     const hourAgoIso = new Date(hourAgo).toISOString();
@@ -282,6 +349,7 @@ export async function appendBroadcast(
         body,
         is_global: isGlobal,
         wide_area_reach: wideAreaReach,
+        audience,
       };
       const insertLegacy = {
         author_uid: authorUid,
@@ -291,6 +359,13 @@ export async function appendBroadcast(
         is_global: isGlobal,
       };
       let { data, error } = await sb.from("map_broadcasts").insert(insertWide).select("id").single();
+      if (error && isAudienceSchemaError(error)) {
+        const noAud = { ...insertWide };
+        delete (noAud as { audience?: string }).audience;
+        const retryA = await sb.from("map_broadcasts").insert(noAud).select("id").single();
+        data = retryA.data;
+        error = retryA.error;
+      }
       if (error && isWideAreaReachSchemaError(error)) {
         const retry = await sb.from("map_broadcasts").insert(insertLegacy).select("id").single();
         data = retry.data;
@@ -321,6 +396,7 @@ export async function appendBroadcast(
       isMob: false,
       mobPhone: null,
       wideAreaReach,
+      audience,
     };
     const next = [...list, row];
     if (canUseKv()) await kvSetJson(KV_KEY, next);
@@ -370,6 +446,7 @@ export async function appendMobBroadcast(
         is_mob: true,
         mob_phone: phoneVal,
         wide_area_reach: false,
+        audience: "all_nearby" as const,
       };
       const insertMobLegacy = {
         author_uid: authorUid,
@@ -381,6 +458,21 @@ export async function appendMobBroadcast(
         mob_phone: phoneVal,
       };
       let { data, error } = await sb.from("map_broadcasts").insert(insertMobWide).select("id").single();
+      if (error && isAudienceSchemaError(error)) {
+        const noAudMob = {
+          author_uid: authorUid,
+          lat,
+          lng,
+          body: text,
+          is_global: false,
+          is_mob: true,
+          mob_phone: phoneVal,
+          wide_area_reach: false,
+        };
+        const retryA = await sb.from("map_broadcasts").insert(noAudMob).select("id").single();
+        data = retryA.data;
+        error = retryA.error;
+      }
       if (error && isWideAreaReachSchemaError(error)) {
         const retry = await sb.from("map_broadcasts").insert(insertMobLegacy).select("id").single();
         data = retry.data;
@@ -414,6 +506,7 @@ export async function appendMobBroadcast(
       isMob: true,
       mobPhone: mobPhone && mobPhone.trim() ? mobPhone.trim().slice(0, 40) : null,
       wideAreaReach: false,
+      audience: "all_nearby",
     };
     const next = [...list, row];
     if (canUseKv()) await kvSetJson(KV_KEY, next);

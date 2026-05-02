@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { LinkifiedPlainText } from "@/components/LinkifiedPlainText";
 
 type Msg = {
   id: string;
@@ -14,13 +15,31 @@ type Props = {
   open: boolean;
   onClose: () => void;
   peerUid: string;
-  /** First line of the broadcast they replied to */
+  /** Short preview (e.g. first line) for subtitle / fallback. */
   contextLine?: string;
+  /** Full area-broadcast text when chat was opened via Reply (shown at top of thread). */
+  broadcastBody?: string | null;
   /** Larger type on Messaging page. */
   textScale?: "default" | "readable";
 };
 
-export function VicinityChatDrawer({ open, onClose, peerUid, contextLine, textScale = "default" }: Props) {
+function fmtMsgTime(iso: string) {
+  return new Date(iso).toLocaleString("en-GB", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+export function VicinityChatDrawer({
+  open,
+  onClose,
+  peerUid,
+  contextLine,
+  broadcastBody,
+  textScale = "default",
+}: Props) {
   const R = textScale === "readable";
   const [messages, setMessages] = useState<Msg[]>([]);
   const [threadId, setThreadId] = useState<string | null>(null);
@@ -30,11 +49,19 @@ export function VicinityChatDrawer({ open, onClose, peerUid, contextLine, textSc
   const [draft, setDraft] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const scrollToBottom = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
+  }, []);
+
+  const focusComposer = useCallback(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.focus({ preventScroll: false });
+    ta.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, []);
 
   const load = useCallback(async () => {
@@ -138,59 +165,53 @@ export function VicinityChatDrawer({ open, onClose, peerUid, contextLine, textSc
 
   if (!open) return null;
 
+  const peerShort = peerUid.length > 22 ? `${peerUid.slice(0, 22)}…` : peerUid;
+  const bubbleText = R ? "text-lg leading-relaxed sm:text-xl" : "text-sm leading-relaxed";
+  const metaText = R ? "text-sm" : "text-[11px]";
+
   return (
     <div className="fixed inset-0 z-[1200] flex items-end justify-center sm:items-center sm:p-4">
-      <button type="button" className="absolute inset-0 bg-black/45" aria-label="Close chat" onClick={onClose} />
+      <button type="button" className="absolute inset-0 bg-black/50 backdrop-blur-[1px]" aria-label="Close chat" onClick={onClose} />
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="vicinity-chat-title"
-        className={`relative flex max-h-[85vh] w-full flex-col rounded-t-2xl border border-indigo-200 bg-white shadow-2xl dark:border-indigo-900/50 dark:bg-zinc-950 sm:rounded-2xl ${
+        className={`relative flex max-h-[90vh] w-full flex-col overflow-hidden rounded-t-2xl border border-indigo-200/90 bg-zinc-50 shadow-2xl dark:border-indigo-900/60 dark:bg-zinc-950 sm:rounded-2xl ${
           R ? "max-w-2xl" : "max-w-md"
         }`}
       >
-        <div className="flex items-start justify-between gap-2 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+        {/* Header */}
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
           <div className="min-w-0">
             <h3
               id="vicinity-chat-title"
-              className={`font-semibold text-zinc-900 dark:text-zinc-50 ${R ? "text-xl sm:text-2xl" : "text-sm"}`}
+              className={`font-bold tracking-tight text-indigo-950 dark:text-indigo-100 ${R ? "text-xl sm:text-2xl" : "text-base"}`}
             >
-              Direct message
+              Private chat
             </h3>
-            <p className={`mt-0.5 text-zinc-500 dark:text-zinc-400 ${R ? "text-base" : "text-[11px]"}`}>
-              Boater id{" "}
-              <span className={`font-mono text-zinc-600 dark:text-zinc-300 ${R ? "text-base" : "text-[11px]"}`} title={peerUid}>
-                {peerUid.length > 14 ? `${peerUid.slice(0, 14)}…` : peerUid}
-              </span>
+            <p className={`mt-0.5 text-zinc-600 dark:text-zinc-400 ${R ? "text-sm" : "text-xs"}`}>
+              With <span className="font-mono font-medium text-zinc-800 dark:text-zinc-200" title={peerUid}>{peerShort}</span>
             </p>
-            {contextLine ? (
-              <p
-                className={`mt-1 line-clamp-2 font-medium text-zinc-700 dark:text-zinc-200 ${R ? "text-lg" : "text-[11px]"}`}
-              >
-                Re: {contextLine}
-              </p>
-            ) : null}
-            <p className={`mt-1 leading-snug text-zinc-500 dark:text-zinc-400 ${R ? "text-base" : "text-[11px]"}`}>
-              About two messages show at once — scroll inside the list for the rest (newest at bottom). Seen closes this
-              chat (messages stay); tap the thread row under Vicinity replies to reopen.
+            <p className={`mt-1 text-zinc-500 dark:text-zinc-400 ${R ? "text-sm" : "text-[11px] leading-snug"}`}>
+              Only the two of you can read this thread. Your messages and theirs stay together here.
             </p>
           </div>
-          <div className="flex shrink-0 flex-col items-end gap-1">
+          <div className="flex shrink-0 flex-col items-end gap-1.5">
             <button
               type="button"
               onClick={onClose}
-              className={`rounded-lg border border-zinc-200 font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-900 ${
-                R ? "px-3 py-2 text-base" : "px-2 py-1 text-xs"
+              className={`rounded-lg border border-zinc-200 bg-white font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700 ${
+                R ? "px-3 py-2 text-sm" : "px-2.5 py-1.5 text-xs"
               }`}
             >
-              Close
+              Done
             </button>
             <button
               type="button"
               disabled={!threadId || deleting}
               onClick={() => void onDeleteConversation()}
               className={`rounded-lg border border-red-200 bg-red-50 font-semibold text-red-800 hover:bg-red-100 disabled:opacity-50 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950/55 ${
-                R ? "px-3 py-2 text-base" : "px-2 py-1 text-xs"
+                R ? "px-3 py-2 text-sm" : "px-2 py-1 text-xs"
               }`}
             >
               {deleting ? "Deleting…" : "Delete chat"}
@@ -198,85 +219,109 @@ export function VicinityChatDrawer({ open, onClose, peerUid, contextLine, textSc
           </div>
         </div>
 
-        <div className="overflow-hidden border-t border-zinc-200 dark:border-zinc-800">
-          {messages.length > 2 && !loading ? (
-            <p
-              className={`border-b border-zinc-200 bg-zinc-50/80 px-2 py-1 text-center text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-300 ${
-                R ? "text-base" : "text-[11px]"
-              }`}
-            >
-              Newest at bottom — scroll up for earlier ({messages.length} in thread)
-            </p>
-          ) : null}
+        {/* Thread */}
+        <div className="flex min-h-0 flex-1 flex-col border-b border-zinc-200 bg-zinc-50/80 dark:border-zinc-800 dark:bg-zinc-950/80">
           <div
             ref={scrollRef}
-            className={`min-h-[4.5rem] space-y-2 overflow-y-auto scroll-smooth px-3 py-2 ${
-              R ? "max-h-[min(45vh,22rem)] sm:max-h-[min(50vh,26rem)]" : "max-h-[11rem] sm:max-h-[12rem]"
+            className={`min-h-0 flex-1 space-y-3 overflow-y-auto scroll-smooth px-3 py-3 sm:px-4 ${
+              R ? "max-h-[min(52vh,26rem)] sm:max-h-[min(56vh,28rem)]" : "max-h-[min(48vh,20rem)] sm:max-h-[min(50vh,22rem)]"
             }`}
           >
+            {broadcastBody && broadcastBody.trim().length > 0 ? (
+              <div className="rounded-xl border border-amber-200/90 bg-gradient-to-br from-amber-50 to-orange-50/80 p-3 shadow-sm dark:border-amber-900/40 dark:from-amber-950/50 dark:to-orange-950/30 sm:p-4">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-amber-900/80 dark:text-amber-200/90">
+                  Original area broadcast
+                </p>
+                <div
+                  className={`mt-2 max-h-36 overflow-y-auto whitespace-pre-wrap text-zinc-900 dark:text-zinc-100 ${R ? "text-base" : "text-xs"}`}
+                >
+                  <LinkifiedPlainText text={broadcastBody} />
+                </div>
+              </div>
+            ) : contextLine ? (
+              <div className="rounded-xl border border-zinc-200 bg-white/90 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900/80">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Thread</p>
+                <p className={`mt-1 line-clamp-3 text-zinc-800 dark:text-zinc-200 ${R ? "text-sm" : "text-xs"}`}>{contextLine}</p>
+              </div>
+            ) : null}
+
             {loading && messages.length === 0 ? (
-              <p className={`text-zinc-500 ${R ? "text-lg" : "text-xs"}`}>Loading…</p>
+              <p className={`text-center text-zinc-500 ${R ? "text-base" : "text-sm"}`}>Loading messages…</p>
             ) : null}
             {err ? (
               <p
-                className={`rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 ${
-                  R ? "text-lg" : "text-xs"
+                className={`rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 ${
+                  R ? "text-base" : "text-sm"
                 }`}
               >
                 {err}
               </p>
             ) : null}
+
+            {!loading && messages.length === 0 && !err ? (
+              <p className={`rounded-lg border border-dashed border-zinc-300 bg-white/60 px-3 py-6 text-center text-zinc-600 dark:border-zinc-600 dark:bg-zinc-900/50 dark:text-zinc-400 ${R ? "text-base" : "text-sm"}`}>
+                No messages yet — say hello below.
+              </p>
+            ) : null}
+
             {messages.map((m) => (
-              <div
-                key={m.id}
-                className={`max-w-[88%] rounded-xl px-2.5 py-2 leading-snug ${
-                  R ? "px-3 py-3 text-2xl sm:text-3xl" : "text-sm"
-                } ${
-                  m.isMine
-                    ? "ml-auto bg-indigo-600 text-white"
-                    : "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50"
-                }`}
-              >
-                <p className="whitespace-pre-wrap">{m.body}</p>
-                <p className={`mt-1 opacity-70 ${R ? "text-base" : "text-[11px]"}`}>
-                  {new Date(m.createdAt).toLocaleString("en-GB", {
-                    day: "numeric",
-                    month: "short",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </p>
+              <div key={m.id} className={`flex flex-col ${m.isMine ? "items-end" : "items-start"}`}>
+                <span
+                  className={`mb-0.5 px-1 font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 ${R ? "text-xs" : "text-[10px]"}`}
+                >
+                  {m.isMine ? "You" : "Other boater"}
+                </span>
+                <div
+                  className={`max-w-[92%] rounded-2xl px-3 py-2.5 shadow-sm ${bubbleText} ${
+                    m.isMine
+                      ? "rounded-br-md bg-indigo-600 text-white"
+                      : "rounded-bl-md border border-zinc-200/80 bg-white text-zinc-900 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50"
+                  }`}
+                >
+                  <div className="whitespace-pre-wrap break-words">
+                    <LinkifiedPlainText text={m.body} />
+                  </div>
+                  <p className={`mt-1.5 opacity-75 ${m.isMine ? "text-indigo-100" : "text-zinc-500 dark:text-zinc-400"} ${metaText}`}>
+                    {fmtMsgTime(m.createdAt)}
+                  </p>
+                </div>
               </div>
             ))}
           </div>
         </div>
 
-        <form onSubmit={(e) => void onSend(e)} className="border-t border-zinc-200 p-3 dark:border-zinc-800">
+        {/* Composer */}
+        <form onSubmit={(e) => void onSend(e)} className="shrink-0 space-y-2 border-t border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900 sm:p-4">
+          <label htmlFor="vicinity-chat-draft" className="sr-only">
+            Your message
+          </label>
           <textarea
+            id="vicinity-chat-draft"
+            ref={textareaRef}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             rows={R ? 3 : 2}
             maxLength={4000}
-            placeholder="Write a message…"
-            className={`w-full rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-zinc-900 outline-none focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 ${
-              R ? "py-3 text-xl sm:text-2xl" : "text-sm"
+            placeholder="Type your reply…"
+            className={`w-full resize-y rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-zinc-900 shadow-inner outline-none ring-indigo-500/0 transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/30 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50 ${
+              R ? "min-h-[5.5rem] text-lg sm:text-xl" : "min-h-[4.5rem] text-sm"
             }`}
           />
-          <div className="mt-2 flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={onClose}
-              className={`shrink-0 rounded-lg border border-zinc-300 bg-white font-semibold text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800 ${
-                R ? "h-12 px-4 text-base" : "h-9 px-3 text-xs"
+              onClick={() => focusComposer()}
+              className={`shrink-0 rounded-xl border-2 border-indigo-200 bg-indigo-50 font-semibold text-indigo-900 hover:bg-indigo-100 dark:border-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-100 dark:hover:bg-indigo-900/40 ${
+                R ? "h-11 px-4 text-base" : "h-10 px-3 text-sm"
               }`}
             >
-              Seen
+              Reply
             </button>
             <button
               type="submit"
               disabled={sending || !draft.trim()}
-              className={`min-w-0 flex-1 rounded-lg bg-indigo-600 font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 dark:bg-indigo-600 ${
-                R ? "h-12 text-lg" : "h-9 text-sm"
+              className={`min-w-0 flex-1 rounded-xl bg-indigo-600 font-bold text-white shadow-md hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-indigo-600 dark:hover:bg-indigo-500 ${
+                R ? "h-11 text-base" : "h-10 text-sm"
               }`}
             >
               {sending ? "Sending…" : "Send"}

@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { applyPresenceCookie, resolvePresenceSession } from "@/lib/map-presence-api-helpers";
-import { appendBroadcast, deleteBroadcast, listBroadcastsNear } from "@/lib/map-broadcast-store";
+import {
+  appendBroadcast,
+  deleteBroadcast,
+  listBroadcastsNear,
+  parseMapBroadcastAudience,
+} from "@/lib/map-broadcast-store";
 import { canSendGlobalAreaBroadcast, getAuthUser, requireAuthUser } from "@/lib/auth";
 
 export const runtime = "nodejs";
@@ -38,7 +43,13 @@ export async function GET(req: Request) {
   }
 }
 
-type PostBody = { lat?: unknown; lng?: unknown; text?: unknown; broadcastAllAreas?: unknown };
+type PostBody = {
+  lat?: unknown;
+  lng?: unknown;
+  text?: unknown;
+  broadcastAllAreas?: unknown;
+  audience?: unknown;
+};
 
 export async function POST(req: Request) {
   const { id: presenceId, cookieFresh } = await resolvePresenceSession();
@@ -77,7 +88,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Message cannot be empty." }, { status: 400 });
   }
 
-  const out = await appendBroadcast(authorUid, coords.lat, coords.lng, text, { isGlobal: broadcastAllAreas });
+  const audience = broadcastAllAreas ? "all_nearby" : parseMapBroadcastAudience(body.audience);
+
+  const out = await appendBroadcast(authorUid, coords.lat, coords.lng, text, {
+    isGlobal: broadcastAllAreas,
+    audience,
+  });
   if (!out.ok) {
     return NextResponse.json({ error: out.error }, { status: 429 });
   }

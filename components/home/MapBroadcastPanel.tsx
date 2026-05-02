@@ -7,6 +7,7 @@ import { VicinityChatDrawer } from "@/components/home/VicinityChatDrawer";
 import { LinkifiedPlainText } from "@/components/LinkifiedPlainText";
 import { mapHrefPreferCoords } from "@/lib/map-links";
 import { MOB_CANCEL_BROADCAST_INTRO } from "@/lib/map-broadcast-constants";
+import type { MapBroadcastAudience } from "@/lib/map-broadcast-store";
 import {
   BROADCAST_HIDDEN_EVENT,
   hideBroadcastId,
@@ -121,6 +122,8 @@ export type BroadcastMsg = {
   canAdminDelete?: boolean;
   isGlobal?: boolean;
   isMob?: boolean;
+  /** Who can see this broadcast (default everyone nearby). */
+  audience?: MapBroadcastAudience;
 };
 
 type Props = {
@@ -155,7 +158,10 @@ export function MapBroadcastPanel({
   const [soundOn, setSoundOn] = useState(() => (typeof window !== "undefined" ? readSoundOn() : true));
   const [chatPeerUid, setChatPeerUid] = useState<string | null>(null);
   const [chatContext, setChatContext] = useState<string | undefined>(undefined);
+  /** Full broadcast text when opening chat via Reply on a broadcast (so the thread shows the original). */
+  const [chatBroadcastBody, setChatBroadcastBody] = useState<string | null>(null);
   const [broadcastAllAreas, setBroadcastAllAreas] = useState(false);
+  const [broadcastAudience, setBroadcastAudience] = useState<MapBroadcastAudience>("all_nearby");
   const [inboxRows, setInboxRows] = useState<VicinityInboxRowApi[]>([]);
   const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null);
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(() =>
@@ -321,6 +327,7 @@ export function MapBroadcastPanel({
       if (chatPeerUid === row.peerUid) {
         setChatPeerUid(null);
         setChatContext(undefined);
+        setChatBroadcastBody(null);
       }
       await fetchInbox();
     } catch {
@@ -345,7 +352,7 @@ export function MapBroadcastPanel({
           lat: sendLat,
           lng: sendLng,
           text,
-          ...(canSendGlobalBroadcast && broadcastAllAreas ? { broadcastAllAreas: true } : {}),
+          ...(canSendGlobalBroadcast && broadcastAllAreas ? { broadcastAllAreas: true } : { audience: broadcastAudience }),
         }),
       });
       const d = (await r.json()) as { error?: string };
@@ -355,6 +362,7 @@ export function MapBroadcastPanel({
       }
       setDraft("");
       setBroadcastAllAreas(false);
+      setBroadcastAudience("all_nearby");
       await load({ silent: true });
     } catch {
       setErr("Network error");
@@ -507,6 +515,22 @@ export function MapBroadcastPanel({
                         All areas
                       </span>
                     ) : null}
+                    {!m.isGlobal && m.audience === "friends_nearby" ? (
+                      <span
+                        className={`ml-2 rounded bg-violet-200/90 text-violet-950 dark:bg-violet-900/55 dark:text-violet-100 ${L ? "px-2 py-1 text-sm" : "px-1 py-0.5 text-[10px]"}`}
+                        title="Only IFM friends within ~5 mi could see this"
+                      >
+                        Friends nearby
+                      </span>
+                    ) : null}
+                    {!m.isGlobal && m.audience === "friends_global" ? (
+                      <span
+                        className={`ml-2 rounded bg-fuchsia-200/90 text-fuchsia-950 dark:bg-fuchsia-900/50 dark:text-fuchsia-50 ${L ? "px-2 py-1 text-sm" : "px-1 py-0.5 text-[10px]"}`}
+                        title="Only your IFM friends (anywhere) could see this"
+                      >
+                        Friends worldwide
+                      </span>
+                    ) : null}
                     {m.isMine ? (
                       <span
                         className={`ml-2 rounded bg-indigo-100 text-indigo-900 dark:bg-indigo-900/60 dark:text-indigo-100 ${L ? "px-2 py-1 text-sm" : "px-1 py-0.5 text-[10px]"}`}
@@ -520,7 +544,9 @@ export function MapBroadcastPanel({
                       <button
                         type="button"
                         onClick={() => {
-                          setChatContext(m.body.trim().split(/\r?\n/)[0]?.slice(0, 120) ?? "");
+                          const full = m.body.trim();
+                          setChatBroadcastBody(full.slice(0, 2500));
+                          setChatContext(full.split(/\r?\n/)[0]?.slice(0, 120) ?? "");
                           setChatPeerUid(m.authorUid);
                         }}
                         className={`rounded-md border border-indigo-200 bg-indigo-50 font-semibold text-indigo-900 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-100 dark:hover:bg-indigo-900/40 ${
@@ -583,58 +609,74 @@ export function MapBroadcastPanel({
       </div>
 
       {signedIn ? (
-        <div className="mt-4 rounded-lg border border-indigo-200/50 bg-white/50 p-3 dark:border-indigo-900/40 dark:bg-zinc-950/50">
+        <div className="mt-4 rounded-xl border border-indigo-200/60 bg-gradient-to-b from-white/95 to-indigo-50/30 p-3 shadow-sm dark:border-indigo-900/40 dark:from-zinc-950/90 dark:to-indigo-950/20 sm:p-4">
           <h4 className={`font-semibold text-indigo-950 dark:text-indigo-100 ${L ? "text-xl" : "text-xs"}`}>
-            Vicinity replies (direct messages)
+            Private replies
           </h4>
           <p
-            className={`mt-1 leading-snug text-indigo-900/75 dark:text-indigo-200/80 ${L ? "text-base" : "text-[11px]"}`}
+            className={`mt-1 leading-snug text-indigo-900/75 dark:text-indigo-200/85 ${L ? "text-base" : "text-[11px]"}`}
           >
-            <strong className="font-semibold">Seen</strong> closes the chat but keeps all messages;{" "}
-            <strong className="font-semibold">tap this row</strong> (preview) to reopen.{" "}
-            <strong className="font-semibold">Delete</strong> removes the whole thread for both people.
+            Each row is one conversation — you and one other boater. Everything you send and receive stays in that same
+            thread. <strong className="font-semibold text-indigo-950 dark:text-indigo-100">Delete</strong> removes the
+            whole chat for both of you.
           </p>
           {inboxRows.length === 0 ? (
-            <p className={`mt-2 text-indigo-800/60 dark:text-indigo-300/70 ${L ? "text-base" : "text-[11px]"}`}>No DM threads yet.</p>
+            <p className={`mt-3 rounded-lg border border-dashed border-indigo-200/70 bg-white/60 px-3 py-4 text-center text-indigo-800/70 dark:border-indigo-800/50 dark:bg-zinc-900/40 dark:text-indigo-200/70 ${L ? "text-base" : "text-[11px]"}`}>
+              No conversations yet. Use <strong className="font-semibold">Reply</strong> on someone else&apos;s broadcast
+              to start one.
+            </p>
           ) : (
-            <ul className={`mt-2 space-y-1.5 overflow-y-auto ${L ? "max-h-72" : "max-h-40"}`}>
+            <ul className={`mt-3 space-y-2 overflow-y-auto ${L ? "max-h-72" : "max-h-44"}`}>
               {inboxRows.map((row) => (
-                <li key={row.threadId} className="flex gap-1.5">
+                <li key={row.threadId} className="flex gap-2">
                   <button
                     type="button"
-                    aria-label="Open vicinity chat. Tap again after Seen to reopen."
+                    aria-label="Open private chat with this boater"
                     onClick={() => {
+                      setChatBroadcastBody(null);
                       setChatContext(row.lastBody.trim().split(/\r?\n/)[0]?.slice(0, 120));
                       setChatPeerUid(row.peerUid);
                     }}
-                    className={`flex min-w-0 flex-1 flex-col rounded-md border border-indigo-100 bg-white px-2 py-2 text-left hover:bg-indigo-50/80 dark:border-indigo-900/35 dark:bg-zinc-900/70 dark:hover:bg-zinc-900 ${
-                      L ? "px-3 py-3" : "text-xs"
+                    className={`flex min-w-0 flex-1 flex-col rounded-xl border border-indigo-100/90 bg-white px-3 py-2.5 text-left shadow-sm ring-indigo-400/30 transition hover:border-indigo-300 hover:ring-2 dark:border-indigo-900/40 dark:bg-zinc-900/80 dark:hover:border-indigo-700 ${
+                      L ? "py-3" : ""
                     }`}
                   >
+                    <div className="flex flex-wrap items-baseline justify-between gap-1">
+                      <span className={`font-semibold text-indigo-950 dark:text-indigo-100 ${L ? "text-base" : "text-xs"}`}>
+                        Conversation
+                      </span>
+                      <span
+                        className={`font-mono text-indigo-600/90 dark:text-indigo-300/90 ${L ? "text-sm" : "text-[10px]"}`}
+                        title={row.peerUid}
+                      >
+                        {row.peerUid.length > 18 ? `${row.peerUid.slice(0, 18)}…` : row.peerUid}
+                      </span>
+                    </div>
                     <span
-                      className={`font-mono text-indigo-700/80 dark:text-indigo-300/90 ${L ? "text-base" : "text-[11px]"}`}
-                    >
-                      {row.peerUid.length > 14 ? `${row.peerUid.slice(0, 14)}…` : row.peerUid}
-                      {row.lastIsMine ? (
-                        <span className="ml-2 font-sans font-normal text-zinc-500 dark:text-zinc-400">· You last</span>
-                      ) : (
-                        <span className="ml-2 font-sans font-semibold text-amber-700 dark:text-amber-400">· Awaiting you</span>
-                      )}
-                    </span>
-                    <span
-                      className={`mt-0.5 line-clamp-2 text-zinc-800 dark:text-zinc-200 ${L ? "text-xl leading-snug sm:text-2xl" : ""}`}
+                      className={`mt-1.5 line-clamp-3 text-zinc-800 dark:text-zinc-100 ${L ? "text-lg leading-snug sm:text-xl" : "text-xs leading-snug"}`}
                     >
                       {row.lastBody}
                     </span>
-                    <span className={`mt-0.5 text-zinc-500 dark:text-zinc-400 ${L ? "text-base" : "text-[11px]"}`}>
-                      {fmtTime(row.lastAt)}
-                    </span>
+                    <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                      <span className={`text-zinc-500 dark:text-zinc-400 ${L ? "text-sm" : "text-[11px]"}`}>
+                        {fmtTime(row.lastAt)}
+                      </span>
+                      {row.lastIsMine ? (
+                        <span className={`rounded-full bg-zinc-200/90 px-2 py-0.5 font-medium text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200 ${L ? "text-xs" : "text-[10px]"}`}>
+                          You sent last
+                        </span>
+                      ) : (
+                        <span className={`rounded-full bg-amber-200/90 px-2 py-0.5 font-semibold text-amber-950 dark:bg-amber-900/50 dark:text-amber-100 ${L ? "text-xs" : "text-[10px]"}`}>
+                          Awaiting your reply
+                        </span>
+                      )}
+                    </div>
                   </button>
                   <button
                     type="button"
                     disabled={deletingThreadId === row.threadId}
                     onClick={(e) => void onDeleteDmThread(row, e)}
-                    className={`shrink-0 self-stretch rounded-md border border-red-200 bg-red-50 font-semibold text-red-800 hover:bg-red-100 disabled:opacity-50 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950/55 ${
+                    className={`shrink-0 self-stretch rounded-xl border border-red-200 bg-red-50 font-semibold text-red-800 hover:bg-red-100 disabled:opacity-50 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950/55 ${
                       L ? "px-3 py-2 text-base" : "px-2 py-1 text-[11px]"
                     }`}
                   >
@@ -666,16 +708,80 @@ export function MapBroadcastPanel({
               </span>
             </label>
           ) : null}
+          {!broadcastAllAreas ? (
+            <fieldset
+              className={`rounded-lg border border-indigo-200/80 bg-indigo-50/40 px-3 py-2 dark:border-indigo-800/60 dark:bg-indigo-950/25 ${L ? "space-y-2 py-3" : "space-y-1.5"}`}
+            >
+              <legend className={`px-1 font-semibold text-indigo-900 dark:text-indigo-100 ${L ? "text-base" : "text-xs"}`}>
+                Who can see this
+              </legend>
+              <label className={`flex cursor-pointer items-start gap-2 text-indigo-900 dark:text-indigo-100 ${L ? "text-base" : "text-xs"}`}>
+                <input
+                  type="radio"
+                  name="broadcastAudience"
+                  checked={broadcastAudience === "all_nearby"}
+                  onChange={() => setBroadcastAudience("all_nearby")}
+                  className="mt-0.5 size-4 shrink-0 border-indigo-300 text-indigo-700 focus:ring-indigo-600"
+                />
+                <span>
+                  <strong className="font-semibold">Everyone nearby</strong> (~5 mi)
+                  {canSendGlobalBroadcast ? " — same as a normal area broadcast when you are not using “all map areas”" : ""}
+                </span>
+              </label>
+              <label className={`flex cursor-pointer items-start gap-2 text-indigo-900 dark:text-indigo-100 ${L ? "text-base" : "text-xs"}`}>
+                <input
+                  type="radio"
+                  name="broadcastAudience"
+                  checked={broadcastAudience === "friends_nearby"}
+                  onChange={() => setBroadcastAudience("friends_nearby")}
+                  className="mt-0.5 size-4 shrink-0 border-indigo-300 text-violet-700 focus:ring-violet-600"
+                />
+                <span>
+                  <strong className="font-semibold">IFM friends nearby</strong> — only people on your IFM friends list who
+                  are also within ~5 mi of this broadcast
+                </span>
+              </label>
+              <label className={`flex cursor-pointer items-start gap-2 text-indigo-900 dark:text-indigo-100 ${L ? "text-base" : "text-xs"}`}>
+                <input
+                  type="radio"
+                  name="broadcastAudience"
+                  checked={broadcastAudience === "friends_global"}
+                  onChange={() => setBroadcastAudience("friends_global")}
+                  className="mt-0.5 size-4 shrink-0 border-indigo-300 text-fuchsia-700 focus:ring-fuchsia-600"
+                />
+                <span>
+                  <strong className="font-semibold">IFM friends worldwide</strong> — only your IFM friends; they can see
+                  it wherever they are (no distance filter for recipients on your friends list)
+                </span>
+              </label>
+              <p className={`text-indigo-800/85 dark:text-indigo-200/75 ${L ? "text-sm pl-6" : "text-[10px] leading-snug pl-6"}`}>
+                Manage friends on the IFM map. Phone-based friends match when your IFM presence includes a normalised phone
+                number the app can compare.
+              </p>
+            </fieldset>
+          ) : null}
           <label
             className={`block font-medium text-indigo-900 dark:text-indigo-200 ${L ? "text-lg" : "text-xs"}`}
           >
-            {broadcastAllAreas && canSendGlobalBroadcast ? "Broadcast (all areas)" : "Broadcast to ~5 mi"}
+            {broadcastAllAreas && canSendGlobalBroadcast
+              ? "Broadcast (all areas)"
+              : broadcastAudience === "friends_nearby"
+                ? "Message (IFM friends within ~5 mi)"
+                : broadcastAudience === "friends_global"
+                  ? "Message (IFM friends worldwide)"
+                  : "Broadcast to ~5 mi"}
             <textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               rows={L ? 4 : 3}
               maxLength={500}
-              placeholder="Short heads-up for nearby boaters…"
+              placeholder={
+                broadcastAudience === "friends_nearby"
+                  ? "Heads-up for IFM friends in range…"
+                  : broadcastAudience === "friends_global"
+                    ? "Heads-up for your IFM friends anywhere…"
+                    : "Short heads-up for nearby boaters…"
+              }
               className={`mt-1 w-full rounded-lg border border-indigo-200 bg-white px-2 py-1.5 text-zinc-900 outline-none focus:border-indigo-500 dark:border-indigo-800 dark:bg-zinc-950 dark:text-zinc-50 ${
                 L ? "py-3 text-xl sm:text-2xl" : "text-sm"
               }`}
@@ -688,7 +794,15 @@ export function MapBroadcastPanel({
               L ? "h-12 text-lg" : "h-9 text-sm"
             }`}
           >
-            {posting ? "Sending…" : broadcastAllAreas && canSendGlobalBroadcast ? "Send to all areas" : "Send broadcast"}
+            {posting
+              ? "Sending…"
+              : broadcastAllAreas && canSendGlobalBroadcast
+                ? "Send to all areas"
+                : broadcastAudience === "friends_nearby"
+                  ? "Send to friends nearby"
+                  : broadcastAudience === "friends_global"
+                    ? "Send to friends worldwide"
+                    : "Send broadcast"}
           </button>
         </form>
       ) : (
@@ -709,10 +823,12 @@ export function MapBroadcastPanel({
           open
           peerUid={chatPeerUid}
           contextLine={chatContext}
+          broadcastBody={chatBroadcastBody}
           textScale={L ? "readable" : "default"}
           onClose={() => {
             setChatPeerUid(null);
             setChatContext(undefined);
+            setChatBroadcastBody(null);
             void fetchInbox();
           }}
         />

@@ -25,24 +25,10 @@ export default async function MessagingPage() {
         <h1 className="mt-4 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-3xl">
           Messages
         </h1>
-        <p className="mt-2 max-w-3xl text-base leading-7 text-zinc-600 dark:text-zinc-400">
-          Area broadcasts and vicinity replies use slightly larger type here than on the home map. Lists follow your last
-          known map position when sharing is on; open the{" "}
-          <Link href="/" className="font-medium text-green-800 underline-offset-2 hover:underline dark:text-green-400">
-            home map
-          </Link>{" "}
-          to refresh GPS.
-        </p>
 
         <div className="mt-8">
           <MessagingBroadcastClient signedIn={signedIn} canSendGlobalBroadcast={canSendGlobalBroadcast} />
         </div>
-
-        <p className="mt-8 text-sm text-zinc-500 dark:text-zinc-400">
-          <Link href="/help#broadcasts" className="font-medium text-green-800 hover:underline dark:text-green-400">
-            Help — broadcasts &amp; chat
-          </Link>
-        </p>
       </main>
     </div>
   );
