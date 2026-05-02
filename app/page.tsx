@@ -8,6 +8,7 @@ import { SeaLinkBrandFooter } from "@/components/SeaLinkBrandFooter";
 import { ShareAppLink } from "@/components/home/ShareAppLink";
 import { DEMO_SESSION_COOKIE, DEMO_SESSION_VALUE } from "@/lib/demo-session";
 import { canSendGlobalAreaBroadcast, getAuthUser } from "@/lib/auth";
+import { getProfileFirstNameForUser } from "@/lib/profiles-server";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,8 @@ export default async function Home() {
   const signedIn = jar.get(DEMO_SESSION_COOKIE)?.value === DEMO_SESSION_VALUE;
   const authUser = await getAuthUser();
   const canSendGlobalBroadcast = authUser ? canSendGlobalAreaBroadcast(authUser.email) : false;
+  const welcomeFirstName =
+    signedIn && authUser ? await getProfileFirstNameForUser(authUser.uid) : null;
 
   return (
     <div className="flex flex-1 flex-col bg-black">
@@ -23,22 +26,19 @@ export default async function Home() {
 
       <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col px-4 py-8 sm:px-6 sm:py-10">
         <h1 className="text-3xl font-semibold tracking-tight text-zinc-50">
-          {signedIn ? "Welcome back" : "Stay linked"}
+          {signedIn
+            ? welcomeFirstName
+              ? `Welcome back, ${welcomeFirstName}`
+              : "Welcome back"
+            : "Stay linked"}
         </h1>
-        <p className="mt-3 max-w-2xl text-base leading-7 text-zinc-400">
-          {signedIn ? (
-            <>
-              You’re on your SeaLink home screen. Use the map below to share location, set anchor alerts, and browse
-              broadcasts — keep this tab open for best GPS behaviour in a browser.
-            </>
-          ) : (
-            <>
-              Your home screen includes a live map: share your GPS position, show your boat name and profile photo on
-              the pin, and keep slower background updates on by default while the tab stays open (you can pause on the
-              map). Fully closed browsers cannot keep GPS on a normal website — that needs a native wrapper app.
-            </>
-          )}
-        </p>
+        {!signedIn ? (
+          <p className="mt-3 max-w-2xl text-base leading-7 text-zinc-400">
+            Your home screen includes a live map: share your GPS position, show your boat name and profile photo on the
+            pin, and keep slower background updates on by default while the tab stays open (you can pause on the map).
+            Fully closed browsers cannot keep GPS on a normal website — that needs a native wrapper app.
+          </p>
+        ) : null}
         {signedIn ? (
           <p className="mt-4 text-sm text-green-300">
             You&apos;re signed in. Posting adverts and broadcasts is tied to your account email.

@@ -111,7 +111,7 @@ export function LifeOnSeasDailyModal({ open, onClose, pinLive, lat, lng }: Props
       >
         <div className="border-b border-teal-200/60 px-5 py-4 dark:border-teal-900/40">
           <h2 id={titleId} className="text-lg font-semibold tracking-tight text-teal-950 dark:text-teal-50">
-            Life on the seas
+            Sea&apos;s the day!
           </h2>
           <p className="mt-1 text-xs leading-5 text-teal-900/75 dark:text-teal-200/80">
             Short notes for boat people. {pinLive ? "Using your shared position for place and local weather." : "Share your location on the map to weave in nearby places when the weather plays along."}
@@ -138,7 +138,7 @@ export function LifeOnSeasDailyModal({ open, onClose, pinLive, lat, lng }: Props
             onClick={() => void fetchLine()}
             className="flex h-11 w-full items-center justify-center rounded-xl bg-teal-700 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60 dark:bg-teal-600 dark:hover:bg-teal-500"
           >
-            {loading ? "Fetching…" : "Another life on the seas message"}
+            {loading ? "Fetching…" : "Another Sea's the day!"}
           </button>
           <button
             type="button"

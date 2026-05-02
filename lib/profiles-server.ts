@@ -16,6 +16,25 @@ export type SignUpProfilePayload = {
   avatarDataUrl?: string | null;
 };
 
+/**
+ * First word of `profiles.full_name` for signed-in greetings (e.g. "Colin" from "Colin Smith").
+ * Returns null if Supabase is off, no row, or empty name.
+ */
+export async function getProfileFirstNameForUser(userUid: string): Promise<string | null> {
+  if (!isSupabaseConfigured()) return null;
+  const sb = supabaseAdmin();
+  const { data, error } = await sb.from("profiles").select("full_name").eq("user_uid", userUid).maybeSingle();
+  if (error || !data) return null;
+  const raw =
+    typeof (data as { full_name?: unknown }).full_name === "string"
+      ? (data as { full_name: string }).full_name.trim()
+      : "";
+  if (!raw) return null;
+  const first = raw.split(/\s+/)[0]?.trim() ?? "";
+  if (!first) return null;
+  return first.length > 48 ? `${first.slice(0, 48)}…` : first;
+}
+
 export async function upsertProfileAfterSignUp(userUid: string, p: SignUpProfilePayload): Promise<void> {
   if (!isSupabaseConfigured()) return;
 

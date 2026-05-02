@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { createPortal } from "react-dom";
 import { getBoatName, getFullName, getProfilePhone } from "@/lib/map-profile-storage";
 import { getMobPosition } from "@/lib/map-mob-position";
 import { MOB_SENDER_ACTIVE_UNTIL_KEY, MOB_SENDER_SENT_EVENT } from "@/components/MobSenderActiveBanner";
@@ -99,48 +100,52 @@ export function ManOverboardAlertButton({ signedIn, variant = "page" }: Props) {
         </p>
       ) : null}
 
-      {confirmOpen ? (
-        <div className="fixed inset-0 z-[1300] flex items-center justify-center p-4 sm:p-6">
-          <button
-            type="button"
-            className="absolute inset-0 bg-black/60"
-            aria-label="Close"
-            onClick={() => !sending && setConfirmOpen(false)}
-          />
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="mob-confirm-title"
-            className="relative z-10 w-full max-w-md rounded-2xl border border-red-900/50 bg-zinc-950 p-5 shadow-xl"
-          >
-            <h2 id="mob-confirm-title" className="text-lg font-semibold text-red-100">
-              Confirm MOB assistance required?
-            </h2>
-            <p className="mt-3 text-sm leading-relaxed text-zinc-300">
-              This will broadcast your live position (or last known GPS), coordinates, email, boat name, your name, and
-              phone number to other signed-in users within about <strong className="text-zinc-100">10 miles</strong>.
-            </p>
-            <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
+      {confirmOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div className="fixed inset-0 z-[1300] flex items-center justify-center p-4 sm:p-6">
               <button
                 type="button"
-                disabled={sending}
-                onClick={() => setConfirmOpen(false)}
-                className="h-11 rounded-xl border border-zinc-600 px-4 text-sm font-semibold text-zinc-200 hover:bg-zinc-900 disabled:opacity-50"
+                className="absolute inset-0 bg-black/60"
+                aria-label="Close"
+                onClick={() => !sending && setConfirmOpen(false)}
+              />
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="mob-confirm-title"
+                className="relative z-10 w-full max-w-md rounded-2xl border border-red-900/50 bg-zinc-950 p-5 shadow-xl"
               >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={sending}
-                onClick={() => void sendMob()}
-                className="h-11 rounded-xl bg-red-600 px-4 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50"
-              >
-                {sending ? "Sending…" : "Yes, send alert"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+                <h2 id="mob-confirm-title" className="text-lg font-semibold text-red-100">
+                  Confirm MOB assistance required?
+                </h2>
+                <p className="mt-3 text-sm leading-relaxed text-zinc-300">
+                  This will broadcast your live position (or last known GPS), coordinates, email, boat name, your name,
+                  and phone number to other signed-in users within about{" "}
+                  <strong className="text-zinc-100">10 miles</strong>.
+                </p>
+                <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
+                  <button
+                    type="button"
+                    disabled={sending}
+                    onClick={() => setConfirmOpen(false)}
+                    className="h-11 rounded-xl border border-zinc-600 px-4 text-sm font-semibold text-zinc-200 hover:bg-zinc-900 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={sending}
+                    onClick={() => void sendMob()}
+                    className="h-11 rounded-xl bg-red-600 px-4 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50"
+                  >
+                    {sending ? "Sending…" : "Yes, send alert"}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

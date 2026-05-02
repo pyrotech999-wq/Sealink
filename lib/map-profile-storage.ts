@@ -10,7 +10,22 @@ export const MAP_PROFILE = {
   shareNearby: "sealink_map_share_nearby",
   /** Share GPS on the home map (persisted; user can turn off anytime). */
   shareOnMap: "sealink_map_share_location",
+  /**
+   * Set when trial/payment completes; cleared when the signed-in home map starts sharing.
+   * Lets the next app visit turn Share on map on without the user tapping the button.
+   */
+  pendingAutoShareAfterPayment: "sealink_auto_share_map_after_payment_v1",
 } as const;
+
+/** Call from payment success so the home map can start sharing on the next signed-in visit. */
+export function setPendingAutoShareOnMapAfterPayment(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(MAP_PROFILE.pendingAutoShareAfterPayment, "1");
+  } catch {
+    /* quota / private mode */
+  }
+}
 
 const MAX_AVATAR_BYTES = 450_000;
 

@@ -138,14 +138,7 @@ export function GearMarketplace() {
         setFormMsg(data.error || "Could not post");
         return;
       }
-      setFormMsg(postKind === "wanted" ? "Wanted posted — thank you." : "Listed — thank you.");
-      setTitle("");
-      setDescription("");
-      setPriceLabel("");
-      setImages([]);
-      setConfirmNotVessel(false);
-      await loadListings();
-      await loadReminders();
+      window.location.reload();
     } catch {
       setFormMsg("Network error");
     } finally {

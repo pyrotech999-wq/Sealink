@@ -202,9 +202,6 @@ export function BroadcastToastProvider({ children }: { children: React.ReactNode
                   Delete
                 </button>
               </div>
-              <p className="text-center text-[10px] text-indigo-700/75 dark:text-indigo-300/75">
-                Seen marks read and moves to the next alert. All stay up to 24 hours unless you Delete.
-              </p>
             </div>
           </div>
         ) : null}

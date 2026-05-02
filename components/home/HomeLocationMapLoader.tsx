@@ -15,9 +15,17 @@ const HomeLocationMap = dynamic(() => import("./HomeLocationMap"), {
 export function HomeLocationMapLoader({
   signedIn = false,
   canSendGlobalBroadcast = false,
+  sharingUiMode = "home",
 }: {
   signedIn?: boolean;
   canSendGlobalBroadcast?: boolean;
+  sharingUiMode?: "home" | "settings";
 }) {
-  return <HomeLocationMap signedIn={signedIn} canSendGlobalBroadcast={canSendGlobalBroadcast} />;
+  return (
+    <HomeLocationMap
+      signedIn={signedIn}
+      canSendGlobalBroadcast={canSendGlobalBroadcast}
+      sharingUiMode={sharingUiMode}
+    />
+  );
 }

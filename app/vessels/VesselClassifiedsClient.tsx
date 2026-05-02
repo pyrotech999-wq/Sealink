@@ -187,17 +187,7 @@ export function VesselClassifiedsClient() {
         setPostMsg(d.error || "Could not create listing");
         return;
       }
-      setPostMsg("Draft created. Choose a payment provider below to publish for 6 months.");
-      setTitle("");
-      setDescription("");
-      setPriceGbp("");
-      setLocationLabel("");
-      setYear("");
-      setLengthFt("");
-      setMakeModel("");
-      setImages([]);
-      await load();
-      await loadMine();
+      window.location.reload();
     } catch {
       setPostMsg("Network error");
     } finally {
@@ -243,10 +233,9 @@ export function VesselClassifiedsClient() {
           });
         }
       } finally {
-        // Clean URL
+        // Clean URL then full refresh so listings and draft state match server
         window.history.replaceState({}, "", "/vessels");
-        await load();
-        await loadMine();
+        window.location.reload();
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps

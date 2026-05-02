@@ -2,6 +2,7 @@
 
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Circle, MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import { LifeOnSeasDailyModal } from "@/components/home/LifeOnSeasDailyModal";
@@ -27,6 +28,7 @@ import {
   getShowAvatar,
   getShareNearbyPeers,
   getShareOnMap,
+  MAP_PROFILE,
   setBackgroundLocationConsent,
   setBoatName,
   setFullName,
@@ -162,10 +164,14 @@ function buildPinIcon(boat: string, avatarUrl: string, peekAvatar: boolean): L.D
 export default function HomeLocationMap({
   signedIn = false,
   canSendGlobalBroadcast = false,
+  sharingUiMode = "home",
 }: {
   signedIn?: boolean;
   canSendGlobalBroadcast?: boolean;
+  /** `home`: map + link to settings. `settings`: options + share toggle only (no map). */
+  sharingUiMode?: "home" | "settings";
 }) {
+  const isSettings = sharingUiMode === "settings";
   const [boatInput, setBoatInput] = useState(() => (typeof window !== "undefined" ? getBoatName() : ""));
   const [avatarUrl] = useState(() => (typeof window !== "undefined" ? getAvatarDataUrl() : ""));
   const [pinAvatarPeek, setPinAvatarPeek] = useState(false);
@@ -878,7 +884,7 @@ export default function HomeLocationMap({
     return () => window.clearTimeout(t);
   }, []);
 
-  function setSharingOn(on: boolean) {
+  const setSharingOn = useCallback((on: boolean) => {
     if (!on) {
       clearMapPresence();
       setShareNearby(false);
@@ -899,7 +905,23 @@ export default function HomeLocationMap({
     setShareOnMap(true);
     setSharing(true);
     setShareNearby(getShareNearbyPeers());
-  }
+  }, []);
+
+  /** After trial/payment success, start map sharing without an extra tap (when signed in). */
+  useEffect(() => {
+    if (!signedIn) return;
+    let pending = false;
+    try {
+      if (localStorage.getItem(MAP_PROFILE.pendingAutoShareAfterPayment) === "1") {
+        pending = true;
+        localStorage.removeItem(MAP_PROFILE.pendingAutoShareAfterPayment);
+      }
+    } catch {
+      return;
+    }
+    if (!pending) return;
+    setSharingOn(true);
+  }, [signedIn, setSharingOn]);
 
   const pinIconVisible = useMemo(
     () => buildPinIcon(boatInput.trim(), avatarUrl, pinAvatarPeek),
@@ -999,20 +1021,137 @@ export default function HomeLocationMap({
   const center: [number, number] = mapPinPos ? [mapPinPos.lat, mapPinPos.lng] : DEFAULT_CENTER;
   const zoom = mapPinPos ? 14 : DEFAULT_ZOOM;
 
+  const sharingSettingsPanel = (
+    <div className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">On your pin</p>
+      <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+        Your name (shown after boat in the small nearby pin popup)
+        <input
+          value={fullName}
+          onChange={(e) => setFullNameState(e.target.value)}
+          onBlur={persistFullName}
+          placeholder="e.g. Colin"
+          className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 outline-none focus:border-green-600 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+        />
+      </label>
+      <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+        Boat name
+        <input
+          value={boatInput}
+          onChange={(e) => setBoatInput(e.target.value)}
+          onBlur={persistBoat}
+          placeholder="e.g. Sea Sprite"
+          className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 outline-none focus:border-green-600 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+        />
+      </label>
+      <p className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+        Map sharing choices (defaults on — set before or after you press Share). Nearby peers need a GPS fix after
+        sharing starts.
+      </p>
+
+      <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-[11px] leading-snug text-zinc-800 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-200">
+        <input
+          type="checkbox"
+          className="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-400 text-green-600"
+          checked={showAvatar}
+          onChange={(e) => persistShowAvatar(e.target.checked)}
+        />
+        <span className="font-semibold">Show profile image on map pin</span>
+      </label>
+
+      <label
+        className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 text-[11px] leading-snug ${
+          sharing && !pos
+            ? "cursor-wait border-blue-200/80 bg-blue-50/50 text-blue-900 dark:border-blue-900/40 dark:bg-blue-950/25 dark:text-blue-100"
+            : "border-blue-200 bg-blue-50/90 text-blue-950 dark:border-blue-900/50 dark:bg-blue-950/35 dark:text-blue-100"
+        }`}
+      >
+        <input
+          type="checkbox"
+          className="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-400 text-blue-600 disabled:opacity-50"
+          checked={shareNearby}
+          disabled={Boolean(sharing && !pos)}
+          onChange={(e) => {
+            const on = e.target.checked;
+            setShareNearby(on);
+            setShareNearbyPeers(on);
+            if (!on) clearMapPresence();
+          }}
+        />
+        <span className="font-semibold">Show me to nearby SeaLink users (~5 mi)</span>
+      </label>
+
+      <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-[11px] leading-snug text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+        <input
+          type="checkbox"
+          className="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-400 text-amber-700"
+          checked={bgConsent}
+          onChange={(e) => {
+            const on = e.target.checked;
+            setBackgroundLocationConsent(on);
+            setBgConsentState(on);
+          }}
+        />
+        <span className="font-semibold">Keep updating in the background</span>
+      </label>
+
+      <hr className="border-zinc-200 dark:border-zinc-800" />
+
+      <button
+        type="button"
+        onClick={() => {
+          setGeoError(null);
+          setSharingOn(!sharing);
+        }}
+        className={`flex h-10 w-full items-center justify-center rounded-lg text-sm font-medium ${
+          sharing
+            ? "border border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+            : "bg-green-600 text-white hover:bg-green-700"
+        }`}
+      >
+        {sharing ? "Stop sharing location on map" : "Share my location on this map"}
+      </button>
+
+      {sharing && locMode ? (
+        <p className="mt-2 text-[11px] text-zinc-600 dark:text-zinc-400">{locMode}</p>
+      ) : null}
+    </div>
+  );
+
   return (
-    <section className="mt-8 w-full space-y-4" aria-labelledby="map-heading">
+    <section className={`w-full space-y-4 ${isSettings ? "mt-4" : "mt-8"}`} aria-labelledby="map-heading">
       <div className="relative z-50 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
+        <div className="min-w-0">
           <h2 id="map-heading" className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-            Your map
+            {isSettings ? "Map sharing settings" : "Your map"}
           </h2>
           <p className="text-xs leading-5 text-zinc-500 dark:text-zinc-400">
-            GPS updates while this page is open, including in the background while the tab stays open (you can pause
-            that below). Standard browsers cannot keep GPS after you fully quit the browser — use a native app for that,
-            or leave a tab open.
+            {isSettings ? (
+              <>
+                Choose the three options below, then press{" "}
+                <span className="font-medium text-zinc-600 dark:text-zinc-300">
+                  Share my location on this map
+                </span>{" "}
+                or <span className="font-medium text-zinc-600 dark:text-zinc-300">Stop sharing</span> to apply.
+              </>
+            ) : (
+              <>
+                GPS updates while this page is open, including in the background while the tab stays open (you can pause
+                that in map sharing settings). Standard browsers cannot keep GPS after you fully quit the browser — use a
+                native app for that, or leave a tab open.
+              </>
+            )}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2 pointer-events-auto">
+        <div className="flex flex-wrap items-center gap-2 pointer-events-auto sm:justify-end">
+          {isSettings ? (
+            <Link
+              href="/"
+              className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-zinc-300 bg-zinc-50 px-4 text-sm font-semibold text-zinc-800 hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+            >
+              ← Back to map
+            </Link>
+          ) : null}
           <div className="flex flex-col items-start gap-1">
             <button
               type="button"
@@ -1052,12 +1191,21 @@ export default function HomeLocationMap({
             onClick={() => setLifeSeasOpen(true)}
             className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-teal-300 bg-teal-50 px-4 text-sm font-semibold text-teal-900 shadow-sm hover:bg-teal-100 dark:border-teal-800 dark:bg-teal-950/60 dark:text-teal-100 dark:hover:bg-teal-900/70"
           >
-            Life on the seas
+            Sea&apos;s the day!
           </button>
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+      {isSettings ? (
+        <div className="max-w-lg space-y-3">
+          {geoError ? (
+            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800 dark:border-red-900/40 dark:bg-red-950/50 dark:text-red-200">
+              {geoError}
+            </p>
+          ) : null}
+          {sharingSettingsPanel}
+        </div>
+      ) : (
         <div className="flex min-w-0 flex-col gap-0">
           <div className="overflow-hidden rounded-xl border border-zinc-200 shadow-sm dark:border-zinc-800">
             <div className="relative h-[min(55vh,420px)] w-full min-h-[280px] bg-zinc-100 dark:bg-zinc-900">
@@ -1150,108 +1298,35 @@ export default function HomeLocationMap({
             onPrev={() => setWindSlotIdx((i) => Math.max(0, i - 1))}
             onNext={() => setWindSlotIdx((i) => Math.min(windSlots.length - 1, i + 1))}
           />
-        </div>
 
-        <div className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
-          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">On your pin</p>
-          <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-            Your name (shown after boat in the small nearby pin popup)
-            <input
-              value={fullName}
-              onChange={(e) => setFullNameState(e.target.value)}
-              onBlur={persistFullName}
-              placeholder="e.g. Colin"
-              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 outline-none focus:border-green-600 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
-            />
-          </label>
-          <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-            Boat name
-            <input
-              value={boatInput}
-              onChange={(e) => setBoatInput(e.target.value)}
-              onBlur={persistBoat}
-              placeholder="e.g. Sea Sprite"
-              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 outline-none focus:border-green-600 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
-            />
-          </label>
-          <p className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-            Map sharing choices (defaults on — set before or after you press Share). Nearby peers need a GPS fix after
-            sharing starts.
-          </p>
-
-          <label
-            className="flex cursor-pointer items-start gap-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-[11px] leading-snug text-zinc-800 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-200"
-          >
-            <input
-              type="checkbox"
-              className="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-400 text-green-600"
-              checked={showAvatar}
-              onChange={(e) => persistShowAvatar(e.target.checked)}
-            />
-            <span className="font-semibold">Show profile image on map pin</span>
-          </label>
-
-          <label
-            className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 text-[11px] leading-snug ${
-              sharing && !pos
-                ? "cursor-wait border-blue-200/80 bg-blue-50/50 text-blue-900 dark:border-blue-900/40 dark:bg-blue-950/25 dark:text-blue-100"
-                : "border-blue-200 bg-blue-50/90 text-blue-950 dark:border-blue-900/50 dark:bg-blue-950/35 dark:text-blue-100"
-            }`}
-          >
-            <input
-              type="checkbox"
-              className="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-400 text-blue-600 disabled:opacity-50"
-              checked={shareNearby}
-              disabled={Boolean(sharing && !pos)}
-              onChange={(e) => {
-                const on = e.target.checked;
-                setShareNearby(on);
-                setShareNearbyPeers(on);
-                if (!on) clearMapPresence();
-              }}
-            />
-            <span className="font-semibold">Show me to nearby SeaLink users (~5 mi)</span>
-          </label>
-
-          <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-[11px] leading-snug text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
-            <input
-              type="checkbox"
-              className="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-400 text-amber-700"
-              checked={bgConsent}
-              onChange={(e) => {
-                const on = e.target.checked;
-                setBackgroundLocationConsent(on);
-                setBgConsentState(on);
-              }}
-            />
-            <span className="font-semibold">Keep updating in the background</span>
-          </label>
-
-          <hr className="border-zinc-200 dark:border-zinc-800" />
-
-          <button
-            type="button"
-            onClick={() => {
-              setGeoError(null);
-              setSharingOn(!sharing);
-            }}
-            className={`flex h-10 w-full items-center justify-center rounded-lg text-sm font-medium ${
-              sharing
-                ? "border border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
-                : "bg-green-600 text-white hover:bg-green-700"
-            }`}
-          >
-            {sharing ? "Stop sharing location on map" : "Share my location on this map"}
-          </button>
-
-          {sharing && locMode ? (
-            <p className="mt-2 text-[11px] text-zinc-600 dark:text-zinc-400">
-              {locMode}
+          <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+            <p className="text-sm text-zinc-700 dark:text-zinc-300">
+              Map location sharing is{" "}
+              <span className="font-semibold text-zinc-900 dark:text-zinc-50">{sharing ? "on" : "off"}</span>
+              {sharing && pos ? " · GPS active." : null}
+              {sharing && !pos ? " · Waiting for GPS…" : null}
             </p>
-          ) : null}
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              Open map sharing settings to choose pin options and turn sharing on or off.
+            </p>
+            <Link
+              href="/map-sharing"
+              className={`mt-3 flex h-10 w-full items-center justify-center rounded-lg text-sm font-medium ${
+                sharing
+                  ? "border border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                  : "bg-green-600 text-white hover:bg-green-700"
+              }`}
+            >
+              {sharing ? "Stop sharing location on map" : "Share my location on this map"}
+            </Link>
+            {sharing && locMode ? (
+              <p className="mt-2 text-[11px] text-zinc-600 dark:text-zinc-400">{locMode}</p>
+            ) : null}
+          </div>
         </div>
-      </div>
+      )}
 
+      {!isSettings ? (
       <div className="mt-4">
         <MapBroadcastPanel
           signedIn={signedIn}
@@ -1263,8 +1338,11 @@ export default function HomeLocationMap({
           sendLng={pos?.lng ?? null}
         />
       </div>
+      ) : null}
 
+      {!isSettings ? (
       <WeatherForecast7Day lat={forecastCoords.lat} lng={forecastCoords.lng} />
+      ) : null}
 
       <LifeOnSeasDailyModal
         open={lifeSeasOpen}

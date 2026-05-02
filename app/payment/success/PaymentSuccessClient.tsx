@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { setPendingAutoShareOnMapAfterPayment } from "@/lib/map-profile-storage";
 
 const STORAGE_KEY = "sealink_paypal_subscription_pending";
 
@@ -37,6 +38,7 @@ export function PaymentSuccessClient({
   useEffect(() => {
     if (!isPayPal) {
       setPhase("ready");
+      setPendingAutoShareOnMapAfterPayment();
       return;
     }
 
@@ -69,6 +71,7 @@ export function PaymentSuccessClient({
           setPhase("ready");
           return;
         }
+        setPendingAutoShareOnMapAfterPayment();
         setPhase("ready");
       } catch {
         if (cancelled) return;
