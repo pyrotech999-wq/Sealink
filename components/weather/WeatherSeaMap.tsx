@@ -3,7 +3,7 @@
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { startTransition, useEffect, useMemo, useState } from "react";
-import { MapContainer, ScaleControl, TileLayer, useMap } from "react-leaflet";
+import { AttributionControl, MapContainer, ScaleControl, TileLayer, useMap } from "react-leaflet";
 
 type LayerMode = "wind" | "waves" | "rain" | "pressure";
 type BaseMapMode = "streets" | "light" | "satellite";
@@ -105,8 +105,9 @@ function Legend({ mode }: { mode: LayerMode }) {
           <span>6m+</span>
         </div>
         <p className="mt-2 text-[10px] text-zinc-500 dark:text-zinc-400">
-          Waves use Stormglass when <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">STORMGLASS_API_KEY</code>{" "}
-          is set (server); otherwise Open‑Meteo Marine (viewport sample grid).
+          Base map stays Esri; wave heights use Stormglass when{" "}
+          <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">STORMGLASS_API_KEY</code> is set, with Open‑Meteo
+          Marine filling gaps. Without a key, the overlay is Open‑Meteo only.
         </p>
       </div>
     );
@@ -117,8 +118,9 @@ function Legend({ mode }: { mode: LayerMode }) {
       <div className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-700 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
         <p className="font-semibold text-zinc-900 dark:text-zinc-100">Legend · Wind (ECMWF IFS)</p>
         <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
-          Particles show flow direction; colour shows speed. With a Stormglass server key, wind is sampled from
-          Stormglass; otherwise ECMWF IFS via Open‑Meteo.
+          Particles show flow direction; colour shows speed. The base map stays Esri tiles (Leaflet); only the wind
+          overlay comes from Stormglass or Open‑Meteo. With a Stormglass server key, wind is sampled from Stormglass
+          when the API returns enough points; otherwise the server fills in with Open‑Meteo.
         </p>
         <div className="mt-2 flex items-center gap-2">
           <div
@@ -1085,8 +1087,9 @@ export function WeatherSeaMap() {
           maxZoom={18}
           className="h-full w-full"
           scrollWheelZoom
-          attributionControl
+          attributionControl={false}
         >
+          <AttributionControl position="bottomright" prefix={false} />
           <ScaleControl position="bottomleft" metric imperial />
           <MapToolbar
             pos={pos}

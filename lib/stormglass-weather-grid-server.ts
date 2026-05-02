@@ -42,25 +42,32 @@ export async function fetchStormglassHourRow(
   signal?: AbortSignal,
 ): Promise<Record<string, unknown> | null> {
   const start = new Date(timeIso);
-  const end = new Date(start.getTime() + 4 * 60 * 60 * 1000);
-  const url = new URL("https://api.stormglass.io/v2/weather/point");
-  url.searchParams.set("lat", String(lat));
-  url.searchParams.set("lng", String(lng));
-  url.searchParams.set("params", params);
-  url.searchParams.set("start", start.toISOString());
-  url.searchParams.set("end", end.toISOString());
-  url.searchParams.set("source", "sg");
+  const end = new Date(start.getTime() + 36 * 60 * 60 * 1000);
 
-  const r = await fetch(url.toString(), {
-    headers: { Authorization: apiKey },
-    cache: "no-store",
-    signal,
-  });
-  if (!r.ok) return null;
-  const j = (await r.json()) as { hours?: { time: string; [k: string]: unknown }[] };
-  const hours = j.hours;
-  if (!Array.isArray(hours) || hours.length === 0) return null;
-  const times = hours.map((h) => h.time);
-  const i = nearestHourIndex(times, timeIso);
-  return hours[i] ?? null;
+  for (const useSgSource of [true, false]) {
+    const url = new URL("https://api.stormglass.io/v2/weather/point");
+    url.searchParams.set("lat", String(lat));
+    url.searchParams.set("lng", String(lng));
+    url.searchParams.set("params", params);
+    url.searchParams.set("start", start.toISOString());
+    url.searchParams.set("end", end.toISOString());
+    if (useSgSource) url.searchParams.set("source", "sg");
+
+    const r = await fetch(url.toString(), {
+      headers: { Authorization: apiKey },
+      cache: "no-store",
+      signal,
+    });
+    if (!r.ok) continue;
+    const j = (await r.json()) as {
+      hours?: { time: string; [k: string]: unknown }[];
+      data?: { time: string; [k: string]: unknown }[];
+    };
+    const hours = j.hours ?? j.data;
+    if (!Array.isArray(hours) || hours.length === 0) continue;
+    const times = hours.map((h) => h.time);
+    const i = nearestHourIndex(times, timeIso);
+    return hours[i] ?? null;
+  }
+  return null;
 }
