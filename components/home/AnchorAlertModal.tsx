@@ -235,17 +235,6 @@ export function AnchorAlertModal({
           </p>
         ) : null}
 
-        {!devicesLoadError && devices.length === 1 ? (
-          <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
-            Only one device is registered for this session on the server. If you already see two rows in Supabase{" "}
-            <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/50">account_devices</code>, production may be
-            running old code — merge the latest changes to <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/50">main</code>{" "}
-            and redeploy, then hard-refresh this page (Shift+reload). In DevTools → Network, open the{" "}
-            <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/50">anchor/devices</code> request and confirm the JSON
-            lists two <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/50">deviceId</code> values.
-          </p>
-        ) : null}
-
         <div className="mt-4 space-y-3">
           <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
             This device label (to recognise it later)
