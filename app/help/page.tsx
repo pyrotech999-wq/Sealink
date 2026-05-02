@@ -230,9 +230,13 @@ export default function HelpPage() {
                 sharing on briefly after a good fix — the app can hold your last good position so the view stays sensible.
               </p>
               <p>
-                <strong className="text-zinc-200">Life on Seas prompt:</strong> you may see a once-per-day message or
-                tip — it is informational; close it to return to the map. It helps us share safety or community notes
-                without cluttering the main UI.
+                <strong className="text-zinc-200">Seas the day / Life on Seas:</strong> once in a while you may see a
+                short, once-per-day style prompt when you open the map. Those messages are meant to be{" "}
+                <strong className="text-zinc-100">inspirational</strong> — celebrating the <strong className="text-zinc-100">adventure</strong>,{" "}
+                <strong className="text-zinc-100">joy</strong>, <strong className="text-zinc-100">freedom</strong>, and{" "}
+                <strong className="text-zinc-100">spirit</strong> of life on the sea or on the water. They are not forecasts
+                or instructions; dismiss the prompt whenever you like to get straight back to the map. We may also use the
+                same channel for occasional safety or community reminders so important notes do not clutter the main UI.
               </p>
             </Section>
 

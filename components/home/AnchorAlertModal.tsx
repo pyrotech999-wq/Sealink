@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ANCHOR_MAX_HORIZ_ACCURACY_M, type AnchorGpsQuality } from "@/lib/anchor-gps-stabilizer";
 import { GPS_REFINE_TARGET_ACCURACY_M } from "@/lib/gps-refinement";
-import { isLikelyAndroid } from "@/lib/location-env";
+import { isLikelyAndroid, openAndroidLocationAppDetailsSettings } from "@/lib/location-env";
 import { getDeviceName, setDeviceName } from "@/lib/device-id";
 
 async function registerSessionDevice(currentDeviceId: string): Promise<void> {
@@ -194,19 +194,31 @@ export function AnchorAlertModal({
         {showIOSPreciseHint ? (
           <p className="mt-3 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-950 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-100">
             <span className="font-semibold text-sky-900 dark:text-sky-50">iPhone / iPad:</span> Settings → SeaLink →
-            Location → turn on <strong className="font-semibold">Precise Location</strong>. Reduced accuracy makes small
-            geofences unreliable; Apple only improves accuracy when permission allows.
+            Location → turn on <strong className="font-semibold">Precise Location</strong>. Approximate-only mode makes
+            small anchor rings unreliable. iOS does not let websites flip this for you — it has to be changed in Settings.
           </p>
         ) : null}
 
         {showAndroidPreciseHint && !showIOSPreciseHint ? (
-          <p className="mt-3 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-950 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-100">
-            <span className="font-semibold text-sky-900 dark:text-sky-50">Android:</span> Allow{" "}
-            <strong className="font-semibold">precise</strong> location for your browser. Chrome uses the fused location
-            stack; a native SeaLink app can call <code className="rounded bg-sky-100/80 px-1 dark:bg-sky-900/60">FusedLocationProviderClient</code>{" "}
-            with <code className="rounded bg-sky-100/80 px-1 dark:bg-sky-900/60">PRIORITY_HIGH_ACCURACY</code> for the
-            tightest fixes.
-          </p>
+          <div className="mt-3 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-950 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-100">
+            <p>
+              <span className="font-semibold text-sky-900 dark:text-sky-50">Android:</span> In system settings, allow{" "}
+              <strong className="font-semibold">precise</strong> (high-accuracy) location for SeaLink or your browser. Small
+              anchor rings need a tight GPS fix; if location is blurred for privacy, alerts can misfire.
+            </p>
+            <p className="mt-2 text-[11px] leading-snug opacity-90">
+              Android does not let websites turn precise location on automatically — only you can, in Settings. The button
+              below tries to open the right app so you can set Location / accuracy there (works on many devices; if nothing
+              opens, use Settings → Apps → your browser or SeaLink → Permissions → Location).
+            </p>
+            <button
+              type="button"
+              onClick={() => openAndroidLocationAppDetailsSettings()}
+              className="mt-2 inline-flex h-9 w-full items-center justify-center rounded-lg border border-sky-300 bg-white px-3 text-sm font-semibold text-sky-950 hover:bg-sky-100 dark:border-sky-700 dark:bg-sky-900/50 dark:text-sky-50 dark:hover:bg-sky-800/80 sm:w-auto"
+            >
+              Open in Android settings
+            </button>
+          </div>
         ) : null}
 
         {config.armed && anchorGpsQuality && anchorGpsQuality !== "ok" ? (
