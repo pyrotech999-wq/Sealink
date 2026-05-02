@@ -6,7 +6,6 @@ import { HomeMainCtas } from "@/components/HomeMainCtas";
 import { HomeMarinaBookingCta } from "@/components/home/HomeMarinaBookingCta";
 import { SeaLinkBrandFooter } from "@/components/SeaLinkBrandFooter";
 import { ShareAppLink } from "@/components/home/ShareAppLink";
-import { ManOverboardAlertButton } from "@/components/home/ManOverboardAlertButton";
 import { DEMO_SESSION_COOKIE, DEMO_SESSION_VALUE } from "@/lib/demo-session";
 import { canSendGlobalAreaBroadcast, getAuthUser } from "@/lib/auth";
 
@@ -55,8 +54,6 @@ export default async function Home() {
         <ShareAppLink className="mt-8" />
 
         <HomeMarinaBookingCta className="mt-8" />
-
-        <ManOverboardAlertButton signedIn={signedIn} />
 
         <SeaLinkBrandFooter />
       </main>

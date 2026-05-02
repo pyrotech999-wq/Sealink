@@ -7,9 +7,11 @@ import { MOB_SENDER_ACTIVE_UNTIL_KEY, MOB_SENDER_SENT_EVENT } from "@/components
 
 type Props = {
   signedIn: boolean;
+  /** Compact strip for bottom dock (every page). Default: full home block. */
+  variant?: "page" | "dock";
 };
 
-export function ManOverboardAlertButton({ signedIn }: Props) {
+export function ManOverboardAlertButton({ signedIn, variant = "page" }: Props) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
@@ -51,8 +53,10 @@ export function ManOverboardAlertButton({ signedIn }: Props) {
     }
   }, []);
 
+  const isDock = variant === "dock";
+
   return (
-    <div className="mt-10 mb-1">
+    <div className={isDock ? "" : "mt-10 mb-1"}>
       <button
         type="button"
         disabled={!signedIn}
@@ -60,22 +64,32 @@ export function ManOverboardAlertButton({ signedIn }: Props) {
           setBanner(null);
           setConfirmOpen(true);
         }}
-        className="w-full rounded-2xl bg-red-600 px-4 py-5 text-center text-lg font-bold tracking-wide text-white shadow-lg shadow-red-900/30 hover:bg-red-500 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400 disabled:shadow-none"
+        className={
+          isDock
+            ? "w-full rounded-xl bg-red-600 px-3 py-3 text-center text-sm font-bold tracking-wide text-white shadow-md shadow-red-950/40 hover:bg-red-500 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400 disabled:shadow-none"
+            : "w-full rounded-2xl bg-red-600 px-4 py-5 text-center text-lg font-bold tracking-wide text-white shadow-lg shadow-red-900/30 hover:bg-red-500 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400 disabled:shadow-none"
+        }
       >
         MAN OVERBOARD
       </button>
-      {!signedIn ? (
-        <p className="mt-2 text-center text-xs text-zinc-500">Sign in to send a man overboard alert.</p>
-      ) : (
-        <p className="mt-2 text-center text-xs text-zinc-500">
-          Sends your position, name, boat, email and phone to signed-in users within ~10 miles. Only use in a real
-          emergency.
-        </p>
-      )}
+      {!isDock ? (
+        !signedIn ? (
+          <p className="mt-2 text-center text-xs text-zinc-500">Sign in to send a man overboard alert.</p>
+        ) : (
+          <p className="mt-2 text-center text-xs text-zinc-500">
+            Sends your position, name, boat, email and phone to signed-in users within ~10 miles. Only use in a real
+            emergency.
+          </p>
+        )
+      ) : !signedIn ? (
+        <p className="mt-1 text-center text-[10px] text-zinc-500">Sign in to send an emergency alert.</p>
+      ) : null}
 
       {banner ? (
         <p
-          className={`mt-3 rounded-lg border px-3 py-2 text-sm ${
+          className={`rounded-lg border ${
+            isDock ? "mt-2 px-2 py-1.5 text-left text-xs leading-snug" : "mt-3 px-3 py-2 text-sm"
+          } ${
             banner.startsWith("MOB alert sent")
               ? "border-emerald-800/50 bg-emerald-950/40 text-emerald-200"
               : "border-red-800/50 bg-red-950/40 text-red-200"

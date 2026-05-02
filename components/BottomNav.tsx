@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
+import { ManOverboardAlertButton } from "@/components/home/ManOverboardAlertButton";
 import { NAV_ITEMS } from "@/components/nav-items";
 import { getBroadcastAlertsSilenced, setBroadcastAlertsSilenced } from "@/lib/broadcast-alert-preferences";
 
@@ -12,6 +13,20 @@ export function BottomNav() {
   const [silenced, setSilenced] = useState(() =>
     typeof window !== "undefined" ? getBroadcastAlertsSilenced() : false,
   );
+  const [signedIn, setSignedIn] = useState(false);
+
+  const refreshSession = useCallback(() => {
+    void fetch("/api/demo/me", { credentials: "same-origin", cache: "no-store" })
+      .then(async (r) => {
+        const d = (await r.json()) as { signedIn?: boolean };
+        setSignedIn(Boolean(d.signedIn));
+      })
+      .catch(() => setSignedIn(false));
+  }, []);
+
+  useEffect(() => {
+    refreshSession();
+  }, [pathname, refreshSession]);
 
   return (
     <div
@@ -50,6 +65,9 @@ export function BottomNav() {
           })}
         </ul>
       </nav>
+      <div className="border-t border-zinc-800/90 bg-zinc-950 px-2 py-2">
+        <ManOverboardAlertButton signedIn={signedIn} variant="dock" />
+      </div>
       <div className="border-t border-zinc-800/90 bg-zinc-950 px-2 py-1.5">
         <label className="flex cursor-pointer items-center justify-center gap-2 text-[10px] font-medium leading-snug text-zinc-400 sm:text-[11px] sm:justify-start">
           <input

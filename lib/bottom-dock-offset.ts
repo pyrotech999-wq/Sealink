@@ -1,5 +1,5 @@
 /**
- * Height reserve for the fixed bottom dock (nav row + silence strip + inner spacing).
+ * Height reserve for the fixed bottom dock (nav + MOB strip + silence row + inner spacing).
  * Keep in sync with `components/BottomNav.tsx` visual height.
  */
-export const BOTTOM_DOCK_OFFSET = "5.75rem";
+export const BOTTOM_DOCK_OFFSET = "9.25rem";

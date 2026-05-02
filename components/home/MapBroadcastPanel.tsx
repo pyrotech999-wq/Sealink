@@ -5,7 +5,7 @@ import { useBroadcastToast } from "@/components/BroadcastToastProvider";
 import { VicinityChatDrawer } from "@/components/home/VicinityChatDrawer";
 import { LinkifiedPlainText } from "@/components/LinkifiedPlainText";
 import { mapHrefPreferCoords } from "@/lib/map-links";
-import { MAP_BROADCAST_RETENTION_HOURS, MOB_CANCEL_BROADCAST_INTRO } from "@/lib/map-broadcast-constants";
+import { MOB_CANCEL_BROADCAST_INTRO } from "@/lib/map-broadcast-constants";
 import {
   BROADCAST_HIDDEN_EVENT,
   hideBroadcastId,
@@ -396,14 +396,6 @@ export function MapBroadcastPanel({
       <h3 className="text-base font-semibold tracking-tight text-indigo-950 dark:text-indigo-100">
         Area broadcasts (~5 mi)
       </h3>
-      <p className="mt-1 text-xs leading-5 text-indigo-900/80 dark:text-indigo-200/85">
-        Short messages go to everyone roughly within five miles of where you sent from (same radius as nearby pins)
-        {canSendGlobalBroadcast ? ", unless you choose to broadcast to all map areas." : "."} The last{" "}
-        {MAP_BROADCAST_RETENTION_HOURS} hours stay here (newest at top; only about two show at once — scroll for older). New ones also pop up as a floating{" "}
-        <strong className="font-semibold">Vicinity broadcast</strong> alert when we have a recent position saved from the map.{" "}
-        <strong className="font-semibold">Hide</strong> removes a message only on this device;{" "}
-        <strong className="font-semibold">Admin delete</strong> removes it for everyone (site admin only).
-      </p>
 
       <label className="mt-2 inline-flex cursor-pointer items-center gap-2 text-xs font-medium text-indigo-900 dark:text-indigo-200">
         <input
@@ -543,9 +535,6 @@ export function MapBroadcastPanel({
             Vicinity replies (direct messages)
           </h4>
           <p className="mt-1 text-[11px] leading-snug text-indigo-900/75 dark:text-indigo-200/80">
-            If someone taps <strong className="font-semibold">Reply</strong> on a broadcast, you chat in a private thread.
-            There is no email or push — watch for a <strong className="font-semibold">Vicinity message</strong> alert. In the
-            chat, only about two messages show at once — scroll the list for the rest.{" "}
             <strong className="font-semibold">Seen</strong> closes the chat but keeps all messages;{" "}
             <strong className="font-semibold">tap this row</strong> (preview) to reopen.{" "}
             <strong className="font-semibold">Delete</strong> removes the whole thread for both people.

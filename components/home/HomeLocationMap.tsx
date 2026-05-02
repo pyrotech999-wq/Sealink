@@ -1188,12 +1188,7 @@ export default function HomeLocationMap({
               checked={showAvatar}
               onChange={(e) => persistShowAvatar(e.target.checked)}
             />
-            <span>
-              <span className="font-semibold">Show profile image on map pin</span>
-              <span className="mt-1 block opacity-90">
-                Uses the profile photo you added on sign-up/profile. Turn off if you prefer a plain “You” marker.
-              </span>
-            </span>
+            <span className="font-semibold">Show profile image on map pin</span>
           </label>
 
           <label
@@ -1215,13 +1210,7 @@ export default function HomeLocationMap({
                 if (!on) clearMapPresence();
               }}
             />
-            <span>
-              <span className="font-semibold">Show me to nearby SeaLink users (~5 mi)</span>
-              <span className="mt-1 block opacity-90">
-                On by default. Other members who also leave this on can appear as blue pins when you share. Turn off to
-                stay private on the shared map.
-              </span>
-            </span>
+            <span className="font-semibold">Show me to nearby SeaLink users (~5 mi)</span>
           </label>
 
           <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-[11px] leading-snug text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
@@ -1235,14 +1224,7 @@ export default function HomeLocationMap({
                 setBgConsentState(on);
               }}
             />
-            <span>
-              <span className="font-semibold">Keep updating in the background</span>
-              <span className="mt-1 block opacity-90">
-                On by default: we keep requesting your position on a slower cadence while this tab stays open, even if
-                you switch apps (browser may still throttle GPS). Turn this off to only update while this tab is visible.
-                Fully closing the browser stops tracking.
-              </span>
-            </span>
+            <span className="font-semibold">Keep updating in the background</span>
           </label>
 
           <hr className="border-zinc-200 dark:border-zinc-800" />

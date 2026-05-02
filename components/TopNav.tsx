@@ -10,7 +10,7 @@ export function TopNav() {
 
   return (
     <nav
-      className="sticky top-0 z-40 border-b border-zinc-800 bg-zinc-950/90 backdrop-blur"
+      className="sticky top-0 z-40 border-b border-zinc-800 bg-zinc-950/90 pt-[calc(env(safe-area-inset-top,0px)+0.625rem)] backdrop-blur"
       aria-label="Main"
     >
       <div className="mx-auto flex max-w-5xl items-center gap-2 px-2 py-1 sm:px-6">
