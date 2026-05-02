@@ -4,7 +4,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Help | SeaLink",
   description:
-    "How to use SeaLink: home map, sharing, weather, IFM, for sale (boats & gear), marinas, anchor watch, broadcasts, and more.",
+    "How to use SeaLink: home map, sharing, weather, IFM, Buy & Sell (boats & gear), marinas, anchor watch, broadcasts, and more.",
 };
 
 const DEV_EMAIL = "pyrotech999@hotmail.co.uk";
@@ -26,7 +26,7 @@ const toc: { id: string; label: string }[] = [
   { id: "profile", label: "Profile & pin" },
   { id: "weather", label: "Weather & sea" },
   { id: "ifm", label: "IFM (friends map)" },
-  { id: "marketplace", label: "For sale, gear & marinas" },
+  { id: "marketplace", label: "Buy & Sell, gear & marinas" },
   { id: "broadcasts", label: "Broadcasts & chat" },
   { id: "anchor", label: "Anchor watch" },
   { id: "anchor-android-location", label: "Android location (anchor)" },
@@ -131,7 +131,7 @@ export default function HelpPage() {
                   Sign in
                 </Link>{" "}
                 if you already have one. Use the <strong className="text-zinc-200">top navigation bar</strong> (Home, IFM,
-                Weather, Messages, For sale) on every screen size — it stays visible while you scroll.
+                Messages, Weather &amp; sea, Buy &amp; Sell) on every screen size — it stays visible while you scroll.
               </p>
               <ul className="list-disc space-y-1 pl-5 text-zinc-400">
                 <li>
@@ -145,7 +145,7 @@ export default function HelpPage() {
                   <strong className="text-zinc-300">IFM</strong> — International Friends Map for seeing other users.
                 </li>
                 <li>
-                  <strong className="text-zinc-300">For sale</strong> — hub for boat gear and boats for sale.
+                  <strong className="text-zinc-300">Buy &amp; Sell</strong> — hub for boat gear and boats for sale.
                 </li>
               </ul>
               <p className="rounded-lg border border-emerald-900/40 bg-emerald-950/30 px-3 py-2 text-xs leading-5 text-emerald-100/90">
@@ -158,7 +158,7 @@ export default function HelpPage() {
             <Section id="navigation" title="Finding your way around">
               <p>
                 <strong className="text-zinc-200">Top navigation</strong> (desktop / tablet): quick jumps to Home, IFM,
-                Weather &amp; sea, Messages, and For sale (then choose boats or gear). The active page is highlighted in
+                Messages, Weather &amp; sea, and Buy &amp; Sell (then choose boats or gear). The active page is highlighted in
                 green.
               </p>
               <p>
@@ -332,11 +332,11 @@ export default function HelpPage() {
               </p>
             </Section>
 
-            <Section id="marketplace" title="For sale, boat gear &amp; marinas">
+            <Section id="marketplace" title="Buy &amp; Sell, boat gear &amp; marinas">
               <p>
                 Start from{" "}
                 <Link href="/for-sale" className="font-medium text-emerald-400 hover:underline">
-                  For sale
+                  Buy &amp; Sell
                 </Link>{" "}
                 (<span className="font-mono text-zinc-400">/for-sale</span>) to open either{" "}
                 <strong className="text-zinc-200">boats for sale</strong> (

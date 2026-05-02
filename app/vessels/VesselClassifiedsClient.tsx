@@ -245,7 +245,7 @@ export function VesselClassifiedsClient() {
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-4 py-8 sm:px-6 sm:py-10">
       <div>
         <Link href="/for-sale" className="text-sm font-medium text-green-800 hover:underline dark:text-green-400">
-          ← For sale
+          ← Buy & Sell
         </Link>
         <h1 className="mt-4 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Boats for sale</h1>
         <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">

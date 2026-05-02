@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "For sale",
+  title: "Buy & Sell",
   description: "Boats for sale and boat gear listings on SeaLink.",
 };
 
@@ -14,7 +14,7 @@ export default function ForSalePage() {
           ← Home
         </Link>
         <h1 className="mt-4 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-3xl">
-          For sale
+          Buy &amp; Sell
         </h1>
         <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
           Choose <strong className="text-zinc-800 dark:text-zinc-200">boats for sale</strong> (paid listings) or{" "}
@@ -24,7 +24,7 @@ export default function ForSalePage() {
         <div className="mt-10 grid gap-4 sm:grid-cols-2">
           <Link
             href="/vessels"
-            className="group flex min-h-[10rem] flex-col justify-between rounded-2xl border-2 border-emerald-800/50 bg-gradient-to-br from-emerald-950/80 to-zinc-950 p-6 shadow-lg transition hover:border-emerald-500/70 hover:from-emerald-900/90 sm:min-h-[11rem]"
+            className="group flex min-h-[10rem] flex-col justify-between rounded-2xl border-2 border-emerald-800/50 bg-gradient-to-br from-emerald-950/80 to-zinc-950 p-6 text-center shadow-lg transition hover:border-emerald-500/70 hover:from-emerald-900/90 sm:min-h-[11rem]"
           >
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-emerald-400/90">Listings</p>
@@ -38,7 +38,7 @@ export default function ForSalePage() {
 
           <Link
             href="/gear"
-            className="group flex min-h-[10rem] flex-col justify-between rounded-2xl border-2 border-sky-800/50 bg-gradient-to-br from-sky-950/80 to-zinc-950 p-6 shadow-lg transition hover:border-sky-500/70 hover:from-sky-900/90 sm:min-h-[11rem]"
+            className="group flex min-h-[10rem] flex-col justify-between rounded-2xl border-2 border-sky-800/50 bg-gradient-to-br from-sky-950/80 to-zinc-950 p-6 text-center shadow-lg transition hover:border-sky-500/70 hover:from-sky-900/90 sm:min-h-[11rem]"
           >
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-sky-400/90">Marketplace</p>

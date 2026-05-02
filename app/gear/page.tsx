@@ -12,7 +12,7 @@ export default function GearPage() {
     <div className="flex flex-1 flex-col bg-black">
       <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col px-4 py-8 sm:px-6 sm:py-10">
         <Link href="/for-sale" className="text-sm font-medium text-green-800 hover:underline dark:text-green-400">
-          ← For sale
+          ← Buy & Sell
         </Link>
         <h1 className="mt-4 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
           Boat gear — buy &amp; sell
