@@ -42,6 +42,9 @@ const initial = {
 /** Large photos are shrunk in the browser before upload; cap raw picker size to avoid memory issues. */
 const MAX_PHOTO_BYTES = 24 * 1024 * 1024;
 
+/** Session-only: after user acknowledges safety disclaimer, do not show again until a new tab/session. */
+const SIGNUP_DISCLAIMER_SESSION_KEY = "sealink_signup_disclaimer_v1";
+
 const PHONE_DIAL_OPTIONS: { dial: string; label: string }[] = [
   { dial: "+44", label: "United Kingdom (+44)" },
   { dial: "+353", label: "Ireland (+353)" },
@@ -79,6 +82,8 @@ export function SignUpForm() {
   /** Stops the primary action sitting under the thumb from firing twice when step 3 → 4 re-renders on mobile. */
   const [step4PrimaryReady, setStep4PrimaryReady] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [signupDisclaimerOpen, setSignupDisclaimerOpen] = useState(false);
+  const [signupDisclaimerChecked, setSignupDisclaimerChecked] = useState(false);
 
   const progress = useMemo(() => ({ 1: 25, 2: 50, 3: 75, 4: 100 }[step]), [step]);
 
@@ -104,6 +109,39 @@ export function SignUpForm() {
     if (!el) return;
     el.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [step]);
+
+  useEffect(() => {
+    if (submitted) return;
+    const id = window.setTimeout(() => {
+      try {
+        if (sessionStorage.getItem(SIGNUP_DISCLAIMER_SESSION_KEY) !== "1") {
+          setSignupDisclaimerOpen(true);
+        }
+      } catch {
+        setSignupDisclaimerOpen(true);
+      }
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, [submitted]);
+
+  useEffect(() => {
+    if (!signupDisclaimerOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [signupDisclaimerOpen]);
+
+  function dismissSignupDisclaimer() {
+    try {
+      sessionStorage.setItem(SIGNUP_DISCLAIMER_SESSION_KEY, "1");
+    } catch {
+      /* private mode */
+    }
+    setSignupDisclaimerOpen(false);
+    setSignupDisclaimerChecked(false);
+  }
 
   function set<K extends keyof typeof initial>(key: K, value: (typeof initial)[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -403,11 +441,90 @@ export function SignUpForm() {
   }
 
   return (
-    <form
-      ref={formTopRef}
-      onSubmit={onSubmit}
-      className="rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-950"
-    >
+    <>
+      {signupDisclaimerOpen ? (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="signup-disclaimer-title"
+            className="max-h-[min(92vh,720px)] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-950 sm:rounded-2xl"
+          >
+            <div className="border-b border-amber-200/80 bg-amber-50 px-4 py-3 dark:border-amber-900/50 dark:bg-amber-950/40">
+              <p id="signup-disclaimer-title" className="text-base font-bold text-amber-950 dark:text-amber-100">
+                Important — please read before you sign up
+              </p>
+              <p className="mt-1 text-xs font-medium text-amber-900/90 dark:text-amber-200/90">
+                SeaLink is for recreational use only. These points are a short summary of our{" "}
+                <Link href="/terms" className="underline underline-offset-2 hover:text-amber-950 dark:hover:text-amber-50">
+                  terms of use
+                </Link>
+                .
+              </p>
+            </div>
+            <div className="space-y-3 px-4 py-4 text-sm leading-6 text-zinc-800 dark:text-zinc-200">
+              <ul className="list-disc space-y-2 pl-4 text-zinc-700 dark:text-zinc-300">
+                <li>
+                  <strong className="text-zinc-900 dark:text-zinc-100">Recreational use only</strong> — not a replacement for
+                  official charts, training, or your own judgement at sea.
+                </li>
+                <li>
+                  <strong className="text-zinc-900 dark:text-zinc-100">Do not use SeaLink to plan trips or sailing</strong> — do
+                  not use it to decide whether to go to sea, route a passage, or navigate.
+                </li>
+                <li>
+                  <strong className="text-zinc-900 dark:text-zinc-100">Get official weather</strong> for any real decision — what
+                  you see here is general interest and entertainment, not an official forecast service.
+                </li>
+                <li>
+                  <strong className="text-zinc-900 dark:text-zinc-100">Emergencies</strong> — use{" "}
+                  <strong>VHF / HF / UHF</strong> distress where appropriate, call the <strong>coastguard / MRCC</strong>, and use
+                  normal <strong>emergency phone numbers</strong> (e.g. 999, 112, 911). In-app help or messages are{" "}
+                  <strong>only in addition</strong> to those channels, after you have raised the alarm properly.
+                </li>
+                <li>
+                  <strong className="text-zinc-900 dark:text-zinc-100">Forecasts, maps, and messages may be wrong</strong> — do not
+                  rely on them for safety, navigation, or legal decisions.
+                </li>
+              </ul>
+              <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-900/60">
+                <input
+                  type="checkbox"
+                  className="mt-1 size-4 shrink-0 rounded border-zinc-400 text-green-700 focus:ring-green-600"
+                  checked={signupDisclaimerChecked}
+                  onChange={(ev) => setSignupDisclaimerChecked(ev.target.checked)}
+                />
+                <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                  I have read and understand these important limitations.
+                </span>
+              </label>
+            </div>
+            <div className="flex flex-col gap-2 border-t border-zinc-200 px-4 py-4 dark:border-zinc-800 sm:flex-row sm:justify-end">
+              <Link
+                href="/terms"
+                className="inline-flex h-11 items-center justify-center rounded-lg border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              >
+                Open full terms
+              </Link>
+              <button
+                type="button"
+                disabled={!signupDisclaimerChecked}
+                onClick={dismissSignupDisclaimer}
+                className="inline-flex h-11 items-center justify-center rounded-lg bg-green-700 px-5 text-sm font-semibold text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Continue to sign up
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <form
+        ref={formTopRef}
+        onSubmit={onSubmit}
+        inert={signupDisclaimerOpen ? true : undefined}
+        className="rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-950"
+      >
       {errors.submit ? (
         <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-200">
           {errors.submit}
@@ -915,5 +1032,6 @@ export function SignUpForm() {
         </div>
       </div>
     </form>
+    </>
   );
 }

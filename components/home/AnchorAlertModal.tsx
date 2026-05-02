@@ -150,32 +150,40 @@ export function AnchorAlertModal({
     if (!open) return;
     const deg = config.angleDeg ?? ANGLE_OFF;
     const on = deg < ANGLE_OFF;
-    setAngleEnabled(on);
-    setAngleDeg(String(on ? deg : ANGLE_DEFAULT_ON));
+    queueMicrotask(() => {
+      setAngleEnabled(on);
+      setAngleDeg(String(on ? deg : ANGLE_DEFAULT_ON));
+    });
   }, [open, config.angleDeg]);
 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 px-4 py-8">
-      <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-800 dark:bg-zinc-950">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Anchor alert & geofence</h3>
-            <p className="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-400">
-              Drop an anchor at your current GPS position and choose a circular geofence. While armed, the map shows an
-              orange ring; you get an alert if the monitored device moves outside that circle (plus a small GPS buffer)
-              while this app stays open.
-            </p>
-          </div>
+    <div className="fixed inset-0 z-[1000] flex items-end justify-center bg-black/40 p-0 sm:items-center sm:px-4 sm:py-6">
+      <div className="flex max-h-[min(92dvh,820px)] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-950 sm:rounded-2xl">
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-zinc-200 px-4 py-4 dark:border-zinc-800 sm:px-5">
+          <h3 id="anchor-alert-dialog-title" className="text-base font-semibold leading-snug text-zinc-900 dark:text-zinc-50">
+            Anchor alert &amp; geofence
+          </h3>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1 text-xs font-semibold text-zinc-800 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            className="shrink-0 rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 text-xs font-semibold text-zinc-800 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-200 dark:hover:bg-zinc-800"
           >
             Close
           </button>
         </div>
+
+        <div
+          className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-5"
+          role="region"
+          aria-labelledby="anchor-alert-dialog-title"
+        >
+          <p className="text-xs leading-5 text-zinc-600 dark:text-zinc-400">
+            Drop an anchor at your current GPS position and choose a circular geofence. While armed, the map shows an orange
+            ring; you get an alert if the monitored device moves outside that circle (plus a small GPS buffer) while this app
+            stays open.
+          </p>
 
         {hint ? (
           <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
@@ -464,6 +472,7 @@ export function AnchorAlertModal({
               <p className="mt-1 text-[11px] opacity-80">No anchor set yet.</p>
             )}
           </div>
+        </div>
         </div>
       </div>
     </div>
