@@ -113,9 +113,7 @@ export function LifeOnSeasDailyModal({ open, onClose, pinLive, lat, lng }: Props
           <h2 id={titleId} className="text-lg font-semibold tracking-tight text-teal-950 dark:text-teal-50">
             Sea&apos;s the day!
           </h2>
-          <p className="mt-1 text-xs leading-5 text-teal-900/75 dark:text-teal-200/80">
-            Short notes for boat people. {pinLive ? "Using your shared position for place and local weather." : "Share your location on the map to weave in nearby places when the weather plays along."}
-          </p>
+          <p className="mt-1 text-xs leading-5 text-teal-900/75 dark:text-teal-200/80">On the water reflections!</p>
         </div>
 
         <div ref={listRef} className="max-h-[min(52vh,320px)] space-y-3 overflow-y-auto px-5 py-4">
