@@ -12,7 +12,7 @@ type Props = { searchParams: Promise<{ provider?: string; subscription_id?: stri
 
 export default async function PaymentSuccessPage({ searchParams }: Props) {
   const { provider, subscription_id: subId } = await searchParams;
-  const isPayPal = provider === "paypal";
+  const paymentProvider = provider === "paypal" ? "paypal" : provider === "stripe" ? "stripe" : "other";
 
   return (
     <div className="mx-auto flex min-h-[60vh] w-full max-w-lg flex-col justify-center px-4 py-12 sm:px-6">
@@ -22,16 +22,18 @@ export default async function PaymentSuccessPage({ searchParams }: Props) {
           Trial subscription confirmed
         </h1>
         <p className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-          {isPayPal
+          {paymentProvider === "paypal"
             ? "PayPal has recorded your subscription. You won’t be charged until the trial ends. You can manage billing from your PayPal account."
-            : "Your subscription is active. You won’t be charged until the trial ends."}
+            : paymentProvider === "stripe"
+              ? "Stripe has recorded your subscription. You won’t be charged until the trial ends. Use the links in Stripe’s confirmation email to manage your payment method or cancel."
+              : "Your subscription is active. You won’t be charged until the trial ends."}
         </p>
         <Suspense
           fallback={
             <p className="mt-8 text-sm text-zinc-500 dark:text-zinc-400">Loading…</p>
           }
         >
-          <PaymentSuccessClient isPayPal={isPayPal} subscriptionIdFromServer={subId ?? null} />
+          <PaymentSuccessClient paymentProvider={paymentProvider} subscriptionIdFromServer={subId ?? null} />
         </Suspense>
       </div>
     </div>

@@ -18,6 +18,7 @@ export async function GET(): Promise<Response> {
         email: a.email,
         createdAt: a.createdAt,
         paypalStatus: d.paypalStatus,
+        stripeStatus: d.stripeStatus,
         freeAccessGranted: d.freeAccessGranted,
         hasAccess: d.hasAccess,
       };

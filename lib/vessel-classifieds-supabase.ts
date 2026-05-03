@@ -19,7 +19,8 @@ function rowToListing(r: Record<string, unknown>): VesselClassifiedListing | nul
     removedAt: typeof r.removed_at === "string" ? r.removed_at : null,
     status: status === "active" || status === "expired" || status === "removed" ? status : "draft",
     paymentStatus: r.payment_status === "paid" || r.payment_status === "pending" ? r.payment_status : "unpaid",
-    paymentProvider: r.payment_provider === "paypal" ? r.payment_provider : null,
+    paymentProvider:
+      r.payment_provider === "paypal" || r.payment_provider === "stripe" ? r.payment_provider : null,
     paymentRef: typeof r.payment_ref === "string" ? r.payment_ref : null,
     categoryId: r.category_id,
     title: r.title,

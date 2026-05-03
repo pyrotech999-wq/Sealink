@@ -34,7 +34,7 @@ export function isVesselCategoryId(v: string): v is VesselCategoryId {
 }
 
 export type VesselListingStatus = "draft" | "active" | "expired" | "removed";
-export type VesselPaymentProvider = "paypal";
+export type VesselPaymentProvider = "paypal" | "stripe";
 export type VesselPaymentStatus = "unpaid" | "pending" | "paid";
 
 export type VesselClassifiedListing = {
@@ -47,7 +47,7 @@ export type VesselClassifiedListing = {
   status: VesselListingStatus;
   paymentStatus: VesselPaymentStatus;
   paymentProvider: VesselPaymentProvider | null;
-  paymentRef: string | null; // paypal order id, etc.
+  paymentRef: string | null; // PayPal order id or Stripe Checkout session id
 
   categoryId: VesselCategoryId;
   title: string;

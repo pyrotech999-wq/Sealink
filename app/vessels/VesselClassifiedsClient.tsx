@@ -2,13 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { VESSEL_CATEGORIES, type VesselCategoryId } from "@/lib/vessel-classifieds-types";
+import { VESSEL_CATEGORIES, type VesselCategoryId, type VesselPaymentProvider } from "@/lib/vessel-classifieds-types";
 
 type PublicListing = {
   id: string;
   status: "draft" | "active" | "expired" | "removed";
   paymentStatus: "unpaid" | "pending" | "paid";
-  paymentProvider: "paypal" | null;
+  paymentProvider: VesselPaymentProvider | null;
   paymentRef: string | null;
   categoryId: VesselCategoryId;
   title: string;
@@ -55,6 +55,7 @@ export function VesselClassifiedsClient() {
   const [postMsg, setPostMsg] = useState<string | null>(null);
   const [reminders, setReminders] = useState<{ id: string; title: string; expiresAt: string; daysLeft: number }[]>([]);
   const [reminderMsg, setReminderMsg] = useState<string | null>(null);
+  const [stripeListingReady, setStripeListingReady] = useState<boolean | null>(null);
 
   useEffect(() => {
     return () => {
@@ -77,6 +78,13 @@ export function VesselClassifiedsClient() {
         setSignedIn(false);
       }
     })();
+  }, []);
+
+  useEffect(() => {
+    void fetch("/api/stripe/config", { cache: "no-store" })
+      .then((r) => r.json() as Promise<{ vesselListing?: boolean }>)
+      .then((d) => setStripeListingReady(Boolean(d.vesselListing)))
+      .catch(() => setStripeListingReady(false));
   }, []);
 
   const load = async () => {
@@ -214,13 +222,34 @@ export function VesselClassifiedsClient() {
     }
   }
 
-  // Handle PayPal return (best effort, no webhook yet).
+  async function payStripe(id: string) {
+    setErr(null);
+    try {
+      const r = await fetch("/api/vessels/classifieds/stripe/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ id }),
+      });
+      const d = (await r.json()) as { url?: string; error?: string };
+      if (!r.ok || !d.url) {
+        setErr(d.error || "Stripe checkout could not be started");
+        return;
+      }
+      window.location.assign(d.url);
+    } catch {
+      setErr("Network error");
+    }
+  }
+
+  // Handle PayPal return (capture) or Stripe return (verify session); webhook also finalises Stripe.
   useEffect(() => {
     const url = new URL(window.location.href);
     const provider = url.searchParams.get("provider") ?? "";
     const listingId = url.searchParams.get("listing") ?? "";
     const paid = url.searchParams.get("paid") === "1";
     const token = url.searchParams.get("token") ?? ""; // PayPal order id
+    const sessionId = url.searchParams.get("session_id") ?? "";
     if (!paid || !listingId) return;
 
     void (async () => {
@@ -230,6 +259,13 @@ export function VesselClassifiedsClient() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ listingId, orderId: token }),
+          });
+        } else if (provider === "stripe" && sessionId) {
+          await fetch("/api/vessels/classifieds/stripe/verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify({ sessionId }),
           });
         }
       } finally {
@@ -249,7 +285,8 @@ export function VesselClassifiedsClient() {
         </Link>
         <h1 className="mt-4 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Boats for sale</h1>
         <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-          Paid boat adverts run for <strong>6 months</strong>. Price: <strong>£30</strong> per listing (PayPal).
+          Paid boat adverts run for <strong>6 months</strong>. Price: <strong>£30</strong> per listing — pay with PayPal
+          {stripeListingReady ? " or card (Stripe)" : ""}.
         </p>
       </div>
 
@@ -267,13 +304,24 @@ export function VesselClassifiedsClient() {
                     {new Date(x.expiresAt).toLocaleString("en-GB")}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => void payPayPal(x.id)}
-                  className="h-9 shrink-0 rounded-lg bg-green-600 px-3 text-sm font-semibold text-white hover:bg-green-700"
-                >
-                  Renew 6 months (£30)
-                </button>
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void payPayPal(x.id)}
+                    className="h-9 rounded-lg bg-green-600 px-3 text-sm font-semibold text-white hover:bg-green-700"
+                  >
+                    Renew (PayPal)
+                  </button>
+                  {stripeListingReady ? (
+                    <button
+                      type="button"
+                      onClick={() => void payStripe(x.id)}
+                      className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-900 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                    >
+                      Renew (card)
+                    </button>
+                  ) : null}
+                </div>
               </div>
             ))}
           </div>
@@ -508,7 +556,8 @@ export function VesselClassifiedsClient() {
       <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
         <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Your drafts (pay to publish)</h2>
         <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-          Drafts don’t show publicly until paid. Use PayPal to publish for 6 months.
+          Drafts don’t show publicly until paid. Pay £30 for 6 months with PayPal
+          {stripeListingReady ? " or Stripe (card)" : ""}.
         </p>
         <div className="mt-4 space-y-3">
           {signedIn === false ? (
@@ -532,6 +581,15 @@ export function VesselClassifiedsClient() {
                     >
                       Pay with PayPal (£30)
                     </button>
+                    {stripeListingReady ? (
+                      <button
+                        type="button"
+                        onClick={() => void payStripe(l.id)}
+                        className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-900 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                      >
+                        Pay with card — Stripe (£30)
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               ))

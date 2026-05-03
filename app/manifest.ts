@@ -1,18 +1,8 @@
 import type { MetadataRoute } from "next";
-
-/** Canonical origin for manifest id + absolute icon URLs (Android Chrome is picky if these drift). */
-function appOrigin(): string {
-  const explicit = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/+$/, "");
-  if (explicit && explicit.length > 0) return explicit;
-  const vercel = process.env.VERCEL_URL?.trim().replace(/\/+$/, "");
-  if (vercel && vercel.length > 0) {
-    return vercel.startsWith("http://") || vercel.startsWith("https://") ? vercel : `https://${vercel}`;
-  }
-  return "http://localhost:3000";
-}
+import { resolvePublicAppOrigin } from "@/lib/public-app-url";
 
 export default function manifest(): MetadataRoute.Manifest {
-  const origin = appOrigin();
+  const origin = resolvePublicAppOrigin();
   return {
     id: `${origin}/`,
     name: "SeaLink",

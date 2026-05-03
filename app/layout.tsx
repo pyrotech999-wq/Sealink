@@ -11,11 +11,11 @@ import { SessionDeviceRegistrar } from "@/components/SessionDeviceRegistrar";
 import { TopNav } from "@/components/TopNav";
 import { MobSenderActiveBanner } from "@/components/MobSenderActiveBanner";
 import { MobIncomingAlertHost } from "@/components/MobIncomingAlertHost";
+import { resolvePublicAppOrigin } from "@/lib/public-app-url";
 import "./globals.css";
 
 function getMetadataBase(): URL {
-  const raw = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/+$/, "");
-  return new URL(raw && raw.length > 0 ? raw : "http://localhost:3000");
+  return new URL(resolvePublicAppOrigin());
 }
 
 const geistSans = Geist({

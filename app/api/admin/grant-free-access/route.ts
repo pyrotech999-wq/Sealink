@@ -3,7 +3,9 @@ import { getAuthUser } from "@/lib/auth";
 import { setAdminGrantedFreeAccess } from "@/lib/admin-free-access-store";
 import { cancelPayPalBillingSubscription, paypalClientId } from "@/app/api/vessels/classifieds/paypal/_paypal";
 import { getPayPalSubscriptionByUser, upsertPayPalSubscription } from "@/lib/paypal-subscription-store";
-import { paypalSubscriptionIsActiveForBilling } from "@/lib/subscription-access";
+import { getStripeSubscriptionByUser, upsertStripeSubscription } from "@/lib/stripe-subscription-store";
+import { getStripe, stripeSecretKey } from "@/lib/stripe-server";
+import { paypalSubscriptionIsActiveForBilling, stripeSubscriptionIsActiveForBilling } from "@/lib/subscription-access";
 
 export const runtime = "nodejs";
 
@@ -26,8 +28,40 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   let paypalCancelled = false;
+  let stripeCancelled = false;
 
   if (granted) {
+    const stripeSub = await getStripeSubscriptionByUser(uid);
+    if (stripeSub?.subscriptionId && stripeSubscriptionIsActiveForBilling(stripeSub.status)) {
+      if (!stripeSecretKey()) {
+        return NextResponse.json(
+          { error: "Stripe is not configured; cannot cancel an active Stripe subscription before granting complimentary access." },
+          { status: 503 },
+        );
+      }
+      try {
+        await getStripe().subscriptions.cancel(stripeSub.subscriptionId);
+        stripeCancelled = true;
+        await upsertStripeSubscription({
+          userUid: uid,
+          stripeCustomerId: stripeSub.stripeCustomerId,
+          subscriptionId: stripeSub.subscriptionId,
+          status: "canceled",
+          priceId: stripeSub.priceId,
+          raw: {
+            ...(typeof stripeSub.raw === "object" && stripeSub.raw !== null ? stripeSub.raw : {}),
+            cancelledForComplimentary: true,
+          },
+        });
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Stripe cancel failed";
+        return NextResponse.json(
+          { error: `Could not cancel Stripe subscription: ${msg}. Complimentary access was not enabled.` },
+          { status: 502 },
+        );
+      }
+    }
+
     const sub = await getPayPalSubscriptionByUser(uid);
     if (sub?.subscriptionId && paypalSubscriptionIsActiveForBilling(sub.status)) {
       if (!paypalClientId()) {
@@ -76,5 +110,5 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
 
-  return NextResponse.json({ ok: true as const, uid, granted, paypalCancelled });
+  return NextResponse.json({ ok: true as const, uid, granted, paypalCancelled, stripeCancelled });
 }

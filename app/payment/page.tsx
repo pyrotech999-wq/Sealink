@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
+import { paymentEnvStatus } from "@/lib/payment-env-status";
 import { PaymentClient } from "./PaymentClient";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Plans & payment",
@@ -13,10 +16,16 @@ export default async function PaymentPage({ searchParams }: Props) {
   const { canceled, required } = await searchParams;
   const showCanceled = canceled === "1";
   const planRequired = required === "1";
+  const envPay = paymentEnvStatus();
 
   return (
     <div className="flex flex-1 flex-col bg-black">
-      <PaymentClient showCanceled={showCanceled} planRequired={planRequired} />
+      <PaymentClient
+        showCanceled={showCanceled}
+        planRequired={planRequired}
+        initialStripeSubscriptionsReady={envPay.stripeSubscriptions}
+        initialPayPalSubscriptionsReady={envPay.paypalSubscriptions}
+      />
     </div>
   );
 }

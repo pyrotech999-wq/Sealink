@@ -72,7 +72,8 @@ function normalise(row: unknown): VesselClassifiedListing | null {
     removedAt: typeof r.removedAt === "string" ? r.removedAt : null,
     status: status === "active" || status === "expired" || status === "removed" ? status : "draft",
     paymentStatus: r.paymentStatus === "paid" || r.paymentStatus === "pending" ? r.paymentStatus : "unpaid",
-    paymentProvider: r.paymentProvider === "paypal" ? r.paymentProvider : null,
+    paymentProvider:
+      r.paymentProvider === "paypal" || r.paymentProvider === "stripe" ? r.paymentProvider : null,
     paymentRef: typeof r.paymentRef === "string" ? r.paymentRef : null,
     categoryId: r.categoryId,
     title: r.title,

@@ -5,18 +5,38 @@ import Link from "next/link";
 import type { BillingPlan } from "@/lib/pricing";
 import { ANNUAL_GBP, MONTHLY_GBP, recurringPriceGbp, TRIAL_DAYS } from "@/lib/pricing";
 
-type Props = { showCanceled?: boolean; planRequired?: boolean };
+type Props = {
+  showCanceled?: boolean;
+  planRequired?: boolean;
+  /** From server env so production shows correct toggles even if /api fetch fails (CSP, adblock, etc.). */
+  initialStripeSubscriptionsReady?: boolean;
+  initialPayPalSubscriptionsReady?: boolean;
+};
 
-export function PaymentClient({ showCanceled = false, planRequired = false }: Props) {
+type BillingProvider = "stripe" | "paypal";
+
+export function PaymentClient({
+  showCanceled = false,
+  planRequired = false,
+  initialStripeSubscriptionsReady = false,
+  initialPayPalSubscriptionsReady = false,
+}: Props) {
   const [plan, setPlan] = useState<BillingPlan>("monthly");
+  const [billingProvider, setBillingProvider] = useState<BillingProvider>("stripe");
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [paypalEnv, setPaypalEnv] = useState<"live" | "sandbox" | null>(null);
   const [paypalConfigured, setPaypalConfigured] = useState<boolean | null>(null);
+  const [paypalSubscriptionsReady, setPaypalSubscriptionsReady] = useState<boolean | null>(
+    initialPayPalSubscriptionsReady,
+  );
+  const [stripeSubscriptionsReady, setStripeSubscriptionsReady] = useState<boolean | null>(
+    initialStripeSubscriptionsReady,
+  );
   const [isAdmin, setIsAdmin] = useState(false);
   const [access, setAccess] = useState<{
     hasAccess: boolean;
-    source: "reserved" | "admin_grant" | "paypal" | "none";
+    source: "reserved" | "admin_grant" | "paypal" | "stripe" | "none";
   } | null>(null);
 
   useEffect(() => {
@@ -30,7 +50,7 @@ export function PaymentClient({ showCanceled = false, planRequired = false }: Pr
         return (await r.json()) as {
           hasAccess?: boolean;
           isAdmin?: boolean;
-          source?: "reserved" | "admin_grant" | "paypal" | "none";
+          source?: "reserved" | "admin_grant" | "paypal" | "stripe" | "none";
         };
       })
       .then((d) => {
@@ -40,7 +60,9 @@ export function PaymentClient({ showCanceled = false, planRequired = false }: Pr
           return;
         }
         const src =
-          d.source === "paypal" || d.source === "admin_grant" || d.source === "reserved" ? d.source : "none";
+          d.source === "paypal" || d.source === "stripe" || d.source === "admin_grant" || d.source === "reserved"
+            ? d.source
+            : "none";
         setAccess({ hasAccess: d.hasAccess, source: src });
         setIsAdmin(Boolean(d.isAdmin));
       })
@@ -51,30 +73,75 @@ export function PaymentClient({ showCanceled = false, planRequired = false }: Pr
   }, []);
 
   useEffect(() => {
-    if (!isAdmin) {
-      setPaypalEnv(null);
-      setPaypalConfigured(null);
-      return;
-    }
+    void fetch("/api/stripe/config", { cache: "no-store" })
+      .then((r) => r.json() as Promise<{ subscriptions?: boolean }>)
+      .then((d) => setStripeSubscriptionsReady(Boolean(d.subscriptions)))
+      .catch(() => {
+        /* keep server-provided initialStripeSubscriptionsReady */
+      });
+  }, []);
+
+  useEffect(() => {
     void fetch("/api/paypal/mode", { cache: "no-store" })
-      .then((r) => r.json() as Promise<{ env?: string; configured?: boolean }>)
+      .then((r) => r.json() as Promise<{ env?: string; configured?: boolean; subscriptionsReady?: boolean }>)
       .then((d) => {
-        setPaypalEnv(d.env === "live" ? "live" : "sandbox");
-        setPaypalConfigured(Boolean(d.configured));
+        if (isAdmin) {
+          setPaypalEnv(d.env === "live" ? "live" : "sandbox");
+          setPaypalConfigured(Boolean(d.configured));
+        } else {
+          setPaypalEnv(null);
+          setPaypalConfigured(null);
+        }
+        setPaypalSubscriptionsReady(Boolean(d.subscriptionsReady));
       })
       .catch(() => {
         setPaypalEnv(null);
         setPaypalConfigured(null);
+        /* keep server-provided initialPayPalSubscriptionsReady */
       });
   }, [isAdmin]);
 
   const base = recurringPriceGbp(plan);
   const finalPrice = useMemo(() => base, [base]);
 
+  useEffect(() => {
+    if (stripeSubscriptionsReady === null || paypalSubscriptionsReady === null) return;
+    if (stripeSubscriptionsReady && paypalSubscriptionsReady) {
+      setBillingProvider("stripe");
+      return;
+    }
+    if (stripeSubscriptionsReady) {
+      setBillingProvider("stripe");
+      return;
+    }
+    if (paypalSubscriptionsReady) setBillingProvider("paypal");
+  }, [stripeSubscriptionsReady, paypalSubscriptionsReady]);
+
   async function startCheckout() {
     setCheckoutError(null);
     setCheckoutLoading(true);
     try {
+      if (billingProvider === "stripe") {
+        const res = await fetch("/api/stripe/subscription/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ plan }),
+        });
+        const data = (await res.json()) as { url?: string; error?: string; detail?: string };
+        if (res.status === 401) {
+          setCheckoutError("Sign in to pay with card (Stripe). PayPal checkout can be used without signing in first.");
+          return;
+        }
+        if (!res.ok || !data.url) {
+          const detail = typeof data.detail === "string" && data.detail.trim() ? ` ${data.detail.trim().slice(0, 200)}` : "";
+          setCheckoutError(`${data.error ?? "Stripe checkout could not be started"}${detail}`);
+          return;
+        }
+        window.location.assign(data.url);
+        return;
+      }
+
       const res = await fetch("/api/paypal/subscription/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -124,7 +191,7 @@ export function PaymentClient({ showCanceled = false, planRequired = false }: Pr
       <div className="mt-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 sm:p-8">
         {planRequired && access !== null && !access.hasAccess ? (
           <p className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-950 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100">
-            A subscription (or your {TRIAL_DAYS}-day trial after you start PayPal checkout) is required to use the app.
+            A subscription (or your {TRIAL_DAYS}-day trial after you complete checkout) is required to use the app.
             {isAdmin ? (
               <> The only exception is complimentary access granted by an admin for your account.</>
             ) : null}
@@ -149,9 +216,11 @@ export function PaymentClient({ showCanceled = false, planRequired = false }: Pr
             You already have full access
             {access.source === "paypal"
               ? " via your PayPal subscription."
-              : isAdmin
-                ? " (complimentary — reserved owner or admin grant)."
-                : "."}{" "}
+              : access.source === "stripe"
+                ? " via your Stripe subscription."
+                : isAdmin
+                  ? " (complimentary — reserved owner or admin grant)."
+                  : "."}{" "}
             You don&apos;t need to subscribe again unless you change accounts.
           </p>
         ) : null}
@@ -169,13 +238,56 @@ export function PaymentClient({ showCanceled = false, planRequired = false }: Pr
 
         <h1 className="mt-6 text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Choose your plan</h1>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          Monthly or annual — two billing options, each with its own price. Checkout opens in PayPal.
+          Monthly or annual — two billing options, each with its own price. Pay with card (Stripe) or PayPal.
         </p>
         <p className="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">Figures below are after your trial.</p>
-        <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/50">
-          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Provider</p>
-          <p className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-50">PayPal</p>
-          <p className="mt-1 text-[11px] text-zinc-500">PayPal balance or linked card</p>
+        {stripeSubscriptionsReady === false && paypalSubscriptionsReady === false ? (
+          <p className="mt-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100">
+            Subscription checkout is not configured on this deployment (Stripe and PayPal subscription env vars are
+            missing or incomplete). If it works on your laptop but not here, open your host (e.g. Vercel → Settings →
+            Environment Variables) and add the same keys for the Production environment,
+            then redeploy. Preview-only variables do not apply to the live domain.
+          </p>
+        ) : null}
+        <div className="mt-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Pay with</p>
+          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              disabled={!stripeSubscriptionsReady}
+              onClick={() => setBillingProvider("stripe")}
+              className={`rounded-xl border-2 px-4 py-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                billingProvider === "stripe"
+                  ? "border-green-600 bg-green-50 dark:border-green-500 dark:bg-green-950/40"
+                  : "border-zinc-200 bg-zinc-50 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900/50"
+              }`}
+            >
+              <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Card (Stripe)</p>
+              <p className="mt-0.5 text-[11px] text-zinc-500">Visa, Mastercard, etc. — sign in required</p>
+            </button>
+            <button
+              type="button"
+              disabled={!paypalSubscriptionsReady}
+              onClick={() => setBillingProvider("paypal")}
+              className={`rounded-xl border-2 px-4 py-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                billingProvider === "paypal"
+                  ? "border-green-600 bg-green-50 dark:border-green-500 dark:bg-green-950/40"
+                  : "border-zinc-200 bg-zinc-50 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900/50"
+              }`}
+            >
+              <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">PayPal</p>
+              <p className="mt-0.5 text-[11px] text-zinc-500">PayPal balance or linked card</p>
+            </button>
+          </div>
+          {paypalSubscriptionsReady && !stripeSubscriptionsReady ? (
+            <p className="mt-2 text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">
+              Card (Stripe) is off until this deployment has{" "}
+              <span className="font-mono text-zinc-600 dark:text-zinc-300">STRIPE_SECRET_KEY</span>,{" "}
+              <span className="font-mono text-zinc-600 dark:text-zinc-300">STRIPE_PRICE_MONTHLY</span>, and{" "}
+              <span className="font-mono text-zinc-600 dark:text-zinc-300">STRIPE_PRICE_ANNUAL</span> in production
+              env, then a redeploy. If you still only see PayPal, push the latest code — older builds had PayPal only.
+            </p>
+          ) : null}
         </div>
 
         <div className="mt-4 grid grid-cols-2 gap-3">
@@ -220,11 +332,20 @@ export function PaymentClient({ showCanceled = false, planRequired = false }: Pr
         {checkoutError && <p className="mt-4 text-center text-sm text-red-600">{checkoutError}</p>}
         <button
           type="button"
-          disabled={checkoutLoading || access?.hasAccess === true}
+          disabled={
+            checkoutLoading ||
+            access?.hasAccess === true ||
+            (billingProvider === "stripe" && !stripeSubscriptionsReady) ||
+            (billingProvider === "paypal" && !paypalSubscriptionsReady)
+          }
           onClick={() => void startCheckout()}
           className="mt-6 flex h-11 w-full items-center justify-center rounded-lg bg-green-600 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-60"
         >
-          {checkoutLoading ? "Redirecting…" : access?.hasAccess ? "Already subscribed" : `Start ${TRIAL_DAYS}-day free trial`}
+          {checkoutLoading
+            ? "Redirecting…"
+            : access?.hasAccess
+              ? "Already subscribed"
+              : `Continue to ${billingProvider === "stripe" ? "Stripe" : "PayPal"}`}
         </button>
         <p className="mt-3 text-center text-[11px] text-zinc-500">
           You will not be charged until the trial ends. Cancel anytime during the trial.

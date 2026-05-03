@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { paypalSubscriptionBillingConfigured } from "@/lib/payment-env-status";
 
 export const runtime = "nodejs";
 
@@ -6,5 +7,6 @@ export const runtime = "nodejs";
 export async function GET(): Promise<Response> {
   const env = process.env.PAYPAL_ENV?.trim().toLowerCase() === "live" ? "live" : "sandbox";
   const configured = Boolean(process.env.PAYPAL_CLIENT_ID?.trim() && process.env.PAYPAL_SECRET?.trim());
-  return NextResponse.json({ env, configured });
+  const subscriptionsReady = paypalSubscriptionBillingConfigured();
+  return NextResponse.json({ env, configured, subscriptionsReady });
 }
