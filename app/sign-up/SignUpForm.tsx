@@ -7,7 +7,7 @@ import { getBoatName, setAvatarDataUrl, setBoatName, setFullName, setProfilePhon
 import { normalisePhone } from "@/lib/phone-normalise";
 import { getDeviceName, getOrCreateDeviceId } from "@/lib/device-id";
 import { humanGeolocationMessage } from "@/lib/geolocation-utils";
-import { compressProfilePhoto } from "@/lib/client/compress-profile-photo";
+import { compressProfilePhoto, PROFILE_PHOTO_MAX_BYTES } from "@/lib/client/compress-profile-photo";
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -39,8 +39,8 @@ const initial = {
   invitedEmails: "",
 };
 
-/** Large photos are shrunk in the browser before upload; cap raw picker size to avoid memory issues. */
-const MAX_PHOTO_BYTES = 24 * 1024 * 1024;
+/** Raw file size limit before in-browser resize (memory). Output is squeezed to ≤5MB. */
+const MAX_RAW_PHOTO_BYTES = 40 * 1024 * 1024;
 
 /** Session-only: after user acknowledges safety disclaimer, do not show again until a new tab/session. */
 const SIGNUP_DISCLAIMER_SESSION_KEY = "sealink_signup_disclaimer_v1";
@@ -84,6 +84,7 @@ export function SignUpForm() {
   const [submitting, setSubmitting] = useState(false);
   const [signupDisclaimerOpen, setSignupDisclaimerOpen] = useState(false);
   const [signupDisclaimerChecked, setSignupDisclaimerChecked] = useState(false);
+  const [photoProcessing, setPhotoProcessing] = useState(false);
 
   const progress = useMemo(() => ({ 1: 25, 2: 50, 3: 75, 4: 100 }[step]), [step]);
 
@@ -167,39 +168,54 @@ export function SignUpForm() {
       setErrors((e) => ({ ...e, profilePhoto: "Choose an image file (JPEG, PNG, or WebP)" }));
       return;
     }
-    if (file.size > MAX_PHOTO_BYTES) {
-      setErrors((e) => ({ ...e, profilePhoto: "That file is too large to process here. Try a smaller original or another photo." }));
+    if (file.size > MAX_RAW_PHOTO_BYTES) {
+      setErrors((e) => ({
+        ...e,
+        profilePhoto: "That file is too large to process in the browser (40MB max). Try a smaller original.",
+      }));
       return;
     }
     clearPhotoError();
-    let processed: File;
+    setPhotoProcessing(true);
     try {
-      processed = await compressProfilePhoto(file);
-    } catch {
-      setErrors((e) => ({ ...e, profilePhoto: "Could not process that image. Try a different photo." }));
-      return;
-    }
-    setPhotoFile(processed);
-    setProfileAvatarDataUrl(null);
-    setPhotoPreview((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return URL.createObjectURL(processed);
-    });
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const url = String(reader.result || "");
-        setAvatarDataUrl(url);
-        setProfileAvatarDataUrl(url);
-      } catch {
+      const processed = await compressProfilePhoto(file);
+      if (processed.size > PROFILE_PHOTO_MAX_BYTES) {
         setErrors((e) => ({
           ...e,
-          profilePhoto: "That photo is still too large after resizing. Try a simpler image or lower resolution.",
+          profilePhoto: "Could not shrink that photo enough. Try a different image or lower resolution.",
         }));
+        return;
       }
-    };
-    reader.readAsDataURL(processed);
+      setPhotoFile(processed);
+      setProfileAvatarDataUrl(null);
+      setPhotoPreview((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return URL.createObjectURL(processed);
+      });
+
+      await new Promise<void>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const url = String(reader.result || "");
+            setAvatarDataUrl(url);
+            setProfileAvatarDataUrl(url);
+            resolve();
+          } catch {
+            reject(new Error("read"));
+          }
+        };
+        reader.onerror = () => reject(new Error("read"));
+        reader.readAsDataURL(processed);
+      });
+    } catch {
+      setErrors((e) => ({
+        ...e,
+        profilePhoto: "Could not process that image. Try a different photo.",
+      }));
+    } finally {
+      setPhotoProcessing(false);
+    }
   }
 
   function removePhoto() {
@@ -556,7 +572,8 @@ export function SignUpForm() {
           <div>
             <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Profile photo</p>
             <p className="mt-0.5 text-xs text-zinc-500">
-              A clear face photo helps people in your Circle recognise you on the map. Large pictures are shrunk automatically.
+              A clear face photo helps people in your Circle recognise you on the map. Large pictures are resized in your
+              browser to under 5MB automatically.
             </p>
             <div className="mt-3 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
               <div className="relative size-24 shrink-0 overflow-hidden rounded-full border-2 border-dashed border-zinc-300 bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900">
@@ -568,13 +585,21 @@ export function SignUpForm() {
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
-                <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={onPickPhoto} />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  disabled={photoProcessing}
+                  onChange={(e) => void onPickPhoto(e)}
+                />
                 <button
                   type="button"
+                  disabled={photoProcessing}
                   onClick={() => fileInputRef.current?.click()}
-                  className="inline-flex h-9 items-center justify-center rounded-lg bg-green-700 px-3 text-sm font-medium text-white hover:bg-green-800"
+                  className="inline-flex h-9 items-center justify-center rounded-lg bg-green-700 px-3 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-60"
                 >
-                  Upload photo
+                  {photoProcessing ? "Resizing…" : "Upload photo"}
                 </button>
                 {photoPreview && (
                   <button

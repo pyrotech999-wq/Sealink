@@ -3,7 +3,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { compressProfilePhoto } from "@/lib/client/compress-profile-photo";
+import {
+  compressProfilePhoto,
+  PROFILE_PHOTO_LOCAL_STORAGE_MAX_BYTES,
+  PROFILE_PHOTO_MAX_BYTES,
+} from "@/lib/client/compress-profile-photo";
 import {
   getAvatarDataUrl,
   getBoatName,
@@ -19,7 +23,8 @@ import {
 import { validateProfileDisplayName } from "@/lib/profile-display-name";
 import { normalisePhone } from "@/lib/phone-normalise";
 
-const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+/** Raw pick limit before in-browser resize (memory safety). */
+const MAX_RAW_PHOTO_BYTES = 40 * 1024 * 1024;
 /** Stay under map-profile-storage max (~450k chars) after base64 growth. */
 const MAX_AVATAR_DATA_URL_CHARS = 430_000;
 
@@ -37,7 +42,7 @@ async function shrinkAvatarDataUrlForStorage(dataUrl: string): Promise<string> {
   const file = new File([blob], "profile.jpg", {
     type: blob.type && blob.type.startsWith("image/") ? blob.type : "image/jpeg",
   });
-  const small = await compressProfilePhoto(file);
+  const small = await compressProfilePhoto(file, { maxBytes: PROFILE_PHOTO_LOCAL_STORAGE_MAX_BYTES });
   return await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ""));
@@ -57,6 +62,7 @@ export function ProfileEditForm({ signedIn, accountEmail }: Props) {
   const [avatarDataUrl, setAvatarDataUrlState] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [photoWorking, setPhotoWorking] = useState(false);
   /** After `/api/profiles/me`, whether cloud profile sync is available (signed-in only). */
   const [serverSync, setServerSync] = useState(false);
 
@@ -107,28 +113,43 @@ export function ProfileEditForm({ signedIn, accountEmail }: Props) {
     return () => cancelAnimationFrame(id);
   }, [error]);
 
-  function onPickPhoto(ev: React.ChangeEvent<HTMLInputElement>) {
+  async function onPickPhoto(ev: React.ChangeEvent<HTMLInputElement>) {
     const file = ev.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith("image/")) {
       setError("Choose an image file (JPEG, PNG, or WebP).");
       return;
     }
-    if (file.size > MAX_PHOTO_BYTES) {
-      setError("Image must be 5MB or smaller.");
+    if (file.size > MAX_RAW_PHOTO_BYTES) {
+      setError("That file is too large to process in the browser (40MB max). Try a smaller original.");
       return;
     }
     setError("");
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const url = String(reader.result || "");
-        setAvatarDataUrlState(url);
-      } catch {
-        setError("Could not read that image. Try another file.");
+    setPhotoWorking(true);
+    try {
+      const processed = await compressProfilePhoto(file);
+      if (processed.size > PROFILE_PHOTO_MAX_BYTES) {
+        setError("Could not shrink that photo enough. Try a different image.");
+        return;
       }
-    };
-    reader.readAsDataURL(file);
+      await new Promise<void>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            setAvatarDataUrlState(String(reader.result || ""));
+            resolve();
+          } catch {
+            reject(new Error("read"));
+          }
+        };
+        reader.onerror = () => reject(new Error("read"));
+        reader.readAsDataURL(processed);
+      });
+    } catch {
+      setError("Could not process that image. Try another file.");
+    } finally {
+      setPhotoWorking(false);
+    }
   }
 
   function removePhoto() {
@@ -274,7 +295,10 @@ export function ProfileEditForm({ signedIn, accountEmail }: Props) {
 
       <div>
         <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Profile photo</p>
-        <p className="mt-0.5 text-xs text-zinc-500">Shown on your map pin when enabled below (stored in this browser only).</p>
+        <p className="mt-0.5 text-xs text-zinc-500">
+          Shown on your map pin when enabled below. Large photos are resized automatically (saved under 5MB, or smaller for
+          browser storage).
+        </p>
         <div className="mt-3 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
           <div className="relative size-24 shrink-0 overflow-hidden rounded-full border-2 border-dashed border-zinc-300 bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900">
             {avatarDataUrl ? (
@@ -285,13 +309,21 @@ export function ProfileEditForm({ signedIn, accountEmail }: Props) {
             )}
           </div>
           <div className="flex flex-wrap gap-2">
-            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={onPickPhoto} />
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              disabled={photoWorking}
+              onChange={(e) => void onPickPhoto(e)}
+            />
             <button
               type="button"
+              disabled={photoWorking}
               onClick={() => fileRef.current?.click()}
-              className="inline-flex h-9 items-center justify-center rounded-lg bg-green-700 px-3 text-sm font-medium text-white hover:bg-green-800"
+              className="inline-flex h-9 items-center justify-center rounded-lg bg-green-700 px-3 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-60"
             >
-              Change photo
+              {photoWorking ? "Resizing…" : "Change photo"}
             </button>
             {avatarDataUrl ? (
               <button
@@ -328,7 +360,7 @@ export function ProfileEditForm({ signedIn, accountEmail }: Props) {
 
       <button
         type="submit"
-        disabled={saving}
+        disabled={saving || photoWorking}
         className="flex h-10 w-full items-center justify-center rounded-lg bg-green-600 text-sm font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[140px]"
       >
         {saving ? "Saving…" : "Save changes"}
