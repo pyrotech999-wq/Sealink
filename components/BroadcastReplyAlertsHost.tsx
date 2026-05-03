@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { getLastKnownPosition } from "@/lib/map-last-known";
+import { suppressMessagingChromePath } from "@/lib/messaging-chrome-paths";
 
 type Alert = {
   broadcastId: string;
@@ -75,7 +76,7 @@ export function BroadcastReplyAlertsHost() {
     return () => window.clearInterval(id);
   }, [tick]);
 
-  if (!signedIn || alerts.length === 0) return null;
+  if (!signedIn || suppressMessagingChromePath(pathname) || alerts.length === 0) return null;
 
   const cur = alerts[index] ?? alerts[0];
   if (!cur) return null;

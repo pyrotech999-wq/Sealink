@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { useBroadcastToast } from "@/components/BroadcastToastProvider";
 import { getLastKnownPosition } from "@/lib/map-last-known";
+import { suppressMessagingChromePath } from "@/lib/messaging-chrome-paths";
 
 const WATERLINE_KEY = "sealink_broadcast_toast_waterline_v1";
 
@@ -33,7 +34,14 @@ export function BroadcastAwayToasts() {
 
   useEffect(() => {
     if (!toast) return;
-    if (pathname === "/" || pathname === "" || pathname === "/messaging") return;
+    if (
+      pathname === "/" ||
+      pathname === "" ||
+      pathname === "/messaging" ||
+      suppressMessagingChromePath(pathname)
+    ) {
+      return;
+    }
 
     const tick = () => {
       const geo = getLastKnownPosition();

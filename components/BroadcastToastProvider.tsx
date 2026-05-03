@@ -8,6 +8,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { usePathname } from "next/navigation";
 import { getBroadcastAlertsSilenced, getMessageAlertSoundOn } from "@/lib/broadcast-alert-preferences";
 import { playBroadcastAlertSound, playVicinityDmAlertSound } from "@/lib/broadcast-alert-sound";
 import { BOTTOM_DOCK_OFFSET } from "@/lib/bottom-dock-offset";
@@ -20,6 +21,7 @@ import {
   type BroadcastAlertVariant,
   type PersistedBroadcastAlert,
 } from "@/lib/broadcast-alert-inbox";
+import { suppressMessagingChromePath } from "@/lib/messaging-chrome-paths";
 
 export type PushToastOpts = { id: string };
 
@@ -36,6 +38,8 @@ function makeKey(variant: BroadcastAlertVariant, id: string): string {
 }
 
 export function BroadcastToastProvider({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const hideMessagingOverlays = suppressMessagingChromePath(pathname);
   const [alerts, setAlerts] = useState<PersistedBroadcastAlert[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [hydrated, setHydrated] = useState(false);
@@ -151,6 +155,7 @@ export function BroadcastToastProvider({ children }: { children: React.ReactNode
   return (
     <BroadcastToastCtx.Provider value={value}>
       {children}
+      {hideMessagingOverlays ? null : (
       <div
         className="pointer-events-none fixed inset-x-0 z-[95] flex flex-col items-center gap-2 px-3"
         style={{ bottom: `calc(${BOTTOM_DOCK_OFFSET} + env(safe-area-inset-bottom))` }}
@@ -259,6 +264,7 @@ export function BroadcastToastProvider({ children }: { children: React.ReactNode
           </div>
         ) : null}
       </div>
+      )}
 
     </BroadcastToastCtx.Provider>
   );

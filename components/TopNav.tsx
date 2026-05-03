@@ -2,11 +2,31 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 
 import { NAV_ITEMS } from "@/components/nav-items";
+import { suppressMessagingChromePath } from "@/lib/messaging-chrome-paths";
 
 export function TopNav() {
   const pathname = usePathname();
+  const [signedIn, setSignedIn] = useState(false);
+
+  const refreshSession = useCallback(() => {
+    void fetch("/api/demo/me", { credentials: "same-origin", cache: "no-store" })
+      .then(async (r) => {
+        const d = (await r.json()) as { signedIn?: boolean };
+        setSignedIn(Boolean(d.signedIn));
+      })
+      .catch(() => setSignedIn(false));
+  }, []);
+
+  useEffect(() => {
+    refreshSession();
+  }, [pathname, refreshSession]);
+
+  const showMessagesTab = signedIn && !suppressMessagingChromePath(pathname);
+
+  const navItems = NAV_ITEMS.filter((item) => item.href !== "/messaging" || showMessagesTab);
 
   return (
     <nav
@@ -15,7 +35,7 @@ export function TopNav() {
     >
       <div className="mx-auto flex max-w-5xl items-stretch gap-1 px-1 py-1 sm:gap-2 sm:px-4 sm:py-1.5 md:px-6">
         <ul className="flex min-h-[2.25rem] min-w-0 flex-1 flex-nowrap gap-0.5 sm:gap-1">
-          {NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const active =
               item.href === "/"
                 ? pathname === "/" || pathname === ""
