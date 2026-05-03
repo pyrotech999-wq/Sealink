@@ -14,7 +14,12 @@ function buildStartUrl(provider: "google" | "facebook" | "apple"): string {
 const btnBase =
   "inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800";
 
-export function OAuthProviderButtons() {
+type OAuthProviderButtonsProps = {
+  /** Extra line under buttons (e.g. sign-up: explains skipping the wizard). Only shown when OAuth is enabled. */
+  signUpCaption?: boolean;
+};
+
+export function OAuthProviderButtons({ signUpCaption }: OAuthProviderButtonsProps) {
   const [cfg, setCfg] = useState<OauthConfig | null>(null);
 
   useEffect(() => {
@@ -66,6 +71,11 @@ export function OAuthProviderButtons() {
           </a>
         ) : null}
       </div>
+      {signUpCaption ? (
+        <p className="mt-3 text-center text-xs text-zinc-500">
+          Tap a provider to sign in with that account — you skip the steps below. Otherwise continue with the form.
+        </p>
+      ) : null}
     </div>
   );
 }
