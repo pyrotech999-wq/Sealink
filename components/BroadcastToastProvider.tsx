@@ -39,6 +39,8 @@ export function BroadcastToastProvider({ children }: { children: React.ReactNode
   const [alerts, setAlerts] = useState<PersistedBroadcastAlert[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [hydrated, setHydrated] = useState(false);
+  /** When true, hide the “Read — last 24 hours” panel until a new live alert arrives. */
+  const [readArchiveHidden, setReadArchiveHidden] = useState(false);
 
   useEffect(() => {
     const next = loadBroadcastAlerts();
@@ -115,6 +117,7 @@ export function BroadcastToastProvider({ children }: { children: React.ReactNode
       return next;
     });
     setCurrentIndex(0);
+    setReadArchiveHidden(false);
   }, []);
 
   const current = unseen.length > 0 ? unseen[Math.min(currentIndex, unseen.length - 1)] : null;
@@ -128,6 +131,7 @@ export function BroadcastToastProvider({ children }: { children: React.ReactNode
   const onDeleteCurrent = () => {
     if (!current) return;
     patchAlert(current.key, { deleted: true });
+    setReadArchiveHidden(true);
   };
 
   const onDeleteArchived = (key: string) => {
@@ -208,13 +212,22 @@ export function BroadcastToastProvider({ children }: { children: React.ReactNode
           </div>
         ) : null}
 
-        {seenArchive.length > 0 ? (
+        {seenArchive.length > 0 && !readArchiveHidden ? (
           <div className="pointer-events-auto w-full max-w-md rounded-xl border border-zinc-300 bg-white/95 shadow-md dark:border-zinc-600 dark:bg-zinc-900/95">
-            <div className="border-b border-zinc-200 px-3 py-2 dark:border-zinc-700">
-              <p className="text-xs font-bold text-zinc-800 dark:text-zinc-100">Read — last 24 hours</p>
-              <p className="mt-0.5 text-[10px] text-zinc-500 dark:text-zinc-400">
-                Tap Seen above clears the alert here; items disappear after 24 hours or when you delete them.
-              </p>
+            <div className="flex items-start justify-between gap-2 border-b border-zinc-200 px-3 py-2 dark:border-zinc-700">
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-zinc-800 dark:text-zinc-100">Read — last 24 hours</p>
+                <p className="mt-0.5 text-[10px] text-zinc-500 dark:text-zinc-400">
+                  Tap Seen moves the alert here; items disappear after 24 hours or when you delete them.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReadArchiveHidden(true)}
+                className="shrink-0 rounded-lg border border-zinc-300 bg-zinc-100 px-2.5 py-1 text-[10px] font-semibold text-zinc-800 hover:bg-zinc-200 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
+              >
+                Close
+              </button>
             </div>
             <ul className="max-h-52 space-y-0 overflow-y-auto overscroll-contain divide-y divide-zinc-200 dark:divide-zinc-700">
               {seenArchive.map((a) => (
