@@ -96,6 +96,14 @@ export async function compressProfilePhoto(file: File, options?: CompressProfile
     blob = await bestBlobAtQuality();
   }
 
+  if (blob.size > maxBytes) {
+    const ratio = Math.min(MIN_EDGE_PX / w, MIN_EDGE_PX / h, 1);
+    w = Math.max(1, Math.round(w * ratio));
+    h = Math.max(1, Math.round(h * ratio));
+    draw();
+    blob = await canvasToBlob(canvas, MIME_JPEG, 0.2);
+  }
+
   const base = file.name.replace(/\.[^.]+$/, "") || "profile";
   return new File([blob], `${base}.jpg`, { type: MIME_JPEG });
 }

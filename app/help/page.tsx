@@ -36,6 +36,7 @@ const toc: { id: string; label: string }[] = [
   { id: "plans", label: "Plans & payment" },
   { id: "sounds", label: "Sounds & bottom bar" },
   { id: "share-install", label: "Share app & tips" },
+  { id: "iphone-install", label: "iPhone — save as app" },
   { id: "safety", label: "Safety & official info" },
   { id: "troubleshooting", label: "Troubleshooting" },
 ];
@@ -539,6 +540,42 @@ export default function HelpPage() {
                 <li>Keep the app updated — forecast endpoints and tiles change over time.</li>
                 <li>Clear site data only if instructed by support; it may reset local preferences.</li>
               </ul>
+            </Section>
+
+            <Section id="iphone-install" title="iPhone &amp; iPad — save SeaLink on your Home Screen">
+              <p>
+                On Apple phones and tablets you can pin SeaLink like an app icon. It opens full-screen in{" "}
+                <strong className="text-zinc-200">Safari</strong> (Apple&apos;s browser) — handy if you don&apos;t use the
+                Android native build.
+              </p>
+              <ol className="list-decimal space-y-2 pl-5 text-zinc-400">
+                <li>
+                  Open your SeaLink site in <strong className="text-zinc-300">Safari</strong> (not only inside another
+                  app&apos;s in-app browser if that hides the share tools).
+                </li>
+                <li>
+                  Tap the <strong className="text-zinc-300">Share</strong> button — the square with an arrow pointing up —
+                  usually at the bottom on iPhone or top on iPad.
+                </li>
+                <li>
+                  Scroll the actions list and tap <strong className="text-zinc-300">Add to Home Screen</strong>. If you
+                  don&apos;t see it, swipe up on the grey icons row, tap <strong className="text-zinc-300">Edit Actions</strong>{" "}
+                  / <strong className="text-zinc-300">More</strong>, and add &quot;Add to Home Screen&quot; to favourites.
+                </li>
+                <li>
+                  Optionally change the label (e.g. &quot;SeaLink&quot;), then tap <strong className="text-zinc-300">Add</strong>{" "}
+                  (top right). The icon appears on your Home Screen like any other app.
+                </li>
+                <li>
+                  Open SeaLink from that icon next time — you stay signed in like a normal tab until cookies expire or you
+                  clear website data.
+                </li>
+              </ol>
+              <p className="rounded-lg border border-zinc-700/80 bg-zinc-950/60 px-3 py-2 text-xs text-zinc-400">
+                <strong className="text-zinc-300">Note:</strong> Chrome and other browsers on iOS use Apple&apos;s web engine;
+                they often have a similar <strong className="text-zinc-300">Share → Add to Home Screen</strong> path. The
+                exact labels can change slightly with iOS updates.
+              </p>
             </Section>
 
             <Section id="safety" title="Safety, privacy &amp; official information">

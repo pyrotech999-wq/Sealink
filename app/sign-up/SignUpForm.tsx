@@ -1050,8 +1050,9 @@ export function SignUpForm() {
           {step < 4 ? (
             <button
               type="button"
+              disabled={photoProcessing}
               onClick={next}
-              className="inline-flex h-10 flex-1 items-center justify-center rounded-lg bg-green-700 px-4 text-sm font-medium text-white hover:bg-green-800 sm:flex-none"
+              className="inline-flex h-10 flex-1 items-center justify-center rounded-lg bg-green-700 px-4 text-sm font-medium text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none"
             >
               Continue
             </button>
