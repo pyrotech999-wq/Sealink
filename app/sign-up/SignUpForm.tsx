@@ -925,8 +925,8 @@ export function SignUpForm() {
           <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/40">
             <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Location sharing</p>
             <p className="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-400">
-              Apps like Life360 usually recommend all-day location so Circles see arrivals, Battery, and driving context.
-              On the web, the browser only shares when you allow it here; on iPhone or Android, pick{" "}
+              Many family-style apps recommend all-day location so your Circle sees arrivals, battery, and driving
+              context. On the web, the browser only shares when you allow it here; on iPhone or Android, pick{" "}
               <span className="font-medium text-green-800 dark:text-green-400">Always</span> in system settings for the
               closest behaviour.
             </p>
@@ -1042,7 +1042,7 @@ export function SignUpForm() {
 
           <div className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
             <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Share the app</p>
-            <p className="mt-1 text-xs text-zinc-500">Send your invite link by message or copy it — same habit as sharing Life360 with family.</p>
+            <p className="mt-1 text-xs text-zinc-500">Send your invite link by message or copy the app link for crew or family.</p>
             <button
               type="button"
               onClick={shareApp}

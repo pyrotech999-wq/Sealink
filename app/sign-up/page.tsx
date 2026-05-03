@@ -29,8 +29,7 @@ export default function SignUpPage() {
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Create your account</h1>
           <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
             Set up your profile, home details, and password — then choose how SeaLink can use location, Bluetooth, and
-            notifications, invite your Circle, and share the app. (Inspired by the flow family safety apps like Life360
-            use; SeaLink is not affiliated with Life360.)
+            notifications, invite your Circle, and share the app.
           </p>
           <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
             Already registered?{" "}
