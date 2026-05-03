@@ -180,7 +180,7 @@ export function HomeMessagesCtaButton({ signedIn, readLat, readLng }: Props) {
             <span className="text-base font-semibold leading-tight opacity-95 sm:text-lg">Click here</span>
           </>
         ) : (
-          <span className="text-lg sm:text-xl">Messages</span>
+          <span className="text-lg sm:text-xl">No new messages</span>
         )}
       </Link>
     </div>
