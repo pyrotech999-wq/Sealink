@@ -582,10 +582,7 @@ export function SignUpForm() {
       </div>
 
       <div className="mb-6">
-        <OAuthProviderButtons />
-        <p className="mt-3 text-center text-xs text-zinc-500">
-          Google, Apple, or Facebook skips this form and opens the app signed in. Otherwise continue below.
-        </p>
+        <OAuthProviderButtons signUpCaption />
       </div>
 
       {step === 1 && (
