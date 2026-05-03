@@ -1,11 +1,19 @@
 /**
- * Browser-only: downscale and re-encode profile photos so they stay under map/localStorage limits.
+ * Browser-only: downscale and re-encode profile photos.
+ * Default: output JPEG **≤ 5MB**. Use a smaller `maxBytes` for tight localStorage data URLs.
  */
-/** Binary blob target; base64 data URLs must stay under map `MAX_AVATAR_BYTES` (~450k chars). */
-const TARGET_MAX_BYTES = 260_000;
-const MAX_EDGE_PX = 1600;
-const MIN_EDGE_PX = 480;
+
+export const PROFILE_PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+/** Binary cap so base64 data URLs stay under ~450k chars in `map-profile-storage`. */
+export const PROFILE_PHOTO_LOCAL_STORAGE_MAX_BYTES = 330_000;
+
+const MAX_EDGE_PX = 2400;
+const MIN_EDGE_PX = 360;
 const MIME_JPEG = "image/jpeg";
+
+export type CompressProfilePhotoOptions = {
+  maxBytes?: number;
+};
 
 function loadImage(file: File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -37,61 +45,57 @@ function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number):
 }
 
 /**
- * Returns a JPEG (or PNG if the source likely needs alpha — skipped for photos) under TARGET_MAX_BYTES when possible.
+ * Returns a JPEG at or under `maxBytes` (default 5MB). Large picks are resized automatically.
  */
-export async function compressProfilePhoto(file: File): Promise<File> {
+export async function compressProfilePhoto(file: File, options?: CompressProfilePhotoOptions): Promise<File> {
+  const maxBytes = options?.maxBytes ?? PROFILE_PHOTO_MAX_BYTES;
   if (!file.type.startsWith("image/")) return file;
-  if (file.size <= TARGET_MAX_BYTES && file.size <= 2 * 1024 * 1024) {
-    const img = await loadImage(file);
-    if (Math.max(img.naturalWidth, img.naturalHeight) <= MAX_EDGE_PX) return file;
-  }
 
   const img = await loadImage(file);
   let w = img.naturalWidth;
   let h = img.naturalHeight;
-  const scale = Math.min(1, MAX_EDGE_PX / Math.max(w, h));
+  if (w < 1 || h < 1) return file;
+
+  if (file.size <= maxBytes && Math.max(w, h) <= MAX_EDGE_PX) {
+    return file;
+  }
+
+  let scale = Math.min(1, MAX_EDGE_PX / Math.max(w, h));
   w = Math.max(1, Math.round(w * scale));
   h = Math.max(1, Math.round(h * scale));
 
   const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
   const ctx = canvas.getContext("2d");
   if (!ctx) return file;
-  ctx.drawImage(img, 0, 0, w, h);
 
-  let quality = 0.9;
-  let blob: Blob | null = null;
-  for (let attempt = 0; attempt < 12; attempt++) {
-    blob = await canvasToBlob(canvas, MIME_JPEG, quality);
-    if (blob.size <= TARGET_MAX_BYTES) break;
-    quality -= 0.08;
-    if (quality < 0.35) break;
-  }
+  const draw = () => {
+    canvas.width = w;
+    canvas.height = h;
+    ctx.drawImage(img, 0, 0, w, h);
+  };
+  draw();
 
-  if (!blob || blob.size > TARGET_MAX_BYTES * 1.15) {
-    let edge = Math.min(w, h);
-    while (edge > MIN_EDGE_PX && (!blob || blob.size > TARGET_MAX_BYTES)) {
-      edge = Math.round(edge * 0.85);
-      const ratio = edge / Math.max(w, h);
-      const nw = Math.max(1, Math.round(w * ratio));
-      const nh = Math.max(1, Math.round(h * ratio));
-      canvas.width = nw;
-      canvas.height = nh;
-      ctx.drawImage(img, 0, 0, nw, nh);
-      quality = 0.82;
-      for (let j = 0; j < 8; j++) {
-        blob = await canvasToBlob(canvas, MIME_JPEG, quality);
-        if (blob.size <= TARGET_MAX_BYTES) break;
-        quality -= 0.1;
-      }
-      w = nw;
-      h = nh;
-      if (blob && blob.size <= TARGET_MAX_BYTES) break;
+  const bestBlobAtQuality = async (): Promise<Blob> => {
+    let q = 0.92;
+    let best: Blob | null = null;
+    for (let i = 0; i < 20; i++) {
+      const b = await canvasToBlob(canvas, MIME_JPEG, q);
+      if (b.size <= maxBytes) return b;
+      if (!best || b.size < best.size) best = b;
+      q -= 0.045;
+      if (q < 0.22) break;
     }
+    return best ?? (await canvasToBlob(canvas, MIME_JPEG, 0.22));
+  };
+
+  let blob = await bestBlobAtQuality();
+  while (blob.size > maxBytes && Math.max(w, h) > MIN_EDGE_PX) {
+    w = Math.max(1, Math.round(w * 0.87));
+    h = Math.max(1, Math.round(h * 0.87));
+    draw();
+    blob = await bestBlobAtQuality();
   }
 
-  if (!blob) return file;
   const base = file.name.replace(/\.[^.]+$/, "") || "profile";
   return new File([blob], `${base}.jpg`, { type: MIME_JPEG });
 }
