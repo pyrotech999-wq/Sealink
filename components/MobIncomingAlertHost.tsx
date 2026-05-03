@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { getLastKnownPosition } from "@/lib/map-last-known";
 import { startMobSiren, stopMobSiren } from "@/lib/mob-siren";
 import { MOB_CANCEL_BROADCAST_INTRO } from "@/lib/map-broadcast-constants";
 import { LinkifiedPlainText } from "@/components/LinkifiedPlainText";
 import { mapHrefPreferCoords } from "@/lib/map-links";
 import { hideBroadcastId, readHiddenBroadcastIds } from "@/lib/broadcast-hidden";
+import { isBareMetaDataDeletionPage } from "@/lib/messaging-chrome-paths";
 
 const WATERLINE_KEY = "sealink_mob_incoming_waterline_v1";
 const DISMISSED_KEY = "sealink_mob_dismissed_ids_v1";
@@ -74,6 +76,7 @@ function telHref(phone: string): string {
 }
 
 export function MobIncomingAlertHost() {
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [msg, setMsg] = useState<ApiMsg | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -215,6 +218,7 @@ export function MobIncomingAlertHost() {
     return () => window.clearInterval(id);
   }, [sessionOk, silence]);
 
+  if (isBareMetaDataDeletionPage(pathname)) return null;
   if (!open || !msg) return null;
 
   const phone = typeof msg.mobPhone === "string" ? msg.mobPhone.trim() : "";

@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { getBoatName, getFullName, getProfilePhone } from "@/lib/map-profile-storage";
 import { getMobPosition } from "@/lib/map-mob-position";
+import { isBareMetaDataDeletionPage } from "@/lib/messaging-chrome-paths";
 
 const STORAGE_KEY = "sealink_mob_sender_active_until";
 const EVENT = "sealink-mob-sent";
@@ -101,6 +103,7 @@ export function MobSenderActiveBanner() {
     }
   }, [clearSenderState]);
 
+  if (isBareMetaDataDeletionPage(pathname)) return null;
   if (!active) return null;
 
   return (
