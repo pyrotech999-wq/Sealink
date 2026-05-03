@@ -10,3 +10,14 @@ export function isOauthUiSuppressed(): boolean {
   const l = v.toLowerCase();
   return v === "1" || l === "true" || l === "yes";
 }
+
+/**
+ * Google/Facebook on sign-in/up are opt-in until those flows are verified.
+ * Apple is not gated by this flag. Set SHOW_GOOGLE_FACEBOOK_OAUTH=1 when ready.
+ */
+export function isGoogleFacebookOAuthUiShown(): boolean {
+  const v = trimEnvValue(process.env.SHOW_GOOGLE_FACEBOOK_OAUTH);
+  if (!v) return false;
+  const l = v.toLowerCase();
+  return v === "1" || l === "true" || l === "yes";
+}

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isOauthStateSigningConfigured } from "@/lib/oauth-pkce-cookie";
-import { isOauthUiSuppressed } from "@/lib/oauth-ui-suppress";
+import { isGoogleFacebookOAuthUiShown, isOauthUiSuppressed } from "@/lib/oauth-ui-suppress";
 import {
   appleOAuthConfigured,
   facebookOAuthConfigured,
@@ -36,14 +36,18 @@ export async function GET() {
   const googleCreds = googleOAuthConfigured();
   const facebookCreds = facebookOAuthConfigured();
   const appleCreds = appleOAuthConfigured();
+  const showGoogleFacebook = isGoogleFacebookOAuthUiShown();
+  const googleOn = Boolean(base && googleCreds && showGoogleFacebook);
+  const facebookOn = Boolean(base && facebookCreds && showGoogleFacebook);
+  const appleOn = Boolean(base && appleCreds);
   return NextResponse.json(
     {
-      enabled: base && (googleCreds || facebookCreds || appleCreds),
-      google: base && googleCreds,
-      facebook: base && facebookCreds,
-      apple: base && appleCreds,
-      /** Google client id/secret set (PKCE secret may still be missing). */
-      googleCredentialsSet: googleCreds,
+      enabled: googleOn || facebookOn || appleOn,
+      google: googleOn,
+      facebook: facebookOn,
+      apple: appleOn,
+      /** Google client id/secret set — only true when GF UI is enabled (avoids PKCE banner while buttons are off). */
+      googleCredentialsSet: Boolean(googleCreds && showGoogleFacebook),
       pkceConfigured: base,
     },
     {

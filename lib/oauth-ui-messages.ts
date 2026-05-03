@@ -18,6 +18,8 @@ export function oauthErrorMessage(code: string | null): string | null {
       return "This email is already linked to a different sign-in method. Use the method you used originally.";
     case "config":
       return "That sign-in method is not configured. Try another option or use email and password.";
+    case "disabled":
+      return "Google and Facebook sign-in are not available on this site yet. Use email and password, or try again later.";
     default:
       return "Social sign-in did not complete. Please try again.";
   }

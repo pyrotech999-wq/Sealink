@@ -22,6 +22,7 @@ import { MAX_PROFILE_DISPLAY_NAME_LEN, validateProfileDisplayName } from "@/lib/
 import { upsertProfileAfterSignUp } from "@/lib/profiles-server";
 import { sessionCookieBase } from "@/lib/session-cookies";
 import { oauthSignInOrRegister } from "@/lib/users-store";
+import { isGoogleFacebookOAuthUiShown } from "@/lib/oauth-ui-suppress";
 
 export const runtime = "nodejs";
 
@@ -119,6 +120,10 @@ async function oauthAuthorize(req: NextRequest, provider: OauthProviderId): Prom
     return NextResponse.json({ error: "OAuth is not configured (set OAUTH_PKCE_SECRET)." }, { status: 503 });
   }
 
+  if ((provider === "google" || provider === "facebook") && !isGoogleFacebookOAuthUiShown()) {
+    return NextResponse.json({ error: "Google and Facebook sign-in are not enabled yet." }, { status: 503 });
+  }
+
   const redirectUri = oauthCallbackUrl(provider);
   const state = generateState();
   const exp = Math.floor(Date.now() / 1000) + 15 * 60;
@@ -207,6 +212,12 @@ async function oauthTokenExchange(
   const payload = verifyOauthStateCookie(cookieRaw);
   if (!payload || payload.provider !== provider || payload.state !== stateQ) {
     return errRedirectAbsolute(req, "/sign-in", "state");
+  }
+
+  if ((provider === "google" || provider === "facebook") && !isGoogleFacebookOAuthUiShown()) {
+    const res = errRedirectAbsolute(req, "/sign-in", "disabled");
+    clearStateCookie(res);
+    return res;
   }
 
   const redirectUri = oauthCallbackUrl(provider);
