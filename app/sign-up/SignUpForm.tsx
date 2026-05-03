@@ -7,7 +7,9 @@ import { getBoatName, setAvatarDataUrl, setBoatName, setFullName, setProfilePhon
 import { normalisePhone } from "@/lib/phone-normalise";
 import { getDeviceName, getOrCreateDeviceId } from "@/lib/device-id";
 import { humanGeolocationMessage } from "@/lib/geolocation-utils";
+import { OAuthProviderButtons } from "@/components/OAuthProviderButtons";
 import { compressProfilePhoto, PROFILE_PHOTO_MAX_BYTES } from "@/lib/client/compress-profile-photo";
+import { oauthErrorMessage } from "@/lib/oauth-ui-messages";
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -124,6 +126,21 @@ export function SignUpForm() {
     }, 0);
     return () => window.clearTimeout(id);
   }, [submitted]);
+
+  useEffect(() => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      const o = oauthErrorMessage(p.get("oauth_err"));
+      if (o) {
+        setErrors((e) => ({ ...e, submit: o }));
+        p.delete("oauth_err");
+        const qs = p.toString();
+        window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
+      }
+    } catch {
+      /* */
+    }
+  }, []);
 
   useEffect(() => {
     if (!signupDisclaimerOpen) return;
@@ -245,9 +262,6 @@ export function SignUpForm() {
       else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = "Enter a valid email";
     }
     if (s === 2) {
-      if (!form.line1.trim()) e.line1 = "Enter the first line of your address";
-      if (!form.city.trim()) e.city = "Enter town or city";
-      if (!form.postcode.trim()) e.postcode = "Enter postcode";
       const dialOk = /^\+[1-9]\d{0,3}$/.test(form.phoneDial.trim());
       if (!dialOk) e.phoneDial = "Choose a valid country code";
       const nationalDigits = form.phone.replace(/\D/g, "");
@@ -567,6 +581,13 @@ export function SignUpForm() {
         </div>
       </div>
 
+      <div className="mb-6">
+        <OAuthProviderButtons />
+        <p className="mt-3 text-center text-xs text-zinc-500">
+          Google, Apple, or Facebook skips this form and opens the app signed in. Otherwise continue below.
+        </p>
+      </div>
+
       {step === 1 && (
         <div className="space-y-5">
           <div>
@@ -726,12 +747,12 @@ export function SignUpForm() {
       {step === 2 && (
         <div className="space-y-4">
           <p className="text-xs text-zinc-500">
-            Home address powers place alerts (school, work, home) in a full app — same idea as family location apps on
-            your phone.
+            Home address is <strong className="text-zinc-700 dark:text-zinc-300">optional</strong> — it can power place
+            alerts in a fuller build. Your phone number below is still used for matching and alerts.
           </p>
           <div>
             <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="line1">
-              Address line 1
+              Address line 1 <span className="font-normal text-zinc-500">(optional)</span>
             </label>
             <input
               id="line1"
@@ -757,7 +778,7 @@ export function SignUpForm() {
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="city">
-                Town / city
+                Town / city <span className="font-normal text-zinc-500">(optional)</span>
               </label>
               <input
                 id="city"
@@ -770,7 +791,7 @@ export function SignUpForm() {
             </div>
             <div>
               <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="postcode">
-                Postcode
+                Postcode <span className="font-normal text-zinc-500">(optional)</span>
               </label>
               <input
                 id="postcode"

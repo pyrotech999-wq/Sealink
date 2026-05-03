@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { OAuthProviderButtons } from "@/components/OAuthProviderButtons";
 import { getDeviceName, getOrCreateDeviceId } from "@/lib/device-id";
 import { LAST_SIGNIN_EMAIL_STORAGE_KEY, normaliseEmail } from "@/lib/email-normalise";
+import { oauthErrorMessage } from "@/lib/oauth-ui-messages";
 import { useRouter } from "next/navigation";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -142,6 +144,21 @@ export function SignInForm() {
     }
   }, []);
 
+  useEffect(() => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      const o = oauthErrorMessage(p.get("oauth_err"));
+      if (o) {
+        setError(o);
+        p.delete("oauth_err");
+        const qs = p.toString();
+        window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
+      }
+    } catch {
+      /* */
+    }
+  }, []);
+
   async function onSubmit(ev: React.FormEvent) {
     ev.preventDefault();
     const trimmed = email.trim();
@@ -184,6 +201,10 @@ export function SignInForm() {
           {error}
         </p>
       )}
+      <div className="mb-6">
+        <OAuthProviderButtons />
+      </div>
+
       {deviceLimit.length ? (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
           <p className="font-semibold">Active devices</p>
