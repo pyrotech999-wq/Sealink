@@ -1,6 +1,38 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { DEMO_SESSION_COOKIE, DEMO_SESSION_VALUE } from "@/lib/demo-session";
+import { safeInternalPathFromNextParam } from "@/lib/safe-internal-next-path";
+
+/**
+ * Unauthenticated users may only hit auth pages, account-deletion URLs, legal pages
+ * (needed for sign-up checkboxes), and selected API routes (auth, session probe, Stripe webhooks).
+ */
+function isExemptFromSessionGate(pathname: string): boolean {
+  if (pathname.startsWith("/api/auth/")) return true;
+  if (pathname === "/api/stripe/webhook") return true;
+  if (pathname === "/api/demo/me") return true;
+  if (pathname === "/api/demo/sign-in" || pathname === "/api/demo/sign-out") return true;
+
+  if (pathname.startsWith("/_next")) return true;
+  if (pathname === "/favicon.ico") return true;
+  if (pathname === "/manifest.webmanifest" || pathname === "/sw") return true;
+
+  const exempt = [
+    "/sign-in",
+    "/sign-up",
+    "/forgot-password",
+    "/reset-password",
+    "/delete-data",
+    "/delete-account",
+    "/delete-my-data",
+    "/terms",
+    "/privacy",
+  ];
+  for (const p of exempt) {
+    if (pathname === p || pathname.startsWith(`${p}/`)) return true;
+  }
+  return false;
+}
 
 /** Paths reachable without an active plan (trial/subscription) or admin-granted access. */
 function isExemptFromPlanGate(pathname: string): boolean {
@@ -32,12 +64,18 @@ export async function proxy(request: NextRequest) {
   const hasSession = request.cookies.get(DEMO_SESSION_COOKIE)?.value === DEMO_SESSION_VALUE;
 
   if (hasSession && (path === "/sign-in" || path.startsWith("/sign-in/"))) {
-    return NextResponse.redirect(new URL("/", request.url));
+    const next = request.nextUrl.searchParams.get("next");
+    const target = safeInternalPathFromNextParam(next);
+    return NextResponse.redirect(new URL(target, request.url));
   }
 
-  /** Plans/checkout require an account first; success return URLs stay under `/payment/success`. */
-  if (!hasSession && path === "/payment") {
-    return NextResponse.redirect(new URL("/sign-up", request.url));
+  if (!hasSession && !isExemptFromSessionGate(path)) {
+    if (path.startsWith("/api/")) {
+      return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+    }
+    const url = new URL("/sign-in", request.url);
+    url.searchParams.set("next", `${path}${request.nextUrl.search}`);
+    return NextResponse.redirect(url, 302);
   }
 
   if (!hasSession || isExemptFromPlanGate(path)) {

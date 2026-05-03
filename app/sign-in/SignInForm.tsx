@@ -6,9 +6,18 @@ import { OAuthProviderButtons } from "@/components/OAuthProviderButtons";
 import { getDeviceName, getOrCreateDeviceId } from "@/lib/device-id";
 import { LAST_SIGNIN_EMAIL_STORAGE_KEY, normaliseEmail } from "@/lib/email-normalise";
 import { oauthErrorMessage } from "@/lib/oauth-ui-messages";
+import { safeInternalPathFromNextParam } from "@/lib/safe-internal-next-path";
 import { useRouter } from "next/navigation";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function postSignInRedirectTarget(): string {
+  try {
+    return safeInternalPathFromNextParam(new URLSearchParams(window.location.search).get("next"));
+  } catch {
+    return "/";
+  }
+}
 
 type DeviceRow = { deviceId: string; name: string; activatedAt: string; lastSeenAt: string };
 
@@ -115,7 +124,7 @@ async function startDemoSession(
       } catch {
         /* */
       }
-      window.location.assign("/");
+      window.location.assign(postSignInRedirectTarget());
     }
     return { ok: true };
   } catch (e: unknown) {
@@ -167,11 +176,11 @@ export function SignInForm() {
       return;
     }
     if (!EMAIL_RE.test(trimmed)) {
-      setError("Enter a valid email address (or use “Skip sign-in” below).");
+      setError("Enter a valid email address.");
       return;
     }
     if (!agree) {
-      setError("Tick the box to confirm you agree to the terms and privacy policy — or use “Skip sign-in”.");
+      setError("Tick the box to confirm you agree to the terms and privacy policy.");
       return;
     }
     setError("");
@@ -183,10 +192,6 @@ export function SignInForm() {
       setDeviceLimit(Array.isArray(result.devices) ? result.devices : []);
       setPending(false);
     }
-  }
-
-  async function skipSignIn() {
-    setError("Sign-in is required to post or manage adverts and broadcasts.");
   }
 
   return (
@@ -342,17 +347,8 @@ export function SignInForm() {
       >
         {pending ? "Opening app…" : "Sign in"}
       </button>
-      <button
-        type="button"
-        disabled={pending}
-        onClick={() => void skipSignIn()}
-        className="mt-3 flex h-10 w-full items-center justify-center rounded-lg border border-zinc-300 bg-white text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-      >
-        Skip sign-in — try the app (demo)
-      </button>
       <p className="mt-4 text-center text-xs leading-5 text-zinc-500 dark:text-zinc-400">
-        You can also use the <strong className="text-zinc-700 dark:text-zinc-300">Home</strong> tab in the bottom bar —
-        nothing in this build requires a real account.
+        You need an account to use SeaLink. Create one from the link below if you are new.
       </p>
     </form>
   );

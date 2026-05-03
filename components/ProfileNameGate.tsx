@@ -8,6 +8,7 @@ const SKIP_PREFIXES = [
   "/sign-in",
   "/sign-up",
   "/forgot-password",
+  "/reset-password",
   "/terms",
   "/privacy",
   "/help",
