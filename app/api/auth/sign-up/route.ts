@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
-import { DEMO_SESSION_COOKIE, DEMO_SESSION_VALUE } from "@/lib/demo-session";
-import { AUTH_EMAIL_COOKIE, uidFromEmail } from "@/lib/auth";
+import { uidFromEmail } from "@/lib/auth";
 import { normaliseEmailFromInput } from "@/lib/email-normalise";
 import { registerAccountDevice } from "@/lib/account-devices-store";
 import { hashPassword } from "@/lib/password-hash";
 import { getUserByEmail, upsertUser } from "@/lib/users-store";
-import { sessionCookieBase } from "@/lib/session-cookies";
 import { upsertProfileAfterSignUp } from "@/lib/profiles-server";
 import { normalisePhone } from "@/lib/phone-normalise";
 
@@ -91,15 +89,6 @@ export async function POST(req: Request) {
     });
   }
 
-  const res = NextResponse.json({ ok: true });
-  const base = sessionCookieBase();
-  res.cookies.set(DEMO_SESSION_COOKIE, DEMO_SESSION_VALUE, {
-    ...base,
-    maxAge: 60 * 60 * 24 * 180,
-  });
-  res.cookies.set(AUTH_EMAIL_COOKIE, email, {
-    ...base,
-    maxAge: 60 * 60 * 24 * 365,
-  });
-  return res;
+  /** Do not set session cookies here — user must sign in next, then the app can send them to plans/payment. */
+  return NextResponse.json({ ok: true as const });
 }

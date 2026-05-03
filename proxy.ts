@@ -32,6 +32,11 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
+  /** Plans/checkout require an account first; success return URLs stay under `/payment/success`. */
+  if (!hasSession && path === "/payment") {
+    return NextResponse.redirect(new URL("/sign-up", request.url));
+  }
+
   if (!hasSession || isExemptFromPlanGate(path)) {
     return NextResponse.next();
   }

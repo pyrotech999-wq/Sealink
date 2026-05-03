@@ -417,23 +417,23 @@ export function SignUpForm() {
   if (submitted) {
     return (
       <div className="rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">You&apos;re in</h2>
+        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">Account created</h2>
         <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-          Your profile, Circle invites, and safety preferences are saved for the next step: email verification and opening
-          your map with the people you trust.
+          Your profile and preferences are saved. Next, sign in with the email and password you just chose. After you
+          sign in, SeaLink will take you through plans and payment before full app access.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           <Link
             href="/sign-in"
             className="inline-flex h-10 items-center justify-center rounded-lg bg-green-600 px-4 text-sm font-medium text-white hover:bg-green-700"
           >
-            Go to sign in
+            Sign in to continue
           </Link>
           <Link
             href="/"
-            className="inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
+            className="inline-flex h-10 items-center justify-center rounded-lg border border-zinc-200 px-4 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
           >
-            Home
+            Home (guest)
           </Link>
         </div>
       </div>
