@@ -23,6 +23,7 @@ function readUntil(): number {
 }
 
 export function MobSenderActiveBanner() {
+  const pathname = usePathname();
   const [active, setActive] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
