@@ -13,6 +13,7 @@ const SKIP_PREFIXES = [
   "/help",
   "/delete-data",
   "/delete-account",
+  "/delete-my-data",
   "/admin",
 ];
 

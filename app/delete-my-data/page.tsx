@@ -117,12 +117,11 @@ export default function DeleteMyDataStaticPage() {
 
         <section className="mt-10 space-y-4 text-sm leading-7 text-zinc-800">
           <h2 className="text-base font-semibold text-zinc-900">4. What is removed</h2>
-          <p>Deletion removes your sign-in, profile, device registrations, listings you created (boats and gear), area</p>
-          <ul className="list-disc space-y-2 pl-5">
-            <li>broadcasts you authored;</li>
-            <li>direct message threads you were part of;</li>
-            <li>billing or subscription rows we store for your user id where the database allows.</li>
-          </ul>
+          <p>
+            Deletion removes your sign-in, profile, device registrations, listings you created (boats and gear), area
+            broadcasts you authored, direct message threads you were part of, and billing or subscription rows we store for
+            your user id where the database allows.
+          </p>
           <p>
             If you signed in with Google, Apple, or Facebook, deleting SeaLink data does not delete your account with
             those companies — only your SeaLink account here.

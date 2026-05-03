@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import { NAV_ITEMS } from "@/components/nav-items";
-import { suppressMessagingChromePath } from "@/lib/messaging-chrome-paths";
+import { isBareMetaDataDeletionPage, suppressMessagingChromePath } from "@/lib/messaging-chrome-paths";
 
 export function TopNav() {
   const pathname = usePathname();
@@ -27,6 +27,8 @@ export function TopNav() {
   const showMessagesTab = signedIn && !suppressMessagingChromePath(pathname);
 
   const navItems = NAV_ITEMS.filter((item) => item.href !== "/messaging" || showMessagesTab);
+
+  if (isBareMetaDataDeletionPage(pathname)) return null;
 
   return (
     <nav

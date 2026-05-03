@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { ManOverboardAlertButton } from "@/components/home/ManOverboardAlertButton";
 import { getBroadcastAlertsSilenced, setBroadcastAlertsSilenced } from "@/lib/broadcast-alert-preferences";
-import { suppressMessagingChromePath } from "@/lib/messaging-chrome-paths";
+import { isBareMetaDataDeletionPage, suppressMessagingChromePath } from "@/lib/messaging-chrome-paths";
 
 /** Bottom strip: MOB + broadcast silence only (main nav is in TopNav). */
 export function BottomNav() {
@@ -27,6 +27,8 @@ export function BottomNav() {
   useEffect(() => {
     refreshSession();
   }, [pathname, refreshSession]);
+
+  if (isBareMetaDataDeletionPage(pathname)) return null;
 
   return (
     <div

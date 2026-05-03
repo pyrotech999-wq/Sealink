@@ -12,7 +12,9 @@ function isNoSplashPath(path: string | null | undefined): boolean {
     path === "/delete-data" ||
     path.startsWith("/delete-data/") ||
     path === "/delete-account" ||
-    path.startsWith("/delete-account/")
+    path.startsWith("/delete-account/") ||
+    path === "/delete-my-data" ||
+    path.startsWith("/delete-my-data/")
   );
 }
 
