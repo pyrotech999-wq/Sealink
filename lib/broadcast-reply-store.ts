@@ -124,42 +124,43 @@ export async function listBroadcastReplyMessages(
   viewerLng: number,
   limit = 200,
 ): Promise<{ ok: true; threadId: string; messages: BroadcastReplyMessagePublic[] } | { ok: false; error: string }> {
+  /** Reads must not sit behind the global file/KV write queue (alerts / other appends), or the UI hangs on “Loading…”. */
+  const m = await getBroadcastRowById(broadcastId);
+  if (!m) return { ok: false, error: "Broadcast not found or no longer available." };
+  if (!(await viewerMayAccessBroadcastReplyThread(m, viewerUid, viewerLat, viewerLng))) {
+    return { ok: false, error: "You cannot access replies for this broadcast from here." };
+  }
+
+  if (isSupabaseConfigured()) {
+    let threadId: string;
+    try {
+      threadId = await ensureSupabaseThreadId(broadcastId);
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "Thread error" };
+    }
+    const sb = supabaseAdmin();
+    const { data: rows, error: msgErr } = await sb
+      .from("broadcast_reply_messages")
+      .select("id, sender_uid, body, created_at")
+      .eq("thread_id", threadId)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (msgErr) return { ok: false, error: msgErr.message };
+    const chronological = [...(rows ?? [])].reverse();
+    const messages: BroadcastReplyMessagePublic[] = chronological.map((r) => {
+      const row = r as { id: string; sender_uid: string; body: string; created_at: string };
+      return {
+        id: row.id,
+        senderUid: row.sender_uid,
+        body: row.body,
+        createdAt: row.created_at,
+        isMine: row.sender_uid === viewerUid,
+      };
+    });
+    return { ok: true, threadId, messages };
+  }
+
   return enqueue(async () => {
-    const m = await getBroadcastRowById(broadcastId);
-    if (!m) return { ok: false, error: "Broadcast not found or no longer available." };
-    if (!(await viewerMayAccessBroadcastReplyThread(m, viewerUid, viewerLat, viewerLng))) {
-      return { ok: false, error: "You cannot access replies for this broadcast from here." };
-    }
-
-    if (isSupabaseConfigured()) {
-      let threadId: string;
-      try {
-        threadId = await ensureSupabaseThreadId(broadcastId);
-      } catch (e) {
-        return { ok: false, error: e instanceof Error ? e.message : "Thread error" };
-      }
-      const sb = supabaseAdmin();
-      const { data: rows, error: msgErr } = await sb
-        .from("broadcast_reply_messages")
-        .select("id, sender_uid, body, created_at")
-        .eq("thread_id", threadId)
-        .order("created_at", { ascending: false })
-        .limit(limit);
-      if (msgErr) return { ok: false, error: msgErr.message };
-      const chronological = [...(rows ?? [])].reverse();
-      const messages: BroadcastReplyMessagePublic[] = chronological.map((r) => {
-        const row = r as { id: string; sender_uid: string; body: string; created_at: string };
-        return {
-          id: row.id,
-          senderUid: row.sender_uid,
-          body: row.body,
-          createdAt: row.created_at,
-          isMine: row.sender_uid === viewerUid,
-        };
-      });
-      return { ok: true, threadId, messages };
-    }
-
     const threadId = await ensureFileThreadId(broadcastId);
     const payload = await readPayload();
     const msgs = payload.messages
@@ -173,8 +174,33 @@ export async function listBroadcastReplyMessages(
       createdAt: row.createdAt,
       isMine: row.senderUid === viewerUid,
     }));
-    return { ok: true, threadId, messages };
+    return { ok: true as const, threadId, messages };
   });
+}
+
+async function appendBroadcastReplyMessageFile(
+  viewerUid: string,
+  broadcastId: string,
+  viewerLat: number,
+  viewerLng: number,
+  text: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const m = await getBroadcastRowById(broadcastId);
+  if (!m) return { ok: false, error: "Broadcast not found or no longer available." };
+  if (!(await viewerMayAccessBroadcastReplyThread(m, viewerUid, viewerLat, viewerLng))) {
+    return { ok: false, error: "You cannot post here from this location or account." };
+  }
+  const threadId = await ensureFileThreadId(broadcastId);
+  const payload = await readPayload();
+  payload.messages.push({
+    id: randomUUID(),
+    threadId,
+    senderUid: viewerUid,
+    body: text,
+    createdAt: new Date().toISOString(),
+  });
+  await writePayload(payload);
+  return { ok: true };
 }
 
 export async function appendBroadcastReplyMessage(
@@ -184,46 +210,34 @@ export async function appendBroadcastReplyMessage(
   viewerLng: number,
   body: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  return enqueue(async () => {
-    const text = body.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
-    if (text.length < 1) return { ok: false, error: "Message cannot be empty." };
-    if (text.length > 4000) return { ok: false, error: "Message too long." };
+  const text = body.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+  if (text.length < 1) return { ok: false, error: "Message cannot be empty." };
+  if (text.length > 4000) return { ok: false, error: "Message too long." };
 
-    const m = await getBroadcastRowById(broadcastId);
-    if (!m) return { ok: false, error: "Broadcast not found or no longer available." };
-    if (!(await viewerMayAccessBroadcastReplyThread(m, viewerUid, viewerLat, viewerLng))) {
-      return { ok: false, error: "You cannot post here from this location or account." };
+  const m = await getBroadcastRowById(broadcastId);
+  if (!m) return { ok: false, error: "Broadcast not found or no longer available." };
+  if (!(await viewerMayAccessBroadcastReplyThread(m, viewerUid, viewerLat, viewerLng))) {
+    return { ok: false, error: "You cannot post here from this location or account." };
+  }
+
+  if (isSupabaseConfigured()) {
+    let threadId: string;
+    try {
+      threadId = await ensureSupabaseThreadId(broadcastId);
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "Thread error" };
     }
-
-    if (isSupabaseConfigured()) {
-      let threadId: string;
-      try {
-        threadId = await ensureSupabaseThreadId(broadcastId);
-      } catch (e) {
-        return { ok: false, error: e instanceof Error ? e.message : "Thread error" };
-      }
-      const sb = supabaseAdmin();
-      const { error: insMsg } = await sb.from("broadcast_reply_messages").insert({
-        thread_id: threadId,
-        sender_uid: viewerUid,
-        body: text,
-      });
-      if (insMsg) return { ok: false, error: insMsg.message };
-      return { ok: true };
-    }
-
-    const threadId = await ensureFileThreadId(broadcastId);
-    const payload = await readPayload();
-    payload.messages.push({
-      id: randomUUID(),
-      threadId,
-      senderUid: viewerUid,
+    const sb = supabaseAdmin();
+    const { error: insMsg } = await sb.from("broadcast_reply_messages").insert({
+      thread_id: threadId,
+      sender_uid: viewerUid,
       body: text,
-      createdAt: new Date().toISOString(),
     });
-    await writePayload(payload);
+    if (insMsg) return { ok: false, error: insMsg.message };
     return { ok: true };
-  });
+  }
+
+  return enqueue(() => appendBroadcastReplyMessageFile(viewerUid, broadcastId, viewerLat, viewerLng, text));
 }
 
 export type BroadcastReplyAlert = {
