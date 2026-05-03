@@ -10,11 +10,17 @@ export const metadata: Metadata = {
   description: "Edit how you appear on the map and your account shortcuts.",
 };
 
-export default async function ProfilePage() {
+export default async function ProfilePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ required?: string }>;
+}) {
   const jar = await cookies();
   const signedIn = jar.get(DEMO_SESSION_COOKIE)?.value === DEMO_SESSION_VALUE;
   const raw = jar.get(AUTH_EMAIL_COOKIE)?.value ?? "";
   const accountEmail = signedIn ? normaliseEmail(raw) : "";
+  const sp = await searchParams;
+  const nameRequired = sp.required === "1";
 
   return (
     <div className="flex flex-1 flex-col bg-black">
@@ -27,11 +33,18 @@ export default async function ProfilePage() {
         </Link>
         <h1 className="mt-4 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Edit profile</h1>
         <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-          Update the name, boat, phone, and photo used on your map pin. This information stays in your browser unless you
-          use features that send it with location (same as sign-up).
+          Your <strong className="font-medium text-zinc-800 dark:text-zinc-200">name</strong> is saved to your account (when
+          signed in with cloud sync) and used in messages and broadcasts so others see you properly — not a numeric id.
+          Boat, phone, and photo still apply on the map as before.
         </p>
 
-        <ProfileEditForm signedIn={signedIn} accountEmail={accountEmail} />
+        {nameRequired ? (
+          <div className="mt-6 rounded-xl border border-amber-600/60 bg-amber-950/40 px-4 py-3 text-sm text-amber-100">
+            Add your name below to continue using SeaLink (at least 2 characters), then save.
+          </div>
+        ) : null}
+
+        <ProfileEditForm signedIn={signedIn} accountEmail={accountEmail} nameRequired={nameRequired} />
       </main>
     </div>
   );
