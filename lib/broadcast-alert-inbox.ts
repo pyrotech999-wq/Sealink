@@ -71,3 +71,13 @@ export function filterActiveAlerts(items: PersistedBroadcastAlert[]): PersistedB
   const pruned = pruneBroadcastAlerts(items);
   return pruned.filter((a) => !a.deleted).sort((a, b) => b.receivedAt - a.receivedAt);
 }
+
+/** Floating toast: only items the user has not marked Seen yet. */
+export function filterUnseenAlerts(items: PersistedBroadcastAlert[]): PersistedBroadcastAlert[] {
+  return filterActiveAlerts(items).filter((a) => !a.seen);
+}
+
+/** After Seen: same 24h window, scrollable archive until Delete or TTL. */
+export function filterSeenArchive(items: PersistedBroadcastAlert[]): PersistedBroadcastAlert[] {
+  return filterActiveAlerts(items).filter((a) => a.seen);
+}

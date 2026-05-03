@@ -12,7 +12,8 @@ import { getBroadcastAlertsSilenced, getMessageAlertSoundOn } from "@/lib/broadc
 import { playBroadcastAlertSound, playVicinityDmAlertSound } from "@/lib/broadcast-alert-sound";
 import { BOTTOM_DOCK_OFFSET } from "@/lib/bottom-dock-offset";
 import {
-  filterActiveAlerts,
+  filterSeenArchive,
+  filterUnseenAlerts,
   loadBroadcastAlerts,
   pruneBroadcastAlerts,
   saveBroadcastAlerts,
@@ -58,14 +59,15 @@ export function BroadcastToastProvider({ children }: { children: React.ReactNode
     return () => window.clearInterval(t);
   }, [hydrated]);
 
-  const active = useMemo(() => filterActiveAlerts(alerts), [alerts]);
+  const unseen = useMemo(() => filterUnseenAlerts(alerts), [alerts]);
+  const seenArchive = useMemo(() => filterSeenArchive(alerts), [alerts]);
 
   useEffect(() => {
     setCurrentIndex((i) => {
-      if (active.length === 0) return 0;
-      return Math.min(i, active.length - 1);
+      if (unseen.length === 0) return 0;
+      return Math.min(i, unseen.length - 1);
     });
-  }, [active.length]);
+  }, [unseen.length]);
 
   const patchAlert = useCallback((key: string, patch: Partial<PersistedBroadcastAlert>) => {
     setAlerts((prev) => {
@@ -115,21 +117,25 @@ export function BroadcastToastProvider({ children }: { children: React.ReactNode
     setCurrentIndex(0);
   }, []);
 
-  const current = active.length > 0 ? active[Math.min(currentIndex, active.length - 1)] : null;
+  const current = unseen.length > 0 ? unseen[Math.min(currentIndex, unseen.length - 1)] : null;
 
   const onSeen = () => {
     if (!current) return;
     patchAlert(current.key, { seen: true });
-    setCurrentIndex((i) => Math.min(i + 1, Math.max(0, active.length - 1)));
+    setCurrentIndex(0);
   };
 
-  const onDelete = () => {
+  const onDeleteCurrent = () => {
     if (!current) return;
     patchAlert(current.key, { deleted: true });
   };
 
+  const onDeleteArchived = (key: string) => {
+    patchAlert(key, { deleted: true });
+  };
+
   const goPrev = () => {
-    setCurrentIndex((i) => Math.min(i + 1, Math.max(0, active.length - 1)));
+    setCurrentIndex((i) => Math.min(i + 1, Math.max(0, unseen.length - 1)));
   };
 
   const goNext = () => {
@@ -153,29 +159,24 @@ export function BroadcastToastProvider({ children }: { children: React.ReactNode
                 <p className="text-[10px] font-bold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
                   {current.variant === "vicinity" ? "Vicinity message" : "Vicinity broadcast"}
                 </p>
-                {current.seen ? (
-                  <span className="rounded bg-zinc-200/90 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200">
-                    Read
-                  </span>
-                ) : null}
               </div>
               <div className="mt-1 max-h-40 overflow-y-auto text-sm leading-snug text-indigo-950 dark:text-indigo-50">
                 <p className="whitespace-pre-wrap">{current.text}</p>
               </div>
             </div>
             <div className="flex flex-col gap-2 border-t border-indigo-200/70 px-3 py-2 dark:border-indigo-800/60">
-              {active.length > 1 ? (
+              {unseen.length > 1 ? (
                 <div className="flex items-center justify-between gap-2 text-[11px] text-indigo-800 dark:text-indigo-200">
                   <button
                     type="button"
                     onClick={goPrev}
-                    disabled={currentIndex >= active.length - 1}
+                    disabled={currentIndex >= unseen.length - 1}
                     className="rounded-md border border-indigo-200 bg-white px-2 py-1 font-semibold disabled:opacity-40 dark:border-indigo-800 dark:bg-indigo-900/40"
                   >
                     ← Older
                   </button>
                   <span className="tabular-nums text-indigo-700/90 dark:text-indigo-300/90">
-                    {currentIndex + 1} / {active.length}
+                    {currentIndex + 1} / {unseen.length}
                   </span>
                   <button
                     type="button"
@@ -197,13 +198,51 @@ export function BroadcastToastProvider({ children }: { children: React.ReactNode
                 </button>
                 <button
                   type="button"
-                  onClick={onDelete}
+                  onClick={onDeleteCurrent}
                   className="h-9 flex-1 rounded-lg border border-red-300 bg-red-50 text-xs font-semibold text-red-900 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/50 dark:text-red-100 dark:hover:bg-red-950/70"
                 >
                   Delete
                 </button>
               </div>
             </div>
+          </div>
+        ) : null}
+
+        {seenArchive.length > 0 ? (
+          <div className="pointer-events-auto w-full max-w-md rounded-xl border border-zinc-300 bg-white/95 shadow-md dark:border-zinc-600 dark:bg-zinc-900/95">
+            <div className="border-b border-zinc-200 px-3 py-2 dark:border-zinc-700">
+              <p className="text-xs font-bold text-zinc-800 dark:text-zinc-100">Read — last 24 hours</p>
+              <p className="mt-0.5 text-[10px] text-zinc-500 dark:text-zinc-400">
+                Tap Seen above clears the alert here; items disappear after 24 hours or when you delete them.
+              </p>
+            </div>
+            <ul className="max-h-52 space-y-0 overflow-y-auto overscroll-contain divide-y divide-zinc-200 dark:divide-zinc-700">
+              {seenArchive.map((a) => (
+                <li key={a.key} className="flex gap-2 px-3 py-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      {a.variant === "vicinity" ? "Message" : "Broadcast"} ·{" "}
+                      {new Date(a.receivedAt).toLocaleString("en-GB", {
+                        day: "numeric",
+                        month: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                    <p className="mt-0.5 line-clamp-4 whitespace-pre-wrap text-xs leading-snug text-zinc-800 dark:text-zinc-100">
+                      {a.text}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onDeleteArchived(a.key)}
+                    className="h-8 shrink-0 self-start rounded-md border border-red-200 bg-red-50 px-2 text-[10px] font-semibold text-red-800 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950/60"
+                  >
+                    Delete
+                  </button>
+                </li>
+              ))}
+            </ul>
           </div>
         ) : null}
       </div>
