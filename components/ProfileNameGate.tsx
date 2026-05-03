@@ -11,6 +11,7 @@ const SKIP_PREFIXES = [
   "/terms",
   "/privacy",
   "/help",
+  "/admin",
 ];
 
 function shouldSkip(pathname: string): boolean {

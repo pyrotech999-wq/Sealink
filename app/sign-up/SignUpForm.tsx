@@ -342,6 +342,13 @@ export function SignUpForm() {
   async function completeSignUp() {
     if (step !== 4) return;
     if (!validateStep(4)) return;
+    if (!form.contactName.trim() || form.contactName.trim().length < 2) {
+      setErrors((e) => ({
+        ...e,
+        contactName: "Use at least 2 characters for your name (e.g. first and last name).",
+      }));
+      return;
+    }
     if (!step4PrimaryReady || submitting) return;
     setSubmitting(true);
     setBoatName(form.boatName);
