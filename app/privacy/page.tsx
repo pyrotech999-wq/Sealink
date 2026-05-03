@@ -384,6 +384,18 @@ export default function PrivacyPage() {
           qualified privacy lawyer should review it against your actual deployment, contracts, and jurisdictions before you rely on it
           as the sole compliance document.
         </p>
+
+        <nav
+          className="mt-12 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 border-t border-zinc-800 pt-8 text-sm text-zinc-400"
+          aria-label="Related pages"
+        >
+          <Link href="/terms" className="hover:text-zinc-200 hover:underline">
+            Terms of use
+          </Link>
+          <Link href="/help" className="hover:text-zinc-200 hover:underline">
+            Help
+          </Link>
+        </nav>
       </article>
     </div>
   );
