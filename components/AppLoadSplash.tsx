@@ -6,18 +6,23 @@ import { usePathname } from "next/navigation";
 
 const SPLASH_MS = 2000;
 
-function isDeleteAccountPath(path: string | null | undefined): boolean {
+function isNoSplashPath(path: string | null | undefined): boolean {
   if (!path) return false;
-  return path === "/delete-account" || path.startsWith("/delete-account/");
+  return (
+    path === "/delete-data" ||
+    path.startsWith("/delete-data/") ||
+    path === "/delete-account" ||
+    path.startsWith("/delete-account/")
+  );
 }
 
-/** Full-screen brand splash on first client paint; hides after a fixed delay while the app hydrates. Skipped on `/delete-account`. */
+/** Full-screen brand splash on first client paint; hides after a fixed delay while the app hydrates. Skipped on `/delete-data`. */
 export function AppLoadSplash() {
   const pathname = usePathname();
   const [skip, setSkip] = useState(false);
 
   useLayoutEffect(() => {
-    if (isDeleteAccountPath(pathname) || isDeleteAccountPath(window.location.pathname)) {
+    if (isNoSplashPath(pathname) || isNoSplashPath(window.location.pathname)) {
       setSkip(true);
     }
   }, [pathname]);

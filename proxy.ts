@@ -17,6 +17,7 @@ function isExemptFromPlanGate(pathname: string): boolean {
     "/privacy",
     "/terms",
     "/help",
+    "/delete-data",
     "/delete-account",
   ];
   for (const p of exempt) {

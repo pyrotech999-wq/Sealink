@@ -38,7 +38,7 @@ const toc: { id: string; label: string }[] = [
   { id: "share-install", label: "Share app & tips" },
   { id: "iphone-install", label: "iPhone — save as app" },
   { id: "safety", label: "Safety & official info" },
-  { id: "delete-account", label: "Delete your account" },
+  { id: "delete-data", label: "Delete your data" },
   { id: "troubleshooting", label: "Troubleshooting" },
 ];
 
@@ -595,12 +595,12 @@ export default function HelpPage() {
               </p>
             </Section>
 
-            <Section id="delete-account" title="Delete your account">
+            <Section id="delete-data" title="Delete your data">
               <p>
-                You can close your SeaLink account at any time. Deleting removes your sign-in, profile, device registrations,
-                listings you created (boats and gear), area broadcasts you authored, direct message threads you were part
-                of, and billing rows we store for your user id where the database allows. Content others saved separately
-                (for example screenshots) is outside the app.
+                You can close your SeaLink account and remove data we hold for you at any time. Deleting removes your
+                sign-in, profile, device registrations, listings you created (boats and gear), area broadcasts you authored,
+                direct message threads you were part of, and billing rows we store for your user id where the database
+                allows. Content others saved separately (for example screenshots) is outside the app.
               </p>
               <p>
                 If you use <strong className="text-zinc-200">Google, Apple, or Facebook</strong> to sign in, deleting here
@@ -621,17 +621,15 @@ export default function HelpPage() {
               </p>
               <p className="rounded-lg border border-zinc-700/80 bg-zinc-950/60 px-3 py-3 text-xs text-zinc-400">
                 <strong className="text-zinc-300">Delete in the app:</strong> sign in, then open{" "}
-                <Link href="/delete-account" className="font-mono text-emerald-400 hover:underline">
-                  /delete-account
+                <Link href="/delete-data" className="font-mono text-emerald-400 hover:underline">
+                  /delete-data
                 </Link>{" "}
                 — on the live site that is{" "}
-                <a
-                  href="https://sealinkapp.com/delete-account"
-                  className="font-mono text-emerald-400 hover:underline"
-                >
-                  https://sealinkapp.com/delete-account
+                <a href="https://sealinkapp.com/delete-data" className="font-mono text-emerald-400 hover:underline">
+                  https://sealinkapp.com/delete-data
                 </a>
-                . Use the button on that page to confirm.
+                . The old <span className="font-mono text-zinc-500">/delete-account</span> address redirects here. Use the
+                button on that page to confirm.
               </p>
             </Section>
 

@@ -13,7 +13,7 @@ export const runtime = "nodejs";
 export async function POST(req: Request) {
   const user = await getAuthUser();
   if (!user) {
-    return NextResponse.json({ ok: false, error: "Sign in first, then try again from Help." }, { status: 401 });
+    return NextResponse.json({ ok: false, error: "Sign in first, then try again from the Delete your data page." }, { status: 401 });
   }
 
   let confirm = "";
@@ -25,7 +25,7 @@ export async function POST(req: Request) {
   }
   if (confirm !== "DELETE_MY_ACCOUNT") {
     return NextResponse.json(
-      { ok: false, error: "Confirmation text did not match. Use the button on the Help page." },
+      { ok: false, error: "Confirmation text did not match. Use the button on the Delete your data page." },
       { status: 400 },
     );
   }

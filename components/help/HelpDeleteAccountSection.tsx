@@ -31,7 +31,7 @@ export function HelpDeleteAccountSection() {
     if (!ok) return;
     setBusy(true);
     try {
-      const r = await fetch("/api/auth/delete-account", {
+      const r = await fetch("/api/auth/delete-data", {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -70,13 +70,13 @@ export function HelpDeleteAccountSection() {
           <li>
             <strong className="text-zinc-900 dark:text-zinc-100">Come back to this page</strong> in the{" "}
             <strong className="text-zinc-900 dark:text-zinc-100">same browser</strong> (bookmark{" "}
-            <span className="font-mono text-xs text-zinc-600 dark:text-zinc-400">/delete-account</span> or use your
+            <span className="font-mono text-xs text-zinc-600 dark:text-zinc-400">/delete-data</span> or use your
             history). If you do not see the red button below, refresh once after signing in.
           </li>
           <li>
             <strong className="text-zinc-900 dark:text-zinc-100">Read the summary</strong> in{" "}
-            <Link href="/help#delete-account" className="font-medium text-emerald-700 hover:underline dark:text-emerald-400">
-              Help → Delete your account
+            <Link href="/help#delete-data" className="font-medium text-emerald-700 hover:underline dark:text-emerald-400">
+              Help → Delete your data
             </Link>{" "}
             and the{" "}
             <Link href="/privacy" className="font-medium text-emerald-700 hover:underline dark:text-emerald-400">
