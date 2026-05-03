@@ -465,6 +465,13 @@ export function MapBroadcastPanel({
       >
         Area broadcasts (~5 mi)
       </h3>
+      <p
+        className={`mt-1 leading-snug text-indigo-900/85 dark:text-indigo-200/85 ${L ? "text-base" : "text-[11px]"}`}
+      >
+        <strong className="font-semibold text-indigo-950 dark:text-indigo-100">Reply</strong> opens a shared thread on a
+        new page: anyone who could see that broadcast (nearby, friends nearby, friends worldwide, or all areas as
+        posted) can read and reply there.
+      </p>
 
       <label
         className={`mt-2 inline-flex cursor-pointer items-center gap-2 font-medium text-indigo-900 dark:text-indigo-200 ${
@@ -675,18 +682,9 @@ export function MapBroadcastPanel({
           <h4 className={`font-semibold text-indigo-950 dark:text-indigo-100 ${L ? "text-xl" : "text-xs"}`}>
             Private replies
           </h4>
-          <p
-            className={`mt-1 leading-snug text-indigo-900/75 dark:text-indigo-200/85 ${L ? "text-base" : "text-[11px]"}`}
-          >
-            Each row is one conversation — you and one other boater.{" "}
-            <strong className="font-semibold text-indigo-950 dark:text-indigo-100">Delete</strong> removes the
-            whole chat for both of you.
-          </p>
           {inboxRows.length === 0 ? (
             <p className={`mt-3 rounded-lg border border-dashed border-indigo-200/70 bg-white/60 px-3 py-4 text-center text-indigo-800/70 dark:border-indigo-800/50 dark:bg-zinc-900/40 dark:text-indigo-200/70 ${L ? "text-base" : "text-[11px]"}`}>
-              No private conversations yet. One-to-one chats show here; use <strong className="font-semibold">Reply</strong>{" "}
-              on a broadcast to open the <strong className="font-semibold">shared thread</strong> (everyone who could see
-              that broadcast).
+              No private chats yet.
             </p>
           ) : (
             <ul className={`sealink-thread-scroll mt-3 space-y-2 overflow-y-auto pr-1 ${L ? "max-h-72" : "max-h-44"}`}>
