@@ -48,7 +48,7 @@ async function shrinkAvatarDataUrlForStorage(dataUrl: string): Promise<string> {
   });
 }
 
-export function ProfileEditForm({ signedIn, accountEmail }: Props) {
+export function ProfileEditForm({ signedIn, accountEmail, nameRequired = false }: Props) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
   const statusRef = useRef<HTMLDivElement>(null);
@@ -59,6 +59,8 @@ export function ProfileEditForm({ signedIn, accountEmail }: Props) {
   const [avatarDataUrl, setAvatarDataUrlState] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  /** After `/api/profiles/me`, whether cloud profile sync is available (signed-in only). */
+  const [serverSync, setServerSync] = useState(false);
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -69,6 +71,32 @@ export function ProfileEditForm({ signedIn, accountEmail }: Props) {
       setAvatarDataUrlState(getAvatarDataUrl());
     });
   }, []);
+
+  useEffect(() => {
+    if (!signedIn) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const r = await fetch("/api/profiles/me", { credentials: "same-origin", cache: "no-store" });
+        const d = (await r.json()) as {
+          supabase?: boolean;
+          fullName?: string | null;
+          boatName?: string | null;
+          phone?: string | null;
+          avatarPublicUrl?: string | null;
+        };
+        if (cancelled || !r.ok || d.supabase === false) return;
+        if (typeof d.fullName === "string" && d.fullName.trim()) setFullNameState(d.fullName.trim());
+        if (typeof d.boatName === "string") setBoatNameState(d.boatName.trim());
+        if (typeof d.phone === "string" && d.phone.trim()) setPhoneState(d.phone.trim());
+      } catch {
+        /* keep localStorage values */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [signedIn]);
 
   useEffect(() => {
     if (!error) return;
@@ -111,19 +139,46 @@ export function ProfileEditForm({ signedIn, accountEmail }: Props) {
   async function onSave(ev: React.FormEvent) {
     ev.preventDefault();
     setError("");
+    const nameTrim = fullName.trim();
+    const nameErr = validateProfileDisplayName(nameTrim);
+    if (nameErr) {
+      setError(nameErr);
+      return;
+    }
     setSaving(true);
     try {
       const nextAvatar = await shrinkAvatarDataUrlForStorage(avatarDataUrl);
       if (nextAvatar !== avatarDataUrl) {
         setAvatarDataUrlState(nextAvatar);
       }
+
+      if (signedIn) {
+        const r = await fetch("/api/profiles/me", {
+          method: "PATCH",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fullName: nameTrim,
+            boatName: boatName.trim(),
+            phone: normalisePhone(phone),
+            avatarDataUrl: nextAvatar.trim() ? nextAvatar : null,
+          }),
+        });
+        const d = (await r.json()) as { ok?: boolean; error?: string };
+        if (!r.ok || !d.ok) {
+          setError(d.error ?? "Could not save profile to your account.");
+          return;
+        }
+      }
+
       setBoatName(boatName);
-      setFullName(fullName);
+      setFullName(nameTrim);
       setProfilePhone(normalisePhone(phone));
       if (nextAvatar) setAvatarDataUrl(nextAvatar);
       else setAvatarDataUrl(null);
       setShowAvatar(showAvatar);
-      router.push("/");
+      router.push(nameRequired ? "/" : "/");
+      if (nameRequired) router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save profile.");
     } finally {
@@ -164,10 +219,13 @@ export function ProfileEditForm({ signedIn, accountEmail }: Props) {
 
       <div>
         <label htmlFor="profile-full" className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-          Your name
+          Your name <span className="font-normal text-red-600 dark:text-red-400">(required)</span>
         </label>
         <input
           id="profile-full"
+          required
+          minLength={2}
+          maxLength={120}
           autoComplete="name"
           value={fullName}
           onChange={(e) => {
@@ -175,6 +233,11 @@ export function ProfileEditForm({ signedIn, accountEmail }: Props) {
           }}
           className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
         />
+        {signedIn ? (
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            Shown to others in area-broadcast replies and private messages (not your account id).
+          </p>
+        ) : null}
       </div>
 
       <div>
