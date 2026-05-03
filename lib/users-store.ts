@@ -1,10 +1,13 @@
+import { randomBytes } from "crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 import { normaliseEmail, uidFromEmail } from "@/lib/auth";
 import type { PasswordHash } from "@/lib/password-hash";
+import { hashPassword } from "@/lib/password-hash";
 import { canUseKv, kvGetJson, kvSetJson } from "@/lib/kv-json";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import type { OauthProviderId } from "@/lib/oauth-pkce-cookie";
 
 export type UserRow = {
   uid: string;
@@ -12,6 +15,8 @@ export type UserRow = {
   password: PasswordHash;
   createdAt: string;
   updatedAt: string;
+  oauthProvider?: string | null;
+  oauthSub?: string | null;
 };
 
 type StoreShape = Record<string, UserRow>;
@@ -52,6 +57,8 @@ type UserAccountRowDb = {
   password_hash: unknown;
   created_at: string;
   updated_at: string;
+  oauth_provider?: unknown;
+  oauth_sub?: unknown;
 };
 
 function rowFromDb(data: UserAccountRowDb): UserRow {
@@ -61,6 +68,8 @@ function rowFromDb(data: UserAccountRowDb): UserRow {
     password: data.password_hash as PasswordHash,
     createdAt: data.created_at,
     updatedAt: data.updated_at,
+    oauthProvider: typeof data.oauth_provider === "string" ? data.oauth_provider : null,
+    oauthSub: typeof data.oauth_sub === "string" ? data.oauth_sub : null,
   };
 }
 
@@ -160,6 +169,84 @@ export async function listUserAccountsBrief(): Promise<{ uid: string; email: str
     }
     const store = canUseKv() ? await kvGetJson<StoreShape>(KV_KEY, {}) : readStore();
     return Object.values(store).map((u) => ({ uid: u.uid, email: u.email, createdAt: u.createdAt }));
+  });
+}
+
+export async function findUserByOauth(provider: OauthProviderId, sub: string): Promise<UserRow | null> {
+  return enqueue(async () => {
+    if (!isSupabaseConfigured()) return null;
+    const sb = supabaseAdmin();
+    const { data, error } = await sb
+      .from("user_accounts")
+      .select("*")
+      .eq("oauth_provider", provider)
+      .eq("oauth_sub", sub.trim())
+      .maybeSingle();
+    if (error || !data) return null;
+    return rowFromDb(data as UserAccountRowDb);
+  });
+}
+
+export type OauthSignInResult =
+  | { ok: true; user: UserRow }
+  | { ok: false; code: "password_account_exists" | "oauth_email_mismatch" | "supabase_off" };
+
+/**
+ * Find or create a user for an OAuth identity. Email must be normalised and non-empty.
+ * Rejects if the same email already exists as an email+password account (no oauth_sub).
+ */
+export async function oauthSignInOrRegister(params: {
+  provider: OauthProviderId;
+  sub: string;
+  email: string;
+}): Promise<OauthSignInResult> {
+  return enqueue(async () => {
+    if (!isSupabaseConfigured()) return { ok: false, code: "supabase_off" };
+    const provider = params.provider;
+    const sub = params.sub.trim();
+    const email = normaliseEmail(params.email);
+    if (!sub || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return { ok: false, code: "oauth_email_mismatch" };
+    }
+
+    const byOauth = await findUserByOauth(provider, sub);
+    if (byOauth) return { ok: true, user: byOauth };
+
+    const existing = await getUserByEmailSupabase(email);
+    if (existing) {
+      const hasOauth = Boolean(existing.oauthSub && existing.oauthProvider);
+      if (!hasOauth) return { ok: false, code: "password_account_exists" };
+      if (existing.oauthProvider !== provider || existing.oauthSub !== sub) {
+        return { ok: false, code: "oauth_email_mismatch" };
+      }
+      return { ok: true, user: existing };
+    }
+
+    const uid = uidFromEmail(email);
+    const now = new Date().toISOString();
+    const password = hashPassword(randomBytes(48).toString("hex"));
+    const sb = supabaseAdmin();
+    const { error } = await sb.from("user_accounts").insert({
+      uid,
+      email,
+      password_hash: password,
+      oauth_provider: provider,
+      oauth_sub: sub,
+      created_at: now,
+      updated_at: now,
+    });
+    if (error) {
+      const retry = await getUserByEmailSupabase(email);
+      if (retry && retry.oauthProvider === provider && retry.oauthSub === sub) {
+        return { ok: true, user: retry };
+      }
+      throw new Error(error.message);
+    }
+
+    return {
+      ok: true,
+      user: { uid, email, password, createdAt: now, updatedAt: now, oauthProvider: provider, oauthSub: sub },
+    };
   });
 }
 
