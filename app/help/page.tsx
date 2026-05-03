@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { HelpDeleteAccountSection } from "@/components/help/HelpDeleteAccountSection";
 
 export const metadata: Metadata = {
   title: "Help | SeaLink",
@@ -620,7 +619,20 @@ export default function HelpPage() {
                 </a>
                 .
               </p>
-              <HelpDeleteAccountSection />
+              <p className="rounded-lg border border-zinc-700/80 bg-zinc-950/60 px-3 py-3 text-xs text-zinc-400">
+                <strong className="text-zinc-300">Delete in the app:</strong> sign in, then open{" "}
+                <Link href="/delete-account" className="font-mono text-emerald-400 hover:underline">
+                  /delete-account
+                </Link>{" "}
+                — on the live site that is{" "}
+                <a
+                  href="https://sealinkapp.com/delete-account"
+                  className="font-mono text-emerald-400 hover:underline"
+                >
+                  https://sealinkapp.com/delete-account
+                </a>
+                . Use the button on that page to confirm.
+              </p>
             </Section>
 
             <Section id="troubleshooting" title="Troubleshooting">

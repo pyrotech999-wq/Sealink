@@ -17,6 +17,7 @@ function isExemptFromPlanGate(pathname: string): boolean {
     "/privacy",
     "/terms",
     "/help",
+    "/delete-account",
   ];
   for (const p of exempt) {
     if (pathname === p || pathname.startsWith(`${p}/`)) return true;
