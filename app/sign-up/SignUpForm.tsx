@@ -568,6 +568,11 @@ export function SignUpForm() {
           {errors.submit}
         </p>
       ) : null}
+
+      <div className="mb-6">
+        <OAuthProviderButtons emphasizeGoogle signUpCaption />
+      </div>
+
       <div className="mb-6">
         <div className="flex items-center justify-between gap-4">
           <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Step {step} of 4</p>
@@ -579,10 +584,6 @@ export function SignUpForm() {
             style={{ width: `${progress}%` }}
           />
         </div>
-      </div>
-
-      <div className="mb-6">
-        <OAuthProviderButtons signUpCaption />
       </div>
 
       {step === 1 && (

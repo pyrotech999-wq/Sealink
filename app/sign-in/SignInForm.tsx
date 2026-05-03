@@ -202,7 +202,7 @@ export function SignInForm() {
         </p>
       )}
       <div className="mb-6">
-        <OAuthProviderButtons />
+        <OAuthProviderButtons emphasizeGoogle />
       </div>
 
       {deviceLimit.length ? (
