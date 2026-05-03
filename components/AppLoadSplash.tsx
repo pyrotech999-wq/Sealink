@@ -1,20 +1,34 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 
 const SPLASH_MS = 2000;
 
-/** Full-screen brand splash on first client paint; hides after a fixed delay while the app hydrates. */
+function isDeleteAccountPath(path: string | null | undefined): boolean {
+  if (!path) return false;
+  return path === "/delete-account" || path.startsWith("/delete-account/");
+}
+
+/** Full-screen brand splash on first client paint; hides after a fixed delay while the app hydrates. Skipped on `/delete-account`. */
 export function AppLoadSplash() {
-  const [visible, setVisible] = useState(true);
+  const pathname = usePathname();
+  const [skip, setSkip] = useState(false);
+
+  useLayoutEffect(() => {
+    if (isDeleteAccountPath(pathname) || isDeleteAccountPath(window.location.pathname)) {
+      setSkip(true);
+    }
+  }, [pathname]);
 
   useEffect(() => {
-    const id = window.setTimeout(() => setVisible(false), SPLASH_MS);
+    if (skip) return;
+    const id = window.setTimeout(() => setSkip(true), SPLASH_MS);
     return () => window.clearTimeout(id);
-  }, []);
+  }, [skip]);
 
-  if (!visible) return null;
+  if (skip) return null;
 
   return (
     <div
