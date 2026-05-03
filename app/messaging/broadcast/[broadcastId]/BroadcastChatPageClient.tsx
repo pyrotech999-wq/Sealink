@@ -123,26 +123,38 @@ export function BroadcastChatPageClient({ broadcastId }: { broadcastId: string }
   const loadMessages = useCallback(async () => {
     if (!broadcastId || readLat == null || readLng == null) {
       setLoading(false);
+      setLoadedOnce(true);
       return;
     }
     setLoading(true);
     setErr(null);
+    const ac = new AbortController();
+    const to = window.setTimeout(() => ac.abort(), 28_000);
     try {
       const r = await fetch(
         `/api/broadcast-replies/messages?broadcastId=${encodeURIComponent(broadcastId)}&lat=${encodeURIComponent(String(readLat))}&lng=${encodeURIComponent(String(readLng))}`,
-        { credentials: "same-origin", cache: "no-store" },
+        { credentials: "same-origin", cache: "no-store", signal: ac.signal },
       );
-      const d = (await r.json()) as { threadId?: string; messages?: Msg[]; error?: string };
+      let d: { threadId?: string; messages?: Msg[]; error?: string };
+      try {
+        d = (await r.json()) as { threadId?: string; messages?: Msg[]; error?: string };
+      } catch {
+        setErr(r.ok ? "Invalid response from server." : `Could not load chat (${r.status})`);
+        setMessages([]);
+        return;
+      }
       if (!r.ok) {
         setErr(d.error ?? "Could not load chat");
         setMessages([]);
         return;
       }
       setMessages(Array.isArray(d.messages) ? d.messages : []);
-    } catch {
-      setErr("Network error");
+    } catch (e) {
+      const aborted = e instanceof Error && e.name === "AbortError";
+      setErr(aborted ? "Loading replies timed out — check connection and try again." : "Network error");
       setMessages([]);
     } finally {
+      window.clearTimeout(to);
       setLoading(false);
       setLoadedOnce(true);
     }
@@ -204,23 +216,34 @@ export function BroadcastChatPageClient({ broadcastId }: { broadcastId: string }
     if (!text || readLat == null || readLng == null) return;
     setSending(true);
     setErr(null);
+    const ac = new AbortController();
+    const to = window.setTimeout(() => ac.abort(), 28_000);
     try {
       const r = await fetch("/api/broadcast-replies/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
         body: JSON.stringify({ broadcastId, text, lat: readLat, lng: readLng }),
+        signal: ac.signal,
       });
-      const d = (await r.json()) as { error?: string };
+      let d: { error?: string };
+      try {
+        d = (await r.json()) as { error?: string };
+      } catch {
+        setErr(r.ok ? "Invalid response from server." : `Send failed (${r.status})`);
+        return;
+      }
       if (!r.ok) {
         setErr(d.error ?? "Send failed");
         return;
       }
       setDraft("");
-      await loadMessages();
-    } catch {
-      setErr("Network error");
+      void loadMessages();
+    } catch (e) {
+      const aborted = e instanceof Error && e.name === "AbortError";
+      setErr(aborted ? "Send timed out — check connection and try again." : "Network error");
     } finally {
+      window.clearTimeout(to);
       setSending(false);
     }
   };
