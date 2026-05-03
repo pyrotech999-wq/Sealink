@@ -9,6 +9,8 @@ export type OauthStatePayload = {
   state: string;
   /** Google only — PKCE verifier */
   codeVerifier?: string;
+  deviceId?: string;
+  deviceName?: string;
   exp: number;
 };
 

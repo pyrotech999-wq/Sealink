@@ -172,23 +172,8 @@ export async function listUserAccountsBrief(): Promise<{ uid: string; email: str
   });
 }
 
-export async function findUserByOauth(provider: OauthProviderId, sub: string): Promise<UserRow | null> {
-  return enqueue(async () => {
-    if (!isSupabaseConfigured()) return null;
-    const sb = supabaseAdmin();
-    const { data, error } = await sb
-      .from("user_accounts")
-      .select("*")
-      .eq("oauth_provider", provider)
-      .eq("oauth_sub", sub.trim())
-      .maybeSingle();
-    if (error || !data) return null;
-    return rowFromDb(data as UserAccountRowDb);
-  });
-}
-
 export type OauthSignInResult =
-  | { ok: true; user: UserRow }
+  | { ok: true; user: UserRow; isNew: boolean }
   | { ok: false; code: "password_account_exists" | "oauth_email_mismatch" | "supabase_off" };
 
 /**
@@ -209,8 +194,16 @@ export async function oauthSignInOrRegister(params: {
       return { ok: false, code: "oauth_email_mismatch" };
     }
 
-    const byOauth = await findUserByOauth(provider, sub);
-    if (byOauth) return { ok: true, user: byOauth };
+    const sb = supabaseAdmin();
+    const { data: byOauthRow, error: errOauth } = await sb
+      .from("user_accounts")
+      .select("*")
+      .eq("oauth_provider", provider)
+      .eq("oauth_sub", sub)
+      .maybeSingle();
+    if (!errOauth && byOauthRow) {
+      return { ok: true, user: rowFromDb(byOauthRow as UserAccountRowDb), isNew: false };
+    }
 
     const existing = await getUserByEmailSupabase(email);
     if (existing) {
@@ -219,13 +212,12 @@ export async function oauthSignInOrRegister(params: {
       if (existing.oauthProvider !== provider || existing.oauthSub !== sub) {
         return { ok: false, code: "oauth_email_mismatch" };
       }
-      return { ok: true, user: existing };
+      return { ok: true, user: existing, isNew: false };
     }
 
     const uid = uidFromEmail(email);
     const now = new Date().toISOString();
     const password = hashPassword(randomBytes(48).toString("hex"));
-    const sb = supabaseAdmin();
     const { error } = await sb.from("user_accounts").insert({
       uid,
       email,
@@ -238,7 +230,7 @@ export async function oauthSignInOrRegister(params: {
     if (error) {
       const retry = await getUserByEmailSupabase(email);
       if (retry && retry.oauthProvider === provider && retry.oauthSub === sub) {
-        return { ok: true, user: retry };
+        return { ok: true, user: retry, isNew: false };
       }
       throw new Error(error.message);
     }
@@ -246,6 +238,7 @@ export async function oauthSignInOrRegister(params: {
     return {
       ok: true,
       user: { uid, email, password, createdAt: now, updatedAt: now, oauthProvider: provider, oauthSub: sub },
+      isNew: true,
     };
   });
 }
