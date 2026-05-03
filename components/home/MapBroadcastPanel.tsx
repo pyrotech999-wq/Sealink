@@ -529,7 +529,7 @@ export function MapBroadcastPanel({
         )}
       </div>
     );
-  }, [signedIn, inboxRows, L, deletingThreadId, onDeleteDmThread]);
+  }, [signedIn, inboxRows, L, deletingThreadId]);
 
   return (
     <section
