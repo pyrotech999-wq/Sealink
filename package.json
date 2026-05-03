@@ -27,6 +27,7 @@
     "@capacitor/geolocation": "^7.1.8",
     "@supabase/supabase-js": "^2.105.1",
     "@vercel/kv": "^3.0.0",
+    "arctic": "^3.7.0",
     "leaflet": "^1.9.4",
     "leaflet.markercluster": "^1.5.3",
     "next": "16.2.4",
