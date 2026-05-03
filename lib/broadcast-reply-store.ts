@@ -2,12 +2,18 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
 import { canUseKv, kvGetJson, kvSetJson } from "@/lib/kv-json";
-import { getBroadcastRowById, viewerMayAccessBroadcastReplyThread } from "@/lib/map-broadcast-store";
+import {
+  getBroadcastRowById,
+  listBroadcastsNear,
+  viewerMayAccessBroadcastReplyThread,
+} from "@/lib/map-broadcast-store";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 const DATA_PATH = path.join(process.cwd(), "data", "broadcast-replies.json");
 const KV_KEY = "sealink:broadcast-replies:v1";
+const SEEN_DATA_PATH = path.join(process.cwd(), "data", "broadcast-reply-seen.json");
+const SEEN_KV_KEY = "sealink:broadcast-reply-seen:v1";
 
 export type BroadcastReplyMessagePublic = {
   id: string;
@@ -216,6 +222,180 @@ export async function appendBroadcastReplyMessage(
       createdAt: new Date().toISOString(),
     });
     await writePayload(payload);
+    return { ok: true };
+  });
+}
+
+export type BroadcastReplyAlert = {
+  broadcastId: string;
+  authorUid: string;
+  lastMessageId: string;
+  lastMessageAt: string;
+  snippet: string;
+};
+
+type SeenRow = { viewerUid: string; broadcastId: string; lastSeenAt: string };
+type SeenPayload = { rows: SeenRow[] };
+
+function readSeenFile(): SeenPayload {
+  try {
+    if (!existsSync(SEEN_DATA_PATH)) return { rows: [] };
+    const raw = readFileSync(SEEN_DATA_PATH, "utf-8");
+    const p = JSON.parse(raw) as unknown;
+    if (!p || typeof p !== "object") return { rows: [] };
+    const rows = Array.isArray((p as SeenPayload).rows) ? (p as SeenPayload).rows : [];
+    return { rows: rows.filter((r) => r && typeof r.viewerUid === "string" && typeof r.broadcastId === "string" && typeof r.lastSeenAt === "string") };
+  } catch {
+    return { rows: [] };
+  }
+}
+
+function writeSeenFile(p: SeenPayload): void {
+  mkdirSync(path.dirname(SEEN_DATA_PATH), { recursive: true });
+  writeFileSync(SEEN_DATA_PATH, JSON.stringify(p, null, 2), "utf-8");
+}
+
+async function readSeenPayload(): Promise<SeenPayload> {
+  if (canUseKv()) {
+    const raw = await kvGetJson<SeenPayload | null>(SEEN_KV_KEY, null);
+    if (raw && typeof raw === "object" && Array.isArray(raw.rows)) return raw;
+    return { rows: [] };
+  }
+  return readSeenFile();
+}
+
+async function writeSeenPayload(p: SeenPayload): Promise<void> {
+  if (canUseKv()) await kvSetJson(SEEN_KV_KEY, p);
+  else writeSeenFile(p);
+}
+
+async function getSeenLastAt(viewerUid: string, broadcastId: string): Promise<string | null> {
+  const bid = broadcastId.trim();
+  if (!bid) return null;
+  if (isSupabaseConfigured()) {
+    const sb = supabaseAdmin();
+    const { data, error } = await sb
+      .from("broadcast_reply_seen")
+      .select("last_seen_at")
+      .eq("viewer_uid", viewerUid)
+      .eq("broadcast_id", bid)
+      .maybeSingle();
+    if (error) return null;
+    const iso = data && typeof (data as { last_seen_at?: string }).last_seen_at === "string" ? (data as { last_seen_at: string }).last_seen_at : "";
+    return iso || null;
+  }
+  const p = await readSeenPayload();
+  const hit = p.rows.find((r) => r.viewerUid === viewerUid && r.broadcastId === bid);
+  return hit?.lastSeenAt ?? null;
+}
+
+async function upsertSeenLastAt(viewerUid: string, broadcastId: string, lastSeenAt: string): Promise<void> {
+  const bid = broadcastId.trim();
+  if (!bid) return;
+  if (isSupabaseConfigured()) {
+    const sb = supabaseAdmin();
+    await sb.from("broadcast_reply_seen").upsert(
+      { viewer_uid: viewerUid, broadcast_id: bid, last_seen_at: lastSeenAt },
+      { onConflict: "viewer_uid,broadcast_id" },
+    );
+    return;
+  }
+  const p = await readSeenPayload();
+  const next = p.rows.filter((r) => !(r.viewerUid === viewerUid && r.broadcastId === bid));
+  next.push({ viewerUid, broadcastId: bid, lastSeenAt });
+  await writeSeenPayload({ rows: next });
+}
+
+/** Latest reply in the shared thread for this area broadcast, if any. */
+export async function getLatestBroadcastReplyMessage(
+  broadcastId: string,
+): Promise<{ id: string; createdAt: string; body: string; senderUid: string } | null> {
+  return enqueue(async () => {
+    const bid = broadcastId.trim();
+    if (!bid) return null;
+    if (isSupabaseConfigured()) {
+      const sb = supabaseAdmin();
+      const { data: thread, error: tErr } = await sb
+        .from("broadcast_reply_threads")
+        .select("id")
+        .eq("broadcast_id", bid)
+        .maybeSingle();
+      if (tErr || !thread || typeof (thread as { id?: string }).id !== "string") return null;
+      const tid = (thread as { id: string }).id;
+      const { data: row, error: mErr } = await sb
+        .from("broadcast_reply_messages")
+        .select("id, sender_uid, body, created_at")
+        .eq("thread_id", tid)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (mErr || !row) return null;
+      const r = row as { id: string; sender_uid: string; body: string; created_at: string };
+      return { id: r.id, createdAt: r.created_at, body: r.body, senderUid: r.sender_uid };
+    }
+    const payload = await readPayload();
+    const thread = payload.threads.find((x) => x.broadcastId === bid);
+    if (!thread) return null;
+    const msgs = payload.messages
+      .filter((x) => x.threadId === thread.id)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const last = msgs[msgs.length - 1];
+    if (!last) return null;
+    return { id: last.id, createdAt: last.createdAt, body: last.body, senderUid: last.senderUid };
+  });
+}
+
+/**
+ * Threads with reply activity newer than this viewer's last seen time (after first bootstrap per thread).
+ */
+export async function listUnreadBroadcastReplyAlerts(
+  viewerUid: string,
+  viewerLat: number,
+  viewerLng: number,
+  viewerIsAdmin = false,
+): Promise<BroadcastReplyAlert[]> {
+  return enqueue(async () => {
+    const visible = await listBroadcastsNear(viewerLat, viewerLng, viewerUid, viewerIsAdmin);
+    const alerts: BroadcastReplyAlert[] = [];
+    for (const m of visible) {
+      const latest = await getLatestBroadcastReplyMessage(m.id);
+      if (!latest) continue;
+      const seen = await getSeenLastAt(viewerUid, m.id);
+      if (!seen) {
+        await upsertSeenLastAt(viewerUid, m.id, latest.createdAt);
+        continue;
+      }
+      if (new Date(latest.createdAt).getTime() > new Date(seen).getTime()) {
+        const snip = latest.body.replace(/\s+/g, " ").trim().slice(0, 120);
+        alerts.push({
+          broadcastId: m.id,
+          authorUid: m.authorUid,
+          lastMessageId: latest.id,
+          lastMessageAt: latest.createdAt,
+          snippet: snip,
+        });
+      }
+    }
+    alerts.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
+    return alerts;
+  });
+}
+
+export async function markBroadcastReplyThreadSeen(
+  viewerUid: string,
+  broadcastId: string,
+  viewerLat: number,
+  viewerLng: number,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  return enqueue(async () => {
+    const row = await getBroadcastRowById(broadcastId);
+    if (!row) return { ok: false, error: "Broadcast not found or no longer available." };
+    if (!(await viewerMayAccessBroadcastReplyThread(row, viewerUid, viewerLat, viewerLng))) {
+      return { ok: false, error: "You cannot update read state for this thread from here." };
+    }
+    const latest = await getLatestBroadcastReplyMessage(broadcastId);
+    const iso = latest?.createdAt ?? new Date().toISOString();
+    await upsertSeenLastAt(viewerUid, broadcastId, iso);
     return { ok: true };
   });
 }

@@ -8,6 +8,7 @@ import { BOTTOM_DOCK_OFFSET } from "@/lib/bottom-dock-offset";
 import { AppLoadSplash } from "@/components/AppLoadSplash";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import { SessionDeviceRegistrar } from "@/components/SessionDeviceRegistrar";
+import { BroadcastReplyAlertsHost } from "@/components/BroadcastReplyAlertsHost";
 import { TopNav } from "@/components/TopNav";
 import { MobSenderActiveBanner } from "@/components/MobSenderActiveBanner";
 import { MobIncomingAlertHost } from "@/components/MobIncomingAlertHost";
@@ -85,6 +86,7 @@ export default function RootLayout({
           <ServiceWorkerRegister />
           <SessionDeviceRegistrar />
           <TopNav />
+          <BroadcastReplyAlertsHost />
           <MobSenderActiveBanner />
           <MobIncomingAlertHost />
           {children}

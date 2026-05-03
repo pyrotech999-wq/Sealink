@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useBroadcastToast } from "@/components/BroadcastToastProvider";
 import { VicinityChatDrawer } from "@/components/home/VicinityChatDrawer";
@@ -151,6 +152,7 @@ export function MapBroadcastPanel({
   layout = "map",
   initialOpenPeerUid = null,
 }: Props) {
+  const router = useRouter();
   const L = layout === "messaging";
   const toast = useBroadcastToast();
   const [messages, setMessages] = useState<BroadcastMsg[]>([]);
@@ -160,11 +162,8 @@ export function MapBroadcastPanel({
   const [err, setErr] = useState<string | null>(null);
   const [soundOn, setSoundOn] = useState(() => (typeof window !== "undefined" ? readSoundOn() : true));
   const [chatPeerUid, setChatPeerUid] = useState<string | null>(null);
-  /** When set, VicinityChatDrawer loads the shared thread for this area broadcast (same visibility as the post). */
-  const [chatBroadcastId, setChatBroadcastId] = useState<string | null>(null);
   const [chatContext, setChatContext] = useState<string | undefined>(undefined);
-  /** Full broadcast text when opening chat via Reply on a broadcast (so the thread shows the original). */
-  const [chatBroadcastBody, setChatBroadcastBody] = useState<string | null>(null);
+  const [unreadBroadcastReplyIds, setUnreadBroadcastReplyIds] = useState<Set<string>>(() => new Set());
   const [broadcastAllAreas, setBroadcastAllAreas] = useState(false);
   const [broadcastAudience, setBroadcastAudience] = useState<MapBroadcastAudience>("all_nearby");
   const [inboxRows, setInboxRows] = useState<VicinityInboxRowApi[]>([]);
@@ -193,15 +192,35 @@ export function MapBroadcastPanel({
     const uid = initialOpenPeerUid?.trim();
     if (!uid || !signedIn) return;
     setChatPeerUid(uid);
-    setChatBroadcastId(null);
     setChatContext("Conversation");
-    setChatBroadcastBody(null);
     queueMicrotask(() => {
       if (typeof window !== "undefined") {
         window.history.replaceState(null, "", "/messaging");
       }
     });
   }, [signedIn, initialOpenPeerUid]);
+
+  useEffect(() => {
+    const fn = (ev: Event) => {
+      const ce = ev as CustomEvent<{ ids?: string[] }>;
+      const ids = ce.detail?.ids;
+      setUnreadBroadcastReplyIds(new Set(Array.isArray(ids) ? ids : []));
+    };
+    window.addEventListener("sealink-broadcast-reply-unread-ids", fn);
+    return () => window.removeEventListener("sealink-broadcast-reply-unread-ids", fn);
+  }, []);
+
+  const openBroadcastChat = useCallback(
+    (m: BroadcastMsg) => {
+      if (!signedIn) return;
+      if (!Number.isFinite(readLat) || !Number.isFinite(readLng)) return;
+      const u = new URL(`/messaging/broadcast/${encodeURIComponent(m.id)}`, window.location.origin);
+      u.searchParams.set("lat", String(readLat));
+      u.searchParams.set("lng", String(readLng));
+      router.push(`${u.pathname}${u.search}`);
+    },
+    [signedIn, readLat, readLng, router],
+  );
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent === true;
@@ -345,9 +364,7 @@ export function MapBroadcastPanel({
       }
       if (chatPeerUid === row.peerUid) {
         setChatPeerUid(null);
-        setChatBroadcastId(null);
         setChatContext(undefined);
-        setChatBroadcastBody(null);
       }
       await fetchInbox();
     } catch {
@@ -498,16 +515,36 @@ export function MapBroadcastPanel({
               !m.isMob && m.body.trimStart().startsWith(MOB_CANCEL_BROADCAST_INTRO);
             const mobMapHref =
               m.isMob || allClear ? mapHrefPreferCoords(m.body, m.lat, m.lng) : null;
+            const canOpenThread =
+              signedIn && Number.isFinite(readLat) && Number.isFinite(readLng);
             return (
               <article
                 key={m.id}
+                role={canOpenThread ? "button" : undefined}
+                tabIndex={canOpenThread ? 0 : undefined}
+                onKeyDown={
+                  canOpenThread
+                    ? (ev) => {
+                        if (ev.key === "Enter" || ev.key === " ") {
+                          ev.preventDefault();
+                          openBroadcastChat(m);
+                        }
+                      }
+                    : undefined
+                }
+                onClick={(ev) => {
+                  if (!canOpenThread) return;
+                  const el = ev.target as HTMLElement;
+                  if (el.closest("button, a")) return;
+                  openBroadcastChat(m);
+                }}
                 className={`rounded-md border px-2.5 py-2 dark:bg-zinc-900/80 ${L ? "px-3 py-3" : "text-sm"} ${
                   m.isMob
                     ? "border-red-400/90 bg-red-50/90 dark:border-red-800/70 dark:bg-red-950/35"
                     : allClear
                       ? "border-emerald-700/50 bg-emerald-50/90 dark:border-emerald-800/60 dark:bg-emerald-950/30"
                       : "border-indigo-100/80 bg-white dark:border-indigo-900/30"
-                }`}
+                } ${canOpenThread ? "cursor-pointer transition hover:border-indigo-300 hover:shadow-sm dark:hover:border-indigo-600" : ""}`}
               >
                 <div className="flex items-start justify-between gap-2">
                   <p
@@ -558,17 +595,21 @@ export function MapBroadcastPanel({
                         You
                       </span>
                     ) : null}
+                    {unreadBroadcastReplyIds.has(m.id) ? (
+                      <span
+                        className={`sealink-broadcast-new-replies ml-2 inline-block rounded-md px-2 py-0.5 font-bold text-white ${L ? "text-sm" : "text-[10px]"}`}
+                      >
+                        New replies
+                      </span>
+                    ) : null}
                   </p>
                   <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
                     {signedIn && m.authorUid ? (
                       <button
                         type="button"
-                        onClick={() => {
-                          const full = m.body.trim();
-                          setChatBroadcastBody(full.slice(0, 2500));
-                          setChatContext(full.split(/\r?\n/)[0]?.slice(0, 120) ?? "");
-                          setChatBroadcastId(m.id);
-                          setChatPeerUid(m.authorUid);
+                        onClick={(ev) => {
+                          ev.stopPropagation();
+                          openBroadcastChat(m);
                         }}
                         className={`rounded-md border border-indigo-200 bg-indigo-50 font-semibold text-indigo-900 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-100 dark:hover:bg-indigo-900/40 ${
                           L ? "px-3 py-2 text-base" : "px-2 py-0.5 text-[11px]"
@@ -643,8 +684,9 @@ export function MapBroadcastPanel({
           </p>
           {inboxRows.length === 0 ? (
             <p className={`mt-3 rounded-lg border border-dashed border-indigo-200/70 bg-white/60 px-3 py-4 text-center text-indigo-800/70 dark:border-indigo-800/50 dark:bg-zinc-900/40 dark:text-indigo-200/70 ${L ? "text-base" : "text-[11px]"}`}>
-              No conversations yet. Use <strong className="font-semibold">Reply</strong> on someone else&apos;s broadcast
-              to start one.
+              No private conversations yet. One-to-one chats show here; use <strong className="font-semibold">Reply</strong>{" "}
+              on a broadcast to open the <strong className="font-semibold">shared thread</strong> (everyone who could see
+              that broadcast).
             </p>
           ) : (
             <ul className={`sealink-thread-scroll mt-3 space-y-2 overflow-y-auto pr-1 ${L ? "max-h-72" : "max-h-44"}`}>
@@ -654,8 +696,6 @@ export function MapBroadcastPanel({
                     type="button"
                     aria-label="Open private chat with this boater"
                     onClick={() => {
-                      setChatBroadcastBody(null);
-                      setChatBroadcastId(null);
                       setChatContext(row.lastBody.trim().split(/\r?\n/)[0]?.slice(0, 120));
                       setChatPeerUid(row.peerUid);
                     }}
@@ -839,21 +879,17 @@ export function MapBroadcastPanel({
         </p>
       )}
 
-      {chatPeerUid || chatBroadcastId ? (
+      {chatPeerUid ? (
         <VicinityChatDrawer
           open
-          peerUid={chatPeerUid ?? ""}
-          broadcastId={chatBroadcastId}
+          peerUid={chatPeerUid}
           readLat={readLat}
           readLng={readLng}
           contextLine={chatContext}
-          broadcastBody={chatBroadcastBody}
           textScale={L ? "readable" : "default"}
           onClose={() => {
             setChatPeerUid(null);
-            setChatBroadcastId(null);
             setChatContext(undefined);
-            setChatBroadcastBody(null);
             void fetchInbox();
           }}
         />
