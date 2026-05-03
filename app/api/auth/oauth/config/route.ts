@@ -11,10 +11,16 @@ export const runtime = "nodejs";
 /** Public: which OAuth providers are configured (no secrets). */
 export async function GET() {
   const base = isOauthStateSigningConfigured();
+  const googleCreds = googleOAuthConfigured();
+  const facebookCreds = facebookOAuthConfigured();
+  const appleCreds = appleOAuthConfigured();
   return NextResponse.json({
-    enabled: base && (googleOAuthConfigured() || facebookOAuthConfigured() || appleOAuthConfigured()),
-    google: base && googleOAuthConfigured(),
-    facebook: base && facebookOAuthConfigured(),
-    apple: base && appleOAuthConfigured(),
+    enabled: base && (googleCreds || facebookCreds || appleCreds),
+    google: base && googleCreds,
+    facebook: base && facebookCreds,
+    apple: base && appleCreds,
+    /** Google client id/secret set (PKCE secret may still be missing). */
+    googleCredentialsSet: googleCreds,
+    pkceConfigured: base,
   });
 }
