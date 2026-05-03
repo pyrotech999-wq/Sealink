@@ -63,6 +63,16 @@ export function VicinityChatDrawer({
   const [err, setErr] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const openRef = useRef(open);
+  const peerUidRef = useRef(peerUid);
+  const broadcastIdRef = useRef(broadcastId);
+  const readLatRef = useRef(readLat);
+  const readLngRef = useRef(readLng);
+  openRef.current = open;
+  peerUidRef.current = peerUid;
+  broadcastIdRef.current = broadcastId;
+  readLatRef.current = readLat;
+  readLngRef.current = readLng;
 
   const scrollToBottom = useCallback(() => {
     const el = scrollRef.current;
@@ -78,22 +88,25 @@ export function VicinityChatDrawer({
   }, []);
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
-    if (!open) return;
+    if (!openRef.current) return;
     const silent = opts?.silent === true;
-    const brId = broadcastId?.trim() ?? "";
+    const brId = (broadcastIdRef.current ?? "").trim();
+    const peer = peerUidRef.current;
+    const lat = readLatRef.current;
+    const lng = readLngRef.current;
     if (!silent) {
       setLoading(true);
       setErr(null);
     }
     if (brId) {
-      if (!Number.isFinite(readLat) || !Number.isFinite(readLng)) {
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
         setErr("Location needed to load broadcast replies.");
         setMessages([]);
         setThreadId(null);
         setLoading(false);
         return;
       }
-    } else if (!peerUid) {
+    } else if (!peer) {
       setLoading(false);
       return;
     }
@@ -102,10 +115,10 @@ export function VicinityChatDrawer({
     try {
       const r = brId
         ? await fetch(
-            `/api/broadcast-replies/messages?broadcastId=${encodeURIComponent(brId)}&lat=${encodeURIComponent(String(readLat))}&lng=${encodeURIComponent(String(readLng))}`,
+            `/api/broadcast-replies/messages?broadcastId=${encodeURIComponent(brId)}&lat=${encodeURIComponent(String(lat))}&lng=${encodeURIComponent(String(lng))}`,
             { credentials: "same-origin", cache: "no-store", signal: ac.signal },
           )
-        : await fetch(`/api/vicinity-chat/messages?peerUid=${encodeURIComponent(peerUid)}`, {
+        : await fetch(`/api/vicinity-chat/messages?peerUid=${encodeURIComponent(peer)}`, {
             credentials: "same-origin",
             cache: "no-store",
             signal: ac.signal,
@@ -142,7 +155,7 @@ export function VicinityChatDrawer({
       window.clearTimeout(to);
       if (!silent) setLoading(false);
     }
-  }, [open, peerUid, broadcastId, readLat, readLng]);
+  }, []);
 
   useEffect(() => {
     if (!open) {
@@ -155,7 +168,7 @@ export function VicinityChatDrawer({
     queueMicrotask(() => void load());
     const id = window.setInterval(() => queueMicrotask(() => void load({ silent: true })), 14_000);
     return () => window.clearInterval(id);
-  }, [open, load]);
+  }, [open, peerUid, broadcastId, load]);
 
   useLayoutEffect(() => {
     if (!open || messages.length === 0) return;
