@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "crypto";
+import { trimEnvValue } from "@/lib/env-trim";
 
 export const OAUTH_STATE_COOKIE = "sealink_oauth_state";
 
@@ -15,8 +16,8 @@ export type OauthStatePayload = {
 };
 
 function oauthSecret(): string | null {
-  const s = process.env.OAUTH_PKCE_SECRET?.trim();
-  if (s && s.length >= 16) return s;
+  const s = trimEnvValue(process.env.OAUTH_PKCE_SECRET);
+  if (s.length >= 16) return s;
   return null;
 }
 

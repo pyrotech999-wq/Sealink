@@ -10,6 +10,8 @@ type OauthConfig = {
   apple?: boolean;
   googleCredentialsSet?: boolean;
   pkceConfigured?: boolean;
+  /** True when /api/auth/oauth/config did not return JSON 200. */
+  configLoadFailed?: boolean;
 };
 
 function buildStartUrl(provider: "google" | "facebook" | "apple"): string {
@@ -59,13 +61,22 @@ export function OAuthProviderButtons({ signUpCaption, emphasizeGoogle }: OAuthPr
 
   useEffect(() => {
     let cancelled = false;
-    void fetch("/api/auth/oauth/config", { cache: "no-store" })
-      .then((r) => r.json() as Promise<OauthConfig>)
-      .then((d) => {
+    void fetch("/api/auth/oauth/config", { cache: "no-store", credentials: "same-origin" })
+      .then(async (r) => {
+        if (!r.ok) {
+          if (!cancelled) setCfg({ configLoadFailed: true });
+          return;
+        }
+        const ct = r.headers.get("content-type");
+        if (!ct?.includes("application/json")) {
+          if (!cancelled) setCfg({ configLoadFailed: true });
+          return;
+        }
+        const d = (await r.json()) as OauthConfig;
         if (!cancelled) setCfg(d);
       })
       .catch(() => {
-        if (!cancelled) setCfg({});
+        if (!cancelled) setCfg({ configLoadFailed: true });
       });
     return () => {
       cancelled = true;
@@ -74,16 +85,27 @@ export function OAuthProviderButtons({ signUpCaption, emphasizeGoogle }: OAuthPr
 
   if (cfg === null) return null;
 
+  if (cfg.configLoadFailed) {
+    return (
+      <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+        Could not load sign-in options (network or server error). Refresh the page or try again in a moment.
+      </p>
+    );
+  }
+
   const hasAny = Boolean(cfg.enabled && (cfg.google || cfg.facebook || cfg.apple));
-  const googleMisconfigured =
-    Boolean(cfg.googleCredentialsSet) && cfg.pkceConfigured === false && process.env.NODE_ENV === "development";
+  /** Google keys in env but PKCE signing secret missing — OAuth start would 503; very common on first Vercel setup. */
+  const googleNeedsPkce = Boolean(cfg.googleCredentialsSet) && cfg.pkceConfigured === false;
 
   if (!hasAny) {
-    if (googleMisconfigured) {
+    if (googleNeedsPkce) {
       return (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
-          Google client env vars are set, but <span className="font-mono">OAUTH_PKCE_SECRET</span> is missing or too short
-          (min 16 chars). Add it to enable Continue with Google. See <span className="font-mono">.env.example</span>.
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+          <strong className="font-semibold">Google is almost ready:</strong> this server has{" "}
+          <span className="font-mono">GOOGLE_CLIENT_ID</span> / <span className="font-mono">GOOGLE_CLIENT_SECRET</span> but
+          is missing <span className="font-mono">OAUTH_PKCE_SECRET</span> (or it is under 16 characters). Add a long
+          random secret in your host env (e.g. <span className="font-mono">openssl rand -hex 32</span>), redeploy, then
+          refresh — the &quot;Continue with Google&quot; button will appear. See <span className="font-mono">.env.example</span>.
         </p>
       );
     }

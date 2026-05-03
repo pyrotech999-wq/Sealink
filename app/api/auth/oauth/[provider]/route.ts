@@ -1,6 +1,7 @@
 import { Apple, Facebook, Google, generateCodeVerifier, generateState } from "arctic";
 import { NextRequest, NextResponse } from "next/server";
 import { AUTH_EMAIL_COOKIE } from "@/lib/auth";
+import { trimEnvValue } from "@/lib/env-trim";
 import { registerAccountDevice } from "@/lib/account-devices-store";
 import { DEMO_SESSION_COOKIE, DEMO_SESSION_VALUE } from "@/lib/demo-session";
 import {
@@ -129,8 +130,8 @@ async function oauthAuthorize(req: NextRequest, provider: OauthProviderId): Prom
     if (!googleOAuthConfigured()) {
       return NextResponse.json({ error: "Google sign-in is not configured." }, { status: 503 });
     }
-    const id = process.env.GOOGLE_CLIENT_ID!.trim();
-    const secret = process.env.GOOGLE_CLIENT_SECRET!.trim();
+    const id = trimEnvValue(process.env.GOOGLE_CLIENT_ID);
+    const secret = trimEnvValue(process.env.GOOGLE_CLIENT_SECRET);
     const google = new Google(id, secret, redirectUri);
     const codeVerifier = generateCodeVerifier();
     const signed = signOauthStatePayload({
@@ -154,8 +155,8 @@ async function oauthAuthorize(req: NextRequest, provider: OauthProviderId): Prom
     if (!facebookOAuthConfigured()) {
       return NextResponse.json({ error: "Facebook sign-in is not configured." }, { status: 503 });
     }
-    const id = process.env.FACEBOOK_CLIENT_ID!.trim();
-    const secret = process.env.FACEBOOK_CLIENT_SECRET!.trim();
+    const id = trimEnvValue(process.env.FACEBOOK_CLIENT_ID);
+    const secret = trimEnvValue(process.env.FACEBOOK_CLIENT_SECRET);
     const fb = new Facebook(id, secret, redirectUri);
     const signed = signOauthStatePayload({
       provider,
@@ -174,9 +175,9 @@ async function oauthAuthorize(req: NextRequest, provider: OauthProviderId): Prom
   if (!appleOAuthConfigured()) {
     return NextResponse.json({ error: "Apple sign-in is not configured." }, { status: 503 });
   }
-  const clientId = process.env.APPLE_CLIENT_ID!.trim();
-  const teamId = process.env.APPLE_TEAM_ID!.trim();
-  const keyId = process.env.APPLE_KEY_ID!.trim();
+  const clientId = trimEnvValue(process.env.APPLE_CLIENT_ID);
+  const teamId = trimEnvValue(process.env.APPLE_TEAM_ID);
+  const keyId = trimEnvValue(process.env.APPLE_KEY_ID);
   const pk = applePrivateKeyPkcs8Der();
   if (!pk) {
     return NextResponse.json({ error: "Apple private key is invalid." }, { status: 500 });
@@ -220,8 +221,8 @@ async function oauthTokenExchange(
         clearStateCookie(res);
         return res;
       }
-      const id = process.env.GOOGLE_CLIENT_ID!.trim();
-      const secret = process.env.GOOGLE_CLIENT_SECRET!.trim();
+      const id = trimEnvValue(process.env.GOOGLE_CLIENT_ID);
+      const secret = trimEnvValue(process.env.GOOGLE_CLIENT_SECRET);
       const google = new Google(id, secret, redirectUri);
       const tokens = await google.validateAuthorizationCode(code, payload.codeVerifier);
       const r = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
@@ -237,8 +238,8 @@ async function oauthTokenExchange(
         clearStateCookie(res);
         return res;
       }
-      const id = process.env.FACEBOOK_CLIENT_ID!.trim();
-      const secret = process.env.FACEBOOK_CLIENT_SECRET!.trim();
+      const id = trimEnvValue(process.env.FACEBOOK_CLIENT_ID);
+      const secret = trimEnvValue(process.env.FACEBOOK_CLIENT_SECRET);
       const fb = new Facebook(id, secret, redirectUri);
       const tokens = await fb.validateAuthorizationCode(code);
       const r = await fetch(
@@ -254,9 +255,9 @@ async function oauthTokenExchange(
         clearStateCookie(res);
         return res;
       }
-      const clientId = process.env.APPLE_CLIENT_ID!.trim();
-      const teamId = process.env.APPLE_TEAM_ID!.trim();
-      const keyId = process.env.APPLE_KEY_ID!.trim();
+      const clientId = trimEnvValue(process.env.APPLE_CLIENT_ID);
+      const teamId = trimEnvValue(process.env.APPLE_TEAM_ID);
+      const keyId = trimEnvValue(process.env.APPLE_KEY_ID);
       const pk = applePrivateKeyPkcs8Der();
       if (!pk) {
         const res = errRedirectAbsolute(req, "/sign-in", "config");
