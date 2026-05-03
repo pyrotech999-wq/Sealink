@@ -18,7 +18,7 @@ function isNoSplashPath(path: string | null | undefined): boolean {
   );
 }
 
-/** Full-screen brand splash on first client paint; hides after a fixed delay while the app hydrates. Skipped on `/delete-data`. */
+/** Full-screen brand splash on first client paint; hides after a fixed delay while the app hydrates. Skipped on deletion / static info paths. */
 export function AppLoadSplash() {
   const pathname = usePathname();
   const [skip, setSkip] = useState(false);

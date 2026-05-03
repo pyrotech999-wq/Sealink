@@ -39,6 +39,7 @@ const toc: { id: string; label: string }[] = [
   { id: "iphone-install", label: "iPhone — save as app" },
   { id: "safety", label: "Safety & official info" },
   { id: "delete-data", label: "Delete your data" },
+  { id: "delete-my-data", label: "Delete my data (information page)" },
   { id: "troubleshooting", label: "Troubleshooting" },
 ];
 
@@ -628,8 +629,29 @@ export default function HelpPage() {
                 <a href="https://sealinkapp.com/delete-data" className="font-mono text-emerald-400 hover:underline">
                   https://sealinkapp.com/delete-data
                 </a>
-                . The old <span className="font-mono text-zinc-500">/delete-account</span> address redirects here. Use the
+                .                 The old <span className="font-mono text-zinc-500">/delete-account</span> address redirects here. Use the
                 button on that page to confirm.
+              </p>
+            </Section>
+
+            <Section id="delete-my-data" title="Delete my data (information page)">
+              <p>
+                For <strong className="text-zinc-200">app stores and Meta (Facebook Login)</strong> we also publish a
+                separate, plain static page with the same deletion instructions in normal text — no app navigation, no
+                message alerts, and no pop-ups. Use that URL in the developer console when a “data deletion” or “user data
+                deletion” link is required.
+              </p>
+              <p className="rounded-lg border border-zinc-700/80 bg-zinc-950/60 px-3 py-3 text-xs text-zinc-400">
+                <strong className="text-zinc-300">Information-only page:</strong> open{" "}
+                <Link href="/delete-my-data" className="font-mono text-emerald-400 hover:underline">
+                  /delete-my-data
+                </Link>{" "}
+                — on the live site that is{" "}
+                <a href="https://sealinkapp.com/delete-my-data" className="font-mono text-emerald-400 hover:underline">
+                  https://sealinkapp.com/delete-my-data
+                </a>
+                . It links to <span className="font-mono text-zinc-500">/delete-data</span> for the actual deletion
+                button once you are signed in, and lists the operator email for requests if you cannot use the app.
               </p>
             </Section>
 
