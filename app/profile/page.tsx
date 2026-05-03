@@ -44,7 +44,7 @@ export default async function ProfilePage({
           </div>
         ) : null}
 
-        <ProfileEditForm signedIn={signedIn} accountEmail={accountEmail} nameRequired={nameRequired} />
+        <ProfileEditForm signedIn={signedIn} accountEmail={accountEmail} />
       </main>
     </div>
   );

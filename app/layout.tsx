@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import { BroadcastAwayToasts } from "@/components/BroadcastAwayToasts";
 import { BroadcastToastProvider } from "@/components/BroadcastToastProvider";
@@ -12,6 +13,7 @@ import { BroadcastReplyAlertsHost } from "@/components/BroadcastReplyAlertsHost"
 import { TopNav } from "@/components/TopNav";
 import { MobSenderActiveBanner } from "@/components/MobSenderActiveBanner";
 import { MobIncomingAlertHost } from "@/components/MobIncomingAlertHost";
+import { ProfileNameGate } from "@/components/ProfileNameGate";
 import { resolvePublicAppOrigin } from "@/lib/public-app-url";
 import "./globals.css";
 
@@ -89,6 +91,9 @@ export default function RootLayout({
           <BroadcastReplyAlertsHost />
           <MobSenderActiveBanner />
           <MobIncomingAlertHost />
+          <Suspense fallback={null}>
+            <ProfileNameGate />
+          </Suspense>
           {children}
           <BroadcastAwayToasts />
           <BottomNav />

@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 
 const SKIP_PREFIXES = [
   "/profile",
@@ -29,15 +29,10 @@ export function ProfileNameGate() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const lastSkip = useRef(true);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (shouldSkip(pathname)) {
-      lastSkip.current = true;
-      return;
-    }
-    lastSkip.current = false;
+    if (shouldSkip(pathname)) return;
 
     let cancelled = false;
     void (async () => {

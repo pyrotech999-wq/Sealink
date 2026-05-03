@@ -26,8 +26,6 @@ const MAX_AVATAR_DATA_URL_CHARS = 430_000;
 type Props = {
   signedIn: boolean;
   accountEmail: string;
-  /** From `/profile?required=1` when account name is missing in the database. */
-  nameRequired?: boolean;
 };
 
 async function shrinkAvatarDataUrlForStorage(dataUrl: string): Promise<string> {
@@ -48,7 +46,7 @@ async function shrinkAvatarDataUrlForStorage(dataUrl: string): Promise<string> {
   });
 }
 
-export function ProfileEditForm({ signedIn, accountEmail, nameRequired = false }: Props) {
+export function ProfileEditForm({ signedIn, accountEmail }: Props) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
   const statusRef = useRef<HTMLDivElement>(null);
@@ -85,7 +83,10 @@ export function ProfileEditForm({ signedIn, accountEmail, nameRequired = false }
           phone?: string | null;
           avatarPublicUrl?: string | null;
         };
-        if (cancelled || !r.ok || d.supabase === false) return;
+        if (cancelled || !r.ok) return;
+        if (d.supabase === true) setServerSync(true);
+        else setServerSync(false);
+        if (d.supabase === false) return;
         if (typeof d.fullName === "string" && d.fullName.trim()) setFullNameState(d.fullName.trim());
         if (typeof d.boatName === "string") setBoatNameState(d.boatName.trim());
         if (typeof d.phone === "string" && d.phone.trim()) setPhoneState(d.phone.trim());
@@ -152,7 +153,7 @@ export function ProfileEditForm({ signedIn, accountEmail, nameRequired = false }
         setAvatarDataUrlState(nextAvatar);
       }
 
-      if (signedIn) {
+      if (signedIn && serverSync) {
         const r = await fetch("/api/profiles/me", {
           method: "PATCH",
           credentials: "same-origin",
@@ -165,8 +166,8 @@ export function ProfileEditForm({ signedIn, accountEmail, nameRequired = false }
           }),
         });
         const d = (await r.json()) as { ok?: boolean; error?: string };
-        if (!r.ok || !d.ok) {
-          setError(d.error ?? "Could not save profile to your account.");
+        if (!r.ok) {
+          setError(typeof d.error === "string" ? d.error : "Could not save profile to your account.");
           return;
         }
       }
@@ -177,8 +178,8 @@ export function ProfileEditForm({ signedIn, accountEmail, nameRequired = false }
       if (nextAvatar) setAvatarDataUrl(nextAvatar);
       else setAvatarDataUrl(null);
       setShowAvatar(showAvatar);
-      router.push(nameRequired ? "/" : "/");
-      if (nameRequired) router.refresh();
+      router.push("/");
+      router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save profile.");
     } finally {
