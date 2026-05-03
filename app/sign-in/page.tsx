@@ -28,8 +28,7 @@ export default function SignInPage() {
         <div className="mb-8 text-center sm:text-left">
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Sign in</h1>
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-            Use the email and password you registered with, or continue with Google when it appears above. If you
-            can&apos;t remember your password, use{" "}
+            Use the email and password you registered with. If you can&apos;t remember your password, use{" "}
             <strong className="text-zinc-800 dark:text-zinc-200">Forgotten password</strong> for a reset link.
           </p>
         </div>

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { isOauthStateSigningConfigured } from "@/lib/oauth-pkce-cookie";
+import { isOauthUiSuppressed } from "@/lib/oauth-ui-suppress";
 import {
   appleOAuthConfigured,
   facebookOAuthConfigured,
@@ -13,6 +14,24 @@ export const dynamic = "force-dynamic";
 
 /** Public: which OAuth providers are configured (no secrets). */
 export async function GET() {
+  if (isOauthUiSuppressed()) {
+    return NextResponse.json(
+      {
+        enabled: false,
+        google: false,
+        facebook: false,
+        apple: false,
+        googleCredentialsSet: false,
+        pkceConfigured: false,
+      },
+      {
+        headers: {
+          "Cache-Control": "private, no-store, max-age=0, must-revalidate",
+        },
+      },
+    );
+  }
+
   const base = isOauthStateSigningConfigured();
   const googleCreds = googleOAuthConfigured();
   const facebookCreds = facebookOAuthConfigured();
