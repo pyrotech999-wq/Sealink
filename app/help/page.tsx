@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { HelpDeleteAccountSection } from "@/components/help/HelpDeleteAccountSection";
 
 export const metadata: Metadata = {
   title: "Help | SeaLink",
@@ -38,6 +39,7 @@ const toc: { id: string; label: string }[] = [
   { id: "share-install", label: "Share app & tips" },
   { id: "iphone-install", label: "iPhone — save as app" },
   { id: "safety", label: "Safety & official info" },
+  { id: "delete-account", label: "Delete your account" },
   { id: "troubleshooting", label: "Troubleshooting" },
 ];
 
@@ -592,6 +594,33 @@ export default function HelpPage() {
                 . Location and profile fields are sensitive — share only what you are comfortable with the community
                 seeing.
               </p>
+            </Section>
+
+            <Section id="delete-account" title="Delete your account">
+              <p>
+                You can close your SeaLink account at any time. Deleting removes your sign-in, profile, device registrations,
+                listings you created (boats and gear), area broadcasts you authored, direct message threads you were part
+                of, and billing rows we store for your user id where the database allows. Content others saved separately
+                (for example screenshots) is outside the app.
+              </p>
+              <p>
+                If you use <strong className="text-zinc-200">Google, Apple, or Facebook</strong> to sign in, deleting here
+                removes the SeaLink account linked to that email — it does not delete your social account with the
+                provider.
+              </p>
+              <p>
+                After deletion, you can register again with the same email if you choose. Questions about data are
+                covered in the{" "}
+                <Link href="/privacy" className="font-medium text-emerald-400 hover:underline">
+                  privacy policy
+                </Link>
+                ; you can also{" "}
+                <a href={mailtoDevelopers} className="font-medium text-emerald-400 hover:underline">
+                  email the developers
+                </a>
+                .
+              </p>
+              <HelpDeleteAccountSection />
             </Section>
 
             <Section id="troubleshooting" title="Troubleshooting">

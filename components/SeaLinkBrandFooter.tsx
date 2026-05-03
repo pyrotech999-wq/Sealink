@@ -24,6 +24,9 @@ export function SeaLinkBrandFooter({ className = "" }: Props) {
         <Link href="/terms" className="text-zinc-400 underline-offset-4 hover:text-zinc-200 hover:underline">
           T&amp;C
         </Link>
+        <Link href="/privacy" className="text-zinc-400 underline-offset-4 hover:text-zinc-200 hover:underline">
+          Privacy
+        </Link>
         <Link href="/help" className="text-zinc-400 underline-offset-4 hover:text-zinc-200 hover:underline">
           Help
         </Link>

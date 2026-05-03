@@ -243,6 +243,20 @@ export async function oauthSignInOrRegister(params: {
   });
 }
 
+/** Local KV/file accounts only — not used when Supabase is configured. */
+export async function deleteUserByEmailFromLocalStore(email: string): Promise<boolean> {
+  return enqueue(async () => {
+    if (isSupabaseConfigured()) return false;
+    const key = normaliseEmail(email);
+    const store = canUseKv() ? await kvGetJson<StoreShape>(KV_KEY, {}) : readStore();
+    if (!store[key]) return false;
+    delete store[key];
+    if (canUseKv()) await kvSetJson(KV_KEY, store);
+    else writeStore(store);
+    return true;
+  });
+}
+
 export async function upsertUser(email: string, password: PasswordHash): Promise<UserRow> {
   return enqueue(async () => {
     if (isSupabaseConfigured()) {

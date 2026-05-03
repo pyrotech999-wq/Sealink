@@ -310,6 +310,18 @@ export default function TermsPage() {
           local maritime regulations. These terms are intended to reflect serious recreational limitations; they are not a substitute
           for legal advice tailored to your operations or jurisdiction.
         </p>
+
+        <nav
+          className="mt-12 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 border-t border-zinc-800 pt-8 text-sm text-zinc-400"
+          aria-label="Related pages"
+        >
+          <Link href="/privacy" className="hover:text-zinc-200 hover:underline">
+            Privacy policy
+          </Link>
+          <Link href="/help" className="hover:text-zinc-200 hover:underline">
+            Help
+          </Link>
+        </nav>
       </div>
     </div>
   );
