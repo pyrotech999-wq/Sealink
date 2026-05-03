@@ -550,8 +550,7 @@ export function MapBroadcastPanel({
         className={`mt-1 leading-snug text-indigo-900/85 dark:text-indigo-200/85 ${L ? "text-base" : "text-[11px]"}`}
       >
         <strong className="font-semibold text-indigo-950 dark:text-indigo-100">Reply</strong> opens a shared thread on a
-        new page: anyone who could see that broadcast (nearby, friends nearby, friends worldwide, or all areas as
-        posted) can read and reply there.
+        new page.
       </p>
 
       <label
