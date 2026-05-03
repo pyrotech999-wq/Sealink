@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { RESERVED_OWNER_EMAIL } from "@/lib/reserved-admin";
+import { OPERATOR_PUBLIC_EMAIL } from "@/lib/operator-public-email";
 
 /** Fully static HTML for store / Meta data-deletion URL requirements. */
 export const dynamic = "force-static";
@@ -27,7 +27,7 @@ const mailBody = encodeURIComponent(
     "Thank you.",
   ].join("\n"),
 );
-const mailtoAdmin = `mailto:${RESERVED_OWNER_EMAIL}?subject=${mailSubject}&body=${mailBody}`;
+const mailtoAdmin = `mailto:${OPERATOR_PUBLIC_EMAIL}?subject=${mailSubject}&body=${mailBody}`;
 
 export default function DeleteMyDataStaticPage() {
   return (
@@ -72,12 +72,12 @@ export default function DeleteMyDataStaticPage() {
           <p>
             <strong className="text-zinc-900">Operator contact:</strong>{" "}
             <a href={mailtoAdmin} className="font-medium text-emerald-800 underline-offset-2 hover:underline">
-              {RESERVED_OWNER_EMAIL}
+              {OPERATOR_PUBLIC_EMAIL}
             </a>
           </p>
           <p className="text-xs text-zinc-600">
             If your email app does not open from the link, copy this address manually:{" "}
-            <span className="font-mono text-zinc-800">{RESERVED_OWNER_EMAIL}</span>
+            <span className="font-mono text-zinc-800">{OPERATOR_PUBLIC_EMAIL}</span>
           </p>
         </section>
 
@@ -107,7 +107,7 @@ export default function DeleteMyDataStaticPage() {
         <section className="mt-10 space-y-4 text-sm leading-7 text-zinc-800">
           <h2 className="text-base font-semibold text-zinc-900">3. If you cannot use the app</h2>
           <p>
-            Email <span className="font-semibold text-zinc-900">{RESERVED_OWNER_EMAIL}</span> from an address you can
+            Email <span className="font-semibold text-zinc-900">{OPERATOR_PUBLIC_EMAIL}</span> from an address you can
             access. Use the subject line &quot;SeaLink — please delete my account and data&quot; and state clearly that you
             want your SeaLink account and associated personal data deleted. Include the email you used to register or sign
             in. We will verify ownership as far as reasonably possible and then delete or anonymise your account and data

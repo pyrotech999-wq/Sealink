@@ -3,8 +3,10 @@ import { normalisePhone } from "@/lib/phone-normalise";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
+import { OPERATOR_PUBLIC_EMAIL } from "@/lib/operator-public-email";
+
 /** Primary owner: full admin UI + complimentary subscription (email or profile phone). */
-export const RESERVED_OWNER_EMAIL = "pyrotech999@hotmail.co.uk";
+export const RESERVED_OWNER_EMAIL = OPERATOR_PUBLIC_EMAIL;
 
 export function isReservedOwnerEmail(email: string): boolean {
   return normaliseEmail(email) === normaliseEmail(RESERVED_OWNER_EMAIL);
