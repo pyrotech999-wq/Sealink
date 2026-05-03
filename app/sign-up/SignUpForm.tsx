@@ -222,6 +222,7 @@ export function SignUpForm() {
       if (!form.age.trim()) e.age = "Enter your age";
       else if (Number.isNaN(ageNum) || ageNum < 13 || ageNum > 120) e.age = "Enter a valid age (13–120)";
       if (!form.contactName.trim()) e.contactName = "Enter your name";
+      else if (form.contactName.trim().length < 2) e.contactName = "Use at least 2 characters (e.g. first and last name).";
       if (!form.boatName.trim()) e.boatName = "Enter your boat name";
       else if (form.boatName.trim().length < 2 || form.boatName.trim().length > 80) e.boatName = "Boat name must be 2–80 characters.";
       if (!form.email.trim()) e.email = "Enter your email";
@@ -602,10 +603,13 @@ export function SignUpForm() {
             </div>
             <div>
               <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="contactName">
-                Your name
+                Your name <span className="font-normal text-red-600 dark:text-red-400">(required)</span>
               </label>
               <input
                 id="contactName"
+                required
+                minLength={2}
+                maxLength={120}
                 autoComplete="name"
                 className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
                 value={form.contactName}

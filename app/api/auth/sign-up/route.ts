@@ -4,6 +4,7 @@ import { normaliseEmailFromInput } from "@/lib/email-normalise";
 import { registerAccountDevice } from "@/lib/account-devices-store";
 import { hashPassword } from "@/lib/password-hash";
 import { getUserByEmail, upsertUser } from "@/lib/users-store";
+import { validateProfileDisplayName } from "@/lib/profile-display-name";
 import { upsertProfileAfterSignUp } from "@/lib/profiles-server";
 import { normalisePhone } from "@/lib/phone-normalise";
 
@@ -51,6 +52,14 @@ export async function POST(req: Request) {
   }
   if (!password || password.length < 10) {
     return NextResponse.json({ ok: false, error: "Use at least 10 characters for your password." }, { status: 400 });
+  }
+
+  if (!profile || typeof profile.fullName !== "string") {
+    return NextResponse.json({ ok: false, error: "Your name is required to create an account." }, { status: 400 });
+  }
+  const nameErr = validateProfileDisplayName(profile.fullName);
+  if (nameErr) {
+    return NextResponse.json({ ok: false, error: nameErr }, { status: 400 });
   }
 
   const existing = await getUserByEmail(email);

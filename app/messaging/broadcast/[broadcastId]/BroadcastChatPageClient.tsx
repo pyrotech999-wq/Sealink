@@ -52,6 +52,8 @@ export function BroadcastChatPageClient({ broadcastId }: { broadcastId: string }
   const [err, setErr] = useState<string | null>(null);
   const [authorFullName, setAuthorFullName] = useState<string | null>(null);
   const [authorBoatName, setAuthorBoatName] = useState<string | null>(null);
+  /** Opaque account id (matches `sender_uid` / broadcast `author_uid`). */
+  const [myUid, setMyUid] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const broadcastIdRef = useRef(broadcastId);
@@ -194,6 +196,23 @@ export function BroadcastChatPageClient({ broadcastId }: { broadcastId: string }
   }, [broadcastId]);
 
   useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const r = await fetch("/api/demo/me", { credentials: "same-origin", cache: "no-store" });
+        const d = (await r.json()) as { signedIn?: boolean; uid?: string };
+        if (cancelled) return;
+        setMyUid(typeof d.uid === "string" && d.uid ? d.uid : null);
+      } catch {
+        if (!cancelled) setMyUid(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     void loadBroadcastMeta();
   }, [loadBroadcastMeta]);
 
@@ -294,10 +313,9 @@ export function BroadcastChatPageClient({ broadcastId }: { broadcastId: string }
     );
   }
 
-  const authorLine =
-    broadcast?.authorUid == null
-      ? "—"
-      : formatChatSenderLine(false, broadcast.authorUid, authorFullName, authorBoatName);
+  const authorUidTrim = broadcast?.authorUid?.trim() ?? "";
+  const authorIsViewer = Boolean(myUid && authorUidTrim && authorUidTrim === myUid);
+  const authorLine = !authorUidTrim ? "—" : formatChatSenderLine(authorIsViewer, authorUidTrim, authorFullName, authorBoatName);
 
   const senderLabel = (m: Msg) =>
     formatChatSenderLine(m.isMine, m.senderUid, m.senderDisplayName, m.senderBoatName);
