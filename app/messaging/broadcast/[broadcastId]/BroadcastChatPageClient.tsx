@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { LinkifiedPlainText } from "@/components/LinkifiedPlainText";
 import { formatChatSenderLine } from "@/lib/format-chat-sender";
@@ -32,39 +32,55 @@ function fmtMsgTime(iso: string) {
   });
 }
 
-export function BroadcastChatPageClient() {
-  const params = useParams();
+export function BroadcastChatPageClient({ broadcastId }: { broadcastId: string }) {
   const router = useRouter();
-  const sp = useSearchParams();
-  const broadcastId = typeof params?.broadcastId === "string" ? params.broadcastId : "";
+  const pathname = usePathname();
 
   const [readLat, setReadLat] = useState<number | null>(null);
   const [readLng, setReadLng] = useState<number | null>(null);
   const [broadcast, setBroadcast] = useState<BroadcastRow | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [markingSeen, setMarkingSeen] = useState(false);
   const [draft, setDraft] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [authorFullName, setAuthorFullName] = useState<string | null>(null);
   const [authorBoatName, setAuthorBoatName] = useState<string | null>(null);
+  const [loadedOnce, setLoadedOnce] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const lat = Number(sp.get("lat"));
-    const lng = Number(sp.get("lng"));
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    let lat = Number(sp.get("lat"));
+    let lng = Number(sp.get("lng"));
     if (Number.isFinite(lat) && Number.isFinite(lng)) {
       setReadLat(lat);
       setReadLng(lng);
       return;
     }
     const g = getLastKnownPosition();
-    if (g) {
+    if (g && Number.isFinite(g.lat) && Number.isFinite(g.lng)) {
       setReadLat(g.lat);
       setReadLng(g.lng);
+    } else {
+      setReadLat(null);
+      setReadLng(null);
     }
-  }, [sp]);
+  }, [pathname, broadcastId]);
+
+  useEffect(() => {
+    if (readLat != null && readLng != null) return;
+    const id = window.setInterval(() => {
+      const g = getLastKnownPosition();
+      if (g && Number.isFinite(g.lat) && Number.isFinite(g.lng)) {
+        setReadLat(g.lat);
+        setReadLng(g.lng);
+      }
+    }, 2500);
+    return () => window.clearInterval(id);
+  }, [readLat, readLng]);
 
   const scrollToBottom = useCallback(() => {
     const el = scrollRef.current;
@@ -94,7 +110,7 @@ export function BroadcastChatPageClient() {
     try {
       const r = await fetch(
         `/api/map/broadcast?lat=${encodeURIComponent(String(readLat))}&lng=${encodeURIComponent(String(readLng))}`,
-        { cache: "no-store" },
+        { credentials: "same-origin", cache: "no-store" },
       );
       const d = (await r.json()) as { messages?: BroadcastRow[] };
       const msgs = Array.isArray(d.messages) ? d.messages : [];
@@ -105,7 +121,10 @@ export function BroadcastChatPageClient() {
   }, [broadcastId, readLat, readLng]);
 
   const loadMessages = useCallback(async () => {
-    if (!broadcastId || readLat == null || readLng == null) return;
+    if (!broadcastId || readLat == null || readLng == null) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setErr(null);
     try {
@@ -125,8 +144,13 @@ export function BroadcastChatPageClient() {
       setMessages([]);
     } finally {
       setLoading(false);
+      setLoadedOnce(true);
     }
   }, [broadcastId, readLat, readLng]);
+
+  useEffect(() => {
+    setLoadedOnce(false);
+  }, [broadcastId]);
 
   useEffect(() => {
     void loadBroadcastMeta();
@@ -263,11 +287,17 @@ export function BroadcastChatPageClient() {
       ) : null}
 
       <div ref={scrollRef} className="sealink-thread-scroll min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-4 sm:px-4">
-        {loading && messages.length === 0 ? <p className="text-center text-zinc-500">Loading…</p> : null}
+        {readLat != null &&
+        readLng != null &&
+        messages.length === 0 &&
+        !err &&
+        (!loadedOnce || loading) ? (
+          <p className="text-center text-zinc-500">Loading…</p>
+        ) : null}
         {err ? (
           <p className="rounded-lg border border-red-800/50 bg-red-950/40 px-3 py-2 text-sm text-red-200">{err}</p>
         ) : null}
-        {!loading && messages.length === 0 && !err ? (
+        {loadedOnce && !loading && messages.length === 0 && !err ? (
           <p className="rounded-lg border border-dashed border-zinc-700 px-3 py-8 text-center text-zinc-400">No replies yet.</p>
         ) : null}
         {messages.map((m) => (

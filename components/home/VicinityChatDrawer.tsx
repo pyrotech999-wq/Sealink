@@ -98,8 +98,12 @@ export function VicinityChatDrawer({
       const r = brId
         ? await fetch(
             `/api/broadcast-replies/messages?broadcastId=${encodeURIComponent(brId)}&lat=${encodeURIComponent(String(readLat))}&lng=${encodeURIComponent(String(readLng))}`,
+            { credentials: "same-origin", cache: "no-store" },
           )
-        : await fetch(`/api/vicinity-chat/messages?peerUid=${encodeURIComponent(peerUid)}`);
+        : await fetch(`/api/vicinity-chat/messages?peerUid=${encodeURIComponent(peerUid)}`, {
+            credentials: "same-origin",
+            cache: "no-store",
+          });
       const d = (await r.json()) as { threadId?: string; messages?: Msg[]; error?: string };
       if (!r.ok) {
         setErr(d.error ?? "Could not load chat");
@@ -150,6 +154,7 @@ export function VicinityChatDrawer({
     try {
       const r = await fetch(brId ? "/api/broadcast-replies/messages" : "/api/vicinity-chat/messages", {
         method: "POST",
+        credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
           brId
@@ -186,6 +191,7 @@ export function VicinityChatDrawer({
     try {
       const r = await fetch("/api/vicinity-chat/thread", {
         method: "DELETE",
+        credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ threadId }),
       });
