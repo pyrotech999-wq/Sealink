@@ -529,7 +529,7 @@ export function MapBroadcastPanel({
         )}
       </div>
     );
-  }, [signedIn, inboxRows, L, deletingThreadId]);
+  }, [signedIn, inboxRows, L, deletingThreadId, onDeleteDmThread]);
 
   return (
     <section
@@ -758,77 +758,7 @@ export function MapBroadcastPanel({
         </div>
       </div>
 
-      {signedIn ? (
-        <div className="mt-4 rounded-xl border border-indigo-200/60 bg-gradient-to-b from-white/95 to-indigo-50/30 p-3 shadow-sm dark:border-indigo-900/40 dark:from-zinc-950/90 dark:to-indigo-950/20 sm:p-4">
-          <h4 className={`font-semibold text-indigo-950 dark:text-indigo-100 ${L ? "text-xl" : "text-xs"}`}>
-            Private replies
-          </h4>
-          {inboxRows.length === 0 ? (
-            <p className={`mt-3 rounded-lg border border-dashed border-indigo-200/70 bg-white/60 px-3 py-4 text-center text-indigo-800/70 dark:border-indigo-800/50 dark:bg-zinc-900/40 dark:text-indigo-200/70 ${L ? "text-base" : "text-[11px]"}`}>
-              No private chats yet.
-            </p>
-          ) : (
-            <ul className={`sealink-thread-scroll mt-3 space-y-2 overflow-y-auto pr-1 ${L ? "max-h-72" : "max-h-44"}`}>
-              {inboxRows.map((row) => (
-                <li key={row.threadId} className="flex gap-2">
-                  <button
-                    type="button"
-                    aria-label="Open private chat with this boater"
-                    onClick={() => {
-                      setChatContext(row.lastBody.trim().split(/\r?\n/)[0]?.slice(0, 120));
-                      setChatPeerUid(row.peerUid);
-                    }}
-                    className={`flex min-w-0 flex-1 flex-col rounded-xl border border-indigo-100/90 bg-white px-3 py-2.5 text-left shadow-sm ring-indigo-400/30 transition hover:border-indigo-300 hover:ring-2 dark:border-indigo-900/40 dark:bg-zinc-900/80 dark:hover:border-indigo-700 ${
-                      L ? "py-3" : ""
-                    }`}
-                  >
-                    <div className="flex flex-wrap items-baseline justify-between gap-1">
-                      <span className={`font-semibold text-indigo-950 dark:text-indigo-100 ${L ? "text-base" : "text-xs"}`}>
-                        Conversation
-                      </span>
-                      <span
-                        className={`font-mono text-indigo-600/90 dark:text-indigo-300/90 ${L ? "text-sm" : "text-[10px]"}`}
-                        title={row.peerUid}
-                      >
-                        {row.peerUid.length > 18 ? `${row.peerUid.slice(0, 18)}…` : row.peerUid}
-                      </span>
-                    </div>
-                    <span
-                      className={`mt-1.5 line-clamp-3 text-zinc-800 dark:text-zinc-100 ${L ? "text-lg leading-snug sm:text-xl" : "text-xs leading-snug"}`}
-                    >
-                      {row.lastBody}
-                    </span>
-                    <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                      <span className={`text-zinc-500 dark:text-zinc-400 ${L ? "text-sm" : "text-[11px]"}`}>
-                        {fmtTime(row.lastAt)}
-                      </span>
-                      {row.lastIsMine ? (
-                        <span className={`rounded-full bg-zinc-200/90 px-2 py-0.5 font-medium text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200 ${L ? "text-xs" : "text-[10px]"}`}>
-                          You sent last
-                        </span>
-                      ) : (
-                        <span className={`rounded-full bg-amber-200/90 px-2 py-0.5 font-semibold text-amber-950 dark:bg-amber-900/50 dark:text-amber-100 ${L ? "text-xs" : "text-[10px]"}`}>
-                          Awaiting your reply
-                        </span>
-                      )}
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    disabled={deletingThreadId === row.threadId}
-                    onClick={(e) => void onDeleteDmThread(row, e)}
-                    className={`shrink-0 self-stretch rounded-xl border border-red-200 bg-red-50 font-semibold text-red-800 hover:bg-red-100 disabled:opacity-50 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950/55 ${
-                      L ? "px-3 py-2 text-base" : "px-2 py-1 text-[11px]"
-                    }`}
-                  >
-                    {deletingThreadId === row.threadId ? "…" : "Delete"}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      ) : null}
+      {!L ? privateRepliesBlock : null}
 
       {canSend && sendLat != null && sendLng != null ? (
         <form onSubmit={(e) => void onSend(e)} className="mt-3 space-y-2">
@@ -957,6 +887,8 @@ export function MapBroadcastPanel({
           to send a broadcast from your current position.
         </p>
       )}
+
+      {L ? privateRepliesBlock : null}
 
       {chatPeerUid ? (
         <VicinityChatDrawer
