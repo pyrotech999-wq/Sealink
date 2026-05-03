@@ -44,7 +44,46 @@ export function HomeMessagesCtaButton({ signedIn, readLat, readLng }: Props) {
   const [hasNew, setHasNew] = useState(false);
   /** Peer to deep-link when the “new” state is from an incoming private message (not broadcast-only). */
   const [openPeerUid, setOpenPeerUid] = useState<string | null>(null);
+  /** Unread area-broadcast thread replies (same ids as the top “New message received” bar). */
+  const [broadcastReplyUnreadIds, setBroadcastReplyUnreadIds] = useState<string[]>([]);
   const lastDmChimeAtMs = useRef(0);
+
+  useEffect(() => {
+    const fn = (ev: Event) => {
+      const ce = ev as CustomEvent<{ ids?: string[] }>;
+      const ids = ce.detail?.ids;
+      setBroadcastReplyUnreadIds(Array.isArray(ids) ? ids.filter((x) => typeof x === "string" && x.trim()) : []);
+    };
+    window.addEventListener("sealink-broadcast-reply-unread-ids", fn);
+    return () => window.removeEventListener("sealink-broadcast-reply-unread-ids", fn);
+  }, []);
+
+  useEffect(() => {
+    if (!signedIn || !Number.isFinite(readLat) || !Number.isFinite(readLng)) {
+      setBroadcastReplyUnreadIds([]);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const r = await fetch(
+          `/api/broadcast-replies/alerts?lat=${encodeURIComponent(String(readLat))}&lng=${encodeURIComponent(String(readLng))}`,
+          { credentials: "same-origin", cache: "no-store" },
+        );
+        const d = (await r.json()) as { alerts?: { broadcastId?: string }[] };
+        if (cancelled || !r.ok) return;
+        const list = Array.isArray(d.alerts) ? d.alerts : [];
+        setBroadcastReplyUnreadIds(
+          list.map((a) => (typeof a.broadcastId === "string" ? a.broadcastId : "")).filter(Boolean),
+        );
+      } catch {
+        if (!cancelled) setBroadcastReplyUnreadIds([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [signedIn, readLat, readLng]);
 
   const check = useCallback(async () => {
     const visit = getMessagingLastVisitIso();
@@ -158,23 +197,33 @@ export function HomeMessagesCtaButton({ signedIn, readLat, readLng }: Props) {
     };
   }, [check]);
 
-  const href =
-    hasNew && openPeerUid
+  const firstReplyBroadcastId = broadcastReplyUnreadIds[0]?.trim() ?? "";
+  const hasReplyAlerts = firstReplyBroadcastId.length > 0;
+  const href = hasReplyAlerts
+    ? `/messaging/broadcast/${encodeURIComponent(firstReplyBroadcastId)}?lat=${encodeURIComponent(String(readLat))}&lng=${encodeURIComponent(String(readLng))}`
+    : hasNew && openPeerUid
       ? `/messaging?open=${encodeURIComponent(openPeerUid)}`
       : "/messaging";
+
+  const showGreen = hasReplyAlerts || hasNew;
 
   return (
     <div className="mt-6">
       <Link
         href={href}
         className={`flex min-h-[4rem] w-full flex-col items-center justify-center gap-0.5 rounded-xl border-2 px-4 py-3 text-center font-bold tracking-tight shadow-lg transition-colors sm:min-h-[4.25rem] sm:py-4 ${
-          hasNew
+          showGreen
             ? "border-green-600 bg-green-600 text-white hover:bg-green-500 dark:border-green-500 dark:bg-green-600 dark:hover:bg-green-500"
             : "border-sky-500 bg-sky-600 text-white hover:bg-sky-500 dark:border-sky-600 dark:bg-sky-600 dark:hover:bg-sky-500"
         }`}
         aria-live="polite"
       >
-        {hasNew ? (
+        {hasReplyAlerts ? (
+          <>
+            <span className="text-lg sm:text-xl">New Replies received</span>
+            <span className="text-base font-semibold leading-tight opacity-95 sm:text-lg">Open thread</span>
+          </>
+        ) : hasNew ? (
           <>
             <span className="text-lg sm:text-xl">New messages</span>
             <span className="text-base font-semibold leading-tight opacity-95 sm:text-lg">Click here</span>
