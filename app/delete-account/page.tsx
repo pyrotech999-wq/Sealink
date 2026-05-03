@@ -47,15 +47,8 @@ export default function DeleteAccountPage() {
           </a>
         </p>
         <p className="mt-4 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-          You must be signed in. Deleting cannot be undone. For what is removed, see{" "}
-          <Link href="/help#delete-account" className="font-medium text-green-800 hover:underline dark:text-green-400">
-            Help → Delete your account
-          </Link>{" "}
-          and the{" "}
-          <Link href="/privacy" className="font-medium text-green-800 hover:underline dark:text-green-400">
-            privacy policy
-          </Link>
-          .
+          This page is open to everyone — you do <strong className="text-zinc-800 dark:text-zinc-200">not</strong> need to
+          be signed in to read the steps below. Deleting your account cannot be undone once you confirm.
         </p>
 
         <div className="mt-8">
