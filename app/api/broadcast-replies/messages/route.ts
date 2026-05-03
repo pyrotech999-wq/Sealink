@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAuthUser } from "@/lib/auth";
+import { attachSenderProfilesToMessages } from "@/lib/message-sender-profiles";
 import { appendBroadcastReplyMessage, listBroadcastReplyMessages } from "@/lib/broadcast-reply-store";
 
 export const runtime = "nodejs";
@@ -33,7 +34,8 @@ export async function GET(req: Request) {
       const status = out.error.includes("not found") ? 404 : out.error.includes("cannot access") ? 403 : 400;
       return NextResponse.json({ error: out.error }, { status });
     }
-    return NextResponse.json({ threadId: out.threadId, messages: out.messages });
+    const enriched = await attachSenderProfilesToMessages(out.messages);
+    return NextResponse.json({ threadId: out.threadId, messages: enriched });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Could not load replies";
     return NextResponse.json({ error: msg }, { status: 500 });

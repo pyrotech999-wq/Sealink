@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAuthUser } from "@/lib/auth";
+import { attachSenderProfilesToMessages } from "@/lib/message-sender-profiles";
 import { appendVicinityMessage, listVicinityMessages } from "@/lib/vicinity-dm-store";
 
 export const runtime = "nodejs";
@@ -20,7 +21,8 @@ export async function GET(req: Request) {
 
   try {
     const { threadId, messages } = await listVicinityMessages(viewerUid, peerUid);
-    return NextResponse.json({ threadId, messages });
+    const enriched = await attachSenderProfilesToMessages(messages);
+    return NextResponse.json({ threadId, messages: enriched });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Could not load messages";
     return NextResponse.json({ error: msg }, { status: 500 });

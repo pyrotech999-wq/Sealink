@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { LinkifiedPlainText } from "@/components/LinkifiedPlainText";
+import { formatChatSenderLine } from "@/lib/format-chat-sender";
 import { getLastKnownPosition } from "@/lib/map-last-known";
 
 type Msg = {
@@ -12,6 +13,8 @@ type Msg = {
   body: string;
   createdAt: string;
   isMine: boolean;
+  senderDisplayName?: string | null;
+  senderBoatName?: string | null;
 };
 
 type BroadcastRow = {
@@ -44,6 +47,8 @@ export function BroadcastChatPageClient() {
   const [markingSeen, setMarkingSeen] = useState(false);
   const [draft, setDraft] = useState("");
   const [err, setErr] = useState<string | null>(null);
+  const [authorFullName, setAuthorFullName] = useState<string | null>(null);
+  const [authorBoatName, setAuthorBoatName] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -128,6 +133,36 @@ export function BroadcastChatPageClient() {
   }, [loadBroadcastMeta]);
 
   useEffect(() => {
+    const uid = broadcast?.authorUid?.trim();
+    if (!uid) {
+      setAuthorFullName(null);
+      setAuthorBoatName(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const r = await fetch(`/api/profiles/display?uid=${encodeURIComponent(uid)}`, {
+          credentials: "same-origin",
+          cache: "no-store",
+        });
+        const d = (await r.json()) as { fullName?: string | null; boatName?: string | null };
+        if (cancelled) return;
+        setAuthorFullName(typeof d.fullName === "string" && d.fullName ? d.fullName : null);
+        setAuthorBoatName(typeof d.boatName === "string" && d.boatName ? d.boatName : null);
+      } catch {
+        if (!cancelled) {
+          setAuthorFullName(null);
+          setAuthorBoatName(null);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [broadcast?.authorUid]);
+
+  useEffect(() => {
     if (readLat == null || readLng == null) return;
     void loadMessages();
     const id = window.setInterval(() => void loadMessages(), 12_000);
@@ -181,11 +216,13 @@ export function BroadcastChatPageClient() {
     );
   }
 
-  const peerShort =
-    (broadcast?.authorUid ?? "").length > 22 ? `${(broadcast?.authorUid ?? "").slice(0, 22)}…` : (broadcast?.authorUid ?? "—");
+  const authorLine =
+    broadcast?.authorUid == null
+      ? "—"
+      : formatChatSenderLine(false, broadcast.authorUid, authorFullName, authorBoatName);
 
   const senderLabel = (m: Msg) =>
-    m.isMine ? "You" : `Boater ${m.senderUid.length > 12 ? `${m.senderUid.slice(0, 12)}…` : m.senderUid}`;
+    formatChatSenderLine(m.isMine, m.senderUid, m.senderDisplayName, m.senderBoatName);
 
   return (
     <div className="flex min-h-[calc(100dvh-8rem)] flex-col bg-zinc-950">
@@ -210,7 +247,7 @@ export function BroadcastChatPageClient() {
         <div className="mx-auto mt-2 max-w-2xl">
           <h1 className="text-lg font-bold text-indigo-100">Area broadcast chat</h1>
           <p className="text-xs text-zinc-400">
-            Original poster <span className="font-mono text-zinc-200">{peerShort}</span> — everyone who could see the
+            Original poster <span className="font-medium text-zinc-200">{authorLine}</span> — everyone who could see the
             post can read and reply.
           </p>
         </div>
@@ -235,7 +272,7 @@ export function BroadcastChatPageClient() {
         ) : null}
         {messages.map((m) => (
           <div key={m.id} className={`mx-auto flex max-w-2xl flex-col ${m.isMine ? "items-end" : "items-start"}`}>
-            <span className="mb-0.5 px-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{senderLabel(m)}</span>
+            <span className="mb-0.5 px-1 text-[10px] font-semibold text-zinc-400">{senderLabel(m)}</span>
             <div
               className={`max-w-[88%] rounded-2xl px-3 py-2.5 text-base leading-relaxed shadow-sm sm:text-lg ${
                 m.isMine

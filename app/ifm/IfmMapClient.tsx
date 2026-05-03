@@ -10,6 +10,7 @@ import MarkerClusterGroup from "react-leaflet-cluster";
 import { SeaLinkBrandFooter } from "@/components/SeaLinkBrandFooter";
 import { distanceMiles } from "@/lib/geo-haversine";
 import { clampGeoAccuracyM, humanGeolocationMessage } from "@/lib/geolocation-utils";
+import { isContactPickerAvailable, pickEmailsFromDeviceContacts } from "@/lib/device-contact-picker";
 import { getAvatarDataUrl, getBoatName, getFullName, getProfilePhone } from "@/lib/map-profile-storage";
 
 const IFM_SHARE_CONTACT_KEY = "sealink_ifm_share_contact_v1";
@@ -121,6 +122,8 @@ export function IfmMapClient() {
   /** Bumped after a successful presence POST so the “me” pin reflects latest profile from storage. */
   const [profileSync, setProfileSync] = useState(0);
   const [addingFriendUid, setAddingFriendUid] = useState<string | null>(null);
+  const [contactSuggestEmails, setContactSuggestEmails] = useState<string[]>([]);
+  const [pickingContacts, setPickingContacts] = useState(false);
 
   const lastShareAt = useRef<number>(0);
   const forceNextPresencePost = useRef(false);
@@ -279,6 +282,29 @@ export function IfmMapClient() {
   const addFriend = useCallback(async () => {
     await addFriendWithContact(contact, { zoomFriendsMap: false });
   }, [contact, addFriendWithContact]);
+
+  const addFriendFromDeviceContacts = useCallback(async () => {
+    if (!isContactPickerAvailable()) return;
+    setPickingContacts(true);
+    setErr(null);
+    try {
+      const emails = await pickEmailsFromDeviceContacts();
+      if (!emails.length) {
+        setErr("No email addresses in the contacts you selected.");
+        return;
+      }
+      setContactSuggestEmails((prev) => [...new Set([...prev, ...emails])]);
+      setContact((c) => (c.trim() ? c : emails[0] ?? ""));
+    } catch (e: unknown) {
+      const name = e && typeof e === "object" && "name" in e ? String((e as { name: string }).name) : "";
+      if (name === "AbortError" || name === "NotAllowedError") {
+        return;
+      }
+      setErr(e instanceof Error ? e.message : "Could not open contacts.");
+    } finally {
+      setPickingContacts(false);
+    }
+  }, []);
 
   const addPeerAsFriend = useCallback(
     async (p: IfmPeer) => {
@@ -554,23 +580,44 @@ export function IfmMapClient() {
             <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
               <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Friends list</p>
               <p className="mt-1 text-xs text-zinc-500">
-                Add by email or phone, or tap someone on the map when they share contact on IFM. Max 100. Switch to{" "}
-                <span className="font-semibold">Friends</span> to view them on the map.
+                Add by email or phone, or tap someone on the map when they share contact on IFM. On supported phones
+                you can pick emails from this device&apos;s contacts; matching addresses appear as suggestions while you
+                type. Max 100. Switch to <span className="font-semibold">Friends</span> to view them on the map.
               </p>
-              <div className="mt-3 flex gap-2">
-                <input
-                  value={contact}
-                  onChange={(e) => setContact(e.target.value)}
-                  placeholder="email@example.com or +447700900123"
-                  className="h-9 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-                />
-                <button
-                  type="button"
-                  onClick={() => void addFriend()}
-                  className="h-9 shrink-0 rounded-lg bg-indigo-600 px-3 text-sm font-semibold text-white hover:bg-indigo-700"
-                >
-                  Add
-                </button>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-stretch">
+                <div className="flex min-w-0 flex-1 gap-2">
+                  <input
+                    id="ifm-friend-contact-input"
+                    list="sealink-ifm-friend-email-datalist"
+                    value={contact}
+                    onChange={(e) => setContact(e.target.value)}
+                    placeholder="email@example.com or +447700900123"
+                    autoComplete="email"
+                    className="h-9 min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-3 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                  />
+                  <datalist id="sealink-ifm-friend-email-datalist">
+                    {contactSuggestEmails.map((e) => (
+                      <option key={e} value={e} />
+                    ))}
+                  </datalist>
+                  <button
+                    type="button"
+                    onClick={() => void addFriend()}
+                    className="h-9 shrink-0 rounded-lg bg-indigo-600 px-3 text-sm font-semibold text-white hover:bg-indigo-700"
+                  >
+                    Add
+                  </button>
+                </div>
+                {isContactPickerAvailable() ? (
+                  <button
+                    type="button"
+                    disabled={pickingContacts}
+                    onClick={() => void addFriendFromDeviceContacts()}
+                    className="h-9 shrink-0 rounded-lg border border-zinc-300 bg-zinc-50 px-3 text-sm font-semibold text-zinc-800 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800 sm:whitespace-nowrap"
+                  >
+                    {pickingContacts ? "Opening…" : "Add from contacts"}
+                  </button>
+                ) : null}
               </div>
 
               <div className="mt-3 max-h-[320px] overflow-auto rounded-lg border border-zinc-200 dark:border-zinc-800">

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { LinkifiedPlainText } from "@/components/LinkifiedPlainText";
+import { formatChatSenderLine } from "@/lib/format-chat-sender";
 
 type Msg = {
   id: string;
@@ -9,6 +10,8 @@ type Msg = {
   body: string;
   createdAt: string;
   isMine: boolean;
+  senderDisplayName?: string | null;
+  senderBoatName?: string | null;
 };
 
 type Props = {
@@ -203,7 +206,7 @@ export function VicinityChatDrawer({
 
   const peerShort = peerUid.length > 22 ? `${peerUid.slice(0, 22)}…` : peerUid;
   const senderLabel = (m: Msg) =>
-    m.isMine ? "You" : `Boater ${m.senderUid.length > 12 ? `${m.senderUid.slice(0, 12)}…` : m.senderUid}`;
+    formatChatSenderLine(m.isMine, m.senderUid, m.senderDisplayName, m.senderBoatName);
   const bubbleText = R ? "text-lg leading-relaxed sm:text-xl" : "text-sm leading-relaxed";
   const metaText = R ? "text-sm" : "text-[11px]";
 
@@ -323,7 +326,7 @@ export function VicinityChatDrawer({
             {messages.map((m) => (
               <div key={m.id} className={`flex flex-col ${m.isMine ? "items-end" : "items-start"}`}>
                 <span
-                  className={`mb-0.5 px-1 font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 ${R ? "text-xs" : "text-[10px]"}`}
+                  className={`mb-0.5 px-1 font-semibold text-zinc-600 dark:text-zinc-300 ${R ? "text-xs" : "text-[10px]"}`}
                 >
                   {senderLabel(m)}
                 </span>
