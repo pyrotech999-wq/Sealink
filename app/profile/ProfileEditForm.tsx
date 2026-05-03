@@ -16,6 +16,7 @@ import {
   setProfilePhone,
   setShowAvatar,
 } from "@/lib/map-profile-storage";
+import { validateProfileDisplayName } from "@/lib/profile-display-name";
 import { normalisePhone } from "@/lib/phone-normalise";
 
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
@@ -25,6 +26,8 @@ const MAX_AVATAR_DATA_URL_CHARS = 430_000;
 type Props = {
   signedIn: boolean;
   accountEmail: string;
+  /** From `/profile?required=1` when account name is missing in the database. */
+  nameRequired?: boolean;
 };
 
 async function shrinkAvatarDataUrlForStorage(dataUrl: string): Promise<string> {
