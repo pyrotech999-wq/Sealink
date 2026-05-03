@@ -26,7 +26,7 @@ export async function GET(req: Request) {
     const sb = supabaseAdmin();
     const { data, error } = await sb.from("profiles").select("full_name, boat_name").eq("user_uid", uid).maybeSingle();
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ fullName: null, boatName: null });
     }
     const row = data as { full_name?: string | null; boat_name?: string | null } | null;
     const fullName = typeof row?.full_name === "string" ? row.full_name.trim() : "";

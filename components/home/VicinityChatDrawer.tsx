@@ -77,11 +77,14 @@ export function VicinityChatDrawer({
     ta.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, []);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
     if (!open) return;
+    const silent = opts?.silent === true;
     const brId = broadcastId?.trim() ?? "";
-    setLoading(true);
-    setErr(null);
+    if (!silent) {
+      setLoading(true);
+      setErr(null);
+    }
     if (brId) {
       if (!Number.isFinite(readLat) || !Number.isFinite(readLng)) {
         setErr("Location needed to load broadcast replies.");
@@ -94,31 +97,50 @@ export function VicinityChatDrawer({
       setLoading(false);
       return;
     }
+    const ac = new AbortController();
+    const to = window.setTimeout(() => ac.abort(), 28_000);
     try {
       const r = brId
         ? await fetch(
             `/api/broadcast-replies/messages?broadcastId=${encodeURIComponent(brId)}&lat=${encodeURIComponent(String(readLat))}&lng=${encodeURIComponent(String(readLng))}`,
-            { credentials: "same-origin", cache: "no-store" },
+            { credentials: "same-origin", cache: "no-store", signal: ac.signal },
           )
         : await fetch(`/api/vicinity-chat/messages?peerUid=${encodeURIComponent(peerUid)}`, {
             credentials: "same-origin",
             cache: "no-store",
+            signal: ac.signal,
           });
-      const d = (await r.json()) as { threadId?: string; messages?: Msg[]; error?: string };
+      let d: { threadId?: string; messages?: Msg[]; error?: string };
+      try {
+        d = (await r.json()) as { threadId?: string; messages?: Msg[]; error?: string };
+      } catch {
+        if (!silent) {
+          setErr(r.ok ? "Invalid response from server." : `Could not load chat (${r.status})`);
+          setMessages([]);
+          setThreadId(null);
+        }
+        return;
+      }
       if (!r.ok) {
-        setErr(d.error ?? "Could not load chat");
-        setMessages([]);
-        setThreadId(null);
+        if (!silent) {
+          setErr(d.error ?? "Could not load chat");
+          setMessages([]);
+          setThreadId(null);
+        }
         return;
       }
       setMessages(Array.isArray(d.messages) ? d.messages : []);
       setThreadId(typeof d.threadId === "string" && d.threadId ? d.threadId : null);
-    } catch {
-      setErr("Network error");
-      setMessages([]);
-      setThreadId(null);
+    } catch (e) {
+      if (!silent) {
+        const aborted = e instanceof Error && e.name === "AbortError";
+        setErr(aborted ? "Request timed out — try again." : "Network error");
+        setMessages([]);
+        setThreadId(null);
+      }
     } finally {
-      setLoading(false);
+      window.clearTimeout(to);
+      if (!silent) setLoading(false);
     }
   }, [open, peerUid, broadcastId, readLat, readLng]);
 
@@ -131,7 +153,7 @@ export function VicinityChatDrawer({
       return;
     }
     queueMicrotask(() => void load());
-    const id = window.setInterval(() => queueMicrotask(() => void load()), 14_000);
+    const id = window.setInterval(() => queueMicrotask(() => void load({ silent: true })), 14_000);
     return () => window.clearInterval(id);
   }, [open, load]);
 
@@ -151,28 +173,39 @@ export function VicinityChatDrawer({
     }
     setSending(true);
     setErr(null);
+    const ac = new AbortController();
+    const to = window.setTimeout(() => ac.abort(), 28_000);
     try {
       const r = await fetch(brId ? "/api/broadcast-replies/messages" : "/api/vicinity-chat/messages", {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
+        signal: ac.signal,
         body: JSON.stringify(
           brId
             ? { broadcastId: brId, text, lat: readLat, lng: readLng }
             : { peerUid, text },
         ),
       });
-      const d = (await r.json()) as { error?: string };
+      let d: { error?: string };
+      try {
+        d = (await r.json()) as { error?: string };
+      } catch {
+        setErr(r.ok ? "Invalid response from server." : `Send failed (${r.status})`);
+        return;
+      }
       if (!r.ok) {
         setErr(d.error ?? "Send failed");
         return;
       }
       setDraft("");
-      await load();
+      void load({ silent: true });
       queueMicrotask(() => scrollToBottom());
-    } catch {
-      setErr("Network error");
+    } catch (e) {
+      const aborted = e instanceof Error && e.name === "AbortError";
+      setErr(aborted ? "Send timed out — try again." : "Network error");
     } finally {
+      window.clearTimeout(to);
       setSending(false);
     }
   };

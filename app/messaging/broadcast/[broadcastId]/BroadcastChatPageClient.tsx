@@ -120,14 +120,19 @@ export function BroadcastChatPageClient({ broadcastId }: { broadcastId: string }
     }
   }, [broadcastId, readLat, readLng]);
 
-  const loadMessages = useCallback(async () => {
+  const loadMessages = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent === true;
     if (!broadcastId || readLat == null || readLng == null) {
-      setLoading(false);
-      setLoadedOnce(true);
+      if (!silent) {
+        setLoading(false);
+        setLoadedOnce(true);
+      }
       return;
     }
-    setLoading(true);
-    setErr(null);
+    if (!silent) {
+      setLoading(true);
+      setErr(null);
+    }
     const ac = new AbortController();
     const to = window.setTimeout(() => ac.abort(), 28_000);
     try {
@@ -139,24 +144,32 @@ export function BroadcastChatPageClient({ broadcastId }: { broadcastId: string }
       try {
         d = (await r.json()) as { threadId?: string; messages?: Msg[]; error?: string };
       } catch {
-        setErr(r.ok ? "Invalid response from server." : `Could not load chat (${r.status})`);
-        setMessages([]);
+        if (!silent) {
+          setErr(r.ok ? "Invalid response from server." : `Could not load chat (${r.status})`);
+          setMessages([]);
+        }
         return;
       }
       if (!r.ok) {
-        setErr(d.error ?? "Could not load chat");
-        setMessages([]);
+        if (!silent) {
+          setErr(d.error ?? "Could not load chat");
+          setMessages([]);
+        }
         return;
       }
       setMessages(Array.isArray(d.messages) ? d.messages : []);
     } catch (e) {
-      const aborted = e instanceof Error && e.name === "AbortError";
-      setErr(aborted ? "Loading replies timed out — check connection and try again." : "Network error");
-      setMessages([]);
+      if (!silent) {
+        const aborted = e instanceof Error && e.name === "AbortError";
+        setErr(aborted ? "Loading replies timed out — check connection and try again." : "Network error");
+        setMessages([]);
+      }
     } finally {
       window.clearTimeout(to);
-      setLoading(false);
-      setLoadedOnce(true);
+      if (!silent) {
+        setLoading(false);
+        setLoadedOnce(true);
+      }
     }
   }, [broadcastId, readLat, readLng]);
 
@@ -201,7 +214,7 @@ export function BroadcastChatPageClient({ broadcastId }: { broadcastId: string }
   useEffect(() => {
     if (readLat == null || readLng == null) return;
     void loadMessages();
-    const id = window.setInterval(() => void loadMessages(), 12_000);
+    const id = window.setInterval(() => void loadMessages({ silent: true }), 12_000);
     return () => window.clearInterval(id);
   }, [readLat, readLng, loadMessages]);
 
@@ -238,7 +251,7 @@ export function BroadcastChatPageClient({ broadcastId }: { broadcastId: string }
         return;
       }
       setDraft("");
-      void loadMessages();
+      void loadMessages({ silent: true });
     } catch (e) {
       const aborted = e instanceof Error && e.name === "AbortError";
       setErr(aborted ? "Send timed out — check connection and try again." : "Network error");

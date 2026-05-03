@@ -312,13 +312,56 @@ export async function listBroadcastsNear(
   });
 }
 
-/** Latest row for a broadcast id (for shared reply threads). */
+/**
+ * Latest row for a broadcast id (shared reply threads, alerts, etc.).
+ * Does not use the map write queue — avoids reply APIs blocking behind a full `readRawUnified()` scan.
+ */
 export async function getBroadcastRowById(id: string, now = new Date()): Promise<BroadcastMessageRow | null> {
-  return enqueue(async () => {
-    const raw = await readRawUnified(now);
-    const bid = id.trim();
-    return raw.find((m) => m.id === bid) ?? null;
-  });
+  const bid = id.trim();
+  if (!bid) return null;
+
+  if (isSupabaseConfigured()) {
+    const sb = supabaseAdmin();
+    let { data, error } = await sb
+      .from("map_broadcasts")
+      .select(MAP_BROADCAST_SELECT_FULL)
+      .eq("id", bid)
+      .maybeSingle();
+    if (error && isAudienceSchemaError(error)) {
+      const retryA = await sb
+        .from("map_broadcasts")
+        .select(MAP_BROADCAST_SELECT_WITH_WIDE)
+        .eq("id", bid)
+        .maybeSingle();
+      data = retryA.data as typeof data;
+      error = retryA.error;
+    }
+    if (error && isWideAreaReachSchemaError(error)) {
+      const retry = await sb
+        .from("map_broadcasts")
+        .select(MAP_BROADCAST_SELECT_LEGACY)
+        .eq("id", bid)
+        .maybeSingle();
+      data = retry.data as typeof data;
+      error = retry.error;
+    }
+    if (error || !data) return null;
+    return dbRowToInternal(data as Record<string, unknown>);
+  }
+
+  if (canUseKv()) {
+    const raw = ((await kvGetJson<unknown[]>(KV_KEY, [])) ?? [])
+      .map((r) => normaliseRow(r))
+      .filter((r): r is BroadcastMessageRow => r != null);
+    const pruned = pruneOld(raw, now);
+    if (pruned.length !== raw.length) await kvSetJson(KV_KEY, pruned);
+    return pruned.find((m) => m.id === bid) ?? null;
+  }
+
+  const fileRaw = readRawFile();
+  const raw = pruneOld(fileRaw, now);
+  if (raw.length !== fileRaw.length) writeRawFile(raw);
+  return raw.find((m) => m.id === bid) ?? null;
 }
 
 /**
