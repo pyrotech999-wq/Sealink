@@ -60,17 +60,16 @@ const DEFAULT_ZOOM = 6;
 const NEARBY_RING_METRES = 5 * 1609.344;
 
 /** One interval drives nearby presence; POST/GET are further throttled inside the tick. */
-const PRESENCE_TICK_MS = 10_000;
-/** Minimum time between presence POSTs (upsert or clear still uses clearMapPresence immediately). */
-const PRESENCE_POST_MIN_MS = 10_000;
-const PRESENCE_GET_MIN_MS = 30_000;
+const PRESENCE_TICK_MS = 15_000;
+/** Minimum time between presence POSTs (upsert; clear uses clearMapPresence immediately). */
+const PRESENCE_POST_MIN_MS = 20_000;
+const PRESENCE_GET_MIN_MS = 45_000;
 /** While anchor alert is armed, POST periodically so peers see movement (~10–30s band). */
 const PRESENCE_ANCHOR_HEARTBEAT_POST_MS = 20_000;
 const PRESENCE_SIGNIFICANT_MOVE_M = 30;
 
 function clearMapPresence(keepalive = false, _reason = "unspecified") {
-  const ts = new Date().toISOString();
-  console.info("presence POST sent", ts);
+  console.log("presence POST", Date.now());
   void fetch("/api/map/presence", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -346,8 +345,7 @@ export default function HomeLocationMap({
           postThrottleOk && (significantMove || profileChanged || anchorHeartbeat);
 
         if (shouldPost) {
-          const ts = new Date().toISOString();
-          console.info("presence POST sent", ts);
+          console.log("presence POST", Date.now());
           try {
             const pr = await fetch("/api/map/presence", {
               method: "POST",
@@ -375,8 +373,7 @@ export default function HomeLocationMap({
         }
 
         if (shouldGet) {
-          const ts = new Date().toISOString();
-          console.info("presence GET sent", ts);
+          console.log("presence GET", Date.now());
           try {
             const r = await fetch(
               `/api/map/presence?lat=${encodeURIComponent(String(p.lat))}&lng=${encodeURIComponent(String(p.lng))}`,

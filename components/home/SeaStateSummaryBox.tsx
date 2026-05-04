@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { distanceMeters } from "@/lib/geo-haversine";
 import { getLastKnownPosition, LAST_KNOWN_GEO_EVENT, type LastKnownGeo } from "@/lib/map-last-known";
 import {
   localCalendarDayKey,
@@ -109,6 +110,13 @@ type ApiOk = {
 };
 type ApiFail = { error: string };
 
+/** Minimum gap between combined `/api/sea/local-summary` + `/api/meteo/nearest` fetches. */
+const SEA_METEO_MIN_INTERVAL_MS = 5 * 60 * 1000;
+/** Only update React `loc` when the fix moved this far (avoids render churn on GPS noise). */
+const LOC_STATE_MIN_MOVE_M = 12;
+/** How often we re-read last-known from storage when no map events arrive. */
+const LOC_POLL_MS = 60_000;
+
 function TideHeightsSummaryBlock({
   summary,
   mslOffsetM,
@@ -182,23 +190,14 @@ export function SeaStateSummaryBox() {
   );
   const hasLoc = Boolean(loc && Number.isFinite(loc.lat) && Number.isFinite(loc.lng));
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const sync = () => {
-      setLoc(getLastKnownPosition());
-    };
-    sync();
-    const onGeo = () => sync();
-    window.addEventListener(LAST_KNOWN_GEO_EVENT, onGeo as EventListener);
-    const id = window.setInterval(sync, 5000);
-    return () => {
-      window.removeEventListener(LAST_KNOWN_GEO_EVENT, onGeo as EventListener);
-      window.clearInterval(id);
-    };
-  }, []);
+  /** Latest map fix for API calls — always updated in the loc pump (not tied to React `loc` identity). */
+  const locRef = useRef<LastKnownGeo | null>(null);
+  const lastSeaMeteoFetchAtRef = useRef(0);
+  const seaMeteoInFlightRef = useRef(false);
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    if (!loc) return;
+  const loadSeaMeteoPair = useCallback(async (signal: AbortSignal) => {
+    const locNow = locRef.current;
+    if (!locNow || !Number.isFinite(locNow.lat) || !Number.isFinite(locNow.lng)) return;
     setLoading(true);
     setErr(null);
     try {
@@ -206,12 +205,12 @@ export function SeaStateSummaryBox() {
       const cache = readHomeOpenAiCache();
       const plan = planSeaLocalSummaryOpenAi({
         now: loadStartedAt,
-        current: { lat: loc.lat, lng: loc.lng },
+        current: { lat: locNow.lat, lng: locNow.lng },
         cache,
       });
       const seaQs = new URLSearchParams({
-        lat: String(loc.lat),
-        lng: String(loc.lng),
+        lat: String(locNow.lat),
+        lng: String(locNow.lng),
       });
       if (plan.skipOpenAi) seaQs.set("skipOpenAi", "1");
 
@@ -220,10 +219,13 @@ export function SeaStateSummaryBox() {
           cache: "no-store",
           signal,
         }),
-        fetch(`/api/meteo/nearest?lat=${encodeURIComponent(String(loc.lat))}&lng=${encodeURIComponent(String(loc.lng))}`, {
-          cache: "no-store",
-          signal,
-        }),
+        fetch(
+          `/api/meteo/nearest?lat=${encodeURIComponent(String(locNow.lat))}&lng=${encodeURIComponent(String(locNow.lng))}`,
+          {
+            cache: "no-store",
+            signal,
+          },
+        ),
       ]);
 
       const meteoJson = (await meteoR.json()) as MeteoOk | MeteoFail;
@@ -284,8 +286,8 @@ export function SeaStateSummaryBox() {
             tideAiNarrative:
               typeof ok.tideAiNarrative === "string" && ok.tideAiNarrative.trim() ? ok.tideAiNarrative.trim() : null,
             generatedAt: loadStartedAt,
-            originLat: loc.lat,
-            originLng: loc.lng,
+            originLat: locNow.lat,
+            originLng: locNow.lng,
             storedDay: localCalendarDayKey(new Date(loadStartedAt)),
           },
         });
@@ -307,14 +309,65 @@ export function SeaStateSummaryBox() {
     } finally {
       setLoading(false);
     }
-  }, [loc]);
+  }, []);
 
+  /**
+   * Single mount effect: listen for map geo + slow poll, throttle API to ≥5 min, avoid `useEffect([load])` loops
+   * caused by new `loc` object references on every GPS tick.
+   */
   useEffect(() => {
-    if (!hasLoc) return;
-    const ac = new AbortController();
-    queueMicrotask(() => void load(ac.signal));
-    return () => ac.abort();
-  }, [hasLoc, load]);
+    if (typeof window === "undefined") return;
+    let disposed = false;
+    let flightAc: AbortController | null = null;
+
+    const pump = () => {
+      if (disposed) return;
+      const next = getLastKnownPosition();
+      locRef.current = next;
+
+      if (!next || !Number.isFinite(next.lat) || !Number.isFinite(next.lng)) {
+        setLoc((prev) => (prev ? null : prev));
+        return;
+      }
+
+      setLoc((prev) => {
+        if (!prev) return next;
+        if (distanceMeters(prev.lat, prev.lng, next.lat, next.lng) < LOC_STATE_MIN_MOVE_M) return prev;
+        return next;
+      });
+
+      if (seaMeteoInFlightRef.current) return;
+      const now = Date.now();
+      if (lastSeaMeteoFetchAtRef.current !== 0 && now - lastSeaMeteoFetchAtRef.current < SEA_METEO_MIN_INTERVAL_MS) {
+        return;
+      }
+
+      lastSeaMeteoFetchAtRef.current = now;
+      seaMeteoInFlightRef.current = true;
+      flightAc = new AbortController();
+      const ac = flightAc;
+      void (async () => {
+        try {
+          console.log("sea summary fetch", Date.now());
+          console.log("meteo fetch", Date.now());
+          await loadSeaMeteoPair(ac.signal);
+        } finally {
+          seaMeteoInFlightRef.current = false;
+        }
+      })();
+    };
+
+    pump();
+    const onGeo = () => pump();
+    window.addEventListener(LAST_KNOWN_GEO_EVENT, onGeo as EventListener);
+    const id = window.setInterval(pump, LOC_POLL_MS);
+    return () => {
+      disposed = true;
+      flightAc?.abort();
+      window.removeEventListener(LAST_KNOWN_GEO_EVENT, onGeo as EventListener);
+      window.clearInterval(id);
+    };
+  }, [loadSeaMeteoPair]);
 
   if (!hasLoc) {
     return (
