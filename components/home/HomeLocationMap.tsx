@@ -1,5 +1,11 @@
 "use client";
 
+/**
+ * Nearby map presence (`/api/map/presence`) is disabled on the client.
+ * Do not add fetch/axios/SWR, `setInterval`/`setTimeout` polling, or any tick that hits that route.
+ * `nearbyPeers` is UI-only (cleared locally); re-enable only after restoring vetted client + server code.
+ */
+
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import Link from "next/link";
@@ -1199,7 +1205,10 @@ export default function HomeLocationMap({
         <button
           type="button"
           onClick={() => {
-            // disabled temporarily to stop presence API spam
+            // DISABLED — do not call `/api/map/presence` (GET/POST) from the browser.
+            // Example (must stay commented):
+            // void fetch(`/api/map/presence?lat=...&lng=...`, { credentials: "same-origin" });
+            // void fetch("/api/map/presence", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: "..." });
           }}
           className="w-full rounded-lg border border-blue-300 bg-white px-3 py-2 text-xs font-semibold text-blue-900 shadow-sm hover:bg-blue-50 dark:border-blue-800 dark:bg-zinc-900 dark:text-blue-100 dark:hover:bg-blue-950/50"
         >

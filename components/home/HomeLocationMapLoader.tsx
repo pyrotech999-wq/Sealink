@@ -1,5 +1,7 @@
 "use client";
 
+/** Loads `HomeLocationMap` only — no `/api/map/presence` calls here. */
+
 import dynamic from "next/dynamic";
 
 const HomeLocationMap = dynamic(() => import("./HomeLocationMap"), {
