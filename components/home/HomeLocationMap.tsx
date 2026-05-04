@@ -262,9 +262,7 @@ export default function HomeLocationMap({
   }, [pos]);
 
   const signedInRef = useRef(signedIn);
-  useEffect(() => {
-    signedInRef.current = signedIn;
-  }, [signedIn]);
+  signedInRef.current = signedIn;
 
   const anchorArmedRef = useRef(false);
   useEffect(() => {
@@ -318,6 +316,10 @@ export default function HomeLocationMap({
       }
       if (keepalive && !tryConsumeMapPresenceClearPost()) {
         logMapPresenceClient("clear-skipped", { reason: "client-throttle-clear-post", keepalive, intent: reason });
+        return;
+      }
+      if (!signedInRef.current) {
+        logMapPresenceClient("clear-skipped", { reason: "not-signed-in-before-fetch", keepalive, intent: reason });
         return;
       }
       void fetch("/api/map/presence", {
@@ -421,6 +423,8 @@ export default function HomeLocationMap({
         if (shouldPost) {
           if (!tryConsumeMapPresencePostTurn(now)) {
             logMapPresenceClient("post-skipped", { reason: "client-guard-post-interval" });
+          } else if (!signedInRef.current) {
+            logMapPresenceClient("post-skipped", { reason: "not-signed-in-before-fetch" });
           } else {
             try {
               const pr = await fetch("/api/map/presence", {
@@ -464,6 +468,10 @@ export default function HomeLocationMap({
         if (!aborted401ThisTick && shouldGet) {
           if (!tryConsumeMapPresenceGetTurn(now)) {
             logMapPresenceClient("get-skipped", { reason: "client-guard-get-interval" });
+          } else if (!signedInRef.current || presenceIsPausedAfter401()) {
+            logMapPresenceClient("get-skipped", {
+              reason: !signedInRef.current ? "not-signed-in-before-fetch" : "paused-after-401",
+            });
           } else {
             try {
               const r = await fetch(
