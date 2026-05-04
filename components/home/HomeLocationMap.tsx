@@ -262,9 +262,7 @@ export default function HomeLocationMap({
   }, [pos]);
 
   const signedInRef = useRef(signedIn);
-  useEffect(() => {
-    signedInRef.current = signedIn;
-  }, [signedIn]);
+  signedInRef.current = signedIn;
 
   const anchorArmedRef = useRef(false);
   useEffect(() => {
@@ -318,6 +316,10 @@ export default function HomeLocationMap({
       }
       if (keepalive && !tryConsumeMapPresenceClearPost()) {
         logMapPresenceClient("clear-skipped", { reason: "client-throttle-clear-post", keepalive, intent: reason });
+        return;
+      }
+      if (!signedInRef.current) {
+        logMapPresenceClient("clear-skipped", { reason: "not-signed-in-before-fetch", keepalive, intent: reason });
         return;
       }
       void fetch("/api/map/presence", {
@@ -419,77 +421,97 @@ export default function HomeLocationMap({
         let aborted401ThisTick = false;
 
         if (shouldPost) {
-          if (!tryConsumeMapPresencePostTurn(now)) {
+          if (!signedInRef.current) {
+            logMapPresenceClient("post-skipped", { reason: "not-signed-in-before-fetch" });
+          } else if (presenceIsPausedAfter401()) {
+            logMapPresenceClient("post-skipped", { reason: "paused-after-401" });
+          } else if (!tryConsumeMapPresencePostTurn(now)) {
             logMapPresenceClient("post-skipped", { reason: "client-guard-post-interval" });
           } else {
-            try {
-              const pr = await fetch("/api/map/presence", {
-                method: "POST",
-                credentials: "same-origin",
-                headers: { "Content-Type": "application/json" },
-                signal: ac.signal,
-                body: JSON.stringify({
-                  shareNearby: true,
-                  lat: p.lat,
-                  lng: p.lng,
-                  label,
-                  avatarDataUrl,
-                }),
+            if (!signedInRef.current || presenceIsPausedAfter401()) {
+              logMapPresenceClient("post-skipped", {
+                reason: !signedInRef.current ? "not-signed-in-before-fetch" : "paused-after-401",
               });
-              if (!disposed && !ac.signal.aborted) {
-                if (pr.status === 401) {
-                  presenceSetPausedAfter401(true);
-                  aborted401ThisTick = true;
-                  logMapPresenceClient("post-401-stops-polling", {});
-                  setNearbyPeers([]);
-                } else if (!pr.ok) {
-                  setNearbyPeers([]);
-                } else {
-                  const postBody = (await pr.json()) as { ok?: boolean; rateLimited?: boolean };
-                  if (postBody.rateLimited) {
-                    logMapPresenceClient("post-skipped", { reason: "server-rate-limit" });
+            } else {
+              try {
+                const pr = await fetch("/api/map/presence", {
+                  method: "POST",
+                  credentials: "same-origin",
+                  headers: { "Content-Type": "application/json" },
+                  signal: ac.signal,
+                  body: JSON.stringify({
+                    shareNearby: true,
+                    lat: p.lat,
+                    lng: p.lng,
+                    label,
+                    avatarDataUrl,
+                  }),
+                });
+                if (!disposed && !ac.signal.aborted) {
+                  if (pr.status === 401) {
+                    presenceSetPausedAfter401(true);
+                    aborted401ThisTick = true;
+                    logMapPresenceClient("post-401-stops-polling", {});
+                    setNearbyPeers([]);
+                  } else if (!pr.ok) {
+                    setNearbyPeers([]);
                   } else {
-                    lastPresencePostAtRef.current = Date.now();
-                    lastPostSnapshotRef.current = { lat: p.lat, lng: p.lng };
-                    lastPostedProfileKeyRef.current = profileKey;
+                    const postBody = (await pr.json()) as { ok?: boolean; rateLimited?: boolean };
+                    if (postBody.rateLimited) {
+                      logMapPresenceClient("post-skipped", { reason: "server-rate-limit" });
+                    } else {
+                      lastPresencePostAtRef.current = Date.now();
+                      lastPostSnapshotRef.current = { lat: p.lat, lng: p.lng };
+                      lastPostedProfileKeyRef.current = profileKey;
+                    }
                   }
                 }
+              } catch {
+                if (!disposed && !ac.signal.aborted) setNearbyPeers([]);
               }
-            } catch {
-              if (!disposed && !ac.signal.aborted) setNearbyPeers([]);
             }
           }
         }
 
         if (!aborted401ThisTick && shouldGet) {
-          if (!tryConsumeMapPresenceGetTurn(now)) {
+          if (!signedInRef.current) {
+            logMapPresenceClient("get-skipped", { reason: "not-signed-in-before-fetch" });
+          } else if (presenceIsPausedAfter401()) {
+            logMapPresenceClient("get-skipped", { reason: "paused-after-401" });
+          } else if (!tryConsumeMapPresenceGetTurn(now)) {
             logMapPresenceClient("get-skipped", { reason: "client-guard-get-interval" });
           } else {
-            try {
-              const r = await fetch(
-                `/api/map/presence?lat=${encodeURIComponent(String(p.lat))}&lng=${encodeURIComponent(String(p.lng))}`,
-                { credentials: "same-origin", signal: ac.signal },
-              );
-              if (!disposed && !ac.signal.aborted) {
-                if (r.status === 401) {
-                  presenceSetPausedAfter401(true);
-                  logMapPresenceClient("get-401-stops-polling", {});
-                  setNearbyPeers([]);
-                } else if (!r.ok) {
-                  setNearbyPeers([]);
-                } else {
-                  const d = (await r.json()) as { peers?: NearbyPeer[]; throttled?: boolean };
-                  if (d.throttled) {
-                    logMapPresenceClient("get-skipped", { reason: "server-throttle" });
+            if (!signedInRef.current || presenceIsPausedAfter401()) {
+              logMapPresenceClient("get-skipped", {
+                reason: !signedInRef.current ? "not-signed-in-before-fetch" : "paused-after-401",
+              });
+            } else {
+              try {
+                const r = await fetch(
+                  `/api/map/presence?lat=${encodeURIComponent(String(p.lat))}&lng=${encodeURIComponent(String(p.lng))}`,
+                  { credentials: "same-origin", signal: ac.signal },
+                );
+                if (!disposed && !ac.signal.aborted) {
+                  if (r.status === 401) {
+                    presenceSetPausedAfter401(true);
+                    logMapPresenceClient("get-401-stops-polling", {});
+                    setNearbyPeers([]);
+                  } else if (!r.ok) {
+                    setNearbyPeers([]);
                   } else {
-                    setNearbyPeers(Array.isArray(d.peers) ? d.peers : []);
-                    lastPresenceGetAtRef.current = Date.now();
-                    initialPresenceGetDoneRef.current = true;
+                    const d = (await r.json()) as { peers?: NearbyPeer[]; throttled?: boolean };
+                    if (d.throttled) {
+                      logMapPresenceClient("get-skipped", { reason: "server-throttle" });
+                    } else {
+                      setNearbyPeers(Array.isArray(d.peers) ? d.peers : []);
+                      lastPresenceGetAtRef.current = Date.now();
+                      initialPresenceGetDoneRef.current = true;
+                    }
                   }
                 }
+              } catch {
+                if (!disposed && !ac.signal.aborted) setNearbyPeers([]);
               }
-            } catch {
-              if (!disposed && !ac.signal.aborted) setNearbyPeers([]);
             }
           }
         }
