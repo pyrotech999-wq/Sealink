@@ -795,7 +795,6 @@ export function MapBroadcastPanel({
                 />
                 <span>
                   <strong className="font-semibold">Everyone nearby</strong> (~5 mi)
-                  {canSendGlobalBroadcast ? " — same as a normal area broadcast when you are not using “all map areas”" : ""}
                 </span>
               </label>
               <label className={`flex cursor-pointer items-start gap-2 text-indigo-900 dark:text-indigo-100 ${L ? "text-base" : "text-xs"}`}>
@@ -807,8 +806,7 @@ export function MapBroadcastPanel({
                   className="mt-0.5 size-4 shrink-0 border-indigo-300 text-violet-700 focus:ring-violet-600"
                 />
                 <span>
-                  <strong className="font-semibold">IFM friends nearby</strong> — only people on your IFM friends list who
-                  are also within ~5 mi of this broadcast
+                  <strong className="font-semibold">IFM friends nearby</strong> (~5 mi)
                 </span>
               </label>
               <label className={`flex cursor-pointer items-start gap-2 text-indigo-900 dark:text-indigo-100 ${L ? "text-base" : "text-xs"}`}>
@@ -820,8 +818,7 @@ export function MapBroadcastPanel({
                   className="mt-0.5 size-4 shrink-0 border-indigo-300 text-fuchsia-700 focus:ring-fuchsia-600"
                 />
                 <span>
-                  <strong className="font-semibold">IFM friends worldwide</strong> — only your IFM friends; they can see
-                  it wherever they are (no distance filter for recipients on your friends list)
+                  <strong className="font-semibold">IFM friends worldwide</strong>
                 </span>
               </label>
               <p className={`text-indigo-800/85 dark:text-indigo-200/75 ${L ? "text-sm pl-6" : "text-[10px] leading-snug pl-6"}`}>
