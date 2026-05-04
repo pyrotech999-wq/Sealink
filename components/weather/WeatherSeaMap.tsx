@@ -1357,7 +1357,7 @@ export function WeatherSeaMap() {
         </div>
       </div>
 
-      <div className="h-[min(78vh,720px)] w-full bg-zinc-100 dark:bg-zinc-900">
+      <div className="mx-auto h-[min(78vh,720px)] w-full max-w-[min(100%,42rem)] bg-zinc-100 dark:bg-zinc-900">
         <MapContainer
           center={center}
           zoom={pos ? 7 : 2}
