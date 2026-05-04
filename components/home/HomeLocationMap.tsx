@@ -1129,7 +1129,7 @@ export default function HomeLocationMap({
     const gLng = pos.lng.toFixed(3);
     const avatarFp = avatarDataUrl ? `${avatarDataUrl.length}:${avatarDataUrl.slice(0, 48)}` : "";
     return `${gLat}|${gLng}|${label}|${showAvatar ? 1 : 0}|${avatarFp}`;
-  }, [sharing, pos?.lat, pos?.lng, shareNearby, boatInput, fullName, avatarUrl, showAvatar]);
+  }, [sharing, pos, shareNearby, boatInput, fullName, avatarUrl, showAvatar]);
 
   useEffect(() => {
     if (!presenceStableKey) {
