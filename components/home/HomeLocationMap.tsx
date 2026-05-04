@@ -52,6 +52,7 @@ import { isLikelyIOS } from "@/lib/location-env";
 import { getNativeLocationBridge } from "@/lib/native-location-bridge";
 import { getDeviceName, getOrCreateDeviceId } from "@/lib/device-id";
 import { clampGeoAccuracyM, humanGeolocationMessage } from "@/lib/geolocation-utils";
+import { tryConsumeMapPresenceGetTurn, tryConsumeMapPresencePostTurn } from "@/lib/map-presence-network-guard";
 
 const DEFAULT_CENTER: [number, number] = [DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng];
 const DEFAULT_ZOOM = 6;
@@ -59,11 +60,11 @@ const DEFAULT_ZOOM = 6;
 /** Statute miles → metres (for ~5 mi “nearby” ring). */
 const NEARBY_RING_METRES = 5 * 1609.344;
 
-/** One interval drives nearby presence; POST/GET are further throttled inside the tick. */
-const PRESENCE_TICK_MS = 15_000;
+/** One interval drives nearby presence; POST/GET are further throttled inside the tick + module guard. */
+const PRESENCE_TICK_MS = 60_000;
 /** Minimum time between presence POSTs (upsert; clear uses clearMapPresence immediately). */
-const PRESENCE_POST_MIN_MS = 20_000;
-const PRESENCE_GET_MIN_MS = 45_000;
+const PRESENCE_POST_MIN_MS = 25_000;
+const PRESENCE_GET_MIN_MS = 55_000;
 /** While anchor alert is armed, POST periodically so peers see movement (~10–30s band). */
 const PRESENCE_ANCHOR_HEARTBEAT_POST_MS = 20_000;
 const PRESENCE_SIGNIFICANT_MOVE_M = 30;
@@ -244,6 +245,10 @@ export default function HomeLocationMap({
   const [activeAnchorAlert, setActiveAnchorAlert] = useState<{ id: string; message: string; createdAt: string; kind?: string } | null>(
     null,
   );
+  const activeAnchorAlertRef = useRef(activeAnchorAlert);
+  useEffect(() => {
+    activeAnchorAlertRef.current = activeAnchorAlert;
+  }, [activeAnchorAlert]);
   const [alarmBlocked, setAlarmBlocked] = useState(false);
   const alarmTimer = useRef<number | null>(null);
   const deviceId = useMemo(() => (typeof window !== "undefined" ? getOrCreateDeviceId() : "server"), []);
@@ -344,7 +349,7 @@ export default function HomeLocationMap({
         const shouldPost =
           postThrottleOk && (significantMove || profileChanged || anchorHeartbeat);
 
-        if (shouldPost) {
+        if (shouldPost && tryConsumeMapPresencePostTurn(now)) {
           console.log("presence POST", Date.now());
           try {
             const pr = await fetch("/api/map/presence", {
@@ -372,7 +377,7 @@ export default function HomeLocationMap({
           }
         }
 
-        if (shouldGet) {
+        if (shouldGet && (forceGet || tryConsumeMapPresenceGetTurn(now))) {
           console.log("presence GET", Date.now());
           try {
             const r = await fetch(
@@ -401,26 +406,27 @@ export default function HomeLocationMap({
       void tick();
     };
 
-    void tick();
+    const bootTimer = window.setTimeout(() => void tick(), 5_000);
     const id = window.setInterval(() => void tick(), PRESENCE_TICK_MS);
 
     return () => {
       disposed = true;
       runNearbyPresenceTickRef.current = null;
+      window.clearTimeout(bootTimer);
       window.clearInterval(id);
     };
   }, [sharing, shareNearby]);
 
-  /** When GPS becomes available for nearby sharing, run one tick without waiting for the interval. */
+  /**
+   * First tick after nearby sharing turns on (GPS may arrive after the effect). Do not reset when `pos` is briefly
+   * null — that used to re-fire tick on every GPS gap and spam POST+GET ~1/s on some devices.
+   */
   useEffect(() => {
     if (!sharing || !shareNearby) {
       hadPosForNearbySharingRef.current = false;
       return;
     }
-    if (!pos) {
-      hadPosForNearbySharingRef.current = false;
-      return;
-    }
+    if (!pos) return;
     if (hadPosForNearbySharingRef.current) return;
     hadPosForNearbySharingRef.current = true;
     runNearbyPresenceTickRef.current?.();
@@ -555,7 +561,7 @@ export default function HomeLocationMap({
       }
     };
     void load();
-    const id = window.setInterval(() => void load(), 30_000);
+    const id = window.setInterval(() => void load(), 60_000);
     return () => {
       disposed = true;
       window.clearInterval(id);
@@ -670,12 +676,12 @@ export default function HomeLocationMap({
           keepalive: true,
         });
         if (!r.ok) {
-          if (!activeAnchorAlert) {
+          if (!activeAnchorAlertRef.current) {
             setActiveAnchorAlert({ id: `local-${now}`, message: msg, createdAt: new Date(now).toISOString() });
           }
         }
       } catch {
-        if (!activeAnchorAlert) {
+        if (!activeAnchorAlertRef.current) {
           setActiveAnchorAlert({ id: `local-${now}`, message: msg, createdAt: new Date(now).toISOString() });
         }
       }
@@ -725,18 +731,18 @@ export default function HomeLocationMap({
         if (disposed) return;
         const allowed = anchorMonitor?.alertDeviceIds?.length ? anchorMonitor.alertDeviceIds.includes(deviceId) : true;
         if (!allowed) return;
-        if (!activeAnchorAlert && list.length) setActiveAnchorAlert(list[0]!);
+        if (!activeAnchorAlertRef.current && list.length) setActiveAnchorAlert(list[0]!);
       } catch {
         /* ignore */
       }
     };
     void load();
-    const id = window.setInterval(() => void load(), 15_000);
+    const id = window.setInterval(() => void load(), 60_000);
     return () => {
       disposed = true;
       window.clearInterval(id);
     };
-  }, [sharing, activeAnchorAlert, anchorMonitor?.alertDeviceIds, deviceId]);
+  }, [sharing, anchorMonitor?.alertDeviceIds, deviceId]);
 
   // Display label for which device is being monitored.
   useEffect(() => {
@@ -1681,6 +1687,7 @@ export default function HomeLocationMap({
             </p>
             <Link
               href="/map-sharing"
+              prefetch={false}
               className={`mt-3 flex h-10 w-full items-center justify-center rounded-lg text-sm font-medium ${
                 sharing
                   ? "border border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"

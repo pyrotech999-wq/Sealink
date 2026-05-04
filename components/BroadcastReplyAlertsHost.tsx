@@ -72,7 +72,7 @@ export function BroadcastReplyAlertsHost() {
 
   useEffect(() => {
     tick();
-    const id = window.setInterval(tick, 10_000);
+    const id = window.setInterval(tick, 60_000);
     return () => window.clearInterval(id);
   }, [tick]);
 
