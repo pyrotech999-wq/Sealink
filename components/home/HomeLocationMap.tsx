@@ -261,6 +261,11 @@ export default function HomeLocationMap({
     posRef.current = pos;
   }, [pos]);
 
+  const signedInRef = useRef(signedIn);
+  useEffect(() => {
+    signedInRef.current = signedIn;
+  }, [signedIn]);
+
   const anchorArmedRef = useRef(false);
   useEffect(() => {
     anchorArmedRef.current = anchorCfg.armed;
@@ -292,6 +297,44 @@ export default function HomeLocationMap({
   const presenceTickInFlightRef = useRef(false);
   const runNearbyPresenceTickRef = useRef<(() => void) | null>(null);
   const hadPosForNearbySharingRef = useRef(false);
+  const prevSignedInForPresenceRef = useRef(signedIn);
+  useEffect(() => {
+    if (signedIn && !prevSignedInForPresenceRef.current) {
+      presenceSetPausedAfter401(false);
+      logMapPresenceClient("401-pause-cleared", { reason: "signed-in-transition" });
+    }
+    prevSignedInForPresenceRef.current = signedIn;
+  }, [signedIn]);
+
+  const clearMapPresence = useCallback(
+    (keepalive = false, reason = "unspecified") => {
+      if (!signedIn) {
+        logMapPresenceClient("clear-skipped", { reason: "not-signed-in", keepalive, intent: reason });
+        return;
+      }
+      if (presenceIsPausedAfter401()) {
+        logMapPresenceClient("clear-skipped", { reason: "paused-after-401", keepalive, intent: reason });
+        return;
+      }
+      if (keepalive && !tryConsumeMapPresenceClearPost()) {
+        logMapPresenceClient("clear-skipped", { reason: "client-throttle-clear-post", keepalive, intent: reason });
+        return;
+      }
+      void fetch("/api/map/presence", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        keepalive,
+        body: JSON.stringify({ shareNearby: false }),
+      }).then((res) => {
+        if (res.status === 401) {
+          presenceSetPausedAfter401(true);
+          logMapPresenceClient("clear-401-pauses-polling", { intent: reason });
+        }
+      });
+    },
+    [signedIn],
+  );
 
   useEffect(() => {
     if (!sharing || !shareNearby) {
@@ -305,18 +348,34 @@ export default function HomeLocationMap({
       runNearbyPresenceTickRef.current = null;
       return;
     }
+    if (!signedIn) {
+      logMapPresenceClient("presence-interval-inactive", { reason: "not-signed-in" });
+      queueMicrotask(() => setNearbyPeers([]));
+      return;
+    }
 
     let disposed = false;
     let bootTimer: number | null = null;
 
     const tick = async () => {
       if (disposed || presenceTickInFlightRef.current) return;
+      if (!signedInRef.current) {
+        logMapPresenceClient("tick-skipped", { reason: "not-signed-in" });
+        return;
+      }
+      if (presenceIsPausedAfter401()) {
+        logMapPresenceClient("tick-skipped", { reason: "paused-after-401" });
+        return;
+      }
       const p = posRef.current;
       if (!p) return;
       const forceGetEarly = forcePresenceGetRef.current;
       const bypassTickGap = forceGetEarly || presenceKickBypassTickGapRef.current;
       if (presenceKickBypassTickGapRef.current) presenceKickBypassTickGapRef.current = false;
-      if (!bypassTickGap && !tryBeginPresenceClientTick()) return;
+      if (!bypassTickGap && !tryBeginPresenceClientTick()) {
+        logMapPresenceClient("tick-skipped", { reason: "client-guard-min-tick-interval" });
+        return;
+      }
       if (bootTimer != null) {
         window.clearTimeout(bootTimer);
         bootTimer = null;
@@ -357,55 +416,81 @@ export default function HomeLocationMap({
         const shouldPost =
           postThrottleOk && (significantMove || profileChanged || anchorHeartbeat);
 
-        if (shouldPost && tryConsumeMapPresencePostTurn(now)) {
-          try {
-            const pr = await fetch("/api/map/presence", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              signal: ac.signal,
-              body: JSON.stringify({
-                shareNearby: true,
-                lat: p.lat,
-                lng: p.lng,
-                label,
-                avatarDataUrl,
-              }),
-            });
-            if (!disposed && !ac.signal.aborted) {
-              if (!pr.ok) setNearbyPeers([]);
-              else {
-                const postBody = (await pr.json()) as { ok?: boolean; rateLimited?: boolean };
-                if (!postBody.rateLimited) {
-                  lastPresencePostAtRef.current = Date.now();
-                  lastPostSnapshotRef.current = { lat: p.lat, lng: p.lng };
-                  lastPostedProfileKeyRef.current = profileKey;
+        let aborted401ThisTick = false;
+
+        if (shouldPost) {
+          if (!tryConsumeMapPresencePostTurn(now)) {
+            logMapPresenceClient("post-skipped", { reason: "client-guard-post-interval" });
+          } else {
+            try {
+              const pr = await fetch("/api/map/presence", {
+                method: "POST",
+                credentials: "same-origin",
+                headers: { "Content-Type": "application/json" },
+                signal: ac.signal,
+                body: JSON.stringify({
+                  shareNearby: true,
+                  lat: p.lat,
+                  lng: p.lng,
+                  label,
+                  avatarDataUrl,
+                }),
+              });
+              if (!disposed && !ac.signal.aborted) {
+                if (pr.status === 401) {
+                  presenceSetPausedAfter401(true);
+                  aborted401ThisTick = true;
+                  logMapPresenceClient("post-401-stops-polling", {});
+                  setNearbyPeers([]);
+                } else if (!pr.ok) {
+                  setNearbyPeers([]);
+                } else {
+                  const postBody = (await pr.json()) as { ok?: boolean; rateLimited?: boolean };
+                  if (postBody.rateLimited) {
+                    logMapPresenceClient("post-skipped", { reason: "server-rate-limit" });
+                  } else {
+                    lastPresencePostAtRef.current = Date.now();
+                    lastPostSnapshotRef.current = { lat: p.lat, lng: p.lng };
+                    lastPostedProfileKeyRef.current = profileKey;
+                  }
                 }
               }
+            } catch {
+              if (!disposed && !ac.signal.aborted) setNearbyPeers([]);
             }
-          } catch {
-            if (!disposed && !ac.signal.aborted) setNearbyPeers([]);
           }
         }
 
-        if (shouldGet && (forceGet || tryConsumeMapPresenceGetTurn(now))) {
-          try {
-            const r = await fetch(
-              `/api/map/presence?lat=${encodeURIComponent(String(p.lat))}&lng=${encodeURIComponent(String(p.lng))}`,
-              { signal: ac.signal },
-            );
-            if (!disposed && !ac.signal.aborted) {
-              if (!r.ok) setNearbyPeers([]);
-              else {
-                const d = (await r.json()) as { peers?: NearbyPeer[]; throttled?: boolean };
-                if (!d.throttled) {
-                  setNearbyPeers(Array.isArray(d.peers) ? d.peers : []);
-                  lastPresenceGetAtRef.current = Date.now();
-                  initialPresenceGetDoneRef.current = true;
+        if (!aborted401ThisTick && shouldGet) {
+          if (!tryConsumeMapPresenceGetTurn(now)) {
+            logMapPresenceClient("get-skipped", { reason: "client-guard-get-interval" });
+          } else {
+            try {
+              const r = await fetch(
+                `/api/map/presence?lat=${encodeURIComponent(String(p.lat))}&lng=${encodeURIComponent(String(p.lng))}`,
+                { credentials: "same-origin", signal: ac.signal },
+              );
+              if (!disposed && !ac.signal.aborted) {
+                if (r.status === 401) {
+                  presenceSetPausedAfter401(true);
+                  logMapPresenceClient("get-401-stops-polling", {});
+                  setNearbyPeers([]);
+                } else if (!r.ok) {
+                  setNearbyPeers([]);
+                } else {
+                  const d = (await r.json()) as { peers?: NearbyPeer[]; throttled?: boolean };
+                  if (d.throttled) {
+                    logMapPresenceClient("get-skipped", { reason: "server-throttle" });
+                  } else {
+                    setNearbyPeers(Array.isArray(d.peers) ? d.peers : []);
+                    lastPresenceGetAtRef.current = Date.now();
+                    initialPresenceGetDoneRef.current = true;
+                  }
                 }
               }
+            } catch {
+              if (!disposed && !ac.signal.aborted) setNearbyPeers([]);
             }
-          } catch {
-            if (!disposed && !ac.signal.aborted) setNearbyPeers([]);
           }
         }
       } finally {
@@ -429,7 +514,7 @@ export default function HomeLocationMap({
       if (bootTimer != null) window.clearTimeout(bootTimer);
       window.clearInterval(id);
     };
-  }, [sharing, shareNearby]);
+  }, [sharing, shareNearby, signedIn]);
 
   /**
    * First tick after nearby sharing turns on (GPS may arrive after the effect). Do not reset when `pos` is briefly
@@ -440,12 +525,13 @@ export default function HomeLocationMap({
       hadPosForNearbySharingRef.current = false;
       return;
     }
+    if (!signedIn) return;
     if (!pos) return;
     if (hadPosForNearbySharingRef.current) return;
     hadPosForNearbySharingRef.current = true;
     presenceKickBypassTickGapRef.current = true;
     runNearbyPresenceTickRef.current?.();
-  }, [sharing, shareNearby, pos != null]);
+  }, [sharing, shareNearby, signedIn, pos != null]);
 
   const pollTimer = useRef<number | null>(null);
   const polling = useRef(false);
@@ -1256,7 +1342,7 @@ export default function HomeLocationMap({
     setShareOnMap(true);
     setSharing(true);
     setShareNearby(getShareNearbyPeers());
-  }, []);
+  }, [clearMapPresence]);
 
   /** After trial/payment success, start map sharing without an extra tap (when signed in). */
   useEffect(() => {
@@ -1309,7 +1395,7 @@ export default function HomeLocationMap({
 
   useEffect(() => {
     return () => clearMapPresence(true, "component_unmount");
-  }, []);
+  }, [clearMapPresence]);
 
   function persistBoat() {
     setBoatName(boatInput);
