@@ -59,7 +59,12 @@ const DEFAULT_ZOOM = 6;
 /** Statute miles → metres (for ~5 mi “nearby” ring). */
 const NEARBY_RING_METRES = 5 * 1609.344;
 
-function clearMapPresence(keepalive = false) {
+function logMapPresenceClient(reason: string, detail?: Record<string, unknown>): void {
+  console.info("[map/presence/client]", new Date().toISOString(), reason, detail ?? {});
+}
+
+function clearMapPresence(keepalive = false, reason = "unspecified") {
+  logMapPresenceClient("POST_clear_shareNearby", { reason, keepalive });
   void fetch("/api/map/presence", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -1030,7 +1035,7 @@ export default function HomeLocationMap({
 
   const setSharingOn = useCallback((on: boolean) => {
     if (!on) {
-      clearMapPresence();
+      clearMapPresence(false, "stop_sharing");
       setShareNearby(false);
       setNearbyPeers([]);
       setPos(null);
@@ -1231,7 +1236,7 @@ export default function HomeLocationMap({
             const on = e.target.checked;
             setShareNearby(on);
             setShareNearbyPeers(on);
-            if (!on) clearMapPresence();
+            if (!on) clearMapPresence(false, "share_nearby_unchecked");
           }}
         />
         <span className="font-semibold">Show me to nearby SeaLink users (~5 mi)</span>
