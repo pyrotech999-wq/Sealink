@@ -33,7 +33,8 @@ export function seaStateForMaxWindMph(mph: number): WindTierStyle {
       id: "light",
       sea: "Flat to slight — some waves",
       boxClass: "border-green-600/80 bg-emerald-50 text-emerald-950 dark:border-emerald-500/70 dark:bg-emerald-950/35 dark:text-emerald-50",
-      badgeClass: "bg-green-600 text-white",
+      /** Darker than calm’s OK badge so 12–22 mph reads as a slight step up while still OK. */
+      badgeClass: "bg-emerald-800 text-white dark:bg-emerald-700",
     };
   }
   if (v < 35) {
