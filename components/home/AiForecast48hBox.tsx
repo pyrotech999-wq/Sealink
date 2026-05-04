@@ -54,6 +54,7 @@ export function AiForecast48hBox({ lat, lng }: Props) {
       setLoading(true);
       setErr(null);
       try {
+        const loadStartedAt = Date.now();
         const res = await fetch("/api/forecast/ai-48h", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -74,10 +75,10 @@ export function AiForecast48hBox({ lat, lng }: Props) {
               text: ok.text,
               model: ok.model,
               openAi: ok.openAi,
-              generatedAt: Date.now(),
+              generatedAt: loadStartedAt,
               originLat: gridLat,
               originLng: gridLng,
-              storedDay: localCalendarDayKey(),
+              storedDay: localCalendarDayKey(new Date(loadStartedAt)),
             },
           });
           recordOpenAiUsageIfApplicable({ forecastUsedOpenAi: ok.openAi === true });

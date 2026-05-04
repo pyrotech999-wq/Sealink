@@ -202,9 +202,10 @@ export function SeaStateSummaryBox() {
     setLoading(true);
     setErr(null);
     try {
+      const loadStartedAt = Date.now();
       const cache = readHomeOpenAiCache();
       const plan = planSeaLocalSummaryOpenAi({
-        now: Date.now(),
+        now: loadStartedAt,
         current: { lat: loc.lat, lng: loc.lng },
         cache,
       });
@@ -282,10 +283,10 @@ export function SeaStateSummaryBox() {
             tideWebSearch: ok.tideWebSearch ?? null,
             tideAiNarrative:
               typeof ok.tideAiNarrative === "string" && ok.tideAiNarrative.trim() ? ok.tideAiNarrative.trim() : null,
-            generatedAt: Date.now(),
+            generatedAt: loadStartedAt,
             originLat: loc.lat,
             originLng: loc.lng,
-            storedDay: localCalendarDayKey(),
+            storedDay: localCalendarDayKey(new Date(loadStartedAt)),
           },
         });
       }

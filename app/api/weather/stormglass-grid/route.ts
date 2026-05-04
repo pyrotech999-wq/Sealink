@@ -143,50 +143,84 @@ export async function POST(req: Request): Promise<Response> {
     let stormglassCacheHits = 0;
     let quotaExceeded = false;
     let sessionStormglassLimitReached = false;
-    let budgetIncrement = 0;
 
     const centroidLat = points.reduce((s, p) => s + p.lat, 0) / points.length;
     const centroidLng = points.reduce((s, p) => s + p.lng, 0) / points.length;
 
-    const cookieHeader = req.headers.get("cookie");
+    const budgetKey = stormglassBudgetClientKey(req);
     const wouldUseUpstream =
       forceRefresh ||
       !peekStormglassHourRowCache(centroidLat, centroidLng, timeIso, STORMGLASS_COMBINED_WEATHER_PARAMS);
 
     let storm: Out[];
-
-    if (wouldUseUpstream && !stormglassUpstreamAllowed(cookieHeader)) {
-      sessionStormglassLimitReached = true;
-      storm = points.map((pt) => ({ lat: pt.lat, lng: pt.lng }));
-    } else {
-      const { row, meta } = await fetchStormglassHourRowCached(
-        key,
-        centroidLat,
-        centroidLng,
-        timeIso,
-        STORMGLASS_COMBINED_WEATHER_PARAMS,
-        req.signal,
-        { forceRefresh },
-      );
-      if (meta.fromCache) stormglassCacheHits = 1;
-      else if (!meta.deduped) {
-        stormglassUpstreamCalls = 1;
-        budgetIncrement = 1;
+    let budgetReserved = false;
+    try {
+      if (wouldUseUpstream) {
+        if (!stormglassMemoryReserveUpstreamSlot(budgetKey)) {
+          sessionStormglassLimitReached = true;
+          storm = points.map((pt) => ({ lat: pt.lat, lng: pt.lng }));
+        } else {
+          budgetReserved = true;
+          const { row, meta } = await fetchStormglassHourRowCached(
+            key,
+            centroidLat,
+            centroidLng,
+            timeIso,
+            STORMGLASS_COMBINED_WEATHER_PARAMS,
+            req.signal,
+            { forceRefresh },
+          );
+          if (meta.fromCache || meta.deduped) {
+            stormglassMemoryReleaseUpstreamSlot(budgetKey);
+            budgetReserved = false;
+          }
+          if (meta.fromCache) stormglassCacheHits = 1;
+          else if (!meta.deduped) stormglassUpstreamCalls = 1;
+          if (meta.httpStatus === 429) {
+            quotaExceeded = true;
+            console.warn("[Stormglass] combined grid: 429 / quota — centroid request hit limit");
+          }
+          const cell = rowToOut({ lat: centroidLat, lng: centroidLng }, row);
+          storm = points.map((pt) => ({
+            lat: pt.lat,
+            lng: pt.lng,
+            ...(typeof cell.windSpeed === "number" && Number.isFinite(cell.windSpeed) ? { windSpeed: cell.windSpeed } : {}),
+            ...(typeof cell.windDirection === "number" && Number.isFinite(cell.windDirection)
+              ? { windDirection: cell.windDirection }
+              : {}),
+            ...(typeof cell.waveHeight === "number" && Number.isFinite(cell.waveHeight) ? { waveHeight: cell.waveHeight } : {}),
+          }));
+        }
+      } else {
+        const { row, meta } = await fetchStormglassHourRowCached(
+          key,
+          centroidLat,
+          centroidLng,
+          timeIso,
+          STORMGLASS_COMBINED_WEATHER_PARAMS,
+          req.signal,
+          { forceRefresh },
+        );
+        if (meta.fromCache) stormglassCacheHits = 1;
+        else if (!meta.deduped) stormglassUpstreamCalls = 1;
+        if (meta.httpStatus === 429) {
+          quotaExceeded = true;
+          console.warn("[Stormglass] combined grid: 429 / quota — centroid request hit limit");
+        }
+        const cell = rowToOut({ lat: centroidLat, lng: centroidLng }, row);
+        storm = points.map((pt) => ({
+          lat: pt.lat,
+          lng: pt.lng,
+          ...(typeof cell.windSpeed === "number" && Number.isFinite(cell.windSpeed) ? { windSpeed: cell.windSpeed } : {}),
+          ...(typeof cell.windDirection === "number" && Number.isFinite(cell.windDirection)
+            ? { windDirection: cell.windDirection }
+            : {}),
+          ...(typeof cell.waveHeight === "number" && Number.isFinite(cell.waveHeight) ? { waveHeight: cell.waveHeight } : {}),
+        }));
       }
-      if (meta.httpStatus === 429) {
-        quotaExceeded = true;
-        console.warn("[Stormglass] combined grid: 429 / quota — centroid request hit limit");
-      }
-      const cell = rowToOut({ lat: centroidLat, lng: centroidLng }, row);
-      storm = points.map((pt) => ({
-        lat: pt.lat,
-        lng: pt.lng,
-        ...(typeof cell.windSpeed === "number" && Number.isFinite(cell.windSpeed) ? { windSpeed: cell.windSpeed } : {}),
-        ...(typeof cell.windDirection === "number" && Number.isFinite(cell.windDirection)
-          ? { windDirection: cell.windDirection }
-          : {}),
-        ...(typeof cell.waveHeight === "number" && Number.isFinite(cell.waveHeight) ? { waveHeight: cell.waveHeight } : {}),
-      }));
+    } catch (e) {
+      if (budgetReserved) stormglassMemoryReleaseUpstreamSlot(budgetKey);
+      throw e;
     }
 
     const goodW = countWindGood(storm);
@@ -255,7 +289,7 @@ export async function POST(req: Request): Promise<Response> {
       forceRefresh,
     });
 
-    const res = NextResponse.json({
+    return NextResponse.json({
       ok: true,
       layer: "combined",
       points: out,
@@ -269,8 +303,6 @@ export async function POST(req: Request): Promise<Response> {
       quotaExceeded,
       sessionStormglassLimitReached,
     });
-    appendStormglassBudgetCookie(res, req, budgetIncrement);
-    return res;
   }
 
   if (layer !== "wind" && layer !== "waves") {

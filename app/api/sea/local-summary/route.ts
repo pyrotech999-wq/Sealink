@@ -3,7 +3,11 @@ import {
   fetchStormglassTideExtremesCached,
   peekStormglassTideExtremesCache,
 } from "@/lib/stormglass-tide";
-import { serializeStormglassBudgetAfterUpstream, stormglassUpstreamAllowed } from "@/lib/stormglass-session-budget";
+import {
+  stormglassBudgetClientKey,
+  stormglassMemoryReleaseUpstreamSlot,
+  stormglassMemoryReserveUpstreamSlot,
+} from "@/lib/stormglass-session-budget";
 import { resolveSeaTideContext, tideDisplayTimeZone } from "@/lib/sea-tide-context";
 import type { TideTableEvent } from "@/lib/tide-table-types";
 import { tideFactsNarrative, type TideFact } from "@/lib/tide-ai-narrative";
@@ -345,17 +349,29 @@ export async function GET(req: Request): Promise<Response> {
 
     const marineUserUrl = openMeteoMarineUrl(coords.lat, coords.lng, [...hourlyMarine]);
 
-    const cookieHeader = req.headers.get("cookie");
+    const budgetKey = stormglassBudgetClientKey(req);
 
     const stormglassPromise = (async () => {
       const lat = tideCoords.lat;
       const lng = tideCoords.lng;
       const warm = peekStormglassTideExtremesCache(lat, lng, tideNowD, stormEnd);
-      if (!warm && !stormglassUpstreamAllowed(cookieHeader)) {
-        return { table: null, inc: 0 };
+      if (!warm) {
+        if (!stormglassMemoryReserveUpstreamSlot(budgetKey)) {
+          return { table: null };
+        }
+        try {
+          const r = await fetchStormglassTideExtremesCached(lat, lng, tideNowD, stormEnd, req.signal);
+          if (r.meta !== "network") {
+            stormglassMemoryReleaseUpstreamSlot(budgetKey);
+          }
+          return { table: r.table };
+        } catch (e) {
+          stormglassMemoryReleaseUpstreamSlot(budgetKey);
+          throw e;
+        }
       }
       const r = await fetchStormglassTideExtremesCached(lat, lng, tideNowD, stormEnd, req.signal);
-      return { table: r.table, inc: r.meta === "network" ? 1 : 0 };
+      return { table: r.table };
     })();
 
     const [noaaFull, stormglassPack, tideTableFull, rUser] = await Promise.all([
@@ -366,7 +382,6 @@ export async function GET(req: Request): Promise<Response> {
     ]);
 
     const stormglassFull = stormglassPack.table;
-    const stormglassBudgetInc = stormglassPack.inc;
 
     if (!rUser.ok) return NextResponse.json({ error: `Marine request failed (${rUser.status})` }, { status: 502 });
     const dataUser = (await rUser.json()) as MarineResp;
@@ -533,8 +548,6 @@ export async function GET(req: Request): Promise<Response> {
       stormglassTideTable: withHeightSummary(stormglassTideTable, now),
       noaaTideTable: withHeightSummary(noaa, now),
     });
-    const budgetCookie = serializeStormglassBudgetAfterUpstream(req.headers.get("cookie"), stormglassBudgetInc);
-    if (budgetCookie) res.headers.append("Set-Cookie", budgetCookie);
     return res;
   } catch {
     return NextResponse.json({ error: "Network error" }, { status: 502 });
