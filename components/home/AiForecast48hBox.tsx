@@ -1,6 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  decideForecast48hFetch,
+  localCalendarDayKey,
+  patchHomeOpenAiCache,
+  readHomeOpenAiCache,
+  recordOpenAiUsageIfApplicable,
+} from "@/lib/openai-home-client-cache";
 
 type Props = {
   lat: number | null;
@@ -30,6 +37,20 @@ export function AiForecast48hBox({ lat, lng }: Props) {
   const generate = useCallback(
     async (opts?: GenerateOpts) => {
       if (gridLat == null || gridLng == null) return;
+      const now = Date.now();
+      const decision = decideForecast48hFetch({
+        now,
+        current: { lat: gridLat, lng: gridLng },
+        cache: readHomeOpenAiCache(),
+      });
+
+      if (decision.mode === "cache-hit" || decision.mode === "stale-throttled") {
+        setText(decision.entry.text);
+        setErr(null);
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       setErr(null);
       try {
@@ -48,6 +69,18 @@ export function AiForecast48hBox({ lat, lng }: Props) {
         const ok = data as ApiSuccess;
         if (ok.configured === true && ok.text) {
           setText(ok.text);
+          patchHomeOpenAiCache({
+            forecast48h: {
+              text: ok.text,
+              model: ok.model,
+              openAi: ok.openAi,
+              generatedAt: Date.now(),
+              originLat: gridLat,
+              originLng: gridLng,
+              storedDay: localCalendarDayKey(),
+            },
+          });
+          recordOpenAiUsageIfApplicable({ forecastUsedOpenAi: ok.openAi === true });
           return;
         }
         setErr("Unexpected response");

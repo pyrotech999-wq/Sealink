@@ -4,7 +4,7 @@ import { resolveSeaTideContext, tideDisplayTimeZone } from "@/lib/sea-tide-conte
 import type { TideTableEvent } from "@/lib/tide-table-types";
 import { tideFactsNarrative, type TideFact } from "@/lib/tide-ai-narrative";
 import { summarizeTideExtremes } from "@/lib/tide-height-summary";
-import { fetchTideScheduleFromWebSearch } from "@/lib/tide-ai-web-schedule";
+import { fetchTideScheduleFromWebSearch, type TideWebSearchResult } from "@/lib/tide-ai-web-schedule";
 
 export const runtime = "nodejs";
 
@@ -318,6 +318,8 @@ export async function GET(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const lat = Number(url.searchParams.get("lat"));
   const lng = Number(url.searchParams.get("lng"));
+  const skipOpenAi =
+    url.searchParams.get("skipOpenAi") === "1" || url.searchParams.get("skipOpenAi") === "true";
   const coords = clampLatLng(lat, lng);
   if (!coords) return NextResponse.json({ error: "lat and lng required" }, { status: 400 });
 
@@ -386,17 +388,22 @@ export async function GET(req: Request): Promise<Response> {
       Boolean(stormglassTideTable?.events?.length) ||
       Boolean(tideTable?.events?.length);
 
-    let tideWebSearch = !hasOfficialTides
-      ? await fetchTideScheduleFromWebSearch({
-          displayLabel: seaTideContext.displayLabel,
-          detail: seaTideContext.detail,
-          nearestMarinaName: seaTideContext.nearestMarina?.name ?? null,
-          lat: tideCoords.lat,
-          lng: tideCoords.lng,
-          timeZone: tz,
-          signal: req.signal,
-        })
-      : null;
+    let openAiInThisRequest = false;
+    const openAiKey = process.env.OPENAI_API_KEY?.trim();
+
+    let tideWebSearch: TideWebSearchResult | null = null;
+    if (!skipOpenAi && !hasOfficialTides) {
+      if (openAiKey) openAiInThisRequest = true;
+      tideWebSearch = await fetchTideScheduleFromWebSearch({
+        displayLabel: seaTideContext.displayLabel,
+        detail: seaTideContext.detail,
+        nearestMarinaName: seaTideContext.nearestMarina?.name ?? null,
+        lat: tideCoords.lat,
+        lng: tideCoords.lng,
+        timeZone: tz,
+        signal: req.signal,
+      });
+    }
 
     const webEvents = tideWebSearch?.events ?? [];
     const webHeightsMm = webEvents.length ? minMaxFinite(webEvents.map((e) => e.heightM)) : null;
@@ -436,14 +443,15 @@ export async function GET(req: Request): Promise<Response> {
     }
 
     const useWebTable = Boolean(tideWebSearch?.events?.length);
-    const tideAiNarrative =
-      useWebTable || aiFacts.length < 2
-        ? null
-        : await tideFactsNarrative({
-            placeLabel: seaTideContext.displayLabel,
-            timeZone: tz,
-            facts: aiFacts,
-          });
+    let tideAiNarrative: string | null = null;
+    if (!skipOpenAi && !useWebTable && aiFacts.length >= 2) {
+      if (openAiKey) openAiInThisRequest = true;
+      tideAiNarrative = await tideFactsNarrative({
+        placeLabel: seaTideContext.displayLabel,
+        timeZone: tz,
+        facts: aiFacts,
+      });
+    }
 
     const parts: string[] = [];
     if (waveM != null) {
@@ -476,6 +484,7 @@ export async function GET(req: Request): Promise<Response> {
 
     return NextResponse.json({
       ok: true,
+      openAiInThisRequest,
       text,
       now: new Date(now).toISOString(),
       hourly_units: dataUser.hourly_units ?? {},

@@ -1,7 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { getLastKnownPosition } from "@/lib/map-last-known";
+import { useCallback, useEffect, useState } from "react";
+import { getLastKnownPosition, LAST_KNOWN_GEO_EVENT, type LastKnownGeo } from "@/lib/map-last-known";
+import {
+  localCalendarDayKey,
+  patchHomeOpenAiCache,
+  patchSeaSummaryTextForMergedWebSearch,
+  planSeaLocalSummaryOpenAi,
+  readHomeOpenAiCache,
+  recordOpenAiUsageIfApplicable,
+} from "@/lib/openai-home-client-cache";
 
 type MeteoOk = {
   ok: true;
@@ -48,6 +56,8 @@ type SeaTideContextOut = {
 
 type ApiOk = {
   ok: true;
+  /** True when this response invoked OpenAI (tide web search or tide narrative). */
+  openAiInThisRequest?: boolean;
   text: string;
   snapshot?: { wave_height_m: number | null; sea_surface_temp_c: number | null };
   seaTideContext?: SeaTideContextOut;
@@ -166,16 +176,45 @@ export function SeaStateSummaryBox() {
   const [bstOn, setBstOn] = useState(true);
   const [tideMslOffsetM, setTideMslOffsetM] = useState(0);
 
-  const loc = useMemo(() => (typeof window !== "undefined" ? getLastKnownPosition() : null), []);
+  const [loc, setLoc] = useState<LastKnownGeo | null>(() =>
+    typeof window !== "undefined" ? getLastKnownPosition() : null,
+  );
   const hasLoc = Boolean(loc && Number.isFinite(loc.lat) && Number.isFinite(loc.lng));
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sync = () => {
+      setLoc(getLastKnownPosition());
+    };
+    sync();
+    const onGeo = () => sync();
+    window.addEventListener(LAST_KNOWN_GEO_EVENT, onGeo as EventListener);
+    const id = window.setInterval(sync, 5000);
+    return () => {
+      window.removeEventListener(LAST_KNOWN_GEO_EVENT, onGeo as EventListener);
+      window.clearInterval(id);
+    };
+  }, []);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     if (!loc) return;
     setLoading(true);
     setErr(null);
     try {
+      const cache = readHomeOpenAiCache();
+      const plan = planSeaLocalSummaryOpenAi({
+        now: Date.now(),
+        current: { lat: loc.lat, lng: loc.lng },
+        cache,
+      });
+      const seaQs = new URLSearchParams({
+        lat: String(loc.lat),
+        lng: String(loc.lng),
+      });
+      if (plan.skipOpenAi) seaQs.set("skipOpenAi", "1");
+
       const [seaR, meteoR] = await Promise.all([
-        fetch(`/api/sea/local-summary?lat=${encodeURIComponent(String(loc.lat))}&lng=${encodeURIComponent(String(loc.lng))}`, {
+        fetch(`/api/sea/local-summary?${seaQs.toString()}`, {
           cache: "no-store",
           signal,
         }),
@@ -198,15 +237,53 @@ export function SeaStateSummaryBox() {
         return;
       }
       const ok = d as ApiOk;
-      setText(ok.text);
-      setTideWebSearch(ok.tideWebSearch ?? null);
+
+      const hasOfficialFromServer =
+        Boolean(ok.noaaTideTable?.events?.length) ||
+        Boolean(ok.stormglassTideTable?.events?.length) ||
+        Boolean(ok.tideTable?.events?.length);
+
+      let tideWebSearchOut = ok.tideWebSearch ?? null;
+      let tideAiOut =
+        typeof ok.tideAiNarrative === "string" && ok.tideAiNarrative.trim() ? ok.tideAiNarrative.trim() : null;
+      let textOut = ok.text;
+
+      if (plan.mergeFromCache) {
+        if (!hasOfficialFromServer && !tideWebSearchOut?.events?.length && plan.mergeFromCache.tideWebSearch?.events?.length) {
+          tideWebSearchOut = plan.mergeFromCache.tideWebSearch;
+        }
+        if (!tideAiOut && plan.mergeFromCache.tideAiNarrative?.trim()) {
+          tideAiOut = plan.mergeFromCache.tideAiNarrative.trim();
+        }
+        if (tideWebSearchOut?.events?.length && ok.seaTideContext?.displayLabel) {
+          textOut = patchSeaSummaryTextForMergedWebSearch(textOut, ok.seaTideContext.displayLabel);
+        }
+      }
+
+      setText(textOut);
+      setTideWebSearch(tideWebSearchOut);
       setTideTable(ok.tideTable ?? null);
       setNoaaTideTable(ok.noaaTideTable ?? null);
       setStormglassTideTable(ok.stormglassTideTable ?? null);
       setSeaTideContext(ok.seaTideContext ?? null);
       setTideDisplayTimeZone(ok.tideDisplayTimeZone?.trim() || "Europe/London");
-      setTideAiNarrative(typeof ok.tideAiNarrative === "string" && ok.tideAiNarrative.trim() ? ok.tideAiNarrative.trim() : null);
+      setTideAiNarrative(tideAiOut);
       setTideMslOffsetM(typeof ok.tide?.mslOffsetM === "number" && Number.isFinite(ok.tide.mslOffsetM) ? ok.tide.mslOffsetM : 0);
+
+      if (!plan.mergeFromCache) {
+        patchHomeOpenAiCache({
+          seaOpenAi: {
+            tideWebSearch: ok.tideWebSearch ?? null,
+            tideAiNarrative:
+              typeof ok.tideAiNarrative === "string" && ok.tideAiNarrative.trim() ? ok.tideAiNarrative.trim() : null,
+            generatedAt: Date.now(),
+            originLat: loc.lat,
+            originLng: loc.lng,
+            storedDay: localCalendarDayKey(),
+          },
+        });
+      }
+      recordOpenAiUsageIfApplicable({ seaUsedOpenAi: ok.openAiInThisRequest === true });
     } catch (e: unknown) {
       if (e instanceof DOMException && e.name === "AbortError") return;
       if (e instanceof Error && e.name === "AbortError") return;

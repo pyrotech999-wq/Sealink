@@ -2,11 +2,14 @@ const KEY = "sealink_map_last_geo_v1";
 
 export type LastKnownGeo = { lat: number; lng: number; ts: number };
 
+export const LAST_KNOWN_GEO_EVENT = "sealink:last-known-geo";
+
 export function recordLastKnownPosition(lat: number, lng: number): void {
   if (typeof window === "undefined") return;
   try {
     const payload: LastKnownGeo = { lat, lng, ts: Date.now() };
     window.localStorage.setItem(KEY, JSON.stringify(payload));
+    window.dispatchEvent(new CustomEvent(LAST_KNOWN_GEO_EVENT, { detail: payload }));
   } catch {
     /* private mode */
   }
