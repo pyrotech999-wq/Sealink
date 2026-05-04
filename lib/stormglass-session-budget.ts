@@ -1,70 +1,55 @@
 /**
- * Rolling 60-minute budget for upstream Stormglass HTTP calls per browser (cookie).
- * Max 3 successful upstream calls per window (weather + tide share the same counter).
+ * Rolling 60-minute cap on upstream Stormglass HTTP calls per client identity.
+ *
+ * Uses an in-process Map (synchronous reserve / release) so concurrent requests cannot
+ * undercount the way read-then-Set-Cookie cookie budgets can when responses race.
+ *
+ * Key: client IP from trusted proxy headers (`stormglassBudgetClientKey`). On multi-instance
+ * deploys each instance has its own counter (stricter in aggregate). For global caps use Redis/KV.
  */
 
-export const STORMGLASS_UPSTREAM_BUDGET_COOKIE = "sealink_sg_upstream";
 export const STORMGLASS_MAX_UPSTREAM_PER_HOUR = 3;
 const WINDOW_MS = 60 * 60 * 1000;
 
-export type StormglassBudgetState = {
-  count: number;
-  /** Start of the current rolling window (epoch ms). */
-  windowStart: number;
-};
+type Mem = { count: number; windowStart: number };
+const mem = new Map<string, Mem>();
 
-function parseCookieHeader(cookieHeader: string | null, name: string): string | null {
-  if (!cookieHeader) return null;
-  for (const part of cookieHeader.split(";")) {
-    const idx = part.indexOf("=");
-    if (idx === -1) continue;
-    const k = part.slice(0, idx).trim();
-    if (k !== name) continue;
-    return decodeURIComponent(part.slice(idx + 1).trim());
-  }
-  return null;
-}
-
-export function readStormglassBudget(cookieHeader: string | null): StormglassBudgetState {
-  const raw = parseCookieHeader(cookieHeader, STORMGLASS_UPSTREAM_BUDGET_COOKIE);
-  if (!raw) return { count: 0, windowStart: 0 };
-  const m = /^(\d+)\|(\d+)$/.exec(raw);
-  if (!m) return { count: 0, windowStart: 0 };
-  const count = Number(m[1]);
-  const windowStart = Number(m[2]);
-  if (!Number.isFinite(count) || !Number.isFinite(windowStart) || count < 0) {
-    return { count: 0, windowStart: 0 };
-  }
-  return { count, windowStart };
-}
-
-function normalizeState(now: number, s: StormglassBudgetState): StormglassBudgetState {
-  if (!s.windowStart || now - s.windowStart >= WINDOW_MS) {
+function normalizeWindow(now: number, e: Mem): Mem {
+  if (!e.windowStart || now - e.windowStart >= WINDOW_MS) {
     return { count: 0, windowStart: now };
   }
-  return { ...s, windowStart: s.windowStart };
+  return e;
 }
 
-/** Returns true if one more upstream Stormglass HTTP call is allowed right now. */
-export function stormglassUpstreamAllowed(cookieHeader: string | null): boolean {
-  const now = Date.now();
-  const s = normalizeState(now, readStormglassBudget(cookieHeader));
-  return s.count < STORMGLASS_MAX_UPSTREAM_PER_HOUR;
+/** Best-effort client key for budget isolation (shared NAT ⇒ shared cap). */
+export function stormglassBudgetClientKey(req: Request): string {
+  const xff = req.headers.get("x-forwarded-for");
+  const first = xff?.split(",")[0]?.trim();
+  const ip =
+    first || req.headers.get("x-real-ip")?.trim() || req.headers.get("cf-connecting-ip")?.trim() || "";
+  return ip || "unknown";
 }
 
-/** After completing upstream call(s) that were not served from server cache. */
-export function serializeStormglassBudgetAfterUpstream(
-  cookieHeader: string | null,
-  upstreamCalls: number,
-): string | null {
-  if (upstreamCalls <= 0) return null;
+/**
+ * Synchronously reserves one hourly slot before an upstream Stormglass attempt.
+ * If the attempt does not consume upstream bandwidth (cache hit, deduped, or error), call
+ * `stormglassMemoryReleaseUpstreamSlot` for the same key.
+ */
+export function stormglassMemoryReserveUpstreamSlot(clientKey: string): boolean {
   const now = Date.now();
-  const s = normalizeState(now, readStormglassBudget(cookieHeader));
-  const next: StormglassBudgetState = {
-    windowStart: s.windowStart || now,
-    count: s.count + upstreamCalls,
-  };
-  const maxAgeSec = Math.max(60, Math.ceil((next.windowStart + WINDOW_MS - now) / 1000));
-  const val = `${next.count}|${next.windowStart}`;
-  return `${STORMGLASS_UPSTREAM_BUDGET_COOKIE}=${encodeURIComponent(val)}; Path=/; Max-Age=${maxAgeSec}; SameSite=Lax; HttpOnly`;
+  let e = mem.get(clientKey);
+  e = e ? normalizeWindow(now, e) : { count: 0, windowStart: now };
+  if (e.count >= STORMGLASS_MAX_UPSTREAM_PER_HOUR) return false;
+  mem.set(clientKey, { windowStart: e.windowStart, count: e.count + 1 });
+  return true;
+}
+
+/** Undo a reserve when no new upstream HTTP was charged (or after a thrown error before upstream). */
+export function stormglassMemoryReleaseUpstreamSlot(clientKey: string): void {
+  const now = Date.now();
+  let e = mem.get(clientKey);
+  if (!e) return;
+  e = normalizeWindow(now, e);
+  if (e.count <= 0) return;
+  mem.set(clientKey, { windowStart: e.windowStart, count: e.count - 1 });
 }

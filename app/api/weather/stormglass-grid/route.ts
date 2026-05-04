@@ -5,7 +5,11 @@ import {
   peekStormglassHourRowCache,
   pickStormglassNumeric,
 } from "@/lib/stormglass-weather-grid-server";
-import { serializeStormglassBudgetAfterUpstream, stormglassUpstreamAllowed } from "@/lib/stormglass-session-budget";
+import {
+  stormglassBudgetClientKey,
+  stormglassMemoryReleaseUpstreamSlot,
+  stormglassMemoryReserveUpstreamSlot,
+} from "@/lib/stormglass-session-budget";
 import { openMeteoWaveGridPoints, openMeteoWindGridPoints } from "@/lib/open-meteo-map-grid-server";
 
 export const runtime = "nodejs";
@@ -53,11 +57,6 @@ function windThreshold(n: number): number {
 
 function waveThreshold(n: number): number {
   return Math.max(4, Math.ceil(n * 0.22));
-}
-
-function appendStormglassBudgetCookie(res: NextResponse, req: Request, upstreamDelta: number): void {
-  const c = serializeStormglassBudgetAfterUpstream(req.headers.get("cookie"), upstreamDelta);
-  if (c) res.headers.append("Set-Cookie", c);
 }
 
 function rowToOut(pt: { lat: number; lng: number }, hour: Record<string, unknown> | null): Out {
