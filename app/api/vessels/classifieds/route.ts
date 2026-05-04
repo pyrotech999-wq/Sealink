@@ -4,19 +4,11 @@ import { buildDraftListing, appendVesselListing, loadVesselClassifieds, updateVe
 import { isVesselCategoryId, type VesselCategoryId } from "@/lib/vessel-classifieds-types";
 import { toPublicVesselListing } from "@/lib/vessel-classifieds-public";
 import { persistListingImages } from "@/lib/listing-uploads";
+import { parseVesselClassifiedFormData } from "@/lib/vessel-classifieds-form-parse";
+import { applyComplimentaryActive } from "@/lib/vessel-classifieds-activate";
+import { consumeOneSlot } from "@/lib/vessel-freelisting-store";
 
 export const runtime = "nodejs";
-
-const MAX_IMAGES = 3;
-const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
-
-function extFromContentType(ct: string): string | null {
-  const c = ct.toLowerCase();
-  if (c === "image/jpeg" || c === "image/jpg") return "jpg";
-  if (c === "image/png") return "png";
-  if (c === "image/webp") return "webp";
-  return null;
-}
 
 function num(v: unknown): number | null {
   const n = typeof v === "number" ? v : Number(v);
@@ -57,40 +49,25 @@ export async function POST(req: Request) {
   }
 
   const fd = await req.formData();
-  const title = typeof fd.get("title") === "string" ? String(fd.get("title")) : "";
-  const description = typeof fd.get("description") === "string" ? String(fd.get("description")) : "";
-  const categoryId = typeof fd.get("categoryId") === "string" ? String(fd.get("categoryId")) : "";
-  const locationLabel = typeof fd.get("locationLabel") === "string" ? String(fd.get("locationLabel")).trim() : "";
-  const makeModel = typeof fd.get("makeModel") === "string" ? String(fd.get("makeModel")).trim() : "";
+  const parsed = parseVesselClassifiedFormData(fd);
+  if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: parsed.status });
 
-  const year = num(fd.get("year"));
-  const lengthFt = num(fd.get("lengthFt"));
-  const priceGbp = num(fd.get("priceGbp"));
+  const useFreeSlot =
+    fd.get("useFreeSlot") === "1" ||
+    fd.get("useFreeSlot") === "true" ||
+    String(fd.get("useFreeSlot") ?? "").toLowerCase() === "on";
 
-  if (!isVesselCategoryId(categoryId)) return NextResponse.json({ error: "Invalid category" }, { status: 400 });
-  if (title.trim().length < 5 || title.trim().length > 160) return NextResponse.json({ error: "Title must be 5–160 characters." }, { status: 400 });
-  if (description.trim().length < 30 || description.trim().length > 12_000) return NextResponse.json({ error: "Description must be 30–12,000 characters." }, { status: 400 });
-
-  const files = fd
-    .getAll("images")
-    .filter((v): v is File => typeof v === "object" && v != null && "arrayBuffer" in v)
-    .slice(0, MAX_IMAGES);
-
-  for (const f of files) {
-    const ext = extFromContentType(f.type || "");
-    if (!ext) return NextResponse.json({ error: "Images must be JPG, PNG, or WebP." }, { status: 400 });
-    if (f.size > MAX_IMAGE_BYTES) return NextResponse.json({ error: "Each image must be 3 MB or smaller." }, { status: 400 });
-  }
+  const { title, description, categoryId, locationLabel, makeModel, year, lengthFt, priceGbp, files } = parsed.data;
 
   const row = buildDraftListing(u.uid);
-  row.title = title.trim();
-  row.description = description.trim();
-  row.categoryId = categoryId as VesselCategoryId;
+  row.title = title;
+  row.description = description;
+  row.categoryId = categoryId;
   row.locationLabel = locationLabel ? locationLabel.slice(0, 80) : null;
   row.makeModel = makeModel ? makeModel.slice(0, 80) : null;
-  row.year = year != null ? Math.max(1900, Math.min(2100, Math.round(year))) : null;
-  row.lengthFt = lengthFt != null ? Math.max(0, Math.min(300, Math.round(lengthFt * 10) / 10)) : null;
-  row.priceGbp = priceGbp != null ? Math.max(0, Math.min(999_999_999, Math.round(priceGbp * 100) / 100)) : null;
+  row.year = year;
+  row.lengthFt = lengthFt;
+  row.priceGbp = priceGbp;
 
   if (files.length) {
     const parts = await Promise.all(
@@ -100,6 +77,16 @@ export async function POST(req: Request) {
       })),
     );
     row.imageUrls = await persistListingImages("vessel", row.id, parts);
+  }
+
+  if (useFreeSlot) {
+    const consumed = await consumeOneSlot(u.uid);
+    if (!consumed) {
+      return NextResponse.json({ error: "No complimentary listing slots available. Redeem a code first." }, { status: 400 });
+    }
+    const active = applyComplimentaryActive(row, "promo", "promo-slot");
+    await appendVesselListing(active);
+    return NextResponse.json({ listing: toPublicVesselListing(active, u.uid) });
   }
 
   await appendVesselListing(row);

@@ -57,6 +57,26 @@ export function VesselClassifiedsClient() {
   const [reminderMsg, setReminderMsg] = useState<string | null>(null);
   const [stripeListingReady, setStripeListingReady] = useState<boolean | null>(null);
 
+  const [freeSlots, setFreeSlots] = useState(0);
+  const [redeemCode, setRedeemCode] = useState("");
+  const [redeemBusy, setRedeemBusy] = useState(false);
+  const [redeemMsg, setRedeemMsg] = useState<string | null>(null);
+  const [useFreeSlot, setUseFreeSlot] = useState(false);
+
+  const loadFreeSlots = async () => {
+    try {
+      const r = await fetch("/api/vessels/classifieds/free-slots", { credentials: "same-origin" });
+      const d = (await r.json()) as { balance?: number };
+      if (r.ok) setFreeSlots(typeof d.balance === "number" ? d.balance : 0);
+    } catch {
+      setFreeSlots(0);
+    }
+  };
+
+  useEffect(() => {
+    if (freeSlots <= 0) setUseFreeSlot(false);
+  }, [freeSlots]);
+
   useEffect(() => {
     return () => {
       for (const u of previews) URL.revokeObjectURL(u);
@@ -163,6 +183,10 @@ export function VesselClassifiedsClient() {
   }, [signedIn]);
 
   useEffect(() => {
+    if (signedIn) queueMicrotask(() => void loadFreeSlots());
+  }, [signedIn]);
+
+  useEffect(() => {
     if (!signedIn) return;
     queueMicrotask(() => void loadReminders());
     const id = window.setInterval(() => void loadReminders(), 60_000);
@@ -188,8 +212,9 @@ export function VesselClassifiedsClient() {
       fd.set("lengthFt", lengthFt);
       fd.set("makeModel", makeModel);
       for (const f of images.slice(0, 3)) fd.append("images", f);
+      if (useFreeSlot && freeSlots > 0) fd.set("useFreeSlot", "1");
 
-      const r = await fetch("/api/vessels/classifieds", { method: "POST", body: fd });
+      const r = await fetch("/api/vessels/classifieds", { method: "POST", body: fd, credentials: "same-origin" });
       const d = (await r.json()) as { listing?: PublicListing; error?: string };
       if (!r.ok) {
         setPostMsg(d.error || "Could not create listing");
@@ -286,7 +311,8 @@ export function VesselClassifiedsClient() {
         <h1 className="mt-4 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Boats for sale</h1>
         <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
           Paid boat adverts run for <strong>6 months</strong>. Price: <strong>£30</strong> per listing — pay with PayPal
-          {stripeListingReady ? " or card (Stripe)" : ""}.
+          {stripeListingReady ? " or card (Stripe)" : ""}. If you have a <strong>promotional code</strong> from SeaLink, redeem
+          it below for complimentary listing slots (no payment for that post).
         </p>
       </div>
 
@@ -328,6 +354,58 @@ export function VesselClassifiedsClient() {
         </section>
       ) : null}
 
+      {signedIn ? (
+        <section className="rounded-xl border border-blue-200 bg-blue-50/80 p-4 shadow-sm dark:border-blue-900/50 dark:bg-blue-950/30">
+          <h2 className="text-base font-semibold text-blue-950 dark:text-blue-100">Promotional code</h2>
+          <p className="mt-1 text-xs text-blue-900/80 dark:text-blue-200/90">
+            Complimentary slots: <strong>{freeSlots}</strong>. Each slot publishes one boat advert for a full term without
+            £30 checkout.
+          </p>
+          {redeemMsg ? <p className="mt-2 text-sm text-blue-900 dark:text-blue-100">{redeemMsg}</p> : null}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <input
+              value={redeemCode}
+              onChange={(e) => setRedeemCode(e.target.value)}
+              placeholder="Enter code"
+              className="min-w-[10rem] flex-1 rounded-lg border border-blue-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-blue-800 dark:bg-zinc-950 dark:text-zinc-50"
+            />
+            <button
+              type="button"
+              disabled={redeemBusy || !redeemCode.trim()}
+              onClick={() => {
+                setRedeemBusy(true);
+                setRedeemMsg(null);
+                void (async () => {
+                  try {
+                    const r = await fetch("/api/vessels/classifieds/redeem-promo", {
+                      method: "POST",
+                      credentials: "same-origin",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ code: redeemCode.trim() }),
+                    });
+                    const d = (await r.json()) as { error?: string; slotsAdded?: number };
+                    if (!r.ok) {
+                      setRedeemMsg(d.error || "Could not redeem");
+                      return;
+                    }
+                    setRedeemMsg(`Added ${d.slotsAdded ?? 1} slot(s). You can post below using “Use complimentary slot”.`);
+                    setRedeemCode("");
+                    await loadFreeSlots();
+                  } catch {
+                    setRedeemMsg("Network error");
+                  } finally {
+                    setRedeemBusy(false);
+                  }
+                })();
+              }}
+              className="h-10 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {redeemBusy ? "…" : "Redeem"}
+            </button>
+          </div>
+        </section>
+      ) : null}
+
       <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
         <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Post a boat advert</h2>
         {signedIn === false ? (
@@ -340,6 +418,21 @@ export function VesselClassifiedsClient() {
           </p>
         ) : null}
         {postMsg ? <p className="mt-3 text-sm text-zinc-700 dark:text-zinc-300">{postMsg}</p> : null}
+
+        {signedIn && freeSlots > 0 ? (
+          <label className="mt-3 flex cursor-pointer items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50/90 p-3 text-sm text-emerald-950 dark:border-emerald-900/50 dark:bg-emerald-950/25 dark:text-emerald-100">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={useFreeSlot}
+              onChange={(e) => setUseFreeSlot(e.target.checked)}
+            />
+            <span>
+              <strong>Use complimentary listing slot</strong> ({freeSlots} left) — publishes immediately with no PayPal or
+              Stripe step.
+            </span>
+          </label>
+        ) : null}
 
         <div className="mt-4 grid gap-4">
           <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
@@ -466,11 +559,11 @@ export function VesselClassifiedsClient() {
 
           <button
             type="button"
-            disabled={posting || signedIn === false}
+            disabled={posting || signedIn === false || (useFreeSlot && freeSlots < 1)}
             onClick={() => void createListing()}
             className="h-10 rounded-lg bg-green-600 px-4 text-sm font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {posting ? "Creating…" : "Create draft advert"}
+            {posting ? "Creating…" : useFreeSlot && freeSlots > 0 ? "Post with complimentary slot" : "Create draft advert"}
           </button>
         </div>
       </section>

@@ -73,7 +73,12 @@ function normalise(row: unknown): VesselClassifiedListing | null {
     status: status === "active" || status === "expired" || status === "removed" ? status : "draft",
     paymentStatus: r.paymentStatus === "paid" || r.paymentStatus === "pending" ? r.paymentStatus : "unpaid",
     paymentProvider:
-      r.paymentProvider === "paypal" || r.paymentProvider === "stripe" ? r.paymentProvider : null,
+      r.paymentProvider === "paypal" ||
+      r.paymentProvider === "stripe" ||
+      r.paymentProvider === "comp" ||
+      r.paymentProvider === "promo"
+        ? r.paymentProvider
+        : null,
     paymentRef: typeof r.paymentRef === "string" ? r.paymentRef : null,
     categoryId: r.categoryId,
     title: r.title,

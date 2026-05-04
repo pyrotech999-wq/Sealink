@@ -75,9 +75,14 @@ export function AdminAccessClient() {
 
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6">
-      <Link href="/" className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400">
-        ← Home
-      </Link>
+      <div className="flex flex-wrap gap-3">
+        <Link href="/" className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400">
+          ← Home
+        </Link>
+        <Link href="/admin/vessel-adverts" className="text-sm font-medium text-amber-700 hover:underline dark:text-amber-400">
+          Boat adverts & promo codes
+        </Link>
+      </div>
       <h1 className="mt-4 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Subscription access</h1>
       <p className="mt-2 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
         Only you (site admin) see this page. Grant or revoke <span className="font-semibold">complimentary full access</span>{" "}

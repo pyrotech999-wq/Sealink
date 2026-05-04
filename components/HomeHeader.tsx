@@ -46,12 +46,20 @@ export function HomeHeader({ signedIn, isAdmin = false }: Props) {
             Plans
           </Link>
           {isAdmin ? (
-            <Link
-              href="/admin/access"
-              className="text-sm font-medium text-amber-400/90 hover:text-amber-300"
-            >
-              Admin
-            </Link>
+            <>
+              <Link
+                href="/admin/access"
+                className="text-sm font-medium text-amber-400/90 hover:text-amber-300"
+              >
+                Admin
+              </Link>
+              <Link
+                href="/admin/vessel-adverts"
+                className="text-sm font-medium text-amber-400/90 hover:text-amber-300"
+              >
+                Boat ads
+              </Link>
+            </>
           ) : null}
           {signedIn ? (
             <>

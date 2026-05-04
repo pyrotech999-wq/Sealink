@@ -20,7 +20,12 @@ function rowToListing(r: Record<string, unknown>): VesselClassifiedListing | nul
     status: status === "active" || status === "expired" || status === "removed" ? status : "draft",
     paymentStatus: r.payment_status === "paid" || r.payment_status === "pending" ? r.payment_status : "unpaid",
     paymentProvider:
-      r.payment_provider === "paypal" || r.payment_provider === "stripe" ? r.payment_provider : null,
+      r.payment_provider === "paypal" ||
+      r.payment_provider === "stripe" ||
+      r.payment_provider === "comp" ||
+      r.payment_provider === "promo"
+        ? r.payment_provider
+        : null,
     paymentRef: typeof r.payment_ref === "string" ? r.payment_ref : null,
     categoryId: r.category_id,
     title: r.title,
