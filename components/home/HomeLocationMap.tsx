@@ -372,44 +372,44 @@ export default function HomeLocationMap({
       const p = posRef.current;
       if (!p) return;
 
+      const prf = presenceProfileRef.current;
+      const label =
+        [prf.boatInput, prf.fullName].filter(Boolean).join(" · ").slice(0, 40) || "Nearby boat";
+      const avatarDataUrl = prf.showAvatar ? (prf.avatarUrl || "") : "";
+      const avatarFp = avatarDataUrl ? `${avatarDataUrl.length}:${avatarDataUrl.slice(0, 48)}` : "";
+      const profileKey = `${label}|${prf.showAvatar ? 1 : 0}|${avatarFp}`;
+
+      const now = Date.now();
+      const preferGet = forcePresenceGetRef.current;
+      if (preferGet) forcePresenceGetRef.current = false;
+
+      const sinceGet =
+        lastPresenceGetAtRef.current === 0 ? Number.POSITIVE_INFINITY : now - lastPresenceGetAtRef.current;
+      const shouldGet =
+        preferGet || !initialPresenceGetDoneRef.current || sinceGet >= PRESENCE_GET_MIN_MS;
+
+      const sincePost =
+        lastPresencePostAtRef.current === 0 ? Number.POSITIVE_INFINITY : now - lastPresencePostAtRef.current;
+      const postThrottleOk = sincePost >= PRESENCE_POST_MIN_MS;
+
+      const snap = lastPostSnapshotRef.current;
+      let significantMove = snap == null;
+      if (snap) {
+        const m = distanceMiles(snap.lat, snap.lng, p.lat, p.lng) * 1609.344;
+        significantMove = m >= PRESENCE_SIGNIFICANT_MOVE_M;
+      }
+      const profileChanged = profileKey !== lastPostedProfileKeyRef.current;
+      const anchorHeartbeat =
+        anchorArmedRef.current &&
+        (lastPresencePostAtRef.current === 0 || now - lastPresencePostAtRef.current >= PRESENCE_ANCHOR_HEARTBEAT_POST_MS);
+      const shouldPost =
+        postThrottleOk && (significantMove || profileChanged || anchorHeartbeat);
+
+      if (!shouldPost && !shouldGet) return;
+
       presenceTickInFlightRef.current = true;
       const ac = new AbortController();
       try {
-        const prf = presenceProfileRef.current;
-        const label =
-          [prf.boatInput, prf.fullName].filter(Boolean).join(" · ").slice(0, 40) || "Nearby boat";
-        const avatarDataUrl = prf.showAvatar ? (prf.avatarUrl || "") : "";
-        const avatarFp = avatarDataUrl ? `${avatarDataUrl.length}:${avatarDataUrl.slice(0, 48)}` : "";
-        const profileKey = `${label}|${prf.showAvatar ? 1 : 0}|${avatarFp}`;
-
-        const now = Date.now();
-        const preferGet = forcePresenceGetRef.current;
-        if (preferGet) forcePresenceGetRef.current = false;
-
-        const sinceGet =
-          lastPresenceGetAtRef.current === 0 ? Number.POSITIVE_INFINITY : now - lastPresenceGetAtRef.current;
-        const shouldGet =
-          preferGet || !initialPresenceGetDoneRef.current || sinceGet >= PRESENCE_GET_MIN_MS;
-
-        const sincePost =
-          lastPresencePostAtRef.current === 0 ? Number.POSITIVE_INFINITY : now - lastPresencePostAtRef.current;
-        const postThrottleOk = sincePost >= PRESENCE_POST_MIN_MS;
-
-        const snap = lastPostSnapshotRef.current;
-        let significantMove = snap == null;
-        if (snap) {
-          const m = distanceMiles(snap.lat, snap.lng, p.lat, p.lng) * 1609.344;
-          significantMove = m >= PRESENCE_SIGNIFICANT_MOVE_M;
-        }
-        const profileChanged = profileKey !== lastPostedProfileKeyRef.current;
-        const anchorHeartbeat =
-          anchorArmedRef.current &&
-          (lastPresencePostAtRef.current === 0 || now - lastPresencePostAtRef.current >= PRESENCE_ANCHOR_HEARTBEAT_POST_MS);
-        const shouldPost =
-          postThrottleOk && (significantMove || profileChanged || anchorHeartbeat);
-
-        if (!shouldPost && !shouldGet) return;
-
         const runGet = async () => {
           if (!signedInRef.current) {
             logMapPresenceClient("get-skipped", { reason: "not-signed-in-before-fetch" });
