@@ -1,16 +1,26 @@
 import { NextResponse } from "next/server";
-import { fetchStormglassHourRow, pickStormglassNumeric } from "@/lib/stormglass-weather-grid-server";
+import {
+  STORMGLASS_COMBINED_WEATHER_PARAMS,
+  fetchStormglassHourRowCached,
+  pickStormglassNumeric,
+} from "@/lib/stormglass-weather-grid-server";
 import { openMeteoWaveGridPoints, openMeteoWindGridPoints } from "@/lib/open-meteo-map-grid-server";
 
 export const runtime = "nodejs";
 
-const MAX_POINTS = 48;
-const CHUNK = 8;
+/** Max grid points per request — keeps Stormglass usage predictable on free tiers. */
+const MAX_POINTS = 24;
+const CHUNK = 6;
 
 type Body = {
   timeIso?: string;
   layer?: string;
   points?: { lat: number; lng: number }[];
+  /** Echo from client so wave raster indexing matches the sampled grid. */
+  cols?: number;
+  rows?: number;
+  /** When true, bypass the 60-minute server cache for this request only. */
+  forceRefresh?: boolean;
 };
 
 type Out = {
@@ -43,6 +53,20 @@ function waveThreshold(n: number): number {
   return Math.max(4, Math.ceil(n * 0.22));
 }
 
+function rowToOut(pt: { lat: number; lng: number }, hour: Record<string, unknown> | null): Out {
+  if (!hour) return { lat: pt.lat, lng: pt.lng };
+  const windSpeed = pickStormglassNumeric(hour.windSpeed);
+  const windDirection = pickStormglassNumeric(hour.windDirection);
+  const waveHeight = pickStormglassNumeric(hour.waveHeight);
+  return {
+    lat: pt.lat,
+    lng: pt.lng,
+    ...(windSpeed != null ? { windSpeed } : {}),
+    ...(windDirection != null ? { windDirection } : {}),
+    ...(waveHeight != null ? { waveHeight } : {}),
+  };
+}
+
 export async function POST(req: Request): Promise<Response> {
   let body: Body;
   try {
@@ -53,6 +77,11 @@ export async function POST(req: Request): Promise<Response> {
 
   const timeIso = typeof body.timeIso === "string" ? body.timeIso.trim() : "";
   const layer = body.layer;
+  const forceRefresh = body.forceRefresh === true;
+  const colsIn =
+    typeof body.cols === "number" && Number.isFinite(body.cols) && body.cols > 0 ? Math.floor(body.cols) : null;
+  const rowsIn =
+    typeof body.rows === "number" && Number.isFinite(body.rows) && body.rows > 0 ? Math.floor(body.rows) : null;
   const rawPts = Array.isArray(body.points) ? body.points : [];
   const points = rawPts
     .filter(
@@ -65,11 +94,160 @@ export async function POST(req: Request): Promise<Response> {
     )
     .slice(0, MAX_POINTS);
 
-  if (!timeIso || (layer !== "wind" && layer !== "waves") || points.length === 0) {
-    return NextResponse.json({ ok: false, error: "timeIso, layer (wind|waves), and points required" }, { status: 400 });
+  if (!timeIso || points.length === 0) {
+    return NextResponse.json({ ok: false, error: "timeIso and points required" }, { status: 400 });
   }
 
   const key = process.env.STORMGLASS_API_KEY?.trim() ?? "";
+
+  if (layer === "combined") {
+    if (!key) {
+      const omW = await openMeteoWindGridPoints(points, timeIso, req.signal);
+      const omWa = await openMeteoWaveGridPoints(points, timeIso, req.signal);
+      const out: Out[] = points.map((pt, idx) => {
+        const w = omW[idx];
+        const wa = omWa[idx];
+        return {
+          lat: pt.lat,
+          lng: pt.lng,
+          ...(w && Number.isFinite(w.windSpeed) && Number.isFinite(w.windDirection)
+            ? { windSpeed: w.windSpeed, windDirection: w.windDirection }
+            : {}),
+          ...(wa && Number.isFinite(wa.waveHeight) ? { waveHeight: wa.waveHeight } : {}),
+        };
+      });
+      console.info("[Stormglass] combined grid: no API key — Open‑Meteo only", { points: points.length });
+      return NextResponse.json({
+        ok: true,
+        layer: "combined",
+        points: out,
+        cols: colsIn ?? null,
+        rows: rowsIn ?? null,
+        providerWind: "open-meteo",
+        providerWaves: "open-meteo",
+        stormglassUpstreamCalls: 0,
+        stormglassCacheHits: 0,
+        usedCache: false,
+        quotaExceeded: false,
+      });
+    }
+
+    let stormglassUpstreamCalls = 0;
+    let stormglassCacheHits = 0;
+    let quotaExceeded = false;
+    const storm: Out[] = [];
+
+    for (const pt of points) {
+      if (quotaExceeded) {
+        storm.push({ lat: pt.lat, lng: pt.lng });
+        continue;
+      }
+      const { row, meta } = await fetchStormglassHourRowCached(
+        key,
+        pt.lat,
+        pt.lng,
+        timeIso,
+        STORMGLASS_COMBINED_WEATHER_PARAMS,
+        req.signal,
+        { forceRefresh },
+      );
+      if (meta.fromCache) stormglassCacheHits += 1;
+      else stormglassUpstreamCalls += 1;
+      if (meta.httpStatus === 429) {
+        quotaExceeded = true;
+        console.warn("[Stormglass] combined grid: 429 / quota — stopping further upstream calls this request");
+        storm.push({ lat: pt.lat, lng: pt.lng });
+        continue;
+      }
+      storm.push(rowToOut(pt, row));
+    }
+
+    const goodW = countWindGood(storm);
+    const goodWa = countWaveGood(storm);
+    const windOk = goodW >= windThreshold(points.length);
+    const waveOk = goodWa >= waveThreshold(points.length);
+
+    let providerWind: "stormglass" | "open-meteo" | "mixed" = "open-meteo";
+    let providerWaves: "stormglass" | "open-meteo" | "mixed" = "open-meteo";
+    let out: Out[] = [];
+
+    if (windOk && waveOk && !quotaExceeded) {
+      out = storm;
+      providerWind = "stormglass";
+      providerWaves = "stormglass";
+    } else {
+      const omW = await openMeteoWindGridPoints(points, timeIso, req.signal);
+      const omWa = await openMeteoWaveGridPoints(points, timeIso, req.signal);
+      out = points.map((pt, idx) => {
+        const s = storm[idx];
+        const ow = omW[idx];
+        const owa = omWa[idx];
+        let windSpeed: number | undefined;
+        let windDirection: number | undefined;
+        let waveHeight: number | undefined;
+        if (
+          s &&
+          typeof s.windSpeed === "number" &&
+          typeof s.windDirection === "number" &&
+          Number.isFinite(s.windSpeed) &&
+          Number.isFinite(s.windDirection)
+        ) {
+          windSpeed = s.windSpeed;
+          windDirection = s.windDirection;
+        } else if (ow && Number.isFinite(ow.windSpeed) && Number.isFinite(ow.windDirection)) {
+          windSpeed = ow.windSpeed;
+          windDirection = ow.windDirection;
+        }
+        if (s && typeof s.waveHeight === "number" && Number.isFinite(s.waveHeight)) {
+          waveHeight = s.waveHeight;
+        } else if (owa && Number.isFinite(owa.waveHeight)) {
+          waveHeight = owa.waveHeight;
+        }
+        return {
+          lat: pt.lat,
+          lng: pt.lng,
+          ...(windSpeed != null ? { windSpeed } : {}),
+          ...(windDirection != null ? { windDirection } : {}),
+          ...(waveHeight != null ? { waveHeight } : {}),
+        };
+      });
+      providerWind = goodW > 0 ? "mixed" : "open-meteo";
+      providerWaves = goodWa > 0 ? "mixed" : "open-meteo";
+    }
+
+    const usedCache = stormglassCacheHits > 0 && stormglassUpstreamCalls === 0;
+    console.info("[Stormglass] combined grid summary", {
+      points: points.length,
+      stormglassUpstreamCalls,
+      stormglassCacheHits,
+      providerWind,
+      providerWaves,
+      quotaExceeded,
+      forceRefresh,
+    });
+
+    return NextResponse.json({
+      ok: true,
+      layer: "combined",
+      points: out,
+      cols: colsIn ?? null,
+      rows: rowsIn ?? null,
+      providerWind,
+      providerWaves,
+      stormglassUpstreamCalls,
+      stormglassCacheHits,
+      usedCache,
+      quotaExceeded,
+    });
+  }
+
+  if (layer !== "wind" && layer !== "waves") {
+    return NextResponse.json(
+      { ok: false, error: "layer must be wind, waves, or combined" },
+      { status: 400 },
+    );
+  }
+
   let provider: "stormglass" | "open-meteo" | "mixed" = "open-meteo";
   let out: Out[] = [];
 
@@ -81,16 +259,10 @@ export async function POST(req: Request): Promise<Response> {
         const slice = points.slice(i, i + CHUNK);
         const rows = await Promise.all(
           slice.map(async (pt) => {
-            const hour = await fetchStormglassHourRow(key, pt.lat, pt.lng, timeIso, params, req.signal);
-            if (!hour) return { lat: pt.lat, lng: pt.lng } as Out;
-            const windSpeed = pickStormglassNumeric(hour.windSpeed);
-            const windDirection = pickStormglassNumeric(hour.windDirection);
-            return {
-              lat: pt.lat,
-              lng: pt.lng,
-              ...(windSpeed != null ? { windSpeed } : {}),
-              ...(windDirection != null ? { windDirection } : {}),
-            } as Out;
+            const { row } = await fetchStormglassHourRowCached(key, pt.lat, pt.lng, timeIso, params, req.signal, {
+              forceRefresh,
+            });
+            return rowToOut(pt, row);
           }),
         );
         storm.push(...rows);
@@ -145,14 +317,10 @@ export async function POST(req: Request): Promise<Response> {
         const slice = points.slice(i, i + CHUNK);
         const rows = await Promise.all(
           slice.map(async (pt) => {
-            const hour = await fetchStormglassHourRow(key, pt.lat, pt.lng, timeIso, params, req.signal);
-            if (!hour) return { lat: pt.lat, lng: pt.lng } as Out;
-            const waveHeight = pickStormglassNumeric(hour.waveHeight);
-            return {
-              lat: pt.lat,
-              lng: pt.lng,
-              ...(waveHeight != null ? { waveHeight } : {}),
-            } as Out;
+            const { row } = await fetchStormglassHourRowCached(key, pt.lat, pt.lng, timeIso, params, req.signal, {
+              forceRefresh,
+            });
+            return rowToOut(pt, row);
           }),
         );
         storm.push(...rows);

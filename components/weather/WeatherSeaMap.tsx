@@ -2,7 +2,17 @@
 
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { startTransition, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  startTransition,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { buildMarineSampleGrid } from "@/lib/weather-marine-grid";
 import { AttributionControl, MapContainer, ScaleControl, TileLayer, useMap } from "react-leaflet";
 
 type LayerMode = "wind" | "waves" | "rain" | "pressure";
@@ -22,9 +32,6 @@ type OpenMeteoBlock = {
 function clamp(n: number, a: number, b: number): number {
   return Math.max(a, Math.min(b, n));
 }
-
-/** Cap Stormglass point calls per map move (same key as tide STORMGLASS_API_KEY). */
-const STORMGLASS_GRID_CAP = 48;
 
 function wavesColor(m: number): string {
   // 0..6m -> blue->cyan->green->yellow->orange->red
@@ -161,6 +168,197 @@ function Legend({ mode }: { mode: LayerMode }) {
   );
 }
 
+type MarineGridPoint = {
+  lat: number;
+  lng: number;
+  windSpeed?: number;
+  windDirection?: number;
+  waveHeight?: number;
+};
+
+type MarineGridContextValue = {
+  dataEpoch: number;
+  cols: number;
+  rows: number;
+  points: MarineGridPoint[];
+  ready: boolean;
+  loading: boolean;
+  quotaExceeded: boolean;
+  lastMeta: {
+    stormglassUpstreamCalls: number;
+    stormglassCacheHits: number;
+    usedCache: boolean;
+    providerWind: string;
+    providerWaves: string;
+  } | null;
+  requestRefresh: () => void;
+};
+
+const MarineGridContext = createContext<MarineGridContextValue | null>(null);
+
+export function useMarineGridContext(): MarineGridContextValue | null {
+  return useContext(MarineGridContext);
+}
+
+function CombinedMarineProvider({
+  children,
+  timeIso,
+  activeMarine,
+  onQuotaExceeded,
+}: {
+  children: React.ReactNode;
+  timeIso: string;
+  activeMarine: boolean;
+  onQuotaExceeded: (v: boolean) => void;
+}) {
+  const map = useMap();
+  const [dataEpoch, setDataEpoch] = useState(0);
+  const [cols, setCols] = useState(6);
+  const [rows, setRows] = useState(4);
+  const [points, setPoints] = useState<MarineGridPoint[]>([]);
+  const [ready, setReady] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [quotaExceeded, setQuotaExceeded] = useState(false);
+  const [lastMeta, setLastMeta] = useState<MarineGridContextValue["lastMeta"]>(null);
+
+  const debounceRef = useRef<number | null>(null);
+  const forceRefreshNextRef = useRef(false);
+  const lastClientOkKey = useRef<string>("");
+
+  const runFetch = useCallback(async () => {
+    if (!activeMarine) {
+      setReady(false);
+      setPoints([]);
+      onQuotaExceeded(false);
+      return;
+    }
+    const { points: gridPts, cols: gc, rows: gr, boundsKey } = buildMarineSampleGrid(map);
+    const clientKey = `${boundsKey}|${timeIso}`;
+    const force = forceRefreshNextRef.current;
+    if (!force && clientKey === lastClientOkKey.current && gridPts.length > 0) {
+      console.info("[Weather map] combined marine: client skip (same viewport + time)");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch("/api/weather/stormglass-grid", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          timeIso,
+          layer: "combined",
+          points: gridPts,
+          cols: gc,
+          rows: gr,
+          forceRefresh: force,
+        }),
+      });
+      forceRefreshNextRef.current = false;
+      const j = (await res.json()) as {
+        ok?: boolean;
+        points?: MarineGridPoint[];
+        cols?: number | null;
+        rows?: number | null;
+        quotaExceeded?: boolean;
+        stormglassUpstreamCalls?: number;
+        stormglassCacheHits?: number;
+        usedCache?: boolean;
+        providerWind?: string;
+        providerWaves?: string;
+      };
+      const q = Boolean(j.quotaExceeded);
+      setQuotaExceeded(q);
+      onQuotaExceeded(q);
+
+      if (!res.ok || !j.ok || !Array.isArray(j.points)) {
+        console.warn("[Weather map] combined marine request failed", res.status);
+        setReady(true);
+        setPoints([]);
+        setLastMeta(null);
+        return;
+      }
+
+      const usedCache = Boolean(j.usedCache);
+      const up = typeof j.stormglassUpstreamCalls === "number" ? j.stormglassUpstreamCalls : 0;
+      const hits = typeof j.stormglassCacheHits === "number" ? j.stormglassCacheHits : 0;
+      console.info("[Weather map] combined marine response", {
+        providerWind: j.providerWind,
+        providerWaves: j.providerWaves,
+        stormglassUpstreamCalls: up,
+        stormglassCacheHits: hits,
+        usedServerCache: usedCache,
+        quotaExceeded: q,
+      });
+
+      setCols(typeof j.cols === "number" && j.cols > 0 ? j.cols : gc);
+      setRows(typeof j.rows === "number" && j.rows > 0 ? j.rows : gr);
+      setPoints(j.points);
+      setLastMeta({
+        stormglassUpstreamCalls: up,
+        stormglassCacheHits: hits,
+        usedCache,
+        providerWind: typeof j.providerWind === "string" ? j.providerWind : "unknown",
+        providerWaves: typeof j.providerWaves === "string" ? j.providerWaves : "unknown",
+      });
+      lastClientOkKey.current = clientKey;
+      setDataEpoch((e) => e + 1);
+      setReady(true);
+    } catch (e) {
+      console.warn("[Weather map] combined marine network error", e);
+      setReady(true);
+      setPoints([]);
+      setLastMeta(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [activeMarine, map, onQuotaExceeded, timeIso]);
+
+  const requestRefresh = useCallback(() => {
+    forceRefreshNextRef.current = true;
+    if (debounceRef.current != null) window.clearTimeout(debounceRef.current);
+    debounceRef.current = null;
+    void runFetch();
+  }, [runFetch]);
+
+  useEffect(() => {
+    if (!activeMarine) {
+      if (debounceRef.current != null) window.clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+      setReady(false);
+      setPoints([]);
+      onQuotaExceeded(false);
+      return;
+    }
+    if (debounceRef.current != null) window.clearTimeout(debounceRef.current);
+    debounceRef.current = window.setTimeout(() => {
+      debounceRef.current = null;
+      void runFetch();
+    }, 500);
+    return () => {
+      if (debounceRef.current != null) window.clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    };
+  }, [activeMarine, runFetch, timeIso, map]);
+
+  const value = useMemo<MarineGridContextValue>(
+    () => ({
+      dataEpoch,
+      cols,
+      rows,
+      points,
+      ready,
+      loading,
+      quotaExceeded,
+      lastMeta,
+      requestRefresh,
+    }),
+    [cols, dataEpoch, lastMeta, loading, points, quotaExceeded, ready, requestRefresh, rows],
+  );
+
+  return <MarineGridContext.Provider value={value}>{children}</MarineGridContext.Provider>;
+}
+
 type WindPoint = { lat: number; lng: number; u: number; v: number };
 type WindSamplePx = { x: number; y: number; u: number; v: number; s: number };
 
@@ -177,6 +375,9 @@ function WindParticlesOverlay({
   motionScale: number;
 }) {
   const map = useMap();
+  const marine = useMarineGridContext();
+  const opacityRef = useRef(opacity);
+  opacityRef.current = opacity;
 
   useEffect(() => {
     if (!enabled) return;
@@ -236,6 +437,31 @@ function WindParticlesOverlay({
     };
 
     const fetchField = async () => {
+      if (marine?.ready && marine.points.length) {
+        const bundleKey = `bundle:${marine.dataEpoch}`;
+        if (bundleKey === lastFetchKey) return;
+        const next: WindPoint[] = [];
+        for (const p of marine.points) {
+          const spd = p.windSpeed;
+          const dir = p.windDirection;
+          if (typeof spd !== "number" || typeof dir !== "number" || !Number.isFinite(spd) || !Number.isFinite(dir)) {
+            continue;
+          }
+          const rad = ((dir + 180) * Math.PI) / 180;
+          next.push({ lat: p.lat, lng: p.lng, u: spd * Math.sin(rad), v: spd * Math.cos(rad) });
+        }
+        if (next.length) {
+          lastFetchKey = bundleKey;
+          field = next;
+          rebuildFieldPx();
+          return;
+        }
+      }
+
+      if (marine && !marine.ready) {
+        return;
+      }
+
       const b = map.getBounds();
       const sw = b.getSouthWest();
       const ne = b.getNorthEast();
@@ -263,50 +489,9 @@ function WindParticlesOverlay({
         }
       }
 
-      const key = `${sw.lat.toFixed(2)},${sw.lng.toFixed(2)},${ne.lat.toFixed(2)},${ne.lng.toFixed(2)}|${timeIso}|${cols}x${rows}`;
-      if (key === lastFetchKey) return;
-      lastFetchKey = key;
-
-      const gridPoints = lats.map((lat, i) => ({ lat, lng: lngs[i]! }));
-
-      try {
-        const sgRes = await fetch("/api/weather/stormglass-grid", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            timeIso,
-            layer: "wind",
-            points: gridPoints.slice(0, STORMGLASS_GRID_CAP),
-          }),
-        });
-        if (sgRes.ok) {
-          const sg = (await sgRes.json()) as {
-            ok?: boolean;
-            points?: { lat: number; lng: number; windSpeed?: number; windDirection?: number }[];
-          };
-          if (sg.ok && Array.isArray(sg.points) && sg.points.length) {
-            const next: WindPoint[] = [];
-            for (const p of sg.points) {
-              const spd = p.windSpeed;
-              const dir = p.windDirection;
-              if (typeof spd !== "number" || typeof dir !== "number" || !Number.isFinite(spd) || !Number.isFinite(dir)) {
-                continue;
-              }
-              const rad = ((dir + 180) * Math.PI) / 180;
-              const u = spd * Math.sin(rad);
-              const v = spd * Math.cos(rad);
-              next.push({ lat: p.lat, lng: p.lng, u, v });
-            }
-            if (next.length) {
-              field = next;
-              rebuildFieldPx();
-              return;
-            }
-          }
-        }
-      } catch {
-        /* fall through to Open‑Meteo */
-      }
+      const omKey = `om:${sw.lat.toFixed(2)},${sw.lng.toFixed(2)},${ne.lat.toFixed(2)},${ne.lng.toFixed(2)}|${timeIso}|${cols}x${rows}`;
+      if (omKey === lastFetchKey) return;
+      lastFetchKey = omKey;
 
       const api = new URL("https://api.open-meteo.com/v1/forecast");
       api.searchParams.set("latitude", lats.join(","));
@@ -437,7 +622,8 @@ function WindParticlesOverlay({
       lastT = now;
 
       // Fade previous frame by scaling alpha (no “black wash”).
-      const keep = clamp(0.86 + clamp(opacity, 0.2, 0.95) * 0.10, 0.84, 0.95);
+      const op = opacityRef.current;
+      const keep = clamp(0.86 + clamp(op, 0.2, 0.95) * 0.10, 0.84, 0.95);
       ctx.globalCompositeOperation = "destination-in";
       ctx.fillStyle = `rgba(0,0,0,${keep})`;
       ctx.fillRect(0, 0, size.x, size.y);
@@ -471,7 +657,7 @@ function WindParticlesOverlay({
         const y2 = p.y - ((w.v * dt) / mPerPxY) * timeScale * ms;
 
         // Slightly more transparent at low speeds, more vivid at high speeds.
-        const a = clamp(0.35 + (speed / 30) * 0.45, 0.25, 0.9) * clamp(opacity, 0.2, 0.95);
+        const a = clamp(0.35 + (speed / 30) * 0.45, 0.25, 0.9) * clamp(opacityRef.current, 0.2, 0.95);
         ctx.strokeStyle = windColor(speed, a);
         ctx.beginPath();
         ctx.moveTo(p.x, p.y);
@@ -522,13 +708,16 @@ function WindParticlesOverlay({
       if (raf) window.cancelAnimationFrame(raf);
       canvas.remove();
     };
-  }, [map, enabled, timeIso, opacity, motionScale]);
+  }, [map, enabled, timeIso, motionScale, marine?.dataEpoch, marine?.ready]);
 
   return null;
 }
 
 function OpenMeteoWavesOverlay({ enabled, timeIso, opacity }: { enabled: boolean; timeIso: string; opacity: number }) {
   const map = useMap();
+  const marine = useMarineGridContext();
+  const opacityRef = useRef(opacity);
+  opacityRef.current = opacity;
 
   useEffect(() => {
     if (!enabled) return;
