@@ -252,6 +252,10 @@ export function IfmMapClient() {
   }, [mode, pos?.lat, pos?.lng]);
 
   useEffect(() => {
+    if (IFM_PRESENCE_CLIENT_DISABLED) {
+      setPeers([]);
+      return;
+    }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadPeers();
     const id = window.setInterval(() => void loadPeers(), 20_000);
@@ -437,12 +441,14 @@ export function IfmMapClient() {
                 const next = !sharing;
                 setSharing(next);
                 if (!next) {
-                  void fetch("/api/ifm/presence", {
-                    method: "POST",
-                    credentials: "same-origin",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ share: false }),
-                  });
+                  if (!IFM_PRESENCE_CLIENT_DISABLED) {
+                    void fetch("/api/ifm/presence", {
+                      method: "POST",
+                      credentials: "same-origin",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ share: false }),
+                    });
+                  }
                 } else {
                   void sharePresence();
                 }
