@@ -61,6 +61,9 @@ import { clampGeoAccuracyM, humanGeolocationMessage } from "@/lib/geolocation-ut
 const DEFAULT_CENTER: [number, number] = [DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng];
 const DEFAULT_ZOOM = 6;
 
+/** When true: no client calls to map presence, broadcast, vicinity inbox, or anchor live APIs from this tree. */
+const EMERGENCY_DISABLE_LIVE_MAP_APIS = true;
+
 /** Statute miles → metres (for ~5 mi “nearby” ring). */
 const NEARBY_RING_METRES = 5 * 1609.344;
 
@@ -316,6 +319,7 @@ export default function HomeLocationMap({
 
   // Report this device's last fix (for cross-device monitoring).
   useEffect(() => {
+    if (EMERGENCY_DISABLE_LIVE_MAP_APIS) return;
     if (!sharing || !pos) return;
     const now = Date.now();
     if (now - lastAnchorReportAt.current < 180_000) return; // 3 minutes
@@ -342,6 +346,7 @@ export default function HomeLocationMap({
 
   // If monitoring another device, pull its latest fix periodically.
   useEffect(() => {
+    if (EMERGENCY_DISABLE_LIVE_MAP_APIS) return;
     if (!sharing) return;
     const serverMonitor = anchorMonitor?.monitorDeviceId;
     const effectiveMonitor = serverMonitor ? serverMonitor : anchorCfg.monitorDeviceId === "this" ? deviceId : anchorCfg.monitorDeviceId;
@@ -372,6 +377,7 @@ export default function HomeLocationMap({
 
   // Load server-backed monitor config (single monitor device + alert recipients).
   useEffect(() => {
+    if (EMERGENCY_DISABLE_LIVE_MAP_APIS) return;
     if (!sharing) return;
     let disposed = false;
     const load = async () => {
@@ -426,6 +432,7 @@ export default function HomeLocationMap({
 
   // Anchor alert check (runs whenever position updates).
   useEffect(() => {
+    if (EMERGENCY_DISABLE_LIVE_MAP_APIS) return;
     if (!sharing || !pos) return;
     const anchorCfg = anchorCfgRef.current;
     if (!anchorCfg.armed || anchorCfg.lat == null || anchorCfg.lng == null) return;
@@ -545,6 +552,7 @@ export default function HomeLocationMap({
 
   // Anchor alert inbox poll (keeps alerts in sync across both devices).
   useEffect(() => {
+    if (EMERGENCY_DISABLE_LIVE_MAP_APIS) return;
     if (!sharing) return;
     let disposed = false;
     const load = async () => {
@@ -571,6 +579,7 @@ export default function HomeLocationMap({
 
   // Display label for which device is being monitored.
   useEffect(() => {
+    if (EMERGENCY_DISABLE_LIVE_MAP_APIS) return;
     if (!anchorCfg.armed) {
       queueMicrotask(() => setMonitorDeviceLabel(""));
       return;
@@ -1205,6 +1214,7 @@ export default function HomeLocationMap({
         <button
           type="button"
           onClick={() => {
+            if (EMERGENCY_DISABLE_LIVE_MAP_APIS) return;
             // DISABLED — do not call `/api/map/presence` (GET/POST) from the browser.
             // Example (must stay commented):
             // void fetch(`/api/map/presence?lat=...&lng=...`, { credentials: "same-origin" });
@@ -1527,7 +1537,12 @@ export default function HomeLocationMap({
       )}
 
       {!isSettings ? (
-        <HomeMessagesCtaButton signedIn={signedIn} readLat={forecastLat} readLng={forecastLng} />
+        <HomeMessagesCtaButton
+          signedIn={signedIn}
+          readLat={forecastLat}
+          readLng={forecastLng}
+          emergencyDisableLiveMapApis={EMERGENCY_DISABLE_LIVE_MAP_APIS}
+        />
       ) : null}
 
       {!isSettings ? (
@@ -1565,6 +1580,10 @@ export default function HomeLocationMap({
               <button
                 type="button"
                 onClick={() => {
+                  if (EMERGENCY_DISABLE_LIVE_MAP_APIS) {
+                    setActiveAnchorAlert(null);
+                    return;
+                  }
                   const id = activeAnchorAlert.id;
                   void (async () => {
                     try {
@@ -1594,6 +1613,7 @@ export default function HomeLocationMap({
       <AnchorAlertModal
         open={anchorOpen}
         onClose={() => setAnchorOpen(false)}
+        emergencyDisableLiveMapApis={EMERGENCY_DISABLE_LIVE_MAP_APIS}
         sharing={sharing}
         hasFix={Boolean(pos)}
         pos={pos ? { lat: pos.lat, lng: pos.lng } : null}
