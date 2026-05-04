@@ -28,6 +28,12 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "lat and lng required" }, { status: 400 });
   }
 
+  console.info("[map/presence]", new Date().toISOString(), "GET_peers", {
+    lat: coords.lat,
+    lng: coords.lng,
+    sessionHint: id.slice(0, 8),
+  });
+
   const peers = await findNearbyPeers(coords.lat, coords.lng, id);
 
   const res = NextResponse.json({ peers });
@@ -46,6 +52,12 @@ export async function POST(req: Request) {
   }
 
   const shareNearby = body.shareNearby === true;
+
+  console.info("[map/presence]", new Date().toISOString(), "POST", {
+    shareNearby,
+    hasLatLng: typeof body.lat === "number" || typeof body.lng === "number",
+    sessionHint: id.slice(0, 8),
+  });
 
   if (!shareNearby) {
     await upsertPresence(id, {

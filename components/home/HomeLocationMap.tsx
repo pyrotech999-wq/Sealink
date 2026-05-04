@@ -1214,6 +1214,7 @@ export default function HomeLocationMap({
       ac.abort();
     };
     // Intentionally only stableKey + manual nonce: raw `pos` updates every GPS tick and would retrigger this effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `pos` / label fields are captured when `presenceStableKey` changes (~100 m + profile) or user clicks refresh.
   }, [presenceStableKey, nearbyRefreshNonce]);
 
   function persistBoat() {
@@ -1299,6 +1300,19 @@ export default function HomeLocationMap({
         />
         <span className="font-semibold">Show me to nearby SeaLink users (~5 mi)</span>
       </label>
+
+      {sharing && pos && shareNearby ? (
+        <button
+          type="button"
+          onClick={() => {
+            logMapPresenceClient("user_action_refresh_nearby", {});
+            setNearbyRefreshNonce((n) => n + 1);
+          }}
+          className="w-full rounded-lg border border-blue-300 bg-white px-3 py-2 text-xs font-semibold text-blue-900 shadow-sm hover:bg-blue-50 dark:border-blue-800 dark:bg-zinc-900 dark:text-blue-100 dark:hover:bg-blue-950/50"
+        >
+          Refresh nearby boats
+        </button>
+      ) : null}
 
       <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-[11px] leading-snug text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
         <input
