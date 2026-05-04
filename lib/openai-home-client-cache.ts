@@ -120,19 +120,40 @@ export function writeHomeOpenAiCache(next: HomeOpenAiCacheV1): void {
   }
 }
 
-export function patchHomeOpenAiCache(patch: Partial<HomeOpenAiCacheV1>): void {
-  const cur = readHomeOpenAiCache();
-  const base: HomeOpenAiCacheV1 = cur ?? {
+function emptyHomeOpenAiCache(): HomeOpenAiCacheV1 {
+  return {
     v: 1,
     lastOpenAiUsageAt: 0,
     forecast48h: null,
     seaOpenAi: null,
   };
-  writeHomeOpenAiCache({
-    ...base,
-    ...patch,
-    v: 1,
-  });
+}
+
+/** Serialize read–merge–write so concurrent/re-entrant patches cannot drop updates (e.g. sea + forecast). */
+let homeOpenAiPatching = false;
+const homeOpenAiDeferredPatches: Partial<HomeOpenAiCacheV1>[] = [];
+
+export function patchHomeOpenAiCache(patch: Partial<HomeOpenAiCacheV1>): void {
+  if (homeOpenAiPatching) {
+    homeOpenAiDeferredPatches.push(patch);
+    return;
+  }
+  homeOpenAiPatching = true;
+  try {
+    let batch: Partial<HomeOpenAiCacheV1>[] = [patch];
+    while (batch.length > 0) {
+      const cur = readHomeOpenAiCache();
+      const base: HomeOpenAiCacheV1 = cur ?? emptyHomeOpenAiCache();
+      let next: HomeOpenAiCacheV1 = base;
+      for (const p of batch) {
+        next = { ...next, ...p, v: 1 };
+      }
+      writeHomeOpenAiCache(next);
+      batch = homeOpenAiDeferredPatches.splice(0);
+    }
+  } finally {
+    homeOpenAiPatching = false;
+  }
 }
 
 export type ForecastNetworkDecision =

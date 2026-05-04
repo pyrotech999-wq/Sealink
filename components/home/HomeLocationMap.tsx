@@ -59,12 +59,13 @@ const DEFAULT_ZOOM = 6;
 /** Statute miles → metres (for ~5 mi “nearby” ring). */
 const NEARBY_RING_METRES = 5 * 1609.344;
 
-function logMapPresenceClient(reason: string, detail?: Record<string, unknown>): void {
-  console.info("[map/presence/client]", new Date().toISOString(), reason, detail ?? {});
-}
+/** POST /api/map/presence only when this ~1.1 km grid cell or profile fingerprint changes (not every GPS tick). */
+const PRESENCE_POST_DECIMALS = 2;
+/** GET /api/map/presence at most once per this interval unless the user taps “Refresh nearby boats”. */
+const PRESENCE_GET_MIN_INTERVAL_MS = 60_000;
 
-function clearMapPresence(keepalive = false, reason = "unspecified") {
-  logMapPresenceClient("POST_clear_shareNearby", { reason, keepalive });
+function clearMapPresence(keepalive = false, _reason = "unspecified") {
+  console.info("presence POST");
   void fetch("/api/map/presence", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -249,6 +250,116 @@ export default function HomeLocationMap({
     typeof window !== "undefined" ? getShareNearbyPeers() : false,
   );
   const [nearbyPeers, setNearbyPeers] = useState<NearbyPeer[]>([]);
+  const posRef = useRef<LatLngAcc | null>(null);
+  useEffect(() => {
+    posRef.current = pos;
+  }, [pos]);
+
+  /** Manual “Refresh nearby boats” — increments this to force a GET (POST only when `presencePostKey` changes). */
+  const [nearbyRefreshNonce, setNearbyRefreshNonce] = useState(0);
+  const prevPresencePostKeyRef = useRef("");
+  const lastHandledRefreshNonceRef = useRef(0);
+  const lastGetAtRef = useRef(0);
+
+  /**
+   * Key for when to POST: coarse lat/lng grid + profile — avoids deps on `pos` object identity (GPS fires a new object every tick).
+   */
+  const presencePostKey = useMemo(() => {
+    if (!sharing || !shareNearby || pos == null) return "";
+    const label =
+      [boatInput.trim(), fullName.trim()].filter(Boolean).join(" · ").slice(0, 40) || "Nearby boat";
+    const avatarDataUrl = showAvatar ? (avatarUrl || "") : "";
+    const gLat = pos.lat.toFixed(PRESENCE_POST_DECIMALS);
+    const gLng = pos.lng.toFixed(PRESENCE_POST_DECIMALS);
+    const avatarFp = avatarDataUrl ? `${avatarDataUrl.length}:${avatarDataUrl.slice(0, 48)}` : "";
+    return `${gLat}|${gLng}|${label}|${showAvatar ? 1 : 0}|${avatarFp}`;
+  }, [sharing, shareNearby, pos?.lat, pos?.lng, boatInput, fullName, avatarUrl, showAvatar]);
+
+  useEffect(() => {
+    if (!presencePostKey || !sharing || !shareNearby) {
+      queueMicrotask(() => setNearbyPeers([]));
+      prevPresencePostKeyRef.current = "";
+      return;
+    }
+
+    const postKeyChanged = prevPresencePostKeyRef.current !== presencePostKey;
+    const manualRefresh = nearbyRefreshNonce > lastHandledRefreshNonceRef.current;
+    if (manualRefresh) lastHandledRefreshNonceRef.current = nearbyRefreshNonce;
+
+    const willPost = postKeyChanged;
+    const t = Date.now();
+    const willGet =
+      willPost || manualRefresh || t - lastGetAtRef.current >= PRESENCE_GET_MIN_INTERVAL_MS;
+
+    if (!willPost && !willGet) {
+      return;
+    }
+
+    const p = posRef.current;
+    if (!p) return;
+
+    const label =
+      [boatInput.trim(), fullName.trim()].filter(Boolean).join(" · ").slice(0, 40) || "Nearby boat";
+    const avatarDataUrl = showAvatar ? (avatarUrl || "") : "";
+
+    const ac = new AbortController();
+    let cancelled = false;
+
+    void (async () => {
+      if (willPost) {
+        console.info("presence POST");
+        try {
+          const pr = await fetch("/api/map/presence", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            signal: ac.signal,
+            body: JSON.stringify({
+              shareNearby: true,
+              lat: p.lat,
+              lng: p.lng,
+              label,
+              avatarDataUrl,
+            }),
+          });
+          if (!pr.ok) {
+            if (!cancelled) setNearbyPeers([]);
+            return;
+          }
+          prevPresencePostKeyRef.current = presencePostKey;
+        } catch {
+          if (ac.signal.aborted) return;
+          if (!cancelled) setNearbyPeers([]);
+          return;
+        }
+      }
+
+      if (willGet) {
+        console.info("presence GET");
+        try {
+          const r = await fetch(
+            `/api/map/presence?lat=${encodeURIComponent(String(p.lat))}&lng=${encodeURIComponent(String(p.lng))}`,
+            { signal: ac.signal },
+          );
+          if (!r.ok) {
+            if (!cancelled) setNearbyPeers([]);
+            return;
+          }
+          const d = (await r.json()) as { peers?: NearbyPeer[] };
+          if (!cancelled) setNearbyPeers(Array.isArray(d.peers) ? d.peers : []);
+          lastGetAtRef.current = Date.now();
+        } catch {
+          if (ac.signal.aborted) return;
+          if (!cancelled) setNearbyPeers([]);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      ac.abort();
+    };
+  }, [presencePostKey, nearbyRefreshNonce, sharing, shareNearby]);
+
   const pollTimer = useRef<number | null>(null);
   const polling = useRef(false);
   const lastAnchorReportAt = useRef<number>(0);
@@ -1113,110 +1224,6 @@ export default function HomeLocationMap({
     return () => clearMapPresence(true, "component_unmount");
   }, []);
 
-  /** Manual “Refresh nearby boats” — increments this to re-run the presence sync without polling. */
-  const [nearbyRefreshNonce, setNearbyRefreshNonce] = useState(0);
-
-  /**
-   * One sync key per ~100 m cell + label/avatar fingerprint. GPS jitter no longer retriggers POST/GET on every fix.
-   * (Previously: deps on raw lat/lng + intervals caused thousands of calls and EROFS on read-only deploys.)
-   */
-  const presenceStableKey = useMemo(() => {
-    if (!sharing || !pos || !shareNearby) return "";
-    const label =
-      [boatInput.trim(), fullName.trim()].filter(Boolean).join(" · ").slice(0, 40) || "Nearby boat";
-    const avatarDataUrl = showAvatar ? (avatarUrl || "") : "";
-    const gLat = pos.lat.toFixed(3);
-    const gLng = pos.lng.toFixed(3);
-    const avatarFp = avatarDataUrl ? `${avatarDataUrl.length}:${avatarDataUrl.slice(0, 48)}` : "";
-    return `${gLat}|${gLng}|${label}|${showAvatar ? 1 : 0}|${avatarFp}`;
-  }, [sharing, pos, shareNearby, boatInput, fullName, avatarUrl, showAvatar]);
-
-  useEffect(() => {
-    if (!presenceStableKey) {
-      queueMicrotask(() => setNearbyPeers([]));
-      return;
-    }
-    if (!pos || !sharing || !shareNearby) {
-      return;
-    }
-
-    const label =
-      [boatInput.trim(), fullName.trim()].filter(Boolean).join(" · ").slice(0, 40) || "Nearby boat";
-    const avatarDataUrl = showAvatar ? (avatarUrl || "") : "";
-    const manual = nearbyRefreshNonce > 0;
-
-    logMapPresenceClient("presence_sync_effect", {
-      stableKey: presenceStableKey,
-      manualRefresh: manual,
-      nonce: nearbyRefreshNonce,
-    });
-
-    const ac = new AbortController();
-    let cancelled = false;
-
-    void (async () => {
-      try {
-        logMapPresenceClient("POST_upsert", {
-          lat: pos.lat,
-          lng: pos.lng,
-          labelLen: label.length,
-        });
-        const pr = await fetch("/api/map/presence", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal: ac.signal,
-          body: JSON.stringify({
-            shareNearby: true,
-            lat: pos.lat,
-            lng: pos.lng,
-            label,
-            avatarDataUrl,
-          }),
-        });
-        if (!pr.ok) {
-          logMapPresenceClient("POST_upsert_failed", { httpStatus: pr.status });
-          if (!cancelled) setNearbyPeers([]);
-          return;
-        }
-      } catch (e) {
-        if (ac.signal.aborted) return;
-        logMapPresenceClient("POST_upsert_error", {
-          message: e instanceof Error ? e.message : String(e),
-        });
-        if (!cancelled) setNearbyPeers([]);
-        return;
-      }
-
-      try {
-        logMapPresenceClient("GET_peers", { lat: pos.lat, lng: pos.lng });
-        const r = await fetch(
-          `/api/map/presence?lat=${encodeURIComponent(String(pos.lat))}&lng=${encodeURIComponent(String(pos.lng))}`,
-          { signal: ac.signal },
-        );
-        if (!r.ok) {
-          logMapPresenceClient("GET_peers_failed", { httpStatus: r.status });
-          if (!cancelled) setNearbyPeers([]);
-          return;
-        }
-        const d = (await r.json()) as { peers?: NearbyPeer[] };
-        if (!cancelled) setNearbyPeers(Array.isArray(d.peers) ? d.peers : []);
-      } catch (e) {
-        if (ac.signal.aborted) return;
-        logMapPresenceClient("GET_peers_error", {
-          message: e instanceof Error ? e.message : String(e),
-        });
-        if (!cancelled) setNearbyPeers([]);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      ac.abort();
-    };
-    // Intentionally only stableKey + manual nonce: raw `pos` updates every GPS tick and would retrigger this effect.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `pos` / label fields are captured when `presenceStableKey` changes (~100 m + profile) or user clicks refresh.
-  }, [presenceStableKey, nearbyRefreshNonce]);
-
   function persistBoat() {
     setBoatName(boatInput);
   }
@@ -1305,7 +1312,6 @@ export default function HomeLocationMap({
         <button
           type="button"
           onClick={() => {
-            logMapPresenceClient("user_action_refresh_nearby", {});
             setNearbyRefreshNonce((n) => n + 1);
           }}
           className="w-full rounded-lg border border-blue-300 bg-white px-3 py-2 text-xs font-semibold text-blue-900 shadow-sm hover:bg-blue-50 dark:border-blue-800 dark:bg-zinc-900 dark:text-blue-100 dark:hover:bg-blue-950/50"
