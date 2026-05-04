@@ -413,7 +413,6 @@ export async function GET(req: Request): Promise<Response> {
 
     let tideWebSearch: TideWebSearchResult | null = null;
     if (!skipOpenAi && !hasOfficialTides) {
-      if (openAiKey) openAiInThisRequest = true;
       tideWebSearch = await fetchTideScheduleFromWebSearch({
         displayLabel: seaTideContext.displayLabel,
         detail: seaTideContext.detail,
@@ -423,6 +422,9 @@ export async function GET(req: Request): Promise<Response> {
         timeZone: tz,
         signal: req.signal,
       });
+      if (openAiKey && tideWebSearch?.events?.length) {
+        openAiInThisRequest = true;
+      }
     }
 
     const webEvents = tideWebSearch?.events ?? [];
@@ -465,12 +467,14 @@ export async function GET(req: Request): Promise<Response> {
     const useWebTable = Boolean(tideWebSearch?.events?.length);
     let tideAiNarrative: string | null = null;
     if (!skipOpenAi && !useWebTable && aiFacts.length >= 2) {
-      if (openAiKey) openAiInThisRequest = true;
       tideAiNarrative = await tideFactsNarrative({
         placeLabel: seaTideContext.displayLabel,
         timeZone: tz,
         facts: aiFacts,
       });
+      if (openAiKey && typeof tideAiNarrative === "string" && tideAiNarrative.trim().length > 0) {
+        openAiInThisRequest = true;
+      }
     }
 
     const parts: string[] = [];

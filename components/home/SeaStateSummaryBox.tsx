@@ -10,6 +10,7 @@ import {
   readHomeOpenAiCache,
   recordOpenAiUsageIfApplicable,
 } from "@/lib/openai-home-client-cache";
+import { summarizeTideExtremes } from "@/lib/tide-height-summary";
 
 type MeteoOk = {
   ok: true;
@@ -250,7 +251,12 @@ export function SeaStateSummaryBox() {
 
       if (plan.mergeFromCache) {
         if (!hasOfficialFromServer && !tideWebSearchOut?.events?.length && plan.mergeFromCache.tideWebSearch?.events?.length) {
-          tideWebSearchOut = plan.mergeFromCache.tideWebSearch;
+          const ev = plan.mergeFromCache.tideWebSearch.events;
+          tideWebSearchOut = {
+            ...plan.mergeFromCache.tideWebSearch,
+            /** Recompute from wall-clock now — cached nextHighT/nextLowT referred to “next” at cache time, not now. */
+            heightSummary: summarizeTideExtremes(ev, Date.now()),
+          };
         }
         if (!tideAiOut && plan.mergeFromCache.tideAiNarrative?.trim()) {
           tideAiOut = plan.mergeFromCache.tideAiNarrative.trim();
