@@ -52,7 +52,12 @@ import { isLikelyIOS } from "@/lib/location-env";
 import { getNativeLocationBridge } from "@/lib/native-location-bridge";
 import { getDeviceName, getOrCreateDeviceId } from "@/lib/device-id";
 import { clampGeoAccuracyM, humanGeolocationMessage } from "@/lib/geolocation-utils";
-import { tryConsumeMapPresenceGetTurn, tryConsumeMapPresencePostTurn } from "@/lib/map-presence-network-guard";
+import {
+  tryBeginPresenceClientTick,
+  tryConsumeMapPresenceClearPost,
+  tryConsumeMapPresenceGetTurn,
+  tryConsumeMapPresencePostTurn,
+} from "@/lib/map-presence-network-guard";
 
 const DEFAULT_CENTER: [number, number] = [DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng];
 const DEFAULT_ZOOM = 6;
@@ -61,7 +66,7 @@ const DEFAULT_ZOOM = 6;
 const NEARBY_RING_METRES = 5 * 1609.344;
 
 /** One interval drives nearby presence; POST/GET are further throttled inside the tick + module guard. */
-const PRESENCE_TICK_MS = 60_000;
+const PRESENCE_TICK_MS = 120_000;
 /** Minimum time between presence POSTs (upsert; clear uses clearMapPresence immediately). */
 const PRESENCE_POST_MIN_MS = 25_000;
 const PRESENCE_GET_MIN_MS = 55_000;
@@ -70,7 +75,7 @@ const PRESENCE_ANCHOR_HEARTBEAT_POST_MS = 20_000;
 const PRESENCE_SIGNIFICANT_MOVE_M = 30;
 
 function clearMapPresence(keepalive = false, _reason = "unspecified") {
-  console.log("presence POST", Date.now());
+  if (keepalive && !tryConsumeMapPresenceClearPost()) return;
   void fetch("/api/map/presence", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -311,6 +316,8 @@ export default function HomeLocationMap({
 
     const tick = async () => {
       if (disposed || presenceTickInFlightRef.current) return;
+      const forceGetEarly = forcePresenceGetRef.current;
+      if (!forceGetEarly && !tryBeginPresenceClientTick()) return;
       const p = posRef.current;
       if (!p) return;
       presenceTickInFlightRef.current = true;
@@ -350,7 +357,6 @@ export default function HomeLocationMap({
           postThrottleOk && (significantMove || profileChanged || anchorHeartbeat);
 
         if (shouldPost && tryConsumeMapPresencePostTurn(now)) {
-          console.log("presence POST", Date.now());
           try {
             const pr = await fetch("/api/map/presence", {
               method: "POST",
@@ -367,9 +373,12 @@ export default function HomeLocationMap({
             if (!disposed && !ac.signal.aborted) {
               if (!pr.ok) setNearbyPeers([]);
               else {
-                lastPresencePostAtRef.current = Date.now();
-                lastPostSnapshotRef.current = { lat: p.lat, lng: p.lng };
-                lastPostedProfileKeyRef.current = profileKey;
+                const postBody = (await pr.json()) as { ok?: boolean; rateLimited?: boolean };
+                if (!postBody.rateLimited) {
+                  lastPresencePostAtRef.current = Date.now();
+                  lastPostSnapshotRef.current = { lat: p.lat, lng: p.lng };
+                  lastPostedProfileKeyRef.current = profileKey;
+                }
               }
             }
           } catch {
@@ -378,7 +387,6 @@ export default function HomeLocationMap({
         }
 
         if (shouldGet && (forceGet || tryConsumeMapPresenceGetTurn(now))) {
-          console.log("presence GET", Date.now());
           try {
             const r = await fetch(
               `/api/map/presence?lat=${encodeURIComponent(String(p.lat))}&lng=${encodeURIComponent(String(p.lng))}`,
@@ -387,10 +395,12 @@ export default function HomeLocationMap({
             if (!disposed && !ac.signal.aborted) {
               if (!r.ok) setNearbyPeers([]);
               else {
-                const d = (await r.json()) as { peers?: NearbyPeer[] };
-                setNearbyPeers(Array.isArray(d.peers) ? d.peers : []);
-                lastPresenceGetAtRef.current = Date.now();
-                initialPresenceGetDoneRef.current = true;
+                const d = (await r.json()) as { peers?: NearbyPeer[]; throttled?: boolean };
+                if (!d.throttled) {
+                  setNearbyPeers(Array.isArray(d.peers) ? d.peers : []);
+                  lastPresenceGetAtRef.current = Date.now();
+                  initialPresenceGetDoneRef.current = true;
+                }
               }
             }
           } catch {
@@ -406,7 +416,7 @@ export default function HomeLocationMap({
       void tick();
     };
 
-    const bootTimer = window.setTimeout(() => void tick(), 5_000);
+    const bootTimer = window.setTimeout(() => void tick(), 8_000);
     const id = window.setInterval(() => void tick(), PRESENCE_TICK_MS);
 
     return () => {
