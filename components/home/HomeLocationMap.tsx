@@ -53,26 +53,13 @@ import { getNativeLocationBridge } from "@/lib/native-location-bridge";
 import { getDeviceName, getOrCreateDeviceId } from "@/lib/device-id";
 import { clampGeoAccuracyM, humanGeolocationMessage } from "@/lib/geolocation-utils";
 import { logMapPresenceClient } from "@/lib/map-presence-client-log";
-import {
-  setMapPresenceServerThrottleCooldown,
-  tryConsumeMapPresenceHttpSlot,
-} from "@/lib/map-presence-network-guard";
-import { presenceIsPausedAfter401, presenceSetPausedAfter401 } from "@/lib/map-presence-session-pause";
+import { presenceSetPausedAfter401 } from "@/lib/map-presence-session-pause";
 
 const DEFAULT_CENTER: [number, number] = [DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng];
 const DEFAULT_ZOOM = 6;
 
 /** Statute miles → metres (for ~5 mi “nearby” ring). */
 const NEARBY_RING_METRES = 5 * 1609.344;
-
-/** Nearby presence: at most one `/api/map/presence` HTTP call per this interval (GET or POST, shared slot). */
-const PRESENCE_POLL_MS = 60_000;
-/** Eligibility windows inside the tick (aligned with poll so we do not “want” updates faster than we can send). */
-const PRESENCE_POST_MIN_MS = 60_000;
-const PRESENCE_GET_MIN_MS = 60_000;
-/** While anchor alert is armed, allow POST upsert on this cadence (same as poll). */
-const PRESENCE_ANCHOR_HEARTBEAT_POST_MS = 60_000;
-const PRESENCE_SIGNIFICANT_MOVE_M = 30;
 
 /** Fixed anchor point for geofence (orange ⚓ — drawn under your moving boat pin). */
 function buildAnchorGeofenceCenterIcon(): L.DivIcon {
@@ -282,13 +269,6 @@ export default function HomeLocationMap({
     };
   }, [boatInput, fullName, avatarUrl, showAvatar]);
 
-  const lastPresencePostAtRef = useRef(0);
-  const lastPresenceGetAtRef = useRef(0);
-  const lastPostSnapshotRef = useRef<{ lat: number; lng: number } | null>(null);
-  const lastPostedProfileKeyRef = useRef("");
-  const initialPresenceGetDoneRef = useRef(false);
-  const forcePresenceGetRef = useRef(false);
-  const presenceTickInFlightRef = useRef(false);
   const runNearbyPresenceTickRef = useRef<(() => void) | null>(null);
   const prevSignedInForPresenceRef = useRef(signedIn);
   useEffect(() => {
@@ -301,237 +281,20 @@ export default function HomeLocationMap({
 
   const clearMapPresence = useCallback(
     (keepalive = false, reason = "unspecified") => {
-      if (!signedIn) {
-        logMapPresenceClient("clear-skipped", { reason: "not-signed-in", keepalive, intent: reason });
-        return;
-      }
-      if (presenceIsPausedAfter401()) {
-        logMapPresenceClient("clear-skipped", { reason: "paused-after-401", keepalive, intent: reason });
-        return;
-      }
-      if (!signedInRef.current) {
-        logMapPresenceClient("clear-skipped", { reason: "not-signed-in-before-fetch", keepalive, intent: reason });
-        return;
-      }
-      const now = Date.now();
-      if (
-        !tryConsumeMapPresenceHttpSlot(now, {
-          force: true,
-          ignoreCooldown: keepalive,
-        })
-      ) {
-        logMapPresenceClient("clear-skipped", { reason: "client-presence-slot-or-cooldown", keepalive, intent: reason });
-        return;
-      }
-      void fetch("/api/map/presence", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "Content-Type": "application/json" },
-        keepalive,
-        body: JSON.stringify({ shareNearby: false }),
-      }).then((res) => {
-        if (res.status === 401) {
-          presenceSetPausedAfter401(true);
-          logMapPresenceClient("clear-401-pauses-polling", { intent: reason });
-        }
-      });
+      // Emergency: all `/api/map/presence` calls disabled (nearby polling off).
+      logMapPresenceClient("clear-skipped", { reason: "presence-api-emergency-disable", keepalive, intent: reason });
+      queueMicrotask(() => setNearbyPeers([]));
     },
-    [signedIn],
+    [],
   );
 
   useEffect(() => {
-    if (!sharing || !shareNearby) {
-      queueMicrotask(() => setNearbyPeers([]));
-      lastPresencePostAtRef.current = 0;
-      lastPresenceGetAtRef.current = 0;
-      lastPostSnapshotRef.current = null;
-      lastPostedProfileKeyRef.current = "";
-      initialPresenceGetDoneRef.current = false;
-      runNearbyPresenceTickRef.current = null;
-      return;
-    }
-    if (!signedIn) {
-      logMapPresenceClient("presence-interval-inactive", { reason: "not-signed-in" });
-      queueMicrotask(() => setNearbyPeers([]));
-      return;
-    }
-
-    let disposed = false;
-    let timeoutId: number | null = null;
-
-    const tick = async () => {
-      if (disposed || presenceTickInFlightRef.current) return;
-      if (!signedInRef.current) {
-        logMapPresenceClient("tick-skipped", { reason: "not-signed-in" });
-        return;
-      }
-      if (presenceIsPausedAfter401()) {
-        logMapPresenceClient("tick-skipped", { reason: "paused-after-401" });
-        return;
-      }
-      const p = posRef.current;
-      if (!p) return;
-
-      const prf = presenceProfileRef.current;
-      const label =
-        [prf.boatInput, prf.fullName].filter(Boolean).join(" · ").slice(0, 40) || "Nearby boat";
-      const avatarDataUrl = prf.showAvatar ? (prf.avatarUrl || "") : "";
-      const avatarFp = avatarDataUrl ? `${avatarDataUrl.length}:${avatarDataUrl.slice(0, 48)}` : "";
-      const profileKey = `${label}|${prf.showAvatar ? 1 : 0}|${avatarFp}`;
-
-      const now = Date.now();
-      const preferGet = forcePresenceGetRef.current;
-      if (preferGet) forcePresenceGetRef.current = false;
-
-      const sinceGet =
-        lastPresenceGetAtRef.current === 0 ? Number.POSITIVE_INFINITY : now - lastPresenceGetAtRef.current;
-      const shouldGet =
-        preferGet || !initialPresenceGetDoneRef.current || sinceGet >= PRESENCE_GET_MIN_MS;
-
-      const sincePost =
-        lastPresencePostAtRef.current === 0 ? Number.POSITIVE_INFINITY : now - lastPresencePostAtRef.current;
-      const postThrottleOk = sincePost >= PRESENCE_POST_MIN_MS;
-
-      const snap = lastPostSnapshotRef.current;
-      let significantMove = snap == null;
-      if (snap) {
-        const m = distanceMiles(snap.lat, snap.lng, p.lat, p.lng) * 1609.344;
-        significantMove = m >= PRESENCE_SIGNIFICANT_MOVE_M;
-      }
-      const profileChanged = profileKey !== lastPostedProfileKeyRef.current;
-      const anchorHeartbeat =
-        anchorArmedRef.current &&
-        (lastPresencePostAtRef.current === 0 || now - lastPresencePostAtRef.current >= PRESENCE_ANCHOR_HEARTBEAT_POST_MS);
-      const shouldPost =
-        postThrottleOk && (significantMove || profileChanged || anchorHeartbeat);
-
-      if (!shouldPost && !shouldGet) return;
-
-      presenceTickInFlightRef.current = true;
-      const ac = new AbortController();
-      try {
-        const runGet = async () => {
-          if (!signedInRef.current) {
-            logMapPresenceClient("get-skipped", { reason: "not-signed-in-before-fetch" });
-            return;
-          }
-          if (presenceIsPausedAfter401()) {
-            logMapPresenceClient("get-skipped", { reason: "paused-after-401" });
-            return;
-          }
-          if (!tryConsumeMapPresenceHttpSlot(Date.now())) {
-            logMapPresenceClient("get-skipped", { reason: "client-presence-slot-or-cooldown" });
-            return;
-          }
-          try {
-            const r = await fetch(
-              `/api/map/presence?lat=${encodeURIComponent(String(p.lat))}&lng=${encodeURIComponent(String(p.lng))}`,
-              { credentials: "same-origin", signal: ac.signal },
-            );
-            if (!disposed && !ac.signal.aborted) {
-              if (r.status === 401) {
-                presenceSetPausedAfter401(true);
-                logMapPresenceClient("get-401-stops-polling", {});
-                setNearbyPeers([]);
-              } else if (!r.ok) {
-                setNearbyPeers([]);
-              } else {
-                const d = (await r.json()) as { peers?: NearbyPeer[]; throttled?: boolean };
-                if (d.throttled) {
-                  setMapPresenceServerThrottleCooldown();
-                  logMapPresenceClient("get-skipped", { reason: "server-throttle" });
-                } else {
-                  setNearbyPeers(Array.isArray(d.peers) ? d.peers : []);
-                  lastPresenceGetAtRef.current = Date.now();
-                  initialPresenceGetDoneRef.current = true;
-                }
-              }
-            }
-          } catch {
-            if (!disposed && !ac.signal.aborted) setNearbyPeers([]);
-          }
-        };
-
-        const runPost = async () => {
-          if (!signedInRef.current) {
-            logMapPresenceClient("post-skipped", { reason: "not-signed-in-before-fetch" });
-            return;
-          }
-          if (presenceIsPausedAfter401()) {
-            logMapPresenceClient("post-skipped", { reason: "paused-after-401" });
-            return;
-          }
-          if (!tryConsumeMapPresenceHttpSlot(Date.now())) {
-            logMapPresenceClient("post-skipped", { reason: "client-presence-slot-or-cooldown" });
-            return;
-          }
-          try {
-            const pr = await fetch("/api/map/presence", {
-              method: "POST",
-              credentials: "same-origin",
-              headers: { "Content-Type": "application/json" },
-              signal: ac.signal,
-              body: JSON.stringify({
-                shareNearby: true,
-                lat: p.lat,
-                lng: p.lng,
-                label,
-                avatarDataUrl,
-              }),
-            });
-            if (!disposed && !ac.signal.aborted) {
-              if (pr.status === 401) {
-                presenceSetPausedAfter401(true);
-                logMapPresenceClient("post-401-stops-polling", {});
-                setNearbyPeers([]);
-              } else if (!pr.ok) {
-                setNearbyPeers([]);
-              } else {
-                const postBody = (await pr.json()) as { ok?: boolean; rateLimited?: boolean };
-                if (postBody.rateLimited) {
-                  setMapPresenceServerThrottleCooldown();
-                  logMapPresenceClient("post-skipped", { reason: "server-throttle" });
-                } else {
-                  lastPresencePostAtRef.current = Date.now();
-                  lastPostSnapshotRef.current = { lat: p.lat, lng: p.lng };
-                  lastPostedProfileKeyRef.current = profileKey;
-                }
-              }
-            }
-          } catch {
-            if (!disposed && !ac.signal.aborted) setNearbyPeers([]);
-          }
-        };
-
-        if (preferGet && shouldGet) {
-          await runGet();
-        } else if (shouldPost) {
-          await runPost();
-        } else if (shouldGet) {
-          await runGet();
-        }
-      } finally {
-        presenceTickInFlightRef.current = false;
-      }
-    };
-
-    runNearbyPresenceTickRef.current = () => {
-      void tick();
-    };
-
-    const loop = async () => {
-      if (disposed) return;
-      await tick();
-      if (!disposed) timeoutId = window.setTimeout(() => void loop(), PRESENCE_POLL_MS);
-    };
-    timeoutId = window.setTimeout(() => void loop(), 0);
-
+    runNearbyPresenceTickRef.current = null;
+    setNearbyPeers([]);
     return () => {
-      disposed = true;
-      if (timeoutId != null) window.clearTimeout(timeoutId);
       runNearbyPresenceTickRef.current = null;
     };
-  }, [sharing, shareNearby, signedIn]);
+  }, []);
 
   const pollTimer = useRef<number | null>(null);
   const polling = useRef(false);
@@ -1485,8 +1248,7 @@ export default function HomeLocationMap({
         <button
           type="button"
           onClick={() => {
-            forcePresenceGetRef.current = true;
-            runNearbyPresenceTickRef.current?.();
+            // disabled temporarily to stop presence API spam
           }}
           className="w-full rounded-lg border border-blue-300 bg-white px-3 py-2 text-xs font-semibold text-blue-900 shadow-sm hover:bg-blue-50 dark:border-blue-800 dark:bg-zinc-900 dark:text-blue-100 dark:hover:bg-blue-950/50"
         >

@@ -11,6 +11,12 @@ import { findNearbyPeers, upsertPresence } from "@/lib/map-presence-store";
 
 export const runtime = "nodejs";
 
+/**
+ * Emergency off-switch: `/api/map/presence` returns empty success payloads immediately (no auth, no throttle, no store).
+ * Set to `false` and redeploy to restore nearby presence.
+ */
+const MAP_PRESENCE_EMERGENCY_OFF = true;
+
 async function requirePresenceAuth(): Promise<{ ok: true } | { ok: false; res: NextResponse }> {
   const u = await getAuthUser().catch(() => null);
   if (!u) {
@@ -33,11 +39,16 @@ type PostBody = {
   lat?: unknown;
   lng?: unknown;
   label?: unknown;
+  /** Ignored: avatars are not stored or returned (bandwidth). */
   avatarDataUrl?: unknown;
   shareNearby?: unknown;
 };
 
 export async function GET(req: Request) {
+  if (MAP_PRESENCE_EMERGENCY_OFF) {
+    return NextResponse.json({ peers: [], disabled: true as const });
+  }
+
   const auth = await requirePresenceAuth();
   if (!auth.ok) return auth.res;
 
@@ -58,7 +69,14 @@ export async function GET(req: Request) {
     return res;
   }
 
-  const peers = await findNearbyPeers(coords.lat, coords.lng, id);
+  const peersRaw = await findNearbyPeers(coords.lat, coords.lng, id);
+  const peers = peersRaw.map((p) => ({
+    id: p.id,
+    lat: p.lat,
+    lng: p.lng,
+    label: p.label,
+    avatarDataUrl: "" as const,
+  }));
 
   const res = NextResponse.json({ peers });
   if (cookieFresh) applyPresenceCookie(res, id);
@@ -66,6 +84,10 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  if (MAP_PRESENCE_EMERGENCY_OFF) {
+    return NextResponse.json({ ok: true as const, disabled: true as const });
+  }
+
   const auth = await requirePresenceAuth();
   if (!auth.ok) return auth.res;
 
@@ -102,8 +124,6 @@ export async function POST(req: Request) {
 
   const labelRaw = typeof body.label === "string" ? body.label : "";
   const label = labelRaw.replace(/[\r\n]+/g, " ").trim().slice(0, 40) || "Nearby boat";
-  const avatarRaw = typeof body.avatarDataUrl === "string" ? body.avatarDataUrl : "";
-  const avatarDataUrl = avatarRaw.trim().slice(0, 450_000);
 
   const tkey = presenceThrottleKey(id, cookieFresh, req);
   if (!presenceAllowPostUpsert(tkey)) {
@@ -117,7 +137,7 @@ export async function POST(req: Request) {
     lat: coords.lat,
     lng: coords.lng,
     label,
-    avatarDataUrl,
+    avatarDataUrl: "",
     shareNearby: true,
   });
 

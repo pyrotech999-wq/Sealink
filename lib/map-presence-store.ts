@@ -85,7 +85,7 @@ export async function upsertPresence(
       lat: patch.lat,
       lng: patch.lng,
       label: patch.label,
-      avatarDataUrl: patch.avatarDataUrl,
+      avatarDataUrl: "",
       updatedAt: new Date().toISOString(),
       shareNearby: true,
     };
@@ -128,7 +128,7 @@ export async function findNearbyPeers(
           lat: r.lat,
           lng: r.lng,
           label: r.label,
-          avatarDataUrl: r.avatarDataUrl || "",
+          avatarDataUrl: "",
         });
       }
     }
