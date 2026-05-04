@@ -1,5 +1,10 @@
 "use client";
 
+/**
+ * IFM `/api/ifm/presence` is disabled on the client when `IFM_PRESENCE_CLIENT_DISABLED` is true.
+ * No fetch/interval may call that route until re-enabled. `/api/ifm/friends` is unchanged.
+ */
+
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster/dist/MarkerCluster.css";
@@ -14,6 +19,9 @@ import { isContactPickerAvailable, pickEmailsFromDeviceContacts } from "@/lib/de
 import { getAvatarDataUrl, getBoatName, getFullName, getProfilePhone } from "@/lib/map-profile-storage";
 
 const IFM_SHARE_CONTACT_KEY = "sealink_ifm_share_contact_v1";
+
+/** Set `false` to restore POST/GET to `/api/ifm/presence` and the 20s peer poll. */
+const IFM_PRESENCE_CLIENT_DISABLED = true;
 
 type FilterMode = "all" | "friends" | "local";
 
@@ -167,6 +175,7 @@ export function IfmMapClient() {
   }, []);
 
   const sharePresence = useCallback(async () => {
+    if (IFM_PRESENCE_CLIENT_DISABLED) return;
     if (!sharing) return;
     if (!pos) return;
     const now = Date.now();
@@ -203,10 +212,15 @@ export function IfmMapClient() {
   }, [sharing, shareContactOnIfm, pos?.lat, pos?.lng]);
 
   useEffect(() => {
+    if (IFM_PRESENCE_CLIENT_DISABLED) return;
     void sharePresence();
   }, [sharePresence]);
 
   const loadPeers = useCallback(async () => {
+    if (IFM_PRESENCE_CLIENT_DISABLED) {
+      setPeers([]);
+      return;
+    }
     setErr(null);
     try {
       if (mode === "local") {
