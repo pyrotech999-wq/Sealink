@@ -1,9 +1,13 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import path from "path";
+/**
+ * Ephemeral map “nearby” presence — in-memory only (no filesystem).
+ *
+ * Vercel serverless: the filesystem is read-only; do not use `fs` here.
+ * Each warm Lambda instance holds its own map — peers only see others hitting the same
+ * instance until it goes cold. For durable or cross-instance presence, plug in Redis / Vercel KV / Supabase.
+ */
+
 import { distanceMiles } from "@/lib/geo-haversine";
 import { MAP_NEARBY_RADIUS_MI, MAP_PRESENCE_STALE_SEC } from "@/lib/map-nearby-constants";
-
-const DATA_PATH = path.join(process.cwd(), "data", "map-nearby-presence.json");
 
 export type MapPresenceRecord = {
   sessionId: string;
@@ -15,6 +19,12 @@ export type MapPresenceRecord = {
   shareNearby: boolean;
 };
 
+/** Session id → latest record (only `shareNearby: true` rows are kept). */
+const presenceBySession = new Map<string, MapPresenceRecord>();
+
+/** Hard cap to avoid unbounded RAM if abused. */
+const MAX_SESSIONS = 5_000;
+
 let queue: Promise<unknown> = Promise.resolve();
 
 function enqueue<T>(fn: () => Promise<T>): Promise<T> {
@@ -24,23 +34,6 @@ function enqueue<T>(fn: () => Promise<T>): Promise<T> {
     () => undefined,
   );
   return next;
-}
-
-function readRaw(): MapPresenceRecord[] {
-  try {
-    if (!existsSync(DATA_PATH)) return [];
-    const raw = readFileSync(DATA_PATH, "utf-8");
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed as MapPresenceRecord[];
-  } catch {
-    return [];
-  }
-}
-
-function writeRaw(list: MapPresenceRecord[]): void {
-  mkdirSync(path.dirname(DATA_PATH), { recursive: true });
-  writeFileSync(DATA_PATH, JSON.stringify(list, null, 2), "utf-8");
 }
 
 function radiusMi(): number {
@@ -54,14 +47,27 @@ function staleMs(): number {
   return sec * 1000;
 }
 
-function pruneStale(list: MapPresenceRecord[], now: Date): MapPresenceRecord[] {
+function pruneStale(now: Date): void {
   const ms = staleMs();
   const t = now.getTime();
-  return list.filter((r) => {
+  for (const [id, r] of presenceBySession) {
     const u = new Date(r.updatedAt).getTime();
-    if (t - u > ms) return false;
-    return true;
-  });
+    if (t - u > ms) presenceBySession.delete(id);
+  }
+}
+
+/** If over cap, drop oldest sessions by `updatedAt` until under the limit. */
+function enforceMaxSessions(): void {
+  if (presenceBySession.size <= MAX_SESSIONS) return;
+  const rows = [...presenceBySession.entries()].sort(
+    (a, b) => new Date(a[1].updatedAt).getTime() - new Date(b[1].updatedAt).getTime(),
+  );
+  let over = presenceBySession.size - MAX_SESSIONS;
+  for (const [id] of rows) {
+    if (over <= 0) break;
+    presenceBySession.delete(id);
+    over -= 1;
+  }
 }
 
 export async function upsertPresence(
@@ -69,10 +75,9 @@ export async function upsertPresence(
   patch: { lat: number; lng: number; label: string; avatarDataUrl: string; shareNearby: boolean },
 ): Promise<void> {
   return enqueue(async () => {
-    let list = pruneStale(readRaw(), new Date());
+    pruneStale(new Date());
     if (!patch.shareNearby) {
-      list = list.filter((r) => r.sessionId !== sessionId);
-      writeRaw(list);
+      presenceBySession.delete(sessionId);
       return;
     }
     const next: MapPresenceRecord = {
@@ -84,10 +89,8 @@ export async function upsertPresence(
       updatedAt: new Date().toISOString(),
       shareNearby: true,
     };
-    const idx = list.findIndex((r) => r.sessionId === sessionId);
-    if (idx >= 0) list[idx] = next;
-    else list.push(next);
-    writeRaw(list);
+    presenceBySession.set(sessionId, next);
+    enforceMaxSessions();
   });
 }
 
@@ -111,13 +114,11 @@ export async function findNearbyPeers(
   now = new Date(),
 ): Promise<NearbyPeer[]> {
   return enqueue(async () => {
-    const raw = readRaw();
-    const list = pruneStale(raw, now);
-    if (list.length !== raw.length) writeRaw(list);
+    pruneStale(now);
 
     const maxMi = radiusMi();
     const out: NearbyPeer[] = [];
-    for (const r of list) {
+    for (const r of presenceBySession.values()) {
       if (!r.shareNearby) continue;
       if (r.sessionId === excludeSessionId) continue;
       const mi = distanceMiles(lat, lng, r.lat, r.lng);
