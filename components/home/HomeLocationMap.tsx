@@ -322,10 +322,6 @@ export default function HomeLocationMap({
         logMapPresenceClient("clear-skipped", { reason: "not-signed-in-before-fetch", keepalive, intent: reason });
         return;
       }
-      if (presenceIsPausedAfter401()) {
-        logMapPresenceClient("clear-skipped", { reason: "paused-after-401", keepalive, intent: reason });
-        return;
-      }
       void fetch("/api/map/presence", {
         method: "POST",
         credentials: "same-origin",
