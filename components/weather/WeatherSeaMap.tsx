@@ -210,13 +210,31 @@ function CombinedMarineProvider({
   timeIso,
   activeMarine,
   onQuotaExceeded,
+  onSessionStormglassLimited,
 }: {
   children: React.ReactNode;
   timeIso: string;
   activeMarine: boolean;
   onQuotaExceeded: (v: boolean) => void;
+  onSessionStormglassLimited: (v: boolean) => void;
 }) {
   const map = useMap();
+  const mapRef = useRef(map);
+  useEffect(() => {
+    mapRef.current = map;
+  }, [map]);
+
+  const [boundsTick, setBoundsTick] = useState(0);
+  useEffect(() => {
+    const bump = () => setBoundsTick((t) => t + 1);
+    map.on("moveend", bump);
+    map.on("zoomend", bump);
+    return () => {
+      map.off("moveend", bump);
+      map.off("zoomend", bump);
+    };
+  }, [map]);
+
   const [dataEpoch, setDataEpoch] = useState(0);
   const [cols, setCols] = useState(6);
   const [rows, setRows] = useState(4);
@@ -224,7 +242,8 @@ function CombinedMarineProvider({
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(false);
   const [quotaExceeded, setQuotaExceeded] = useState(false);
-  const [lastMeta, setLastMeta] = useState<MarineGridContextValue["lastMeta"]>(null);
+  const [sessionStormglassLimitReached, setSessionStormglassLimitReached] = useState(false);
+  const [lastMeta, setLastMeta] = useState<MarineGridDataContextValue["lastMeta"]>(null);
 
   const debounceRef = useRef<number | null>(null);
   const forceRefreshNextRef = useRef(false);
@@ -239,9 +258,12 @@ function CombinedMarineProvider({
       setReady(false);
       setPoints([]);
       onQuotaExceeded(false);
+      onSessionStormglassLimited(false);
       return;
     }
-    const { points: gridPts, cols: gc, rows: gr, boundsKey } = buildMarineSampleGrid(map);
+    const m = mapRef.current;
+    if (!m) return;
+    const { points: gridPts, cols: gc, rows: gr, boundsKey } = buildMarineSampleGrid(m);
     const clientKey = `${boundsKey}|${timeIso}`;
     const force = forceRefreshNextRef.current;
     if (!force && clientKey === lastClientOkKey.current && gridPts.length > 0 && pointsRef.current.length > 0) {
@@ -270,6 +292,7 @@ function CombinedMarineProvider({
         cols?: number | null;
         rows?: number | null;
         quotaExceeded?: boolean;
+        sessionStormglassLimitReached?: boolean;
         stormglassUpstreamCalls?: number;
         stormglassCacheHits?: number;
         usedCache?: boolean;
@@ -279,6 +302,9 @@ function CombinedMarineProvider({
       const q = Boolean(j.quotaExceeded);
       setQuotaExceeded(q);
       onQuotaExceeded(q);
+      const sl = Boolean(j.sessionStormglassLimitReached);
+      setSessionStormglassLimitReached(sl);
+      onSessionStormglassLimited(sl);
 
       if (!res.ok || !j.ok || !Array.isArray(j.points)) {
         console.warn("[Weather map] combined marine request failed", res.status);
@@ -298,6 +324,7 @@ function CombinedMarineProvider({
         stormglassCacheHits: hits,
         usedServerCache: usedCache,
         quotaExceeded: q,
+        sessionStormglassLimitReached: sl,
       });
 
       setCols(typeof j.cols === "number" && j.cols > 0 ? j.cols : gc);
@@ -321,7 +348,7 @@ function CombinedMarineProvider({
     } finally {
       setLoading(false);
     }
-  }, [activeMarine, map, onQuotaExceeded, timeIso]);
+  }, [activeMarine, onQuotaExceeded, onSessionStormglassLimited, timeIso]);
 
   const requestRefresh = useCallback(() => {
     forceRefreshNextRef.current = true;
@@ -338,6 +365,7 @@ function CombinedMarineProvider({
         setReady(false);
         setPoints([]);
         onQuotaExceeded(false);
+        onSessionStormglassLimited(false);
       });
       return;
     }
@@ -350,24 +378,38 @@ function CombinedMarineProvider({
       if (debounceRef.current != null) window.clearTimeout(debounceRef.current);
       debounceRef.current = null;
     };
-  }, [activeMarine, onQuotaExceeded, runFetch, timeIso, map]);
+  }, [activeMarine, boundsTick, onQuotaExceeded, onSessionStormglassLimited, runFetch, timeIso]);
 
-  const value = useMemo<MarineGridContextValue>(
+  const dataValue = useMemo<MarineGridDataContextValue>(
     () => ({
       dataEpoch,
       cols,
       rows,
       points,
       ready,
-      loading,
       quotaExceeded,
+      sessionStormglassLimitReached,
       lastMeta,
       requestRefresh,
     }),
-    [cols, dataEpoch, lastMeta, loading, points, quotaExceeded, ready, requestRefresh, rows],
+    [
+      cols,
+      dataEpoch,
+      lastMeta,
+      points,
+      quotaExceeded,
+      ready,
+      requestRefresh,
+      rows,
+      sessionStormglassLimitReached,
+    ],
   );
 
-  return <MarineGridContext.Provider value={value}>{children}</MarineGridContext.Provider>;
+  return (
+    <MarineGridDataContext.Provider value={dataValue}>
+      <MarineGridLoadingContext.Provider value={loading}>{children}</MarineGridLoadingContext.Provider>
+    </MarineGridDataContext.Provider>
+  );
 }
 
 type WindPoint = { lat: number; lng: number; u: number; v: number };
@@ -386,11 +428,17 @@ function WindParticlesOverlay({
   motionScale: number;
 }) {
   const map = useMap();
-  const marine = useMarineGridContext();
+  const marine = useMarineGridData();
+  const marineRef = useRef(marine);
+  const dataEpoch = marine?.dataEpoch ?? 0;
+  const marineReady = marine?.ready ?? false;
   const opacityRef = useRef(opacity);
   useEffect(() => {
     opacityRef.current = opacity;
   }, [opacity]);
+  useEffect(() => {
+    marineRef.current = marine;
+  }, [marine]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -450,11 +498,12 @@ function WindParticlesOverlay({
     };
 
     const fetchField = async () => {
-      if (marine?.ready && marine.points.length) {
-        const bundleKey = `bundle:${marine.dataEpoch}`;
+      const marineNow = marineRef.current;
+      if (marineNow?.ready && marineNow.points.length) {
+        const bundleKey = `bundle:${marineNow.dataEpoch}`;
         if (bundleKey === lastFetchKey) return;
         const next: WindPoint[] = [];
-        for (const p of marine.points) {
+        for (const p of marineNow.points) {
           const spd = p.windSpeed;
           const dir = p.windDirection;
           if (typeof spd !== "number" || typeof dir !== "number" || !Number.isFinite(spd) || !Number.isFinite(dir)) {
@@ -471,7 +520,7 @@ function WindParticlesOverlay({
         }
       }
 
-      if (marine && !marine.ready) {
+      if (marineNow && !marineNow.ready) {
         return;
       }
 
@@ -721,18 +770,24 @@ function WindParticlesOverlay({
       if (raf) window.cancelAnimationFrame(raf);
       canvas.remove();
     };
-  }, [map, enabled, timeIso, motionScale, marine]);
+  }, [map, enabled, timeIso, motionScale, dataEpoch, marineReady]);
 
   return null;
 }
 
 function OpenMeteoWavesOverlay({ enabled, timeIso, opacity }: { enabled: boolean; timeIso: string; opacity: number }) {
   const map = useMap();
-  const marine = useMarineGridContext();
+  const marine = useMarineGridData();
+  const marineRef = useRef(marine);
+  const dataEpoch = marine?.dataEpoch ?? 0;
+  const marineReady = marine?.ready ?? false;
   const opacityRef = useRef(opacity);
   useEffect(() => {
     opacityRef.current = opacity;
   }, [opacity]);
+  useEffect(() => {
+    marineRef.current = marine;
+  }, [marine]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -742,6 +797,7 @@ function OpenMeteoWavesOverlay({ enabled, timeIso, opacity }: { enabled: boolean
 
     const render = async () => {
       try {
+        const marineNow = marineRef.current;
         const bounds = map.getBounds();
         const sw = bounds.getSouthWest();
         const ne = bounds.getNorthEast();
@@ -774,14 +830,14 @@ function OpenMeteoWavesOverlay({ enabled, timeIso, opacity }: { enabled: boolean
         };
 
         if (
-          marine?.ready &&
-          marine.points.length &&
-          marine.cols > 0 &&
-          marine.rows > 0 &&
-          marine.cols * marine.rows === marine.points.length
+          marineNow?.ready &&
+          marineNow.points.length &&
+          marineNow.cols > 0 &&
+          marineNow.rows > 0 &&
+          marineNow.cols * marineNow.rows === marineNow.points.length
         ) {
-          const mcols = marine.cols;
-          const mrows = marine.rows;
+          const mcols = marineNow.cols;
+          const mrows = marineNow.rows;
           const canvas = document.createElement("canvas");
           canvas.width = mcols * 24;
           canvas.height = mrows * 24;
@@ -791,8 +847,8 @@ function OpenMeteoWavesOverlay({ enabled, timeIso, opacity }: { enabled: boolean
             const cell = 24;
             const alpha = clamp(opacityRef.current, 0.2, 0.95);
             let painted = false;
-            for (let i = 0; i < marine.points.length; i++) {
-              const v = marine.points[i]?.waveHeight;
+            for (let i = 0; i < marineNow.points.length; i++) {
+              const v = marineNow.points[i]?.waveHeight;
               if (typeof v !== "number" || !Number.isFinite(v)) continue;
               painted = true;
               const x = i % mcols;
@@ -807,7 +863,7 @@ function OpenMeteoWavesOverlay({ enabled, timeIso, opacity }: { enabled: boolean
           }
         }
 
-        if (marine && !marine.ready) {
+        if (marineNow && !marineNow.ready) {
           return;
         }
 
@@ -927,7 +983,7 @@ function OpenMeteoWavesOverlay({ enabled, timeIso, opacity }: { enabled: boolean
       overlay = null;
       void disposed;
     };
-  }, [map, enabled, timeIso, marine]);
+  }, [map, enabled, timeIso, dataEpoch, marineReady]);
 
   return null;
 }
@@ -1019,7 +1075,8 @@ function MapToolbar({
   onInsightHint: (h: string) => void;
 }) {
   const map = useMap();
-  const marineCtx = useMarineGridContext();
+  const marineCtx = useMarineGridData();
+  const marineLoading = useMarineGridLoading();
 
   return (
     <div className="leaflet-top leaflet-right" style={{ pointerEvents: "auto" }}>
@@ -1036,12 +1093,12 @@ function MapToolbar({
         {(mode === "wind" || mode === "waves") && marineCtx ? (
           <button
             type="button"
-            disabled={marineCtx.loading}
+            disabled={marineLoading}
             onClick={() => marineCtx.requestRefresh()}
             className="rounded-lg border border-sky-200 bg-sky-50/95 px-2.5 py-1.5 text-xs font-semibold text-sky-950 shadow-md backdrop-blur-sm hover:bg-sky-100 disabled:opacity-60 dark:border-sky-800 dark:bg-sky-950/90 dark:text-sky-100 dark:hover:bg-sky-900"
             title="Fetch fresh wind & wave data from the server (bypasses the 60-minute cache)"
           >
-            {marineCtx.loading ? "…" : "Refresh marine"}
+            {marineLoading ? "…" : "Refresh marine"}
           </button>
         ) : null}
         <button
@@ -1120,6 +1177,10 @@ export function WeatherSeaMap() {
   const [marineQuotaExceeded, setMarineQuotaExceeded] = useState(false);
   const onMarineQuotaExceeded = useCallback((v: boolean) => {
     setMarineQuotaExceeded(v);
+  }, []);
+  const [marineSessionLimit, setMarineSessionLimit] = useState(false);
+  const onMarineSessionLimit = useCallback((v: boolean) => {
+    setMarineSessionLimit(v);
   }, []);
 
   useEffect(() => {
@@ -1309,6 +1370,7 @@ export function WeatherSeaMap() {
             timeIso={timeIso}
             activeMarine={mode === "wind" || mode === "waves"}
             onQuotaExceeded={onMarineQuotaExceeded}
+            onSessionStormglassLimited={onMarineSessionLimit}
           >
           <AttributionControl position="bottomright" prefix={false} />
           <ScaleControl position="bottomleft" metric imperial />
@@ -1369,6 +1431,12 @@ export function WeatherSeaMap() {
             Stormglass returned a rate limit (HTTP 429). Free plans have a small daily allowance — try again tomorrow, or
             use <span className="font-semibold">Refresh marine</span> sparingly. The map will keep using Open‑Meteo where
             Stormglass data is missing.
+          </p>
+        ) : null}
+        {marineSessionLimit && !marineQuotaExceeded ? (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
+            Stormglass usage for this browser reached the hourly safety limit (3 upstream calls). The map is using Open‑Meteo
+            only until the window resets. Cached server data still applies when available.
           </p>
         ) : null}
         {insightLoading ? (

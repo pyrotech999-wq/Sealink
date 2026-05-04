@@ -136,6 +136,7 @@ export async function POST(req: Request): Promise<Response> {
         stormglassCacheHits: 0,
         usedCache: false,
         quotaExceeded: false,
+        sessionStormglassLimitReached: false,
       });
     }
 
