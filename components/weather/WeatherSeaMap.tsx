@@ -224,6 +224,10 @@ function CombinedMarineProvider({
   const debounceRef = useRef<number | null>(null);
   const forceRefreshNextRef = useRef(false);
   const lastClientOkKey = useRef<string>("");
+  const pointsRef = useRef(points);
+  useEffect(() => {
+    pointsRef.current = points;
+  }, [points]);
 
   const runFetch = useCallback(async () => {
     if (!activeMarine) {
@@ -235,7 +239,7 @@ function CombinedMarineProvider({
     const { points: gridPts, cols: gc, rows: gr, boundsKey } = buildMarineSampleGrid(map);
     const clientKey = `${boundsKey}|${timeIso}`;
     const force = forceRefreshNextRef.current;
-    if (!force && clientKey === lastClientOkKey.current && gridPts.length > 0) {
+    if (!force && clientKey === lastClientOkKey.current && gridPts.length > 0 && pointsRef.current.length > 0) {
       console.info("[Weather map] combined marine: client skip (same viewport + time)");
       return;
     }
@@ -325,9 +329,11 @@ function CombinedMarineProvider({
     if (!activeMarine) {
       if (debounceRef.current != null) window.clearTimeout(debounceRef.current);
       debounceRef.current = null;
-      setReady(false);
-      setPoints([]);
-      onQuotaExceeded(false);
+      startTransition(() => {
+        setReady(false);
+        setPoints([]);
+        onQuotaExceeded(false);
+      });
       return;
     }
     if (debounceRef.current != null) window.clearTimeout(debounceRef.current);
@@ -339,7 +345,7 @@ function CombinedMarineProvider({
       if (debounceRef.current != null) window.clearTimeout(debounceRef.current);
       debounceRef.current = null;
     };
-  }, [activeMarine, runFetch, timeIso, map]);
+  }, [activeMarine, onQuotaExceeded, runFetch, timeIso, map]);
 
   const value = useMemo<MarineGridContextValue>(
     () => ({
@@ -377,7 +383,9 @@ function WindParticlesOverlay({
   const map = useMap();
   const marine = useMarineGridContext();
   const opacityRef = useRef(opacity);
-  opacityRef.current = opacity;
+  useEffect(() => {
+    opacityRef.current = opacity;
+  }, [opacity]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -708,7 +716,7 @@ function WindParticlesOverlay({
       if (raf) window.cancelAnimationFrame(raf);
       canvas.remove();
     };
-  }, [map, enabled, timeIso, motionScale, marine?.dataEpoch, marine?.ready]);
+  }, [map, enabled, timeIso, motionScale, marine]);
 
   return null;
 }
@@ -717,7 +725,9 @@ function OpenMeteoWavesOverlay({ enabled, timeIso, opacity }: { enabled: boolean
   const map = useMap();
   const marine = useMarineGridContext();
   const opacityRef = useRef(opacity);
-  opacityRef.current = opacity;
+  useEffect(() => {
+    opacityRef.current = opacity;
+  }, [opacity]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -730,34 +740,6 @@ function OpenMeteoWavesOverlay({ enabled, timeIso, opacity }: { enabled: boolean
         const bounds = map.getBounds();
         const sw = bounds.getSouthWest();
         const ne = bounds.getNorthEast();
-
-        // Sample a grid across the viewport, but cap total samples to avoid URL-length failures.
-        // (Open-Meteo multi-point API is GET-only, so we must keep the query string reasonable.)
-        const size = map.getSize();
-        let cols: number = clamp(Math.round(size.x / 70), 10, 22);
-        let rows: number = clamp(Math.round(size.y / 70), 8, 18);
-        const MAX_SAMPLES = 160;
-        while (cols * rows > MAX_SAMPLES) {
-          if (cols >= rows) cols -= 1;
-          else rows -= 1;
-          if (cols < 8 || rows < 6) break;
-        }
-        const lats: number[] = [];
-        const lngs: number[] = [];
-        const req: { lat: number; lng: number }[] = [];
-        for (let y = 0; y < rows; y++) {
-          const fy = rows === 1 ? 0.5 : y / (rows - 1);
-          const lat = sw.lat + (ne.lat - sw.lat) * fy;
-          for (let x = 0; x < cols; x++) {
-            const fx = cols === 1 ? 0.5 : x / (cols - 1);
-            const lng = sw.lng + (ne.lng - sw.lng) * fx;
-            const rlat = Number(lat.toFixed(4));
-            const rlng = Number(lng.toFixed(4));
-            lats.push(rlat);
-            lngs.push(rlng);
-            req.push({ lat: rlat, lng: rlng });
-          }
-        }
 
         const publishWaveRaster = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
           const smooth = document.createElement("canvas");
@@ -786,46 +768,70 @@ function OpenMeteoWavesOverlay({ enabled, timeIso, opacity }: { enabled: boolean
           }
         };
 
-        try {
-          const sgRes = await fetch("/api/weather/stormglass-grid", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              timeIso,
-              layer: "waves",
-              points: req.slice(0, STORMGLASS_GRID_CAP),
-            }),
-          });
-          if (sgRes.ok) {
-            const sg = (await sgRes.json()) as { ok?: boolean; points?: { waveHeight?: number }[] };
-            if (sg.ok && Array.isArray(sg.points) && sg.points.length) {
-              const canvas = document.createElement("canvas");
-              canvas.width = cols * 24;
-              canvas.height = rows * 24;
-              const sgCtx = canvas.getContext("2d");
-              if (sgCtx) {
-                sgCtx.clearRect(0, 0, canvas.width, canvas.height);
-                const cell = 24;
-                const alpha = clamp(opacity, 0.2, 0.95);
-                let painted = false;
-                for (let i = 0; i < sg.points.length; i++) {
-                  const v = sg.points[i]?.waveHeight;
-                  if (typeof v !== "number" || !Number.isFinite(v)) continue;
-                  painted = true;
-                  const x = i % cols;
-                  const y = Math.floor(i / cols);
-                  sgCtx.fillStyle = wavesColor(v).replace(/,0\.68\)$/, `,${alpha})`);
-                  sgCtx.fillRect(x * cell, y * cell, cell, cell);
-                }
-                if (painted) {
-                  publishWaveRaster(sgCtx, canvas);
-                  return;
-                }
-              }
+        if (
+          marine?.ready &&
+          marine.points.length &&
+          marine.cols > 0 &&
+          marine.rows > 0 &&
+          marine.cols * marine.rows === marine.points.length
+        ) {
+          const mcols = marine.cols;
+          const mrows = marine.rows;
+          const canvas = document.createElement("canvas");
+          canvas.width = mcols * 24;
+          canvas.height = mrows * 24;
+          const sgCtx = canvas.getContext("2d");
+          if (sgCtx) {
+            sgCtx.clearRect(0, 0, canvas.width, canvas.height);
+            const cell = 24;
+            const alpha = clamp(opacityRef.current, 0.2, 0.95);
+            let painted = false;
+            for (let i = 0; i < marine.points.length; i++) {
+              const v = marine.points[i]?.waveHeight;
+              if (typeof v !== "number" || !Number.isFinite(v)) continue;
+              painted = true;
+              const x = i % mcols;
+              const y = Math.floor(i / mcols);
+              sgCtx.fillStyle = wavesColor(v).replace(/,0\.68\)$/, `,${alpha})`);
+              sgCtx.fillRect(x * cell, y * cell, cell, cell);
+            }
+            if (painted) {
+              publishWaveRaster(sgCtx, canvas);
+              return;
             }
           }
-        } catch {
-          /* Open‑Meteo marine */
+        }
+
+        if (marine && !marine.ready) {
+          return;
+        }
+
+        // Sample a grid across the viewport, but cap total samples to avoid URL-length failures.
+        // (Open-Meteo multi-point API is GET-only, so we must keep the query string reasonable.)
+        const size = map.getSize();
+        let cols: number = clamp(Math.round(size.x / 70), 10, 22);
+        let rows: number = clamp(Math.round(size.y / 70), 8, 18);
+        const MAX_SAMPLES = 160;
+        while (cols * rows > MAX_SAMPLES) {
+          if (cols >= rows) cols -= 1;
+          else rows -= 1;
+          if (cols < 8 || rows < 6) break;
+        }
+        const lats: number[] = [];
+        const lngs: number[] = [];
+        const req: { lat: number; lng: number }[] = [];
+        for (let y = 0; y < rows; y++) {
+          const fy = rows === 1 ? 0.5 : y / (rows - 1);
+          const lat = sw.lat + (ne.lat - sw.lat) * fy;
+          for (let x = 0; x < cols; x++) {
+            const fx = cols === 1 ? 0.5 : x / (cols - 1);
+            const lng = sw.lng + (ne.lng - sw.lng) * fx;
+            const rlat = Number(lat.toFixed(4));
+            const rlng = Number(lng.toFixed(4));
+            lats.push(rlat);
+            lngs.push(rlng);
+            req.push({ lat: rlat, lng: rlng });
+          }
         }
 
         const api = new URL("https://marine-api.open-meteo.com/v1/marine");
@@ -872,7 +878,7 @@ function OpenMeteoWavesOverlay({ enabled, timeIso, opacity }: { enabled: boolean
         ctx.globalAlpha = 1;
 
         const cell = 24;
-        const alpha = clamp(opacity, 0.2, 0.95);
+        const alpha = clamp(opacityRef.current, 0.2, 0.95);
         // If Open-Meteo had to "snap" a request far away to find sea, treat it as land and do not paint it.
         const SNAP_DEG = 0.12; // ~13km latitude; avoids big inland smearing
 
@@ -916,7 +922,7 @@ function OpenMeteoWavesOverlay({ enabled, timeIso, opacity }: { enabled: boolean
       overlay = null;
       void disposed;
     };
-  }, [map, enabled, timeIso, opacity]);
+  }, [map, enabled, timeIso, marine]);
 
   return null;
 }
@@ -1008,6 +1014,7 @@ function MapToolbar({
   onInsightHint: (h: string) => void;
 }) {
   const map = useMap();
+  const marineCtx = useMarineGridContext();
 
   return (
     <div className="leaflet-top leaflet-right" style={{ pointerEvents: "auto" }}>
@@ -1019,6 +1026,17 @@ function MapToolbar({
             className="rounded-lg border border-zinc-200 bg-white/95 px-2.5 py-1.5 text-xs font-semibold text-zinc-800 shadow-md backdrop-blur-sm hover:bg-white dark:border-zinc-600 dark:bg-zinc-900/95 dark:text-zinc-100 dark:hover:bg-zinc-800"
           >
             My location
+          </button>
+        ) : null}
+        {(mode === "wind" || mode === "waves") && marineCtx ? (
+          <button
+            type="button"
+            disabled={marineCtx.loading}
+            onClick={() => marineCtx.requestRefresh()}
+            className="rounded-lg border border-sky-200 bg-sky-50/95 px-2.5 py-1.5 text-xs font-semibold text-sky-950 shadow-md backdrop-blur-sm hover:bg-sky-100 disabled:opacity-60 dark:border-sky-800 dark:bg-sky-950/90 dark:text-sky-100 dark:hover:bg-sky-900"
+            title="Fetch fresh wind & wave data from the server (bypasses the 60-minute cache)"
+          >
+            {marineCtx.loading ? "…" : "Refresh marine"}
           </button>
         ) : null}
         <button
@@ -1094,6 +1112,10 @@ export function WeatherSeaMap() {
   const [insightText, setInsightText] = useState<string | null>(null);
   const [insightErr, setInsightErr] = useState<string | null>(null);
   const [insightHint, setInsightHint] = useState<string | null>(null);
+  const [marineQuotaExceeded, setMarineQuotaExceeded] = useState(false);
+  const onMarineQuotaExceeded = useCallback((v: boolean) => {
+    setMarineQuotaExceeded(v);
+  }, []);
 
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
@@ -1278,6 +1300,11 @@ export function WeatherSeaMap() {
           scrollWheelZoom
           attributionControl={false}
         >
+          <CombinedMarineProvider
+            timeIso={timeIso}
+            activeMarine={mode === "wind" || mode === "waves"}
+            onQuotaExceeded={onMarineQuotaExceeded}
+          >
           <AttributionControl position="bottomright" prefix={false} />
           <ScaleControl position="bottomleft" metric imperial />
           <MapToolbar
@@ -1327,10 +1354,18 @@ export function WeatherSeaMap() {
           {/* Open-Meteo marine raster — good coverage in enclosed seas (e.g. Mediterranean). */}
           <OpenMeteoWavesOverlay enabled={mode === "waves"} timeIso={timeIso} opacity={opacity} />
           <WmsOverlay mode={mode} opacity={opacity} timeIso={timeIso} />
+          </CombinedMarineProvider>
         </MapContainer>
       </div>
       <div className="grid gap-2 border-t border-zinc-200 px-3 py-2 dark:border-zinc-800">
         <Legend mode={mode} />
+        {marineQuotaExceeded ? (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
+            Stormglass returned a rate limit (HTTP 429). Free plans have a small daily allowance — try again tomorrow, or
+            use <span className="font-semibold">Refresh marine</span> sparingly. The map will keep using Open‑Meteo where
+            Stormglass data is missing.
+          </p>
+        ) : null}
         {insightLoading ? (
           <p className="text-xs text-zinc-500 dark:text-zinc-400">Generating outlook for map centre…</p>
         ) : insightErr ? (

@@ -257,7 +257,7 @@ export async function POST(req: Request): Promise<Response> {
       const params = "windSpeed,windDirection";
       for (let i = 0; i < points.length; i += CHUNK) {
         const slice = points.slice(i, i + CHUNK);
-        const rows = await Promise.all(
+        const chunkRows = await Promise.all(
           slice.map(async (pt) => {
             const { row } = await fetchStormglassHourRowCached(key, pt.lat, pt.lng, timeIso, params, req.signal, {
               forceRefresh,
@@ -265,7 +265,7 @@ export async function POST(req: Request): Promise<Response> {
             return rowToOut(pt, row);
           }),
         );
-        storm.push(...rows);
+        storm.push(...chunkRows);
       }
       const good = countWindGood(storm);
       if (good >= windThreshold(points.length)) {
@@ -315,7 +315,7 @@ export async function POST(req: Request): Promise<Response> {
       const params = "waveHeight";
       for (let i = 0; i < points.length; i += CHUNK) {
         const slice = points.slice(i, i + CHUNK);
-        const rows = await Promise.all(
+        const chunkRows = await Promise.all(
           slice.map(async (pt) => {
             const { row } = await fetchStormglassHourRowCached(key, pt.lat, pt.lng, timeIso, params, req.signal, {
               forceRefresh,
@@ -323,7 +323,7 @@ export async function POST(req: Request): Promise<Response> {
             return rowToOut(pt, row);
           }),
         );
-        storm.push(...rows);
+        storm.push(...chunkRows);
       }
       const good = countWaveGood(storm);
       if (good >= waveThreshold(points.length)) {

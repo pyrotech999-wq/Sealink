@@ -15,14 +15,14 @@ export function buildMarineSampleGrid(map: Map): {
   const b = map.getBounds();
   const sw = b.getSouthWest();
   const ne = b.getNorthEast();
-  const cols = 6;
-  const rows = 4;
+  const cols = 6 as number;
+  const rows = 4 as number;
   const points: { lat: number; lng: number }[] = [];
   for (let y = 0; y < rows; y++) {
-    const fy = rows === 1 ? 0.5 : y / (rows - 1);
+    const fy = rows <= 1 ? 0.5 : y / (rows - 1);
     const lat = sw.lat + (ne.lat - sw.lat) * fy;
     for (let x = 0; x < cols; x++) {
-      const fx = cols === 1 ? 0.5 : x / (cols - 1);
+      const fx = cols <= 1 ? 0.5 : x / (cols - 1);
       const lng = sw.lng + (ne.lng - sw.lng) * fx;
       points.push({ lat: Number(lat.toFixed(4)), lng: Number(lng.toFixed(4)) });
     }
