@@ -59,13 +59,18 @@ const DEFAULT_ZOOM = 6;
 /** Statute miles → metres (for ~5 mi “nearby” ring). */
 const NEARBY_RING_METRES = 5 * 1609.344;
 
-/** POST /api/map/presence only when this ~1.1 km grid cell or profile fingerprint changes (not every GPS tick). */
-const PRESENCE_POST_DECIMALS = 2;
-/** GET /api/map/presence at most once per this interval unless the user taps “Refresh nearby boats”. */
-const PRESENCE_GET_MIN_INTERVAL_MS = 60_000;
+/** One interval drives nearby presence; POST/GET are further throttled inside the tick. */
+const PRESENCE_TICK_MS = 10_000;
+/** Minimum time between presence POSTs (upsert or clear still uses clearMapPresence immediately). */
+const PRESENCE_POST_MIN_MS = 10_000;
+const PRESENCE_GET_MIN_MS = 30_000;
+/** While anchor alert is armed, POST periodically so peers see movement (~10–30s band). */
+const PRESENCE_ANCHOR_HEARTBEAT_POST_MS = 20_000;
+const PRESENCE_SIGNIFICANT_MOVE_M = 30;
 
 function clearMapPresence(keepalive = false, _reason = "unspecified") {
-  console.info("presence POST");
+  const ts = new Date().toISOString();
+  console.info("presence POST sent", ts);
   void fetch("/api/map/presence", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -255,110 +260,174 @@ export default function HomeLocationMap({
     posRef.current = pos;
   }, [pos]);
 
-  /** Manual “Refresh nearby boats” — increments this to force a GET (POST only when `presencePostKey` changes). */
-  const [nearbyRefreshNonce, setNearbyRefreshNonce] = useState(0);
-  const prevPresencePostKeyRef = useRef("");
-  const lastHandledRefreshNonceRef = useRef(0);
-  const lastGetAtRef = useRef(0);
+  const anchorArmedRef = useRef(false);
+  useEffect(() => {
+    anchorArmedRef.current = anchorCfg.armed;
+  }, [anchorCfg.armed]);
 
-  /**
-   * Key for when to POST: coarse lat/lng grid + profile — avoids deps on `pos` object identity (GPS fires a new object every tick).
-   */
-  const presencePostKey = useMemo(() => {
-    if (!sharing || !shareNearby || pos == null) return "";
-    const label =
-      [boatInput.trim(), fullName.trim()].filter(Boolean).join(" · ").slice(0, 40) || "Nearby boat";
-    const avatarDataUrl = showAvatar ? (avatarUrl || "") : "";
-    const gLat = pos.lat.toFixed(PRESENCE_POST_DECIMALS);
-    const gLng = pos.lng.toFixed(PRESENCE_POST_DECIMALS);
-    const avatarFp = avatarDataUrl ? `${avatarDataUrl.length}:${avatarDataUrl.slice(0, 48)}` : "";
-    return `${gLat}|${gLng}|${label}|${showAvatar ? 1 : 0}|${avatarFp}`;
-  }, [sharing, shareNearby, pos?.lat, pos?.lng, boatInput, fullName, avatarUrl, showAvatar]);
+  const presenceProfileRef = useRef({
+    boatInput: "",
+    fullName: "",
+    avatarUrl: "",
+    showAvatar: true,
+  });
+  useEffect(() => {
+    presenceProfileRef.current = {
+      boatInput: boatInput.trim(),
+      fullName: fullName.trim(),
+      avatarUrl,
+      showAvatar,
+    };
+  }, [boatInput, fullName, avatarUrl, showAvatar]);
+
+  const lastPresencePostAtRef = useRef(0);
+  const lastPresenceGetAtRef = useRef(0);
+  const lastPostSnapshotRef = useRef<{ lat: number; lng: number } | null>(null);
+  const lastPostedProfileKeyRef = useRef("");
+  const initialPresenceGetDoneRef = useRef(false);
+  const forcePresenceGetRef = useRef(false);
+  const presenceTickInFlightRef = useRef(false);
+  const runNearbyPresenceTickRef = useRef<(() => void) | null>(null);
+  const hadPosForNearbySharingRef = useRef(false);
 
   useEffect(() => {
-    if (!presencePostKey || !sharing || !shareNearby) {
+    if (!sharing || !shareNearby) {
       queueMicrotask(() => setNearbyPeers([]));
-      prevPresencePostKeyRef.current = "";
+      lastPresencePostAtRef.current = 0;
+      lastPresenceGetAtRef.current = 0;
+      lastPostSnapshotRef.current = null;
+      lastPostedProfileKeyRef.current = "";
+      initialPresenceGetDoneRef.current = false;
+      hadPosForNearbySharingRef.current = false;
+      runNearbyPresenceTickRef.current = null;
       return;
     }
 
-    const postKeyChanged = prevPresencePostKeyRef.current !== presencePostKey;
-    const manualRefresh = nearbyRefreshNonce > lastHandledRefreshNonceRef.current;
-    if (manualRefresh) lastHandledRefreshNonceRef.current = nearbyRefreshNonce;
+    let disposed = false;
 
-    const willPost = postKeyChanged;
-    const t = Date.now();
-    const willGet =
-      willPost || manualRefresh || t - lastGetAtRef.current >= PRESENCE_GET_MIN_INTERVAL_MS;
+    const tick = async () => {
+      if (disposed || presenceTickInFlightRef.current) return;
+      const p = posRef.current;
+      if (!p) return;
+      presenceTickInFlightRef.current = true;
+      const ac = new AbortController();
+      try {
+        const prf = presenceProfileRef.current;
+        const label =
+          [prf.boatInput, prf.fullName].filter(Boolean).join(" · ").slice(0, 40) || "Nearby boat";
+        const avatarDataUrl = prf.showAvatar ? (prf.avatarUrl || "") : "";
+        const avatarFp = avatarDataUrl ? `${avatarDataUrl.length}:${avatarDataUrl.slice(0, 48)}` : "";
+        const profileKey = `${label}|${prf.showAvatar ? 1 : 0}|${avatarFp}`;
 
-    if (!willPost && !willGet) {
-      return;
-    }
+        const now = Date.now();
+        const forceGet = forcePresenceGetRef.current;
+        if (forceGet) forcePresenceGetRef.current = false;
 
-    const p = posRef.current;
-    if (!p) return;
+        const sinceGet =
+          lastPresenceGetAtRef.current === 0 ? Number.POSITIVE_INFINITY : now - lastPresenceGetAtRef.current;
+        const shouldGet =
+          forceGet || !initialPresenceGetDoneRef.current || sinceGet >= PRESENCE_GET_MIN_MS;
 
-    const label =
-      [boatInput.trim(), fullName.trim()].filter(Boolean).join(" · ").slice(0, 40) || "Nearby boat";
-    const avatarDataUrl = showAvatar ? (avatarUrl || "") : "";
+        const sincePost =
+          lastPresencePostAtRef.current === 0 ? Number.POSITIVE_INFINITY : now - lastPresencePostAtRef.current;
+        const postThrottleOk = sincePost >= PRESENCE_POST_MIN_MS;
 
-    const ac = new AbortController();
-    let cancelled = false;
-
-    void (async () => {
-      if (willPost) {
-        console.info("presence POST");
-        try {
-          const pr = await fetch("/api/map/presence", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            signal: ac.signal,
-            body: JSON.stringify({
-              shareNearby: true,
-              lat: p.lat,
-              lng: p.lng,
-              label,
-              avatarDataUrl,
-            }),
-          });
-          if (!pr.ok) {
-            if (!cancelled) setNearbyPeers([]);
-            return;
-          }
-          prevPresencePostKeyRef.current = presencePostKey;
-        } catch {
-          if (ac.signal.aborted) return;
-          if (!cancelled) setNearbyPeers([]);
-          return;
+        const snap = lastPostSnapshotRef.current;
+        let significantMove = snap == null;
+        if (snap) {
+          const m = distanceMiles(snap.lat, snap.lng, p.lat, p.lng) * 1609.344;
+          significantMove = m >= PRESENCE_SIGNIFICANT_MOVE_M;
         }
-      }
+        const profileChanged = profileKey !== lastPostedProfileKeyRef.current;
+        const anchorHeartbeat =
+          anchorArmedRef.current &&
+          (lastPresencePostAtRef.current === 0 || now - lastPresencePostAtRef.current >= PRESENCE_ANCHOR_HEARTBEAT_POST_MS);
+        const shouldPost =
+          postThrottleOk && (significantMove || profileChanged || anchorHeartbeat);
 
-      if (willGet) {
-        console.info("presence GET");
-        try {
-          const r = await fetch(
-            `/api/map/presence?lat=${encodeURIComponent(String(p.lat))}&lng=${encodeURIComponent(String(p.lng))}`,
-            { signal: ac.signal },
-          );
-          if (!r.ok) {
-            if (!cancelled) setNearbyPeers([]);
-            return;
+        if (shouldPost) {
+          const ts = new Date().toISOString();
+          console.info("presence POST sent", ts);
+          try {
+            const pr = await fetch("/api/map/presence", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              signal: ac.signal,
+              body: JSON.stringify({
+                shareNearby: true,
+                lat: p.lat,
+                lng: p.lng,
+                label,
+                avatarDataUrl,
+              }),
+            });
+            if (!disposed && !ac.signal.aborted) {
+              if (!pr.ok) setNearbyPeers([]);
+              else {
+                lastPresencePostAtRef.current = Date.now();
+                lastPostSnapshotRef.current = { lat: p.lat, lng: p.lng };
+                lastPostedProfileKeyRef.current = profileKey;
+              }
+            }
+          } catch {
+            if (!disposed && !ac.signal.aborted) setNearbyPeers([]);
           }
-          const d = (await r.json()) as { peers?: NearbyPeer[] };
-          if (!cancelled) setNearbyPeers(Array.isArray(d.peers) ? d.peers : []);
-          lastGetAtRef.current = Date.now();
-        } catch {
-          if (ac.signal.aborted) return;
-          if (!cancelled) setNearbyPeers([]);
         }
+
+        if (shouldGet) {
+          const ts = new Date().toISOString();
+          console.info("presence GET sent", ts);
+          try {
+            const r = await fetch(
+              `/api/map/presence?lat=${encodeURIComponent(String(p.lat))}&lng=${encodeURIComponent(String(p.lng))}`,
+              { signal: ac.signal },
+            );
+            if (!disposed && !ac.signal.aborted) {
+              if (!r.ok) setNearbyPeers([]);
+              else {
+                const d = (await r.json()) as { peers?: NearbyPeer[] };
+                setNearbyPeers(Array.isArray(d.peers) ? d.peers : []);
+                lastPresenceGetAtRef.current = Date.now();
+                initialPresenceGetDoneRef.current = true;
+              }
+            }
+          } catch {
+            if (!disposed && !ac.signal.aborted) setNearbyPeers([]);
+          }
+        }
+      } finally {
+        presenceTickInFlightRef.current = false;
       }
-    })();
+    };
+
+    runNearbyPresenceTickRef.current = () => {
+      void tick();
+    };
+
+    void tick();
+    const id = window.setInterval(() => void tick(), PRESENCE_TICK_MS);
 
     return () => {
-      cancelled = true;
-      ac.abort();
+      disposed = true;
+      runNearbyPresenceTickRef.current = null;
+      window.clearInterval(id);
     };
-  }, [presencePostKey, nearbyRefreshNonce, sharing, shareNearby]);
+  }, [sharing, shareNearby]);
+
+  /** When GPS becomes available for nearby sharing, run one tick without waiting for the interval. */
+  useEffect(() => {
+    if (!sharing || !shareNearby) {
+      hadPosForNearbySharingRef.current = false;
+      return;
+    }
+    if (!pos) {
+      hadPosForNearbySharingRef.current = false;
+      return;
+    }
+    if (hadPosForNearbySharingRef.current) return;
+    hadPosForNearbySharingRef.current = true;
+    runNearbyPresenceTickRef.current?.();
+  }, [sharing, shareNearby, pos != null]);
 
   const pollTimer = useRef<number | null>(null);
   const polling = useRef(false);
@@ -1312,7 +1381,8 @@ export default function HomeLocationMap({
         <button
           type="button"
           onClick={() => {
-            setNearbyRefreshNonce((n) => n + 1);
+            forcePresenceGetRef.current = true;
+            runNearbyPresenceTickRef.current?.();
           }}
           className="w-full rounded-lg border border-blue-300 bg-white px-3 py-2 text-xs font-semibold text-blue-900 shadow-sm hover:bg-blue-50 dark:border-blue-800 dark:bg-zinc-900 dark:text-blue-100 dark:hover:bg-blue-950/50"
         >
