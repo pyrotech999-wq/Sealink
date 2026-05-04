@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import { applyPresenceCookie, resolvePresenceSession } from "@/lib/map-presence-api-helpers";
+import {
+  presenceAllowGet,
+  presenceAllowPostUpsert,
+  presenceThrottleKey,
+} from "@/lib/map-presence-server-rate-limit";
 import { findNearbyPeers, upsertPresence } from "@/lib/map-presence-store";
 
 export const runtime = "nodejs";
@@ -26,6 +31,13 @@ export async function GET(req: Request) {
   const coords = clampLatLng(lat, lng);
   if (!coords) {
     return NextResponse.json({ error: "lat and lng required" }, { status: 400 });
+  }
+
+  const tkey = presenceThrottleKey(id, cookieFresh, req);
+  if (!presenceAllowGet(tkey)) {
+    const res = NextResponse.json({ peers: [], throttled: true as const });
+    if (cookieFresh) applyPresenceCookie(res, id);
+    return res;
   }
 
   const peers = await findNearbyPeers(coords.lat, coords.lng, id);
@@ -71,6 +83,13 @@ export async function POST(req: Request) {
   const label = labelRaw.replace(/[\r\n]+/g, " ").trim().slice(0, 40) || "Nearby boat";
   const avatarRaw = typeof body.avatarDataUrl === "string" ? body.avatarDataUrl : "";
   const avatarDataUrl = avatarRaw.trim().slice(0, 450_000);
+
+  const tkey = presenceThrottleKey(id, cookieFresh, req);
+  if (!presenceAllowPostUpsert(tkey)) {
+    const res = NextResponse.json({ ok: true as const, rateLimited: true as const });
+    if (cookieFresh) applyPresenceCookie(res, id);
+    return res;
+  }
 
   await upsertPresence(id, {
     lat: coords.lat,
