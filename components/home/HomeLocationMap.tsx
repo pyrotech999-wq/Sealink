@@ -52,9 +52,6 @@ import { isLikelyIOS } from "@/lib/location-env";
 import { getNativeLocationBridge } from "@/lib/native-location-bridge";
 import { getDeviceName, getOrCreateDeviceId } from "@/lib/device-id";
 import { clampGeoAccuracyM, humanGeolocationMessage } from "@/lib/geolocation-utils";
-import { logMapPresenceClient } from "@/lib/map-presence-client-log";
-import { presenceSetPausedAfter401 } from "@/lib/map-presence-session-pause";
-
 const DEFAULT_CENTER: [number, number] = [DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng];
 const DEFAULT_ZOOM = 6;
 
@@ -253,48 +250,6 @@ export default function HomeLocationMap({
   useEffect(() => {
     anchorArmedRef.current = anchorCfg.armed;
   }, [anchorCfg.armed]);
-
-  const presenceProfileRef = useRef({
-    boatInput: "",
-    fullName: "",
-    avatarUrl: "",
-    showAvatar: true,
-  });
-  useEffect(() => {
-    presenceProfileRef.current = {
-      boatInput: boatInput.trim(),
-      fullName: fullName.trim(),
-      avatarUrl,
-      showAvatar,
-    };
-  }, [boatInput, fullName, avatarUrl, showAvatar]);
-
-  const runNearbyPresenceTickRef = useRef<(() => void) | null>(null);
-  const prevSignedInForPresenceRef = useRef(signedIn);
-  useEffect(() => {
-    if (signedIn && !prevSignedInForPresenceRef.current) {
-      presenceSetPausedAfter401(false);
-      logMapPresenceClient("401-pause-cleared", { reason: "signed-in-transition" });
-    }
-    prevSignedInForPresenceRef.current = signedIn;
-  }, [signedIn]);
-
-  const clearMapPresence = useCallback(
-    (keepalive = false, reason = "unspecified") => {
-      // Emergency: all `/api/map/presence` calls disabled (nearby polling off).
-      logMapPresenceClient("clear-skipped", { reason: "presence-api-emergency-disable", keepalive, intent: reason });
-      queueMicrotask(() => setNearbyPeers([]));
-    },
-    [],
-  );
-
-  useEffect(() => {
-    runNearbyPresenceTickRef.current = null;
-    setNearbyPeers([]);
-    return () => {
-      runNearbyPresenceTickRef.current = null;
-    };
-  }, []);
 
   const pollTimer = useRef<number | null>(null);
   const polling = useRef(false);
@@ -1082,7 +1037,6 @@ export default function HomeLocationMap({
 
   const setSharingOn = useCallback((on: boolean) => {
     if (!on) {
-      clearMapPresence(false, "stop_sharing");
       setShareNearby(false);
       setNearbyPeers([]);
       setPos(null);
@@ -1105,7 +1059,7 @@ export default function HomeLocationMap({
     setShareOnMap(true);
     setSharing(true);
     setShareNearby(getShareNearbyPeers());
-  }, [clearMapPresence]);
+  }, []);
 
   /** After trial/payment success, start map sharing without an extra tap (when signed in). */
   useEffect(() => {
@@ -1156,9 +1110,6 @@ export default function HomeLocationMap({
     [activeWind],
   );
 
-  useEffect(() => {
-    return () => clearMapPresence(true, "component_unmount");
-  }, [clearMapPresence]);
 
   function persistBoat() {
     setBoatName(boatInput);
@@ -1238,7 +1189,7 @@ export default function HomeLocationMap({
             const on = e.target.checked;
             setShareNearby(on);
             setShareNearbyPeers(on);
-            if (!on) clearMapPresence(false, "share_nearby_unchecked");
+            if (!on) setNearbyPeers([]);
           }}
         />
         <span className="font-semibold">Show me to nearby SeaLink users (~5 mi)</span>
