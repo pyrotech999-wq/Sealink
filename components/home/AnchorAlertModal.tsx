@@ -29,6 +29,8 @@ async function registerSessionDevice(currentDeviceId: string): Promise<void> {
 type Props = {
   open: boolean;
   onClose: () => void;
+  /** When true: skip `/api/anchor/devices` and `/api/anchor/monitor` from this modal (see HomeLocationMap). */
+  emergencyDisableLiveMapApis?: boolean;
   sharing: boolean;
   hasFix: boolean;
   pos: { lat: number; lng: number } | null;
@@ -67,6 +69,7 @@ const ANGLE_DEFAULT_ON = 45;
 export function AnchorAlertModal({
   open,
   onClose,
+  emergencyDisableLiveMapApis = false,
   sharing,
   hasFix,
   pos,
@@ -111,6 +114,7 @@ export function AnchorAlertModal({
 
   useEffect(() => {
     if (!open) return;
+    if (emergencyDisableLiveMapApis) return;
     void (async () => {
       setDevicesLoadError(null);
       try {
@@ -131,7 +135,7 @@ export function AnchorAlertModal({
         setDevicesLoadError("Network error loading devices.");
       }
     })();
-  }, [open, deviceId]);
+  }, [open, deviceId, emergencyDisableLiveMapApis]);
 
   useEffect(() => {
     if (!open) return;
@@ -409,6 +413,7 @@ export function AnchorAlertModal({
               <button
                 type="button"
                 onClick={() => {
+                  if (emergencyDisableLiveMapApis) return;
                   const ids: string[] = [];
                   if (alertMode === "this" || alertMode === "both") ids.push(deviceId);
                   if ((alertMode === "other" || alertMode === "both") && alertOtherId) ids.push(alertOtherId);
@@ -510,6 +515,7 @@ export function AnchorAlertModal({
               type="button"
               disabled={!canSet}
               onClick={() => {
+                if (emergencyDisableLiveMapApis) return;
                 const n = parseAnchorRadiusM(Number(radius));
                 const a = angleEnabled
                   ? Math.max(0, Math.min(359, Math.round(Number(angleDeg) || ANGLE_DEFAULT_ON)))

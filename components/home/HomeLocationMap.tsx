@@ -346,7 +346,10 @@ export default function HomeLocationMap({
 
   // If monitoring another device, pull its latest fix periodically.
   useEffect(() => {
-    if (EMERGENCY_DISABLE_LIVE_MAP_APIS) return;
+    if (EMERGENCY_DISABLE_LIVE_MAP_APIS) {
+      queueMicrotask(() => setMonitoredFix(null));
+      return;
+    }
     if (!sharing) return;
     const serverMonitor = anchorMonitor?.monitorDeviceId;
     const effectiveMonitor = serverMonitor ? serverMonitor : anchorCfg.monitorDeviceId === "this" ? deviceId : anchorCfg.monitorDeviceId;

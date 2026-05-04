@@ -38,9 +38,16 @@ type Props = {
   signedIn: boolean;
   readLat: number;
   readLng: number;
+  /** When true: skip `/api/map/broadcast` and `/api/vicinity-chat/inbox` polling (see HomeLocationMap). */
+  emergencyDisableLiveMapApis?: boolean;
 };
 
-export function HomeMessagesCtaButton({ signedIn, readLat, readLng }: Props) {
+export function HomeMessagesCtaButton({
+  signedIn,
+  readLat,
+  readLng,
+  emergencyDisableLiveMapApis = false,
+}: Props) {
   const [hasNew, setHasNew] = useState(false);
   /** Peer to deep-link when the “new” state is from an incoming private message (not broadcast-only). */
   const [openPeerUid, setOpenPeerUid] = useState<string | null>(null);
@@ -86,6 +93,7 @@ export function HomeMessagesCtaButton({ signedIn, readLat, readLng }: Props) {
   }, [signedIn, readLat, readLng]);
 
   const check = useCallback(async () => {
+    if (emergencyDisableLiveMapApis) return;
     const visit = getMessagingLastVisitIso();
     let broadcasts: BroadcastRow[] = [];
     try {
@@ -167,13 +175,14 @@ export function HomeMessagesCtaButton({ signedIn, readLat, readLng }: Props) {
       setHasNew(newFlag);
       setOpenPeerUid(newFromDm && newestIncomingDmPeer ? newestIncomingDmPeer : null);
     });
-  }, [readLat, readLng, signedIn]);
+  }, [readLat, readLng, signedIn, emergencyDisableLiveMapApis]);
 
   useEffect(() => {
+    if (emergencyDisableLiveMapApis) return;
     queueMicrotask(() => void check());
     const id = window.setInterval(() => queueMicrotask(() => void check()), POLL_MS);
     return () => window.clearInterval(id);
-  }, [check]);
+  }, [check, emergencyDisableLiveMapApis]);
 
   useEffect(() => {
     const onStorage = (ev: StorageEvent) => {
