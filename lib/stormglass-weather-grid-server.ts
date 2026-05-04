@@ -2,6 +2,8 @@
  * Server-only helpers for Stormglass `/v2/weather/point` sampling used by the weather map grid API.
  */
 
+import { logStormglassRequest } from "@/lib/stormglass-log";
+
 export const STORMGLASS_GRID_CACHE_TTL_MS = 60 * 60 * 1000;
 /** One request per point: wind, waves, and swell together (not separate calls per variable). */
 export const STORMGLASS_COMBINED_WEATHER_PARAMS =
@@ -47,6 +49,8 @@ type HourRowResult = {
  * Single Stormglass weather/point request for the given params bundle.
  * On 429, does not retry alternate `source` (counts as quota hit).
  */
+const WEATHER_LOG_FILE = "lib/stormglass-weather-grid-server.ts";
+
 export async function fetchStormglassHourRow(
   apiKey: string,
   lat: number,
@@ -67,6 +71,8 @@ export async function fetchStormglassHourRow(
     url.searchParams.set("start", start.toISOString());
     url.searchParams.set("end", end.toISOString());
     if (useSgSource) url.searchParams.set("source", "sg");
+
+    logStormglassRequest(WEATHER_LOG_FILE, "fetchStormglassHourRow", url);
 
     const r = await fetch(url.toString(), {
       headers: { Authorization: apiKey },
@@ -99,6 +105,20 @@ function cacheKey(lat: number, lng: number, timeIso: string, params: string): st
   return `${lat.toFixed(4)}|${lng.toFixed(4)}|${timeIso}|${params}`;
 }
 
+/** True if a fresh cache entry exists (used for session budget before network). */
+export function peekStormglassHourRowCache(
+  lat: number,
+  lng: number,
+  timeIso: string,
+  params: string,
+): boolean {
+  const key = cacheKey(lat, lng, timeIso, params);
+  const hit = hourRowCache.get(key);
+  return Boolean(hit && Date.now() - hit.storedAt < STORMGLASS_GRID_CACHE_TTL_MS);
+}
+
+const inflightHourRows = new Map<string, Promise<HourRowResult>>();
+
 function pruneStormglassCache(): void {
   if (hourRowCache.size <= MAX_CACHE_ENTRIES) return;
   const now = Date.now();
@@ -112,6 +132,8 @@ function pruneStormglassCache(): void {
 
 export type StormglassCachedFetchMeta = {
   fromCache: boolean;
+  /** Another in-flight request served this result (no extra upstream HTTP). */
+  deduped: boolean;
   httpStatus: number;
 };
 
@@ -137,24 +159,56 @@ export async function fetchStormglassHourRowCached(
         timeIso: timeIso.slice(0, 19),
         params: params.slice(0, 48),
       });
-      return { row: hit.row, meta: { fromCache: true, httpStatus: 200 } };
+      return { row: hit.row, meta: { fromCache: true, deduped: false, httpStatus: 200 } };
     }
   }
 
-  const { row, httpStatus } = await fetchStormglassHourRow(apiKey, lat, lng, timeIso, params, signal);
-  if (httpStatus === 200 || (row == null && httpStatus !== 429)) {
-    hourRowCache.set(key, { storedAt: Date.now(), row });
-    pruneStormglassCache();
+  if (!opts.forceRefresh) {
+    const existing = inflightHourRows.get(key);
+    if (existing) {
+      const { row, httpStatus } = await existing;
+      return { row, meta: { fromCache: false, deduped: true, httpStatus } };
+    }
   }
 
-  console.info("[Stormglass] grid hour row NETWORK", {
-    lat: Number(lat.toFixed(4)),
-    lng: Number(lng.toFixed(4)),
-    timeIso: timeIso.slice(0, 19),
-    params: params.slice(0, 48),
-    httpStatus,
-    forceRefresh: Boolean(opts.forceRefresh),
-  });
+  const doNetwork = async (): Promise<HourRowResult> => {
+    const { row, httpStatus } = await fetchStormglassHourRow(apiKey, lat, lng, timeIso, params, signal);
+    if (httpStatus === 200 || (row == null && httpStatus !== 429)) {
+      hourRowCache.set(key, { storedAt: Date.now(), row });
+      pruneStormglassCache();
+    }
 
-  return { row, meta: { fromCache: false, httpStatus } };
+    console.info("[Stormglass] grid hour row NETWORK", {
+      lat: Number(lat.toFixed(4)),
+      lng: Number(lng.toFixed(4)),
+      timeIso: timeIso.slice(0, 19),
+      params: params.slice(0, 48),
+      httpStatus,
+      forceRefresh: Boolean(opts.forceRefresh),
+    });
+
+    return { row, httpStatus };
+  };
+
+  let networkPromise: Promise<HourRowResult>;
+  if (opts.forceRefresh) {
+    networkPromise = doNetwork();
+  } else {
+    networkPromise = new Promise<HourRowResult>((resolve, reject) => {
+      queueMicrotask(async () => {
+        try {
+          resolve(await doNetwork());
+        } catch (e) {
+          reject(e);
+        }
+      });
+    });
+    inflightHourRows.set(key, networkPromise);
+    networkPromise.finally(() => {
+      inflightHourRows.delete(key);
+    });
+  }
+
+  const { row, httpStatus } = await networkPromise;
+  return { row, meta: { fromCache: false, deduped: false, httpStatus } };
 }
