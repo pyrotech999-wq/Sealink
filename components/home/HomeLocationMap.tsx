@@ -54,10 +54,8 @@ import { getDeviceName, getOrCreateDeviceId } from "@/lib/device-id";
 import { clampGeoAccuracyM, humanGeolocationMessage } from "@/lib/geolocation-utils";
 import { logMapPresenceClient } from "@/lib/map-presence-client-log";
 import {
-  tryBeginPresenceClientTick,
-  tryConsumeMapPresenceClearPost,
-  tryConsumeMapPresenceGetTurn,
-  tryConsumeMapPresencePostTurn,
+  setMapPresenceServerThrottleCooldown,
+  tryConsumeMapPresenceHttpSlot,
 } from "@/lib/map-presence-network-guard";
 import { presenceIsPausedAfter401, presenceSetPausedAfter401 } from "@/lib/map-presence-session-pause";
 
@@ -67,13 +65,13 @@ const DEFAULT_ZOOM = 6;
 /** Statute miles → metres (for ~5 mi “nearby” ring). */
 const NEARBY_RING_METRES = 5 * 1609.344;
 
-/** One interval drives nearby presence; POST/GET are further throttled inside the tick + module guard. */
-const PRESENCE_TICK_MS = 180_000;
-/** In-tick soft throttle (network guard is the hard cap: POST 30s, GET 60s). */
-const PRESENCE_POST_MIN_MS = 30_000;
+/** Nearby presence: at most one `/api/map/presence` HTTP call per this interval (GET or POST, shared slot). */
+const PRESENCE_POLL_MS = 60_000;
+/** Eligibility windows inside the tick (aligned with poll so we do not “want” updates faster than we can send). */
+const PRESENCE_POST_MIN_MS = 60_000;
 const PRESENCE_GET_MIN_MS = 60_000;
-/** While anchor alert is armed, POST periodically (≤ same cadence as MIN_POST / network guard). */
-const PRESENCE_ANCHOR_HEARTBEAT_POST_MS = 30_000;
+/** While anchor alert is armed, allow POST upsert on this cadence (same as poll). */
+const PRESENCE_ANCHOR_HEARTBEAT_POST_MS = 60_000;
 const PRESENCE_SIGNIFICANT_MOVE_M = 30;
 
 /** Fixed anchor point for geofence (orange ⚓ — drawn under your moving boat pin). */
@@ -290,11 +288,8 @@ export default function HomeLocationMap({
   const lastPostedProfileKeyRef = useRef("");
   const initialPresenceGetDoneRef = useRef(false);
   const forcePresenceGetRef = useRef(false);
-  /** One-shot: first GPS fix after enabling nearby can run even if tryBegin would block (e.g. empty tick consumed the slot). */
-  const presenceKickBypassTickGapRef = useRef(false);
   const presenceTickInFlightRef = useRef(false);
   const runNearbyPresenceTickRef = useRef<(() => void) | null>(null);
-  const hadPosForNearbySharingRef = useRef(false);
   const prevSignedInForPresenceRef = useRef(signedIn);
   useEffect(() => {
     if (signedIn && !prevSignedInForPresenceRef.current) {
@@ -314,12 +309,18 @@ export default function HomeLocationMap({
         logMapPresenceClient("clear-skipped", { reason: "paused-after-401", keepalive, intent: reason });
         return;
       }
-      if (keepalive && !tryConsumeMapPresenceClearPost()) {
-        logMapPresenceClient("clear-skipped", { reason: "client-throttle-clear-post", keepalive, intent: reason });
-        return;
-      }
       if (!signedInRef.current) {
         logMapPresenceClient("clear-skipped", { reason: "not-signed-in-before-fetch", keepalive, intent: reason });
+        return;
+      }
+      const now = Date.now();
+      if (
+        !tryConsumeMapPresenceHttpSlot(now, {
+          force: true,
+          ignoreCooldown: keepalive,
+        })
+      ) {
+        logMapPresenceClient("clear-skipped", { reason: "client-presence-slot-or-cooldown", keepalive, intent: reason });
         return;
       }
       void fetch("/api/map/presence", {
@@ -346,7 +347,6 @@ export default function HomeLocationMap({
       lastPostSnapshotRef.current = null;
       lastPostedProfileKeyRef.current = "";
       initialPresenceGetDoneRef.current = false;
-      hadPosForNearbySharingRef.current = false;
       runNearbyPresenceTickRef.current = null;
       return;
     }
