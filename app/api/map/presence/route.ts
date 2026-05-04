@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { getAuthUser } from "@/lib/auth";
 import { applyPresenceCookie, resolvePresenceSession } from "@/lib/map-presence-api-helpers";
+import { logMapPresenceServer } from "@/lib/map-presence-server-log";
 import {
   presenceAllowGet,
   presenceAllowPostUpsert,
@@ -8,6 +10,18 @@ import {
 import { findNearbyPeers, upsertPresence } from "@/lib/map-presence-store";
 
 export const runtime = "nodejs";
+
+async function requirePresenceAuth(): Promise<{ ok: true } | { ok: false; res: NextResponse }> {
+  const u = await getAuthUser().catch(() => null);
+  if (!u) {
+    logMapPresenceServer("reject", { reason: "unauthorized", note: "no-session" });
+    return {
+      ok: false,
+      res: NextResponse.json({ error: "Sign in required." }, { status: 401 }),
+    };
+  }
+  return { ok: true };
+}
 
 function clampLatLng(lat: number, lng: number): { lat: number; lng: number } | null {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
@@ -24,6 +38,9 @@ type PostBody = {
 };
 
 export async function GET(req: Request) {
+  const auth = await requirePresenceAuth();
+  if (!auth.ok) return auth.res;
+
   const { id, cookieFresh } = await resolvePresenceSession();
   const url = new URL(req.url);
   const lat = Number(url.searchParams.get("lat"));
@@ -35,6 +52,7 @@ export async function GET(req: Request) {
 
   const tkey = presenceThrottleKey(id, cookieFresh, req);
   if (!presenceAllowGet(tkey)) {
+    logMapPresenceServer("GET-skipped", { reason: "server-throttle", keyKind: tkey.startsWith("s:") ? "session" : "ip" });
     const res = NextResponse.json({ peers: [], throttled: true as const });
     if (cookieFresh) applyPresenceCookie(res, id);
     return res;
@@ -48,6 +66,9 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const auth = await requirePresenceAuth();
+  if (!auth.ok) return auth.res;
+
   const { id, cookieFresh } = await resolvePresenceSession();
 
   let body: PostBody;
@@ -86,6 +107,7 @@ export async function POST(req: Request) {
 
   const tkey = presenceThrottleKey(id, cookieFresh, req);
   if (!presenceAllowPostUpsert(tkey)) {
+    logMapPresenceServer("POST-upsert-skipped", { reason: "server-throttle", keyKind: tkey.startsWith("s:") ? "session" : "ip" });
     const res = NextResponse.json({ ok: true as const, rateLimited: true as const });
     if (cookieFresh) applyPresenceCookie(res, id);
     return res;

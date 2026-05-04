@@ -52,12 +52,14 @@ import { isLikelyIOS } from "@/lib/location-env";
 import { getNativeLocationBridge } from "@/lib/native-location-bridge";
 import { getDeviceName, getOrCreateDeviceId } from "@/lib/device-id";
 import { clampGeoAccuracyM, humanGeolocationMessage } from "@/lib/geolocation-utils";
+import { logMapPresenceClient } from "@/lib/map-presence-client-log";
 import {
   tryBeginPresenceClientTick,
   tryConsumeMapPresenceClearPost,
   tryConsumeMapPresenceGetTurn,
   tryConsumeMapPresencePostTurn,
 } from "@/lib/map-presence-network-guard";
+import { presenceIsPausedAfter401, presenceSetPausedAfter401 } from "@/lib/map-presence-session-pause";
 
 const DEFAULT_CENTER: [number, number] = [DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng];
 const DEFAULT_ZOOM = 6;
@@ -66,23 +68,13 @@ const DEFAULT_ZOOM = 6;
 const NEARBY_RING_METRES = 5 * 1609.344;
 
 /** One interval drives nearby presence; POST/GET are further throttled inside the tick + module guard. */
-const PRESENCE_TICK_MS = 120_000;
-/** Minimum time between presence POSTs (upsert; clear uses clearMapPresence immediately). */
-const PRESENCE_POST_MIN_MS = 25_000;
-const PRESENCE_GET_MIN_MS = 55_000;
-/** While anchor alert is armed, POST periodically so peers see movement (aligned with network guard POST gap). */
-const PRESENCE_ANCHOR_HEARTBEAT_POST_MS = 45_000;
+const PRESENCE_TICK_MS = 180_000;
+/** In-tick soft throttle (network guard is the hard cap: POST 30s, GET 60s). */
+const PRESENCE_POST_MIN_MS = 30_000;
+const PRESENCE_GET_MIN_MS = 60_000;
+/** While anchor alert is armed, POST periodically (≤ same cadence as MIN_POST / network guard). */
+const PRESENCE_ANCHOR_HEARTBEAT_POST_MS = 30_000;
 const PRESENCE_SIGNIFICANT_MOVE_M = 30;
-
-function clearMapPresence(keepalive = false, _reason = "unspecified") {
-  if (keepalive && !tryConsumeMapPresenceClearPost()) return;
-  void fetch("/api/map/presence", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    keepalive,
-    body: JSON.stringify({ shareNearby: false }),
-  });
-}
 
 /** Fixed anchor point for geofence (orange ⚓ — drawn under your moving boat pin). */
 function buildAnchorGeofenceCenterIcon(): L.DivIcon {

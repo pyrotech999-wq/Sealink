@@ -19,11 +19,12 @@ function guard(): Guard {
   return g[GKEY]!;
 }
 
-const MIN_POST_MS = 45_000;
+/** Hard caps aligned with product: POST ≤1/30s, GET ≤1/60s on this device (all map instances share guard). */
+const MIN_POST_MS = 30_000;
 const MIN_GET_MS = 60_000;
 /** Minimum wall time between full presence ticks (interval + stray callers). */
-const MIN_TICK_MS = 55_000;
-const MIN_CLEAR_POST_MS = 12_000;
+const MIN_TICK_MS = 60_000;
+const MIN_CLEAR_POST_MS = 30_000;
 
 /** Gate interval/stray tick spam; callers that need an immediate run (e.g. forced refresh) should skip this check. */
 export function tryBeginPresenceClientTick(now = Date.now()): boolean {

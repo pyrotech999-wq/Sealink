@@ -8,8 +8,8 @@ type Row = { lastGet: number; lastPost: number };
 const rows = new Map<string, Row>();
 
 const MAX_KEYS = 8_000;
-const GET_MIN_MS = 55_000;
-const POST_MIN_MS = 45_000;
+const GET_MIN_MS = 60_000;
+const POST_MIN_MS = 30_000;
 
 function pruneIfNeeded(): void {
   if (rows.size <= MAX_KEYS) return;
