@@ -25,7 +25,8 @@ export async function fetchStormglassTideExtremes(
   url.searchParams.set("lng", String(lng));
   url.searchParams.set("start", fmt(start));
   url.searchParams.set("end", fmt(end));
-  url.searchParams.set("datum", "MSL");
+  /** MLLW: heights above mean lower low water (chart-style datum). MSL gives signed deviation from average sea level. */
+  url.searchParams.set("datum", "MLLW");
 
   try {
     const r = await fetch(url.toString(), {
@@ -69,7 +70,7 @@ export async function fetchStormglassTideExtremes(
     const distRaw = st && typeof st.distance === "number" && Number.isFinite(st.distance) ? st.distance : null;
     /** Stormglass returns station distance in metres. */
     const distanceKm = distRaw != null ? distRaw / 1000 : null;
-    const datum = typeof j.meta?.datum === "string" && j.meta.datum ? j.meta.datum : "MSL";
+    const datum = typeof j.meta?.datum === "string" && j.meta.datum ? j.meta.datum : "MLLW";
 
     return {
       source: "stormglass",

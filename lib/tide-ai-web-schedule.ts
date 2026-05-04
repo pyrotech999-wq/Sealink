@@ -126,7 +126,7 @@ Return ONLY valid JSON (no markdown fences), one object:
 Rules:
 - Include at least 4 alternating high/low events covering roughly ${today} local day and nearby hours, sorted by time.
 - "t" must be parseable by JavaScript Date (include Z or ±HH:MM offset).
-- Heights in metres as published (2 decimal places typical).
+- Heights in metres as published vs the source's tidal/chart datum (e.g. CD, LAT, MLLW, MHWS) — absolute water level above that datum, not signed deviation from mean sea level (2 decimal places typical).
 - If the web shows times in local clock time, encode them with the correct offset for ${args.timeZone}.
 - Do not invent values: only numbers and times that appear in sources you found via search.`;
 
