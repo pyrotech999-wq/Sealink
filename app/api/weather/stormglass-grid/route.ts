@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import {
   STORMGLASS_COMBINED_WEATHER_PARAMS,
   fetchStormglassHourRowCached,
+  peekStormglassHourRowCache,
   pickStormglassNumeric,
 } from "@/lib/stormglass-weather-grid-server";
+import { serializeStormglassBudgetAfterUpstream, stormglassUpstreamAllowed } from "@/lib/stormglass-session-budget";
 import { openMeteoWaveGridPoints, openMeteoWindGridPoints } from "@/lib/open-meteo-map-grid-server";
 
 export const runtime = "nodejs";
@@ -51,6 +53,11 @@ function windThreshold(n: number): number {
 
 function waveThreshold(n: number): number {
   return Math.max(4, Math.ceil(n * 0.22));
+}
+
+function appendStormglassBudgetCookie(res: NextResponse, req: Request, upstreamDelta: number): void {
+  const c = serializeStormglassBudgetAfterUpstream(req.headers.get("cookie"), upstreamDelta);
+  if (c) res.headers.append("Set-Cookie", c);
 }
 
 function rowToOut(pt: { lat: number; lng: number }, hour: Record<string, unknown> | null): Out {
@@ -135,31 +142,51 @@ export async function POST(req: Request): Promise<Response> {
     let stormglassUpstreamCalls = 0;
     let stormglassCacheHits = 0;
     let quotaExceeded = false;
-    const storm: Out[] = [];
+    let sessionStormglassLimitReached = false;
+    let budgetIncrement = 0;
 
-    for (const pt of points) {
-      if (quotaExceeded) {
-        storm.push({ lat: pt.lat, lng: pt.lng });
-        continue;
-      }
+    const centroidLat = points.reduce((s, p) => s + p.lat, 0) / points.length;
+    const centroidLng = points.reduce((s, p) => s + p.lng, 0) / points.length;
+
+    const cookieHeader = req.headers.get("cookie");
+    const wouldUseUpstream =
+      forceRefresh ||
+      !peekStormglassHourRowCache(centroidLat, centroidLng, timeIso, STORMGLASS_COMBINED_WEATHER_PARAMS);
+
+    let storm: Out[];
+
+    if (wouldUseUpstream && !stormglassUpstreamAllowed(cookieHeader)) {
+      sessionStormglassLimitReached = true;
+      storm = points.map((pt) => ({ lat: pt.lat, lng: pt.lng }));
+    } else {
       const { row, meta } = await fetchStormglassHourRowCached(
         key,
-        pt.lat,
-        pt.lng,
+        centroidLat,
+        centroidLng,
         timeIso,
         STORMGLASS_COMBINED_WEATHER_PARAMS,
         req.signal,
         { forceRefresh },
       );
-      if (meta.fromCache) stormglassCacheHits += 1;
-      else stormglassUpstreamCalls += 1;
+      if (meta.fromCache) stormglassCacheHits = 1;
+      else if (!meta.deduped) {
+        stormglassUpstreamCalls = 1;
+        budgetIncrement = 1;
+      }
       if (meta.httpStatus === 429) {
         quotaExceeded = true;
-        console.warn("[Stormglass] combined grid: 429 / quota — stopping further upstream calls this request");
-        storm.push({ lat: pt.lat, lng: pt.lng });
-        continue;
+        console.warn("[Stormglass] combined grid: 429 / quota — centroid request hit limit");
       }
-      storm.push(rowToOut(pt, row));
+      const cell = rowToOut({ lat: centroidLat, lng: centroidLng }, row);
+      storm = points.map((pt) => ({
+        lat: pt.lat,
+        lng: pt.lng,
+        ...(typeof cell.windSpeed === "number" && Number.isFinite(cell.windSpeed) ? { windSpeed: cell.windSpeed } : {}),
+        ...(typeof cell.windDirection === "number" && Number.isFinite(cell.windDirection)
+          ? { windDirection: cell.windDirection }
+          : {}),
+        ...(typeof cell.waveHeight === "number" && Number.isFinite(cell.waveHeight) ? { waveHeight: cell.waveHeight } : {}),
+      }));
     }
 
     const goodW = countWindGood(storm);
@@ -218,15 +245,17 @@ export async function POST(req: Request): Promise<Response> {
     const usedCache = stormglassCacheHits > 0 && stormglassUpstreamCalls === 0;
     console.info("[Stormglass] combined grid summary", {
       points: points.length,
+      centroid: { lat: centroidLat, lng: centroidLng },
       stormglassUpstreamCalls,
       stormglassCacheHits,
       providerWind,
       providerWaves,
       quotaExceeded,
+      sessionStormglassLimitReached,
       forceRefresh,
     });
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       ok: true,
       layer: "combined",
       points: out,
@@ -238,7 +267,10 @@ export async function POST(req: Request): Promise<Response> {
       stormglassCacheHits,
       usedCache,
       quotaExceeded,
+      sessionStormglassLimitReached,
     });
+    appendStormglassBudgetCookie(res, req, budgetIncrement);
+    return res;
   }
 
   if (layer !== "wind" && layer !== "waves") {

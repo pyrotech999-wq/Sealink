@@ -176,14 +176,14 @@ type MarineGridPoint = {
   waveHeight?: number;
 };
 
-type MarineGridContextValue = {
+type MarineGridDataContextValue = {
   dataEpoch: number;
   cols: number;
   rows: number;
   points: MarineGridPoint[];
   ready: boolean;
-  loading: boolean;
   quotaExceeded: boolean;
+  sessionStormglassLimitReached: boolean;
   lastMeta: {
     stormglassUpstreamCalls: number;
     stormglassCacheHits: number;
@@ -194,10 +194,15 @@ type MarineGridContextValue = {
   requestRefresh: () => void;
 };
 
-const MarineGridContext = createContext<MarineGridContextValue | null>(null);
+const MarineGridDataContext = createContext<MarineGridDataContextValue | null>(null);
+const MarineGridLoadingContext = createContext(false);
 
-export function useMarineGridContext(): MarineGridContextValue | null {
-  return useContext(MarineGridContext);
+export function useMarineGridData(): MarineGridDataContextValue | null {
+  return useContext(MarineGridDataContext);
+}
+
+export function useMarineGridLoading(): boolean {
+  return useContext(MarineGridLoadingContext);
 }
 
 function CombinedMarineProvider({
