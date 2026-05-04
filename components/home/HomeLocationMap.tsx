@@ -70,8 +70,8 @@ const PRESENCE_TICK_MS = 120_000;
 /** Minimum time between presence POSTs (upsert; clear uses clearMapPresence immediately). */
 const PRESENCE_POST_MIN_MS = 25_000;
 const PRESENCE_GET_MIN_MS = 55_000;
-/** While anchor alert is armed, POST periodically so peers see movement (~10–30s band). */
-const PRESENCE_ANCHOR_HEARTBEAT_POST_MS = 20_000;
+/** While anchor alert is armed, POST periodically so peers see movement (aligned with network guard POST gap). */
+const PRESENCE_ANCHOR_HEARTBEAT_POST_MS = 45_000;
 const PRESENCE_SIGNIFICANT_MOVE_M = 30;
 
 function clearMapPresence(keepalive = false, _reason = "unspecified") {
@@ -295,6 +295,8 @@ export default function HomeLocationMap({
   const lastPostedProfileKeyRef = useRef("");
   const initialPresenceGetDoneRef = useRef(false);
   const forcePresenceGetRef = useRef(false);
+  /** One-shot: first GPS fix after enabling nearby can run even if tryBegin would block (e.g. empty tick consumed the slot). */
+  const presenceKickBypassTickGapRef = useRef(false);
   const presenceTickInFlightRef = useRef(false);
   const runNearbyPresenceTickRef = useRef<(() => void) | null>(null);
   const hadPosForNearbySharingRef = useRef(false);
@@ -313,13 +315,20 @@ export default function HomeLocationMap({
     }
 
     let disposed = false;
+    let bootTimer: number | null = null;
 
     const tick = async () => {
       if (disposed || presenceTickInFlightRef.current) return;
-      const forceGetEarly = forcePresenceGetRef.current;
-      if (!forceGetEarly && !tryBeginPresenceClientTick()) return;
       const p = posRef.current;
       if (!p) return;
+      const forceGetEarly = forcePresenceGetRef.current;
+      const bypassTickGap = forceGetEarly || presenceKickBypassTickGapRef.current;
+      if (presenceKickBypassTickGapRef.current) presenceKickBypassTickGapRef.current = false;
+      if (!bypassTickGap && !tryBeginPresenceClientTick()) return;
+      if (bootTimer != null) {
+        window.clearTimeout(bootTimer);
+        bootTimer = null;
+      }
       presenceTickInFlightRef.current = true;
       const ac = new AbortController();
       try {
@@ -416,13 +425,16 @@ export default function HomeLocationMap({
       void tick();
     };
 
-    const bootTimer = window.setTimeout(() => void tick(), 8_000);
+    bootTimer = window.setTimeout(() => {
+      bootTimer = null;
+      void tick();
+    }, 8_000);
     const id = window.setInterval(() => void tick(), PRESENCE_TICK_MS);
 
     return () => {
       disposed = true;
       runNearbyPresenceTickRef.current = null;
-      window.clearTimeout(bootTimer);
+      if (bootTimer != null) window.clearTimeout(bootTimer);
       window.clearInterval(id);
     };
   }, [sharing, shareNearby]);
@@ -439,6 +451,7 @@ export default function HomeLocationMap({
     if (!pos) return;
     if (hadPosForNearbySharingRef.current) return;
     hadPosForNearbySharingRef.current = true;
+    presenceKickBypassTickGapRef.current = true;
     runNearbyPresenceTickRef.current?.();
   }, [sharing, shareNearby, pos != null]);
 

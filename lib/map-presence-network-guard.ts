@@ -21,8 +21,8 @@ function guard(): Guard {
 
 const MIN_POST_MS = 45_000;
 const MIN_GET_MS = 60_000;
-/** Ignore overlapping tick() invocations (interval + stray callers) within this window. */
-const MIN_TICK_MS = 35_000;
+/** Minimum wall time between full presence ticks (interval + stray callers). */
+const MIN_TICK_MS = 55_000;
 const MIN_CLEAR_POST_MS = 12_000;
 
 /** Gate interval/stray tick spam; callers that need an immediate run (e.g. forced refresh) should skip this check. */
