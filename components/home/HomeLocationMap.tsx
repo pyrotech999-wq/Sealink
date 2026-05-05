@@ -71,8 +71,8 @@ const EMERGENCY_DISABLE_LIVE_MAP_APIS = true;
  */
 const EMERGENCY_REENABLE_MAP_LIVE_POLLING = true;
 
-/** Nearby presence is intentionally disabled on Home; use `/local-map` instead. */
-const EMERGENCY_REENABLE_NEARBY_PRESENCE = false;
+/** Safe-mode: nearby friends (≤ ~5 mi) on the Home map. */
+const EMERGENCY_REENABLE_NEARBY_PRESENCE = true;
 
 /** Statute miles → metres (for ~5 mi “nearby” ring). */
 const NEARBY_RING_METRES = 5 * 1609.344;
@@ -369,7 +369,7 @@ export default function HomeLocationMap({
     });
   }, [sharing, pos?.lat, pos?.lng, deviceId]);
 
-  // Nearby presence stays disabled on Home; `/local-map` owns presence.
+  // Nearby friends (safe mode): max 1 POST + 1 GET per 60s, hidden-tab paused, no retries.
   useEffect(() => {
     if (!EMERGENCY_REENABLE_NEARBY_PRESENCE) return;
     if (!signedIn) {
@@ -1272,7 +1272,7 @@ export default function HomeLocationMap({
                 if (!on) setNearbyPeers([]);
               }}
             />
-            <span className="font-semibold">Show me to nearby SeaLink users (~5 mi)</span>
+        <span className="font-semibold">Show friends (within ~5 miles)</span>
           </label>
 
           {sharing && pos && shareNearby ? (
@@ -1374,6 +1374,24 @@ export default function HomeLocationMap({
             >
               ← Back to map
             </Link>
+          ) : null}
+          {!isSettings && sharing ? (
+            <button
+              type="button"
+              onClick={() => {
+                const next = !shareNearby;
+                setShareNearby(next);
+                setShareNearbyPeers(next);
+                if (!next) setNearbyPeers([]);
+              }}
+              className={`inline-flex h-10 shrink-0 items-center justify-center rounded-lg px-4 text-sm font-semibold ${
+                shareNearby
+                  ? "border border-blue-700 bg-blue-600 text-white hover:bg-blue-700"
+                  : "border border-zinc-300 bg-zinc-50 text-zinc-800 hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+              }`}
+            >
+              {shareNearby ? "Friends: ON" : "Show friends"}
+            </button>
           ) : null}
           <div className="flex flex-col items-start gap-1">
             <button
