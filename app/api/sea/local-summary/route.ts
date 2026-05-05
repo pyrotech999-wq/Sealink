@@ -267,10 +267,31 @@ type WorldTidesTable = {
   events: TideTableEvent[];
 };
 
+type CachedWorldTides = { storedAt: number; value: WorldTidesTable | null };
+const worldTidesCache = new Map<string, CachedWorldTides>();
+const worldTidesInflight = new Map<string, Promise<WorldTidesTable | null>>();
+const WORLD_TIDES_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+
+function bucketCoord(n: number): number {
+  return Math.round(n * 10) / 10;
+}
+
+function worldTidesCacheKey(coords: { lat: number; lng: number }): string {
+  // Cache broadly across a grid bucket to maximize hit rate.
+  return `lat=${bucketCoord(coords.lat).toFixed(1)}|lng=${bucketCoord(coords.lng).toFixed(1)}|days=3|datum=CD`;
+}
+
 async function fetchWorldTidesTable(coords: { lat: number; lng: number }): Promise<WorldTidesTable | null> {
   const worldTidesKey = process.env.WORLD_TIDES_API_KEY;
   if (!(typeof worldTidesKey === "string" && worldTidesKey.trim())) return null;
 
+  const key = worldTidesCacheKey(coords);
+  const hit = worldTidesCache.get(key);
+  if (hit && Date.now() - hit.storedAt < WORLD_TIDES_CACHE_TTL_MS) return hit.value;
+  const existing = worldTidesInflight.get(key);
+  if (existing) return existing;
+
+  const networkPromise: Promise<WorldTidesTable | null> = (async () => {
   const wt = new URL("https://www.worldtides.info/api/v3");
   wt.searchParams.set("extremes", "");
   wt.searchParams.set("datum", "CD");
@@ -306,8 +327,8 @@ async function fetchWorldTidesTable(coords: { lat: number; lng: number }): Promi
         })
         .filter((x): x is TideTableEvent => Boolean(x));
 
-      return {
-        source: "worldtides",
+      const out: WorldTidesTable = {
+        source: "worldtides" as const,
         datum: typeof wj.responseDatum === "string" && wj.responseDatum ? wj.responseDatum : "CD",
         timezone: typeof wj.timezone === "string" ? wj.timezone : null,
         atlas: typeof wj.atlas === "string" ? wj.atlas : null,
@@ -315,11 +336,23 @@ async function fetchWorldTidesTable(coords: { lat: number; lng: number }): Promi
         copyright: typeof wj.copyright === "string" ? wj.copyright : null,
         events,
       };
+      return out;
     }
   } catch {
     /* ignore */
   }
   return null;
+  })()
+    .then((v) => {
+      worldTidesCache.set(key, { storedAt: Date.now(), value: v });
+      return v;
+    })
+    .finally(() => {
+      worldTidesInflight.delete(key);
+    });
+
+  worldTidesInflight.set(key, networkPromise);
+  return networkPromise;
 }
 
 export async function GET(req: Request): Promise<Response> {
@@ -374,14 +407,15 @@ export async function GET(req: Request): Promise<Response> {
       return { table: r.table };
     })();
 
-    const [noaaFull, stormglassPack, tideTableFull, rUser] = await Promise.all([
+    const [noaaFull, stormglassPack, rUser] = await Promise.all([
       noaaTideTable(tideCoords),
       stormglassPromise,
-      fetchWorldTidesTable(tideCoords),
       fetch(marineUserUrl, { cache: "no-store", signal: req.signal }),
     ]);
 
     const stormglassFull = stormglassPack.table;
+    const tideTableFull =
+      noaaFull?.events?.length || stormglassFull?.events?.length ? null : await fetchWorldTidesTable(tideCoords);
 
     if (!rUser.ok) return NextResponse.json({ error: `Marine request failed (${rUser.status})` }, { status: 502 });
     const dataUser = (await rUser.json()) as MarineResp;

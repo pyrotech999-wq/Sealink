@@ -10,14 +10,20 @@ export type StormglassTideTable = {
 };
 
 const TIDE_LOG_FILE = "lib/stormglass-tide.ts";
-const TIDE_CACHE_TTL_MS = 60 * 60 * 1000;
+// Wide-area cache to reduce upstream hits (serverless RAM).
+const TIDE_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+
+function bucketCoord(n: number): number {
+  // ~0.1° ≈ 11km lat; good enough for tide station lookup and reduces key explosion.
+  return Math.round(n * 10) / 10;
+}
 
 function fmt(d: Date) {
   return d.toISOString().slice(0, 13);
 }
 
 function tideCacheKey(lat: number, lng: number, start: Date, end: Date): string {
-  return `${lat.toFixed(4)}|${lng.toFixed(4)}|${fmt(start)}|${fmt(end)}`;
+  return `${bucketCoord(lat).toFixed(1)}|${bucketCoord(lng).toFixed(1)}|${fmt(start)}|${fmt(end)}`;
 }
 
 type CachedTide = { storedAt: number; value: StormglassTideTable | null };
