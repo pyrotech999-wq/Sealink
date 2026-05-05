@@ -4,7 +4,7 @@ import { buildDraftListing, appendVesselListing, loadVesselClassifieds, updateVe
 import { isVesselCategoryId, type VesselCategoryId } from "@/lib/vessel-classifieds-types";
 import { toPublicVesselListing } from "@/lib/vessel-classifieds-public";
 import { persistListingImages } from "@/lib/listing-uploads";
-import { parseVesselClassifiedFormData } from "@/lib/vessel-classifieds-form-parse";
+import { parseVesselClassifiedFormData, VESSEL_FORM_MAX_IMAGE_BYTES, VESSEL_FORM_MAX_IMAGES } from "@/lib/vessel-classifieds-form-parse";
 import { applyComplimentaryActive } from "@/lib/vessel-classifieds-activate";
 import { consumeOneSlot } from "@/lib/vessel-freelisting-store";
 
@@ -13,6 +13,23 @@ export const runtime = "nodejs";
 function num(v: unknown): number | null {
   const n = typeof v === "number" ? v : Number(v);
   return Number.isFinite(n) ? n : null;
+}
+
+function extFromContentType(ct: string): string | null {
+  const c = ct.toLowerCase();
+  if (c === "image/jpeg" || c === "image/jpg") return "jpg";
+  if (c === "image/png") return "png";
+  if (c === "image/webp") return "webp";
+  return null;
+}
+
+function validateNewImages(files: File[]): { ok: true } | { ok: false; error: string } {
+  for (const f of files) {
+    const ext = extFromContentType(f.type || "");
+    if (!ext) return { ok: false, error: "Images must be JPG, PNG, or WebP." };
+    if (f.size > VESSEL_FORM_MAX_IMAGE_BYTES) return { ok: false, error: "Each image must be 3 MB or smaller." };
+  }
+  return { ok: true };
 }
 
 export async function GET(req: Request) {
@@ -116,12 +133,48 @@ export async function PATCH(req: Request) {
   const u = await requireAuthUser().catch(() => null);
   if (!u) return NextResponse.json({ error: "Sign-in required" }, { status: 401 });
 
+  const ct = (req.headers.get("content-type") ?? "").toLowerCase();
   let body: UpdateBody;
-  try {
-    body = (await req.json()) as UpdateBody;
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  let newFiles: File[] = [];
+
+  if (ct.includes("multipart/form-data")) {
+    let fd: FormData;
+    try {
+      fd = await req.formData();
+    } catch {
+      return NextResponse.json({ error: "Invalid form data" }, { status: 400 });
+    }
+    newFiles = fd
+      .getAll("images")
+      .filter((v): v is File => typeof v === "object" && v != null && "arrayBuffer" in v);
+    const hasPhonePublic = fd.has("contactPhonePublic");
+    const phonePubRaw = fd.get("contactPhonePublic");
+    body = {
+      id: typeof fd.get("id") === "string" ? String(fd.get("id")) : "",
+      title: typeof fd.get("title") === "string" ? String(fd.get("title")) : undefined,
+      description: typeof fd.get("description") === "string" ? String(fd.get("description")) : undefined,
+      categoryId: typeof fd.get("categoryId") === "string" ? String(fd.get("categoryId")) : undefined,
+      priceGbp: fd.get("priceGbp"),
+      locationLabel: typeof fd.get("locationLabel") === "string" ? String(fd.get("locationLabel")) : undefined,
+      year: fd.get("year"),
+      lengthFt: fd.get("lengthFt"),
+      makeModel: typeof fd.get("makeModel") === "string" ? String(fd.get("makeModel")) : undefined,
+      contactEmail: typeof fd.get("contactEmail") === "string" ? String(fd.get("contactEmail")) : undefined,
+      contactPhone: typeof fd.get("contactPhone") === "string" ? String(fd.get("contactPhone")) : undefined,
+      contactPhonePublic: hasPhonePublic
+        ? phonePubRaw === "1" ||
+          phonePubRaw === "true" ||
+          String(phonePubRaw ?? "").toLowerCase() === "on"
+        : undefined,
+    };
+  } else {
+    try {
+      body = (await req.json()) as UpdateBody;
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    }
   }
+
   const id = typeof body.id === "string" ? body.id : "";
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
@@ -129,9 +182,28 @@ export async function PATCH(req: Request) {
   const existing = all.find((l) => l.id === id);
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  const trimmedNew = newFiles.slice(0, VESSEL_FORM_MAX_IMAGES);
+  const imgCheck = validateNewImages(trimmedNew);
+  if (!imgCheck.ok) return NextResponse.json({ error: imgCheck.error }, { status: 400 });
+
+  const room = Math.max(0, VESSEL_FORM_MAX_IMAGES - existing.imageUrls.length);
+  if (trimmedNew.length > room) {
+    return NextResponse.json({ error: `You can have at most ${VESSEL_FORM_MAX_IMAGES} photos (room for ${room} more).` }, { status: 400 });
+  }
+
+  let uploadedUrls: string[] = [];
+  if (trimmedNew.length) {
+    const parts = await Promise.all(
+      trimmedNew.map(async (f) => ({
+        buffer: Buffer.from(await f.arrayBuffer()),
+        contentType: f.type || "image/jpeg",
+      })),
+    );
+    uploadedUrls = await persistListingImages("vessel", id, parts);
+  }
+
   const apply = (l: typeof existing) => {
     if (l.status === "removed") return null;
-    if (l.paymentStatus === "paid" && l.status === "active") return null; // edit rules can be expanded later
     const title = typeof body.title === "string" ? body.title : l.title;
     const description = typeof body.description === "string" ? body.description : l.description;
     const categoryId = typeof body.categoryId === "string" ? body.categoryId : l.categoryId;
@@ -151,6 +223,7 @@ export async function PATCH(req: Request) {
         : body.contactPhonePublic === false
           ? false
           : l.contactPhonePublic;
+    const nextImages = [...l.imageUrls, ...uploadedUrls].slice(0, VESSEL_FORM_MAX_IMAGES);
     return {
       ...l,
       title: title.trim(),
@@ -164,6 +237,7 @@ export async function PATCH(req: Request) {
       contactEmail: nextEmail,
       contactPhone: nextPhone || null,
       contactPhonePublic: nextPhonePublic,
+      imageUrls: nextImages,
     };
   };
 

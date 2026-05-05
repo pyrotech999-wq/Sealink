@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { VESSEL_CATEGORIES, type VesselCategoryId, type VesselPaymentProvider } from "@/lib/vessel-classifieds-types";
+import { VESSEL_FORM_MAX_IMAGES } from "@/lib/vessel-classifieds-form-parse";
 
 type PublicListing = {
   id: string;
@@ -216,6 +217,14 @@ export function VesselClassifiedsClient() {
   } | null>(null);
   const [editBusy, setEditBusy] = useState(false);
   const [editMsg, setEditMsg] = useState<string | null>(null);
+  const [editImages, setEditImages] = useState<File[]>([]);
+  const editPreviews = useMemo(() => editImages.map((f) => URL.createObjectURL(f)), [editImages]);
+
+  useEffect(() => {
+    return () => {
+      for (const u of editPreviews) URL.revokeObjectURL(u);
+    };
+  }, [editPreviews]);
 
   async function createListing() {
     if (!signedIn) {
@@ -257,6 +266,7 @@ export function VesselClassifiedsClient() {
   function startEdit(l: PublicListing) {
     if (!l.isOwner) return;
     setEditMsg(null);
+    setEditImages([]);
     setEditingId(l.id);
     setEditDraft({
       title: l.title ?? "",
@@ -276,6 +286,7 @@ export function VesselClassifiedsClient() {
   function cancelEdit() {
     setEditingId("");
     setEditDraft(null);
+    setEditImages([]);
     setEditBusy(false);
     setEditMsg(null);
   }
@@ -285,24 +296,23 @@ export function VesselClassifiedsClient() {
     setEditBusy(true);
     setEditMsg(null);
     try {
-      const body = {
-        id,
-        title: editDraft.title,
-        description: editDraft.description,
-        categoryId: editDraft.categoryId,
-        priceGbp: editDraft.priceGbp,
-        locationLabel: editDraft.locationLabel,
-        year: editDraft.year,
-        lengthFt: editDraft.lengthFt,
-        makeModel: editDraft.makeModel,
-        contactEmail: editDraft.contactEmail,
-        contactPhone: editDraft.contactPhone,
-        contactPhonePublic: editDraft.contactPhonePublic,
-      };
+      const fd = new FormData();
+      fd.set("id", id);
+      fd.set("title", editDraft.title);
+      fd.set("description", editDraft.description);
+      fd.set("categoryId", editDraft.categoryId);
+      fd.set("priceGbp", editDraft.priceGbp);
+      fd.set("locationLabel", editDraft.locationLabel);
+      fd.set("year", editDraft.year);
+      fd.set("lengthFt", editDraft.lengthFt);
+      fd.set("makeModel", editDraft.makeModel);
+      fd.set("contactEmail", editDraft.contactEmail);
+      fd.set("contactPhone", editDraft.contactPhone);
+      if (editDraft.contactPhonePublic) fd.set("contactPhonePublic", "1");
+      for (const f of editImages.slice(0, 8)) fd.append("images", f);
       const r = await fetch("/api/vessels/classifieds", {
         method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
+        body: fd,
         credentials: "same-origin",
       });
       const d = (await r.json()) as { listing?: PublicListing; error?: string };
@@ -671,6 +681,49 @@ export function VesselClassifiedsClient() {
                               Show telephone number on listing
                             </label>
                           </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                            Add photos (optional)
+                            <input
+                              type="file"
+                              accept="image/*"
+                              multiple
+                              disabled={l.imageUrls.length >= VESSEL_FORM_MAX_IMAGES}
+                              onChange={(e) => {
+                                const files = Array.from(e.target.files ?? []);
+                                if (!files.length) return;
+                                const room = Math.max(0, VESSEL_FORM_MAX_IMAGES - l.imageUrls.length);
+                                setEditImages((prev) => [...prev, ...files].slice(0, room));
+                                e.target.value = "";
+                              }}
+                              className="mt-1 block w-full text-sm text-zinc-700 file:mr-4 file:rounded-lg file:border-0 file:bg-zinc-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-zinc-800 hover:file:bg-zinc-200 disabled:opacity-50 dark:text-zinc-200 dark:file:bg-zinc-800 dark:file:text-zinc-100 dark:hover:file:bg-zinc-700"
+                            />
+                          </label>
+                          <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+                            {l.imageUrls.length >= VESSEL_FORM_MAX_IMAGES
+                              ? `Maximum ${VESSEL_FORM_MAX_IMAGES} photos reached.`
+                              : `Up to ${VESSEL_FORM_MAX_IMAGES} photos total · room for ${VESSEL_FORM_MAX_IMAGES - l.imageUrls.length} more.`}
+                          </p>
+                          {editPreviews.length ? (
+                            <div className="mt-2 grid grid-cols-4 gap-2">
+                              {editPreviews.map((src, i) => (
+                                <div
+                                  key={src}
+                                  className="relative overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900"
+                                >
+                                  <img src={src} alt="" className="h-16 w-full object-cover" />
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditImages((prev) => prev.filter((_, idx) => idx !== i))}
+                                    className="absolute right-1 top-1 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-black/70"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
                         </div>
                         {editMsg ? (
                           <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
