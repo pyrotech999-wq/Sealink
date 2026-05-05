@@ -56,10 +56,25 @@ export function LocalPresenceMap() {
     typeof window !== "undefined" ? getShareNearbyPeers() : false,
   );
   const [pos, setPos] = useState<LatLngAcc | null>(null);
+  const [pollingStarted, setPollingStarted] = useState(false);
   const [geoErr, setGeoErr] = useState<string | null>(null);
   const [nearbyPeers, setNearbyPeers] = useState<NearbyPeer[]>([]);
   const [boatName, setBoatNameState] = useState(() => (typeof window !== "undefined" ? getBoatName() : ""));
   const [fullName, setFullNameState] = useState(() => (typeof window !== "undefined" ? getFullName() : ""));
+
+  const presenceEnabled = Boolean(signedIn && Boolean(pos) && sharing && shareNearby);
+
+  useEffect(() => {
+    console.info("PRESENCE_CONDITION_CHECK", {
+      signedIn: Boolean(signedIn),
+      hasPosition: Boolean(pos),
+      sharingEnabled: Boolean(sharing),
+      shareNearbyEnabled: Boolean(shareNearby),
+      presenceEnabled,
+      pollingStarted: Boolean(pollingStarted),
+      hidden: typeof document !== "undefined" ? document.visibilityState !== "visible" : false,
+    });
+  }, [signedIn, Boolean(pos), sharing, shareNearby, presenceEnabled, pollingStarted]);
 
   useEffect(() => {
     void getDemoMe()
@@ -70,6 +85,7 @@ export function LocalPresenceMap() {
   useEffect(() => {
     if (!sharing) {
       setPos(null);
+      setPollingStarted(false);
       setGeoErr(null);
       setNearbyPeers([]);
       return;
@@ -96,9 +112,11 @@ export function LocalPresenceMap() {
   useEffect(() => {
     if (!signedIn || !sharing || !shareNearby || !pos) {
       setNearbyPeers([]);
+      setPollingStarted(false);
       return;
     }
-    return startNearbyPresence({
+    setPollingStarted(true);
+    const stop = startNearbyPresence({
       signedIn,
       shareNearby,
       getCoords: () => ({ lat: pos.lat, lng: pos.lng }),
@@ -106,6 +124,10 @@ export function LocalPresenceMap() {
       onPeers: (peers) => setNearbyPeers(peers),
       onUnauthorized: () => setNearbyPeers([]),
     });
+    return () => {
+      setPollingStarted(false);
+      stop?.();
+    };
   }, [signedIn, sharing, shareNearby, pos?.lat, pos?.lng, boatName, fullName]);
 
   const center = useMemo<[number, number]>(() => {
@@ -170,6 +192,29 @@ export function LocalPresenceMap() {
       {!signedIn ? (
         <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">Sign in to see nearby users.</p>
       ) : null}
+
+      <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-[11px] font-medium text-zinc-800 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-200">
+        <div className="flex flex-wrap gap-x-4 gap-y-1">
+          <span>
+            signedIn=<span className="font-semibold">{String(Boolean(signedIn))}</span>
+          </span>
+          <span>
+            hasPosition=<span className="font-semibold">{String(Boolean(pos))}</span>
+          </span>
+          <span>
+            sharingEnabled=<span className="font-semibold">{String(Boolean(sharing))}</span>
+          </span>
+          <span>
+            shareNearbyEnabled=<span className="font-semibold">{String(Boolean(shareNearby))}</span>
+          </span>
+          <span>
+            presenceEnabled=<span className="font-semibold">{String(Boolean(presenceEnabled))}</span>
+          </span>
+          <span>
+            pollingStarted=<span className="font-semibold">{String(Boolean(pollingStarted))}</span>
+          </span>
+        </div>
+      </div>
 
       <div className="mt-4 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
         <div className="h-[420px] bg-zinc-100 dark:bg-zinc-900">
