@@ -13,7 +13,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AttributionControl, MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 import { SeaLinkBrandFooter } from "@/components/SeaLinkBrandFooter";
-import { subscribeSharedPoller } from "@/lib/client/shared-poller";
 import { distanceMiles } from "@/lib/geo-haversine";
 import { clampGeoAccuracyM, humanGeolocationMessage } from "@/lib/geolocation-utils";
 import { isContactPickerAvailable, pickEmailsFromDeviceContacts } from "@/lib/device-contact-picker";
@@ -133,6 +132,8 @@ export function IfmMapClient() {
   const [addingFriendUid, setAddingFriendUid] = useState<string | null>(null);
   const [contactSuggestEmails, setContactSuggestEmails] = useState<string[]>([]);
   const [pickingContacts, setPickingContacts] = useState(false);
+  const [lastRefreshedAtMs, setLastRefreshedAtMs] = useState(0);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   const lastShareAt = useRef<number>(0);
   const forceNextPresencePost = useRef(false);
@@ -257,13 +258,20 @@ export function IfmMapClient() {
       setPeers([]);
       return;
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadPeers();
-    return subscribeSharedPoller(
-      "sealink:/api/ifm/presence:peers",
-      async () => void loadPeers(),
-      { enabled: true, minIntervalMs: 30_000, maxIntervalMs: 60_000 },
-    );
+    // No polling: IFM peers are refreshed manually (or once on initial load below).
+  }, [loadPeers]);
+
+  // One-time initial load so the map isn't empty on first visit.
+  useEffect(() => {
+    if (IFM_PRESENCE_CLIENT_DISABLED) return;
+    let disposed = false;
+    (async () => {
+      await loadPeers();
+      if (!disposed) setLastRefreshedAtMs(Date.now());
+    })().catch(() => undefined);
+    return () => {
+      disposed = true;
+    };
   }, [loadPeers]);
 
   const refreshFriendsList = useCallback(async () => {
@@ -279,6 +287,33 @@ export function IfmMapClient() {
   useEffect(() => {
     void refreshFriendsList();
   }, [refreshFriendsList]);
+
+  useEffect(() => {
+    if (!lastRefreshedAtMs) return;
+    const id = window.setInterval(() => setNowMs(Date.now()), 15_000);
+    return () => window.clearInterval(id);
+  }, [lastRefreshedAtMs]);
+
+  const lastRefreshedLabel = useMemo(() => {
+    if (!lastRefreshedAtMs) return "Never";
+    const s = Math.max(0, Math.floor((nowMs - lastRefreshedAtMs) / 1000));
+    if (s < 10) return "just now";
+    if (s < 60) return `${s}s ago`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 48) return `${h}h ago`;
+    const d = Math.floor(h / 24);
+    return `${d}d ago`;
+  }, [lastRefreshedAtMs, nowMs]);
+
+  const manualRefreshPeers = useCallback(async () => {
+    if (IFM_PRESENCE_CLIENT_DISABLED) return;
+    await loadPeers();
+    setLastRefreshedAtMs(Date.now());
+    // Friends list can change as you add/remove; keep it fresh on refresh.
+    void refreshFriendsList();
+  }, [loadPeers, refreshFriendsList]);
 
   const addFriendWithContact = useCallback(async (raw: string, opts?: { zoomFriendsMap?: boolean }) => {
     const v = raw.trim();
@@ -438,6 +473,20 @@ export function IfmMapClient() {
             >
               Center on me
             </button>
+
+              <div className="flex flex-col items-stretch gap-0.5 sm:items-end">
+                <button
+                  type="button"
+                  onClick={() => void manualRefreshPeers()}
+                  className="h-9 rounded-xl border border-indigo-200 bg-indigo-50 px-3 text-sm font-semibold text-indigo-900 shadow-sm hover:bg-indigo-100 dark:border-indigo-900/40 dark:bg-indigo-950/40 dark:text-indigo-100 dark:hover:bg-indigo-900/60"
+                  title="Refresh IFM users"
+                >
+                  Refresh
+                </button>
+                <p className="text-center text-[10px] font-medium text-zinc-500 sm:text-right dark:text-zinc-400">
+                  Last refreshed {lastRefreshedLabel}
+                </p>
+              </div>
 
             <button
               type="button"
