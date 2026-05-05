@@ -137,6 +137,7 @@ export function IfmMapClient() {
 
   const lastShareAt = useRef<number>(0);
   const forceNextPresencePost = useRef(false);
+  const peerIconCacheRef = useRef<Map<string, { avatar: string; icon: L.DivIcon }>>(new Map());
 
   const myDisplay = useMemo(() => {
     const fullName = getFullName().trim();
@@ -147,6 +148,16 @@ export function IfmMapClient() {
   }, [profileSync]);
 
   const myIcon = useMemo(() => buildAvatarIcon(myDisplay.avatarDataUrl), [myDisplay.avatarDataUrl]);
+
+  const getPeerIcon = useCallback((uid: string, avatarDataUrl: string) => {
+    const avatar = avatarDataUrl || "";
+    const cache = peerIconCacheRef.current;
+    const existing = cache.get(uid);
+    if (existing && existing.avatar === avatar) return existing.icon;
+    const icon = buildAvatarIcon(avatar);
+    cache.set(uid, { avatar, icon });
+    return icon;
+  }, []);
 
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
@@ -576,7 +587,7 @@ export function IfmMapClient() {
                 {mode === "all" ? (
                   <MarkerClusterGroup chunkedLoading>
                     {peersWithLocalSort.map((p) => (
-                      <Marker key={p.uid} position={[p.lat, p.lng]} icon={buildAvatarIcon(p.avatarDataUrl)}>
+                      <Marker key={p.uid} position={[p.lat, p.lng]} icon={getPeerIcon(p.uid, p.avatarDataUrl)}>
                         <Popup>
                           <IfmPeerPopup
                             peer={p}
@@ -589,7 +600,7 @@ export function IfmMapClient() {
                   </MarkerClusterGroup>
                 ) : (
                   peersWithLocalSort.map((p) => (
-                    <Marker key={p.uid} position={[p.lat, p.lng]} icon={buildAvatarIcon(p.avatarDataUrl)}>
+                    <Marker key={p.uid} position={[p.lat, p.lng]} icon={getPeerIcon(p.uid, p.avatarDataUrl)}>
                       <Popup>
                         <IfmPeerPopup
                           peer={p}
