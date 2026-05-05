@@ -32,7 +32,7 @@ export const WEATHER_CHART_REGIONS: WeatherChartRegion[] = [
     id: "europe",
     label: "Europe",
     bbox: { latMin: 35, lonMin: -12, latMax: 72, lonMax: 35 },
-    stepDeg: 3.0,
+    stepDeg: 1.25,
     mapBounds: [
       [35, -12],
       [72, 35],
@@ -42,7 +42,7 @@ export const WEATHER_CHART_REGIONS: WeatherChartRegion[] = [
     id: "north-america",
     label: "North America",
     bbox: { latMin: 15, lonMin: -170, latMax: 72, lonMax: -50 },
-    stepDeg: 5.0,
+    stepDeg: 6.0,
     mapBounds: [
       [15, -170],
       [72, -50],
@@ -52,7 +52,7 @@ export const WEATHER_CHART_REGIONS: WeatherChartRegion[] = [
     id: "south-america",
     label: "South America",
     bbox: { latMin: -56, lonMin: -82, latMax: 14, lonMax: -34 },
-    stepDeg: 5.0,
+    stepDeg: 6.0,
     mapBounds: [
       [-56, -82],
       [14, -34],
@@ -62,7 +62,7 @@ export const WEATHER_CHART_REGIONS: WeatherChartRegion[] = [
     id: "africa",
     label: "Africa",
     bbox: { latMin: -35, lonMin: -20, latMax: 37, lonMax: 55 },
-    stepDeg: 5.0,
+    stepDeg: 6.0,
     mapBounds: [
       [-35, -20],
       [37, 55],
@@ -72,7 +72,7 @@ export const WEATHER_CHART_REGIONS: WeatherChartRegion[] = [
     id: "eastern-asia",
     label: "Eastern Asia",
     bbox: { latMin: 5, lonMin: 90, latMax: 60, lonMax: 160 },
-    stepDeg: 5.0,
+    stepDeg: 6.0,
     mapBounds: [
       [5, 90],
       [60, 160],
@@ -82,7 +82,7 @@ export const WEATHER_CHART_REGIONS: WeatherChartRegion[] = [
     id: "southern-asia",
     label: "Southern Asia",
     bbox: { latMin: -5, lonMin: 55, latMax: 40, lonMax: 105 },
-    stepDeg: 4.0,
+    stepDeg: 5.0,
     mapBounds: [
       [-5, 55],
       [40, 105],
@@ -92,7 +92,7 @@ export const WEATHER_CHART_REGIONS: WeatherChartRegion[] = [
     id: "australia",
     label: "Australia",
     bbox: { latMin: -46, lonMin: 110, latMax: -8, lonMax: 155 },
-    stepDeg: 4.0,
+    stepDeg: 5.0,
     mapBounds: [
       [-46, 110],
       [-8, 155],
@@ -102,7 +102,7 @@ export const WEATHER_CHART_REGIONS: WeatherChartRegion[] = [
     id: "middle-america",
     label: "Middle America",
     bbox: { latMin: 5, lonMin: -120, latMax: 35, lonMax: -60 },
-    stepDeg: 4.0,
+    stepDeg: 5.0,
     mapBounds: [
       [5, -120],
       [35, -60],
@@ -114,7 +114,7 @@ export const WEATHER_CHART_REGIONS: WeatherChartRegion[] = [
     id: "central-europe",
     label: "Central Europe",
     bbox: { latMin: 45, lonMin: 2, latMax: 56, lonMax: 22 },
-    stepDeg: 1.8,
+    stepDeg: 1.15,
     mapBounds: [
       [45, 2],
       [56, 22],
@@ -134,7 +134,7 @@ export const WEATHER_CHART_REGIONS: WeatherChartRegion[] = [
     id: "netherlands",
     label: "Netherlands",
     bbox: { latMin: 50.5, lonMin: 2.5, latMax: 54, lonMax: 8 },
-    stepDeg: 0.7,
+    stepDeg: 0.35,
     mapBounds: [
       [50.5, 2.5],
       [54, 8],
@@ -184,7 +184,7 @@ export const WEATHER_CHART_REGIONS: WeatherChartRegion[] = [
     id: "united-kingdom",
     label: "United Kingdom",
     bbox: { latMin: 49.5, lonMin: -11, latMax: 60.8, lonMax: 3 },
-    stepDeg: 1.0,
+    stepDeg: 0.45,
     mapBounds: [
       [49.5, -11],
       [60.8, 3],
@@ -227,7 +227,7 @@ export function buildRegionGrid(region: WeatherChartRegion): { lats: number[]; l
   return { lats, lons, points };
 }
 
-const MAX_SAMPLE_POINTS = 340;
+const MAX_SAMPLE_POINTS = 520;
 
 /** Cap grid size for Open-Meteo multi-location limits and payload size. */
 export function buildRegionGridCapped(region: WeatherChartRegion): { points: { lat: number; lon: number }[] } {
