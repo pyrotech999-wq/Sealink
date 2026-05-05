@@ -39,25 +39,26 @@ export function refreshNearbyPresenceNow(opts: StartOpts): void {
   void manualRefreshNearbyPresence(opts);
 }
 
-export async function manualRefreshNearbyPresence(opts: StartOpts): Promise<void> {
+export async function manualRefreshNearbyPresence(opts: StartOpts): Promise<boolean> {
   const s = st();
-  if (!opts.signedIn || !opts.shareNearby) return;
+  if (!opts.signedIn || !opts.shareNearby) return false;
 
   const now = Date.now();
-  if (s.lastManualAtMs && now - s.lastManualAtMs < 60_000) return;
+  if (s.lastManualAtMs && now - s.lastManualAtMs < 60_000) return false;
   if (s.inflightManual) {
     console.info("PRESENCE_MANUAL_SKIPPED_INFLIGHT");
-    return s.inflightManual;
+    void s.inflightManual;
+    return false;
   }
 
   const coords = opts.getCoords();
-  if (!coords) return;
+  if (!coords) return false;
   const label = opts.getLabel().trim().slice(0, 40) || "Nearby boat";
 
   s.lastManualAtMs = now;
   console.info("PRESENCE_MANUAL_START");
 
-  const doWork = async () => {
+  const doWork = async (): Promise<boolean> => {
     // POST heartbeat once
     console.info("PRESENCE_MANUAL_POST");
     const post = await fetch("/api/map/presence", {
@@ -68,8 +69,9 @@ export async function manualRefreshNearbyPresence(opts: StartOpts): Promise<void
     });
     if (post.status === 401) {
       opts.onUnauthorized();
-      return;
+      return false;
     }
+    if (!post.ok) return false;
 
     // GET peers once
     console.info("PRESENCE_MANUAL_GET");
@@ -77,21 +79,22 @@ export async function manualRefreshNearbyPresence(opts: StartOpts): Promise<void
     const get = await fetch(url, { credentials: "same-origin", cache: "no-store" });
     if (get.status === 401) {
       opts.onUnauthorized();
-      return;
+      return false;
     }
-    if (!get.ok) return;
+    if (!get.ok) return false;
     const d = (await get.json().catch(() => ({}))) as { peers?: PresencePeer[] };
     const peers = Array.isArray(d.peers) ? d.peers : [];
     opts.onPeers(peers);
+    return true;
   };
 
   // Set inflight immediately to prevent same-tick duplicates.
   s.inflightManual = doWork()
-    .catch(() => undefined)
+    .catch(() => false)
     .finally(() => {
       console.info("PRESENCE_MANUAL_DONE");
-    s.inflightManual = null;
-  });
+      s.inflightManual = null;
+    });
   return s.inflightManual;
 }
 

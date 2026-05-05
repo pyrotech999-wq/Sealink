@@ -58,7 +58,7 @@ import { isLikelyIOS } from "@/lib/location-env";
 import { getNativeLocationBridge } from "@/lib/native-location-bridge";
 import { getDeviceName, getOrCreateDeviceId } from "@/lib/device-id";
 import { clampGeoAccuracyM, humanGeolocationMessage } from "@/lib/geolocation-utils";
-import { refreshNearbyPresenceNow } from "@/lib/client/map-presence-client";
+import { manualRefreshNearbyPresence } from "@/lib/client/map-presence-client";
 const DEFAULT_CENTER: [number, number] = [DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng];
 const DEFAULT_ZOOM = 6;
 
@@ -372,7 +372,60 @@ export default function HomeLocationMap({
   // Emergency mode: no automatic presence polling. Manual refresh only.
 
   const [nearbyRefreshBlockedUntilMs, setNearbyRefreshBlockedUntilMs] = useState(0);
-  const nearbyRefreshBlocked = typeof window !== "undefined" && Date.now() < nearbyRefreshBlockedUntilMs;
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const [lastNearbyRefreshOkAtMs, setLastNearbyRefreshOkAtMs] = useState(0);
+  const nearbyRefreshBlocked = nowMs < nearbyRefreshBlockedUntilMs;
+  const nearbyRefreshCooldownLeftS = nearbyRefreshBlocked
+    ? Math.max(0, Math.ceil((nearbyRefreshBlockedUntilMs - nowMs) / 1000))
+    : 0;
+
+  useEffect(() => {
+    setNowMs(Date.now());
+  }, []);
+
+  useEffect(() => {
+    const tick = () => setNowMs(Date.now());
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const nearbyRefreshStatusText = useMemo(() => {
+    if (nearbyRefreshBlocked && nearbyRefreshCooldownLeftS > 0) {
+      return `Refresh again in ${nearbyRefreshCooldownLeftS}s`;
+    }
+    if (lastNearbyRefreshOkAtMs) {
+      const agoS = Math.max(0, Math.floor((nowMs - lastNearbyRefreshOkAtMs) / 1000));
+      if (agoS < 5) return "Last refreshed just now";
+      if (agoS < 60) return `Last refreshed ${agoS}s ago`;
+      const agoM = Math.floor(agoS / 60);
+      return `Last refreshed ${agoM}m ago`;
+    }
+    return "";
+  }, [nearbyRefreshBlocked, nearbyRefreshCooldownLeftS, lastNearbyRefreshOkAtMs, nowMs]);
+
+  const requestNearbyManualRefresh = useCallback(() => {
+    if (!EMERGENCY_REENABLE_NEARBY_PRESENCE) return;
+    if (!signedIn || !sharing || !pos || !shareNearby) return;
+    if (nearbyRefreshBlocked) return;
+    setNearbyRefreshBlockedUntilMs(Date.now() + 60_000);
+    void manualRefreshNearbyPresence({
+      signedIn,
+      shareNearby,
+      getCoords: () => ({ lat: pos.lat, lng: pos.lng }),
+      getLabel: () => `${(boatInput || "Boat").trim()} · ${(fullName || "").trim()}`.trim().slice(0, 40),
+      onPeers: (peers) => setNearbyPeers(peers),
+      onUnauthorized: () => setNearbyPeers([]),
+    }).then(() => setLastNearbyRefreshOkAtMs(Date.now()));
+  }, [
+    signedIn,
+    sharing,
+    pos?.lat,
+    pos?.lng,
+    shareNearby,
+    boatInput,
+    fullName,
+    nearbyRefreshBlocked,
+  ]);
 
   const [monitoredFix, setMonitoredFix] = useState<{ lat: number; lng: number; at: string } | null>(null);
 
@@ -1234,51 +1287,44 @@ export default function HomeLocationMap({
 
       {EMERGENCY_REENABLE_NEARBY_PRESENCE ? (
         <>
-          <label
-            className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 text-[11px] leading-snug ${
+          <div
+            className={`flex flex-col gap-2 rounded-lg border p-3 text-[11px] leading-snug sm:flex-row sm:items-center sm:justify-between ${
               sharing && !pos
                 ? "cursor-wait border-blue-200/80 bg-blue-50/50 text-blue-900 dark:border-blue-900/40 dark:bg-blue-950/25 dark:text-blue-100"
                 : "border-blue-200 bg-blue-50/90 text-blue-950 dark:border-blue-900/50 dark:bg-blue-950/35 dark:text-blue-100"
             }`}
           >
-            <input
-              type="checkbox"
-              className="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-400 text-blue-600 disabled:opacity-50"
-              checked={shareNearby}
-              disabled={Boolean(sharing && !pos)}
-              onChange={(e) => {
-                const on = e.target.checked;
-                setShareNearby(on);
-                setShareNearbyPeers(on);
-                if (!on) setNearbyPeers([]);
-              }}
-            />
-        <span className="font-semibold">Show friends (within ~5 miles)</span>
-          </label>
-
-          {sharing && pos && shareNearby ? (
-            <button
-              type="button"
-              onClick={() => {
-                if (!EMERGENCY_REENABLE_NEARBY_PRESENCE) return;
-                if (!signedIn || !sharing || !pos || !shareNearby) return;
-                if (nearbyRefreshBlocked) return;
-                setNearbyRefreshBlockedUntilMs(Date.now() + 60_000);
-                refreshNearbyPresenceNow({
-                  signedIn,
-                  shareNearby,
-                  getCoords: () => ({ lat: pos.lat, lng: pos.lng }),
-                  getLabel: () => `${(boatInput || "Boat").trim()} · ${(fullName || "").trim()}`.trim().slice(0, 40),
-                  onPeers: (peers) => setNearbyPeers(peers),
-                  onUnauthorized: () => setNearbyPeers([]),
-                });
-              }}
-              disabled={nearbyRefreshBlocked}
-              className="w-full rounded-lg border border-blue-300 bg-white px-3 py-2 text-xs font-semibold text-blue-900 shadow-sm hover:bg-blue-50 dark:border-blue-800 dark:bg-zinc-900 dark:text-blue-100 dark:hover:bg-blue-950/50"
-            >
-              Refresh nearby users
-            </button>
-          ) : null}
+            <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-2">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-400 text-blue-600 disabled:opacity-50"
+                checked={shareNearby}
+                disabled={Boolean(sharing && !pos)}
+                onChange={(e) => {
+                  const on = e.target.checked;
+                  setShareNearby(on);
+                  setShareNearbyPeers(on);
+                  if (!on) setNearbyPeers([]);
+                }}
+              />
+              <span className="font-semibold">Show friends (within ~5 miles)</span>
+            </label>
+            {sharing && pos && shareNearby ? (
+              <div className="flex min-w-0 shrink-0 flex-col items-stretch gap-1 sm:items-end">
+                <button
+                  type="button"
+                  onClick={() => requestNearbyManualRefresh()}
+                  disabled={nearbyRefreshBlocked || !signedIn}
+                  className="inline-flex h-9 items-center justify-center rounded-lg border border-blue-300 bg-white px-3 text-xs font-semibold text-blue-900 shadow-sm hover:bg-blue-50 disabled:opacity-50 dark:border-blue-800 dark:bg-zinc-900 dark:text-blue-100 dark:hover:bg-blue-950/50"
+                >
+                  Refresh nearby users
+                </button>
+                {nearbyRefreshStatusText ? (
+                  <p className="text-[10px] font-medium text-blue-900/80 dark:text-blue-100/80">{nearbyRefreshStatusText}</p>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         </>
       ) : null}
 
@@ -1360,22 +1406,41 @@ export default function HomeLocationMap({
             </Link>
           ) : null}
           {!isSettings && sharing ? (
-            <button
-              type="button"
-              onClick={() => {
-                const next = !shareNearby;
-                setShareNearby(next);
-                setShareNearbyPeers(next);
-                if (!next) setNearbyPeers([]);
-              }}
-              className={`inline-flex h-10 shrink-0 items-center justify-center rounded-lg px-4 text-sm font-semibold ${
-                shareNearby
-                  ? "border border-blue-700 bg-blue-600 text-white hover:bg-blue-700"
-                  : "border border-zinc-300 bg-zinc-50 text-zinc-800 hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
-              }`}
-            >
-              {shareNearby ? "Friends: ON" : "Show friends"}
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !shareNearby;
+                  setShareNearby(next);
+                  setShareNearbyPeers(next);
+                  if (!next) setNearbyPeers([]);
+                }}
+                className={`inline-flex h-10 shrink-0 items-center justify-center rounded-lg px-4 text-sm font-semibold ${
+                  shareNearby
+                    ? "border border-blue-700 bg-blue-600 text-white hover:bg-blue-700"
+                    : "border border-zinc-300 bg-zinc-50 text-zinc-800 hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                }`}
+              >
+                {shareNearby ? "Friends: ON" : "Show friends"}
+              </button>
+              {EMERGENCY_REENABLE_NEARBY_PRESENCE && shareNearby && pos ? (
+                <div className="flex flex-col items-stretch gap-0.5 sm:items-end">
+                  <button
+                    type="button"
+                    onClick={() => requestNearbyManualRefresh()}
+                    disabled={nearbyRefreshBlocked || !signedIn}
+                    className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-blue-300 bg-white px-4 text-sm font-semibold text-blue-900 shadow-sm hover:bg-blue-50 disabled:opacity-50 dark:border-blue-800 dark:bg-zinc-900 dark:text-blue-100 dark:hover:bg-blue-950/50"
+                  >
+                    Refresh nearby users
+                  </button>
+                  {nearbyRefreshStatusText ? (
+                    <p className="text-center text-[10px] font-medium text-blue-900/80 sm:text-right dark:text-blue-100/80">
+                      {nearbyRefreshStatusText}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
           ) : null}
           <div className="flex flex-col items-start gap-1">
             <button
