@@ -165,7 +165,10 @@ export function startNearbyPresence(opts: StartOpts): () => void {
     return () => undefined;
   }
 
-  if (!s.running) {
+  if (s.running) {
+    // Prevent duplicate starts from multiple components/rerenders.
+    console.info("PRESENCE_ALREADY_RUNNING");
+  } else {
     s.blocked401 = false;
     s.lastGetAtMs = 0;
     s.lastPostAtMs = 0;
