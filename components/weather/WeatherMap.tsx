@@ -273,7 +273,9 @@ export function WeatherMap() {
             {overlay === "wave_direction"
               ? points.map((p, i) => {
                   const deg = p.waveDirDeg ?? null;
-                  if (deg == null) return null;
+                  const h = p.waveHeightM ?? null;
+                  // Open-Meteo marine can return direction-like values over land; only draw if waves are meaningful.
+                  if (deg == null || h == null || h < 0.05) return null;
                   return (
                     <Marker
                       key={`wd-${i}`}
