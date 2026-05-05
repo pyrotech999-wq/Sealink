@@ -383,11 +383,31 @@ export default function HomeLocationMap({
     setNowMs(Date.now());
   }, []);
 
+  const nearbyUiTimer = useRef<number | null>(null);
   useEffect(() => {
-    const tick = () => setNowMs(Date.now());
-    const id = window.setInterval(tick, 1000);
-    return () => window.clearInterval(id);
-  }, []);
+    const clear = () => {
+      if (nearbyUiTimer.current != null) {
+        window.clearTimeout(nearbyUiTimer.current);
+        nearbyUiTimer.current = null;
+      }
+    };
+
+    const schedule = () => {
+      clear();
+      const t = Date.now();
+      const blocked = t < nearbyRefreshBlockedUntilMs;
+      const recentOk = lastNearbyRefreshOkAtMs > 0 && t - lastNearbyRefreshOkAtMs < 120_000;
+      if (!blocked && !recentOk) return;
+
+      nearbyUiTimer.current = window.setTimeout(() => {
+        setNowMs(Date.now());
+        schedule();
+      }, 1000);
+    };
+
+    schedule();
+    return () => clear();
+  }, [nearbyRefreshBlockedUntilMs, lastNearbyRefreshOkAtMs]);
 
   const nearbyRefreshStatusText = useMemo(() => {
     if (nearbyRefreshBlocked && nearbyRefreshCooldownLeftS > 0) {
