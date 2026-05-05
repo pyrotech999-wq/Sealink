@@ -197,8 +197,8 @@ function FitBoundsTrigger({
 }) {
   const map = useMap();
   useEffect(() => {
-    map.fitBounds(bounds, { padding: [28, 28], maxZoom: 10 });
-    map.setZoom(Math.min(map.getZoom() + 2, map.getMaxZoom()));
+    map.fitBounds(bounds, { padding: [18, 18], maxZoom: 12 });
+    map.setZoom(Math.min(map.getZoom() + 3, map.getMaxZoom()));
   }, [map, bounds, trigger]);
   return null;
 }
@@ -674,7 +674,7 @@ export function WeatherModelChartViewer() {
         <MapContainer
           className="h-[min(72vh,760px)] w-full"
           bounds={regionConfig.mapBounds}
-          boundsOptions={{ padding: [28, 28], maxZoom: 10 }}
+          boundsOptions={{ padding: [18, 18], maxZoom: 12 }}
           scrollWheelZoom
           attributionControl={false}
         >
