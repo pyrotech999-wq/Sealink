@@ -19,9 +19,13 @@ type State = {
   unsub: (() => void) | null;
   inflightGet: Promise<void> | null;
   inflightPost: Promise<void> | null;
+  lastGetAtMs: number;
+  lastPostAtMs: number;
+  backoffUntilMs: number;
   blocked401: boolean;
   running: boolean;
   visHooked: boolean;
+  opts: StartOpts | null;
 };
 
 function st(): State {
@@ -31,9 +35,13 @@ function st(): State {
       unsub: null,
       inflightGet: null,
       inflightPost: null,
+      lastGetAtMs: 0,
+      lastPostAtMs: 0,
+      backoffUntilMs: 0,
       blocked401: false,
       running: false,
       visHooked: false,
+      opts: null,
     };
   }
   return g[GKEY]!;
@@ -58,9 +66,19 @@ function ensureVisibilityLog() {
 async function postHeartbeat(opts: StartOpts): Promise<void> {
   const s = st();
   if (s.inflightPost) return s.inflightPost;
+  const now = Date.now();
+  if (s.backoffUntilMs && now < s.backoffUntilMs) {
+    console.info("PRESENCE_BACKOFF", { method: "POST", msRemaining: s.backoffUntilMs - now });
+    return;
+  }
+  if (s.lastPostAtMs && now - s.lastPostAtMs < 60_000) {
+    console.info("PRESENCE_CLIENT_SKIP_TOO_SOON", { method: "POST", msSinceLast: now - s.lastPostAtMs });
+    return;
+  }
   const coords = opts.getCoords();
   if (!coords) return;
   const label = opts.getLabel().trim().slice(0, 40) || "Nearby boat";
+  s.lastPostAtMs = now;
   console.info("PRESENCE_POST", { url: "/api/map/presence" });
   s.inflightPost = fetch("/api/map/presence", {
     method: "POST",
@@ -76,7 +94,11 @@ async function postHeartbeat(opts: StartOpts): Promise<void> {
       }
       if (!r.ok) return;
       const d = (await r.json().catch(() => ({}))) as { rateLimited?: boolean };
-      if (d.rateLimited) console.info("PRESENCE_RATE_LIMITED", { method: "POST" });
+      if (d.rateLimited) {
+        console.info("PRESENCE_RATE_LIMITED", { method: "POST" });
+        s.backoffUntilMs = Date.now() + 60_000;
+        console.info("PRESENCE_BACKOFF", { method: "POST", ms: 60_000 });
+      }
     })
     .finally(() => {
       s.inflightPost = null;
@@ -87,8 +109,18 @@ async function postHeartbeat(opts: StartOpts): Promise<void> {
 async function getPeers(opts: StartOpts): Promise<void> {
   const s = st();
   if (s.inflightGet) return s.inflightGet;
+  const now = Date.now();
+  if (s.backoffUntilMs && now < s.backoffUntilMs) {
+    console.info("PRESENCE_BACKOFF", { method: "GET", msRemaining: s.backoffUntilMs - now });
+    return;
+  }
+  if (s.lastGetAtMs && now - s.lastGetAtMs < 60_000) {
+    console.info("PRESENCE_CLIENT_SKIP_TOO_SOON", { method: "GET", msSinceLast: now - s.lastGetAtMs });
+    return;
+  }
   const coords = opts.getCoords();
   if (!coords) return;
+  s.lastGetAtMs = now;
   console.info("PRESENCE_GET");
   const url = `/api/map/presence?lat=${encodeURIComponent(String(coords.lat))}&lng=${encodeURIComponent(String(coords.lng))}`;
   s.inflightGet = fetch(url, { credentials: "same-origin", cache: "no-store" })
@@ -100,7 +132,11 @@ async function getPeers(opts: StartOpts): Promise<void> {
       }
       if (!r.ok) return;
       const d = (await r.json().catch(() => ({}))) as { peers?: PresencePeer[]; throttled?: boolean };
-      if (d.throttled) console.info("PRESENCE_RATE_LIMITED", { method: "GET" });
+      if (d.throttled) {
+        console.info("PRESENCE_RATE_LIMITED", { method: "GET" });
+        s.backoffUntilMs = Date.now() + 60_000;
+        console.info("PRESENCE_BACKOFF", { method: "GET", ms: 60_000 });
+      }
       const peers = Array.isArray(d.peers) ? d.peers : [];
       opts.onPeers(peers);
     })
@@ -113,6 +149,7 @@ async function getPeers(opts: StartOpts): Promise<void> {
 function stop(): void {
   const s = st();
   s.running = false;
+  s.opts = null;
   if (s.unsub) s.unsub();
   s.unsub = null;
 }
@@ -121,32 +158,41 @@ export function startNearbyPresence(opts: StartOpts): () => void {
   const s = st();
   ensureVisibilityLog();
 
-  stop();
-
-  s.blocked401 = false;
-  s.running = true;
+  s.opts = opts;
 
   if (!opts.signedIn || !opts.shareNearby) {
     s.running = false;
     return () => undefined;
   }
 
-  console.info("PRESENCE_POLLING_START");
+  if (!s.running) {
+    s.blocked401 = false;
+    s.lastGetAtMs = 0;
+    s.lastPostAtMs = 0;
+    s.backoffUntilMs = 0;
+    s.running = true;
+    console.info("PRESENCE_POLLING_START");
+  }
 
   const tick = async () => {
+    const cur = st();
+    const live = cur.opts;
+    if (!live) return;
     if (!isVisible()) return; // shared poller won't tick hidden; safety.
-    if (!opts.signedIn || !opts.shareNearby) return;
-    if (s.blocked401) return;
+    if (!live.signedIn || !live.shareNearby) return;
+    if (cur.blocked401) return;
     // No aggressive retry: best-effort once per minute.
-    await postHeartbeat(opts);
-    await getPeers(opts);
+    await postHeartbeat(live);
+    await getPeers(live);
   };
 
-  s.unsub = subscribeSharedPoller(
-    "sealink:/api/map/presence",
-    async () => void tick(),
-    { enabled: true, minIntervalMs: 60_000, maxIntervalMs: 60_000 },
-  );
+  if (!s.unsub) {
+    s.unsub = subscribeSharedPoller(
+      "sealink:/api/map/presence",
+      async () => void tick(),
+      { enabled: true, minIntervalMs: 60_000, maxIntervalMs: 60_000 },
+    );
+  }
 
   return () => stop();
 }
