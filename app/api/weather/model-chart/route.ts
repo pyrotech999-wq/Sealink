@@ -169,31 +169,32 @@ function renderSvg(opts: {
   const cellW = (step / (lonMax - lonMin)) * innerW;
   const cellH = (step / (latMax - latMin)) * innerH;
 
-  const scalarStops =
+  type Stop = { v: number; c: [number, number, number] };
+  const scalarStops: Stop[] =
     opts.layer === "temperature_2m"
       ? [
-          { v: -20, c: [70, 120, 255] },
-          { v: 0, c: [120, 220, 255] },
-          { v: 10, c: [140, 235, 160] },
-          { v: 20, c: [255, 220, 120] },
-          { v: 30, c: [255, 140, 90] },
-          { v: 40, c: [255, 70, 70] },
+          { v: -20, c: [70, 120, 255] as [number, number, number] },
+          { v: 0, c: [120, 220, 255] as [number, number, number] },
+          { v: 10, c: [140, 235, 160] as [number, number, number] },
+          { v: 20, c: [255, 220, 120] as [number, number, number] },
+          { v: 30, c: [255, 140, 90] as [number, number, number] },
+          { v: 40, c: [255, 70, 70] as [number, number, number] },
         ]
       : opts.layer === "precipitation"
         ? [
-            { v: 0, c: [20, 20, 30] },
-            { v: 0.2, c: [80, 140, 255] },
-            { v: 1, c: [60, 220, 200] },
-            { v: 3, c: [60, 220, 120] },
-            { v: 8, c: [255, 220, 90] },
-            { v: 15, c: [255, 120, 80] },
+            { v: 0, c: [20, 20, 30] as [number, number, number] },
+            { v: 0.2, c: [80, 140, 255] as [number, number, number] },
+            { v: 1, c: [60, 220, 200] as [number, number, number] },
+            { v: 3, c: [60, 220, 120] as [number, number, number] },
+            { v: 8, c: [255, 220, 90] as [number, number, number] },
+            { v: 15, c: [255, 120, 80] as [number, number, number] },
           ]
         : [
-            { v: 980, c: [70, 120, 255] },
-            { v: 1000, c: [120, 220, 255] },
-            { v: 1015, c: [140, 235, 160] },
-            { v: 1030, c: [255, 220, 120] },
-            { v: 1045, c: [255, 140, 90] },
+            { v: 980, c: [70, 120, 255] as [number, number, number] },
+            { v: 1000, c: [120, 220, 255] as [number, number, number] },
+            { v: 1015, c: [140, 235, 160] as [number, number, number] },
+            { v: 1030, c: [255, 220, 120] as [number, number, number] },
+            { v: 1045, c: [255, 140, 90] as [number, number, number] },
           ];
 
   // scalar underlay for pressure/temp/precip, and also for wind magnitude
