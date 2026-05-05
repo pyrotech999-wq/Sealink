@@ -423,15 +423,23 @@ export default function HomeLocationMap({
     return "";
   }, [nearbyRefreshBlocked, nearbyRefreshCooldownLeftS, lastNearbyRefreshOkAtMs, nowMs]);
 
+  const refreshCoords = useMemo(() => {
+    if (!sharing) return null;
+    const p = mapPinPos ?? pos;
+    if (!p) return null;
+    return { lat: p.lat, lng: p.lng };
+  }, [sharing, mapPinPos?.lat, mapPinPos?.lng, pos?.lat, pos?.lng]);
+
   const requestNearbyManualRefresh = useCallback(() => {
     if (!EMERGENCY_REENABLE_NEARBY_PRESENCE) return;
-    if (!signedIn || !sharing || !pos || !shareNearby) return;
+    if (!signedIn || !sharing || !shareNearby) return;
+    if (!refreshCoords) return;
     if (nearbyRefreshBlocked) return;
     setNearbyRefreshBlockedUntilMs(Date.now() + 60_000);
     void manualRefreshNearbyPresence({
       signedIn,
       shareNearby,
-      getCoords: () => ({ lat: pos.lat, lng: pos.lng }),
+      getCoords: () => refreshCoords,
       getLabel: () => `${(boatInput || "Boat").trim()} · ${(fullName || "").trim()}`.trim().slice(0, 40),
       onPeers: (peers) => setNearbyPeers(peers),
       onUnauthorized: () => setNearbyPeers([]),
@@ -441,8 +449,8 @@ export default function HomeLocationMap({
   }, [
     signedIn,
     sharing,
-    pos?.lat,
-    pos?.lng,
+    refreshCoords?.lat,
+    refreshCoords?.lng,
     shareNearby,
     boatInput,
     fullName,
@@ -1331,18 +1339,21 @@ export default function HomeLocationMap({
               />
               <span className="font-semibold">Show friends (within ~5 miles)</span>
             </label>
-            {sharing && pos && shareNearby ? (
+            {sharing && shareNearby ? (
               <div className="flex min-w-0 shrink-0 flex-col items-stretch gap-1 sm:items-end">
                 <button
                   type="button"
                   onClick={() => requestNearbyManualRefresh()}
-                  disabled={nearbyRefreshBlocked || !signedIn}
+                  disabled={nearbyRefreshBlocked || !signedIn || !refreshCoords}
                   className="inline-flex h-9 items-center justify-center rounded-lg border border-blue-300 bg-white px-3 text-xs font-semibold text-blue-900 shadow-sm hover:bg-blue-50 disabled:opacity-50 dark:border-blue-800 dark:bg-zinc-900 dark:text-blue-100 dark:hover:bg-blue-950/50"
                 >
                   Refresh nearby users
                 </button>
                 {nearbyRefreshStatusText ? (
                   <p className="text-[10px] font-medium text-blue-900/80 dark:text-blue-100/80">{nearbyRefreshStatusText}</p>
+                ) : null}
+                {!refreshCoords ? (
+                  <p className="text-[10px] font-medium text-blue-900/70 dark:text-blue-100/70">Waiting for GPS…</p>
                 ) : null}
               </div>
             ) : null}
@@ -1445,12 +1456,12 @@ export default function HomeLocationMap({
               >
                 {shareNearby ? "Friends: ON" : "Show friends"}
               </button>
-              {EMERGENCY_REENABLE_NEARBY_PRESENCE && shareNearby && pos ? (
+              {EMERGENCY_REENABLE_NEARBY_PRESENCE && shareNearby ? (
                 <div className="flex flex-col items-stretch gap-0.5 sm:items-end">
                   <button
                     type="button"
                     onClick={() => requestNearbyManualRefresh()}
-                    disabled={nearbyRefreshBlocked || !signedIn}
+                    disabled={nearbyRefreshBlocked || !signedIn || !refreshCoords}
                     className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-blue-300 bg-white px-4 text-sm font-semibold text-blue-900 shadow-sm hover:bg-blue-50 disabled:opacity-50 dark:border-blue-800 dark:bg-zinc-900 dark:text-blue-100 dark:hover:bg-blue-950/50"
                   >
                     Refresh nearby users
@@ -1458,6 +1469,11 @@ export default function HomeLocationMap({
                   {nearbyRefreshStatusText ? (
                     <p className="text-center text-[10px] font-medium text-blue-900/80 sm:text-right dark:text-blue-100/80">
                       {nearbyRefreshStatusText}
+                    </p>
+                  ) : null}
+                  {!refreshCoords ? (
+                    <p className="text-center text-[10px] font-medium text-blue-900/70 sm:text-right dark:text-blue-100/70">
+                      Waiting for GPS…
                     </p>
                   ) : null}
                 </div>
