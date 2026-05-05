@@ -16,10 +16,10 @@ const WZ_ORIGIN = "https://www.wetterzentrale.de";
 const CACHE_MS = 6 * 60 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 400;
 
-type CacheEntry = { body: Uint8Array; storedAt: number };
+type CacheEntry = { body: Buffer; storedAt: number };
 
 const memoryCache = new Map<string, CacheEntry>();
-const inflight = new Map<string, Promise<Uint8Array>>();
+const inflight = new Map<string, Promise<Buffer>>();
 
 const ALLOWED_REGIONS = new Set<WzGfsMapRegionCode>(WZ_GFS_MAP_REGIONS.map((r) => r.code));
 
