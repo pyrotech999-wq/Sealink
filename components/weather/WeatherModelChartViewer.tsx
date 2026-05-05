@@ -20,7 +20,7 @@ type LayerId = "wind10m" | "waves" | "pressure_msl" | "precipitation" | "tempera
 const LAYERS: { id: LayerId; label: string; description: string }[] = [
   { id: "wind10m", label: "10 m wind", description: "GFS wind (kn): arrow points downwind; size and colour scale with speed." },
   { id: "waves", label: "Waves", description: "Marine wave height (m) and direction — arrows where swell is meaningful." },
-  { id: "pressure_msl", label: "Sea-level pressure", description: "MSLP (hPa) as semi-transparent tiles." },
+  { id: "pressure_msl", label: "Sea-level pressure", description: "MSLP (hPa): sampled value labels, low/high centres (L/H)." },
   { id: "precipitation", label: "Precipitation", description: "Hourly precipitation (mm) as semi-transparent tiles." },
   { id: "temperature_2m", label: "2 m temperature", description: "Air temperature (°C) as semi-transparent tiles." },
 ];
@@ -125,12 +125,38 @@ function precipColor(mm: number): string {
   return `rgba(${r},${g},${b},0.72)`;
 }
 
-function pressureColor(hpa: number): string {
-  const t = clamp((hpa - 980) / 70, 0, 1);
-  const r = Math.round(80 + 175 * t);
-  const g = Math.round(160 + 60 * (1 - Math.abs(t - 0.5) * 2));
-  const b = Math.round(240 - 180 * t);
-  return `rgba(${r},${g},${b},0.72)`;
+/** Low &lt; 1000, normal 1000–1020, high &gt; 1020 hPa. */
+function pressureLabelColors(hpa: number): { bg: string; fg: string; border: string } {
+  if (hpa < 1000) {
+    return { bg: "rgba(76,29,149,0.92)", fg: "#f5f3ff", border: "rgba(196,181,253,0.55)" };
+  }
+  if (hpa > 1020) {
+    return { bg: "rgba(217,119,6,0.92)", fg: "#1c1917", border: "rgba(254,240,138,0.65)" };
+  }
+  return { bg: "rgba(87,110,96,0.9)", fg: "#ecfdf5", border: "rgba(167,243,208,0.45)" };
+}
+
+function pressureLabelIcon(hpa: number): L.DivIcon {
+  const { bg, fg, border } = pressureLabelColors(hpa);
+  const text = `${Math.round(hpa)} hPa`;
+  const html = `<div style="padding:2px 7px;font:600 10px ui-monospace,Menlo,monospace;color:${fg};background:${bg};border:1px solid ${border};border-radius:7px;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.4)">${text}</div>`;
+  return L.divIcon({
+    className: "sealink-pressure-label",
+    html,
+    iconSize: [58, 20],
+    iconAnchor: [29, 10],
+  });
+}
+
+function extremaPressureIcon(letter: "L" | "H"): L.DivIcon {
+  const bg = letter === "L" ? "#4c1d95" : "#c2410c";
+  const html = `<div style="font:800 12px system-ui,sans-serif;color:#fff;background:${bg};border:2px solid rgba(255,255,255,.92);border-radius:999px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.4)">${letter}</div>`;
+  return L.divIcon({
+    className: "sealink-pressure-extrema",
+    html,
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+  });
 }
 
 function tempColor(c: number): string {
@@ -194,19 +220,31 @@ function LayerLegend({ layer }: { layer: LayerId }) {
   }
   if (layer === "pressure_msl") {
     return (
-      <div className="rounded-lg border border-zinc-200 bg-white/95 px-3 py-2 text-[10px] shadow-sm dark:border-zinc-700 dark:bg-zinc-950/95">
-        <div className="font-semibold text-zinc-800 dark:text-zinc-100">Pressure (hPa)</div>
-        <div
-          className="mt-1 h-2.5 w-full rounded-md"
-          style={{
-            background: "linear-gradient(90deg, rgb(80,120,240), rgb(140,235,160), rgb(255,140,90))",
-          }}
-        />
-        <div className="mt-0.5 flex justify-between font-mono text-zinc-500 dark:text-zinc-400">
-          <span>980</span>
-          <span>1010</span>
-          <span>1050</span>
-        </div>
+      <div className="max-w-[260px] rounded-lg border border-zinc-200 bg-white/95 px-3 py-2 text-[10px] shadow-sm dark:border-zinc-700 dark:bg-zinc-950/95">
+        <div className="font-semibold text-zinc-800 dark:text-zinc-100">Sea-level pressure</div>
+        <ul className="mt-2 list-none space-y-1.5 text-zinc-700 dark:text-zinc-200">
+          <li className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[rgb(76,29,149)]" />
+            <span>
+              Low · <span className="font-mono">&lt; 1000</span> hPa
+            </span>
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[rgb(87,110,96)]" />
+            <span>
+              Normal · <span className="font-mono">1000–1020</span> hPa
+            </span>
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[rgb(217,119,6)]" />
+            <span>
+              High · <span className="font-mono">&gt; 1020</span> hPa
+            </span>
+          </li>
+        </ul>
+        <p className="mt-2 border-t border-zinc-200 pt-1.5 text-[9px] text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
+          L / H mark the lowest / highest value in the sampled grid for this hour.
+        </p>
       </div>
     );
   }
