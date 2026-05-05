@@ -97,11 +97,11 @@ function drawPrecipCanvas(
 
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, w, h);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, pw, ph);
   ctx.filter = "blur(12px)";
   ctx.globalAlpha = 0.96;
-  ctx.drawImage(off, 0, 0, w, h);
+  ctx.drawImage(off, 0, 0);
   ctx.filter = "none";
   ctx.globalAlpha = 1;
 }
