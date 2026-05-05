@@ -41,9 +41,26 @@ function ttlMs(): number {
 }
 
 function bucketCoord(n: number): number {
-  // Bucket to ~0.01° (~1.1km lat), good enough for caching without exploding keys.
-  // Broadcasts are already radius-filtered server-side; this is purely a work-dedup hint.
-  return Math.round(n * 100) / 100;
+  // Bucket to ~0.001° (~111m lat). Small enough to be stable across repeated loads while
+  // still providing meaningful cache reuse under slight GPS jitter.
+  return Math.round(n * 1000) / 1000;
+}
+
+function stableCacheKey(url: URL, coords: { lat: number; lng: number }): string {
+  // Cache key must be stable for identical inputs:
+  // - Include only rounded lat/lng and real query params (sorted), excluding lat/lng duplicates.
+  // - Do NOT include cookies, headers, request ids, timestamps, etc.
+  const parts: string[] = [];
+  parts.push(`lat=${bucketCoord(coords.lat)}`);
+  parts.push(`lng=${bucketCoord(coords.lng)}`);
+  const extras: string[] = [];
+  for (const [k, v] of url.searchParams.entries()) {
+    if (k === "lat" || k === "lng") continue;
+    extras.push(`${k}=${v}`);
+  }
+  extras.sort();
+  if (extras.length) parts.push(...extras);
+  return parts.join("|");
 }
 
 function clampLatLng(lat: number, lng: number): { lat: number; lng: number } | null {
@@ -65,8 +82,7 @@ export async function GET(req: Request) {
     }
 
     const { cache, inflight } = caches();
-    const viewerKey = viewer ? `${viewer.uid}:${viewer.isAdmin ? "a" : "u"}` : "anon";
-    const key = `v=${viewerKey}|lat=${bucketCoord(coords.lat)}|lng=${bucketCoord(coords.lng)}`;
+    const key = stableCacheKey(url, coords);
     const now = Date.now();
 
     const hit = cache.get(key);

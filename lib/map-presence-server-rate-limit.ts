@@ -8,8 +8,13 @@ type Row = { lastGet: number; lastPost: number };
 const rows = new Map<string, Row>();
 
 const MAX_KEYS = 8_000;
-const GET_MIN_MS = 60_000;
-const POST_MIN_MS = 30_000;
+const MIN_BASE_MS = 45_000;
+const MIN_JITTER_MS = 15_000;
+
+function minMs(): number {
+  // 45–60s window (jitter) so bursts spread out.
+  return MIN_BASE_MS + Math.floor(Math.random() * (MIN_JITTER_MS + 1));
+}
 
 function pruneIfNeeded(): void {
   if (rows.size <= MAX_KEYS) return;
@@ -37,7 +42,7 @@ export function presenceThrottleKey(sessionId: string, cookieFresh: boolean, req
 export function presenceAllowGet(key: string, now = Date.now()): boolean {
   pruneIfNeeded();
   const r = row(key);
-  if (now - r.lastGet < GET_MIN_MS) return false;
+  if (now - r.lastGet < minMs()) return false;
   r.lastGet = now;
   return true;
 }
@@ -46,7 +51,7 @@ export function presenceAllowGet(key: string, now = Date.now()): boolean {
 export function presenceAllowPostUpsert(key: string, now = Date.now()): boolean {
   pruneIfNeeded();
   const r = row(key);
-  if (now - r.lastPost < POST_MIN_MS) return false;
+  if (now - r.lastPost < minMs()) return false;
   r.lastPost = now;
   return true;
 }

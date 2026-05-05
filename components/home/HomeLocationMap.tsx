@@ -58,6 +58,7 @@ import { isLikelyIOS } from "@/lib/location-env";
 import { getNativeLocationBridge } from "@/lib/native-location-bridge";
 import { getDeviceName, getOrCreateDeviceId } from "@/lib/device-id";
 import { clampGeoAccuracyM, humanGeolocationMessage } from "@/lib/geolocation-utils";
+import { refreshNearbyPresenceNow, startNearbyPresence } from "@/lib/client/map-presence-client";
 const DEFAULT_CENTER: [number, number] = [DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng];
 const DEFAULT_ZOOM = 6;
 
@@ -69,6 +70,9 @@ const EMERGENCY_DISABLE_LIVE_MAP_APIS = true;
  * nearby presence, IFM presence, and anchor live APIs disabled.
  */
 const EMERGENCY_REENABLE_MAP_LIVE_POLLING = true;
+
+/** Safe-mode re-enable: nearby presence at low frequency (60s). */
+const EMERGENCY_REENABLE_NEARBY_PRESENCE = true;
 
 /** Statute miles → metres (for ~5 mi “nearby” ring). */
 const NEARBY_RING_METRES = 5 * 1609.344;
@@ -323,6 +327,32 @@ export default function HomeLocationMap({
     polling.current = false;
   }, []);
 
+  const presenceEnabled = Boolean(
+    EMERGENCY_REENABLE_NEARBY_PRESENCE && signedIn && sharing && pos && shareNearby,
+  );
+
+  const [presenceDebugUi, setPresenceDebugUi] = useState(false);
+  useEffect(() => {
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      setPresenceDebugUi(sp.get("presence_debug") === "1");
+    } catch {
+      setPresenceDebugUi(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    console.info("PRESENCE_CONDITION_CHECK", {
+      signedIn: Boolean(signedIn),
+      sharing: Boolean(sharing),
+      gps: Boolean(pos),
+      shareNearby: Boolean(shareNearby),
+      presenceEnabled,
+      flag: EMERGENCY_REENABLE_NEARBY_PRESENCE,
+      hidden: typeof document !== "undefined" ? document.visibilityState !== "visible" : false,
+    });
+  }, [signedIn, sharing, Boolean(pos), shareNearby, presenceEnabled]);
+
   // Report this device's last fix (for cross-device monitoring).
   useEffect(() => {
     if (EMERGENCY_DISABLE_LIVE_MAP_APIS) return;
@@ -338,6 +368,30 @@ export default function HomeLocationMap({
       body: JSON.stringify(payload),
     });
   }, [sharing, pos?.lat, pos?.lng, deviceId]);
+
+  // Nearby presence (safe mode): max 1 POST + 1 GET per 60s, hidden-tab paused, no retries.
+  useEffect(() => {
+    if (!EMERGENCY_REENABLE_NEARBY_PRESENCE) return;
+    if (!signedIn) {
+      setNearbyPeers([]);
+      return;
+    }
+    if (!sharing || !pos || !shareNearby) {
+      setNearbyPeers([]);
+      return;
+    }
+    return startNearbyPresence({
+      signedIn,
+      shareNearby,
+      getCoords: () => ({ lat: pos.lat, lng: pos.lng }),
+      getLabel: () => `${(boatInput || "Boat").trim()} · ${(fullName || "").trim()}`.trim().slice(0, 40),
+      onPeers: (peers) => setNearbyPeers(peers),
+      onUnauthorized: () => {
+        // Stop updating peers until user logs in again.
+        setNearbyPeers([]);
+      },
+    });
+  }, [signedIn, sharing, pos?.lat, pos?.lng, shareNearby, boatInput, fullName]);
 
   const [monitoredFix, setMonitoredFix] = useState<{ lat: number; lng: number; at: string } | null>(null);
 
@@ -1223,11 +1277,16 @@ export default function HomeLocationMap({
         <button
           type="button"
           onClick={() => {
-            if (EMERGENCY_DISABLE_LIVE_MAP_APIS) return;
-            // DISABLED — do not call `/api/map/presence` (GET/POST) from the browser.
-            // Example (must stay commented):
-            // void fetch(`/api/map/presence?lat=...&lng=...`, { credentials: "same-origin" });
-            // void fetch("/api/map/presence", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: "..." });
+            if (!EMERGENCY_REENABLE_NEARBY_PRESENCE) return;
+            if (!signedIn || !sharing || !pos || !shareNearby) return;
+            refreshNearbyPresenceNow({
+              signedIn,
+              shareNearby,
+              getCoords: () => ({ lat: pos.lat, lng: pos.lng }),
+              getLabel: () => `${(boatInput || "Boat").trim()} · ${(fullName || "").trim()}`.trim().slice(0, 40),
+              onPeers: (peers) => setNearbyPeers(peers),
+              onUnauthorized: () => setNearbyPeers([]),
+            });
           }}
           className="w-full rounded-lg border border-blue-300 bg-white px-3 py-2 text-xs font-semibold text-blue-900 shadow-sm hover:bg-blue-50 dark:border-blue-800 dark:bg-zinc-900 dark:text-blue-100 dark:hover:bg-blue-950/50"
         >
@@ -1295,6 +1354,13 @@ export default function HomeLocationMap({
               </>
             )}
           </p>
+          {presenceDebugUi ? (
+            <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 font-mono text-[10px] text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+              presence_debug signedIn={String(Boolean(signedIn))} gps={String(Boolean(pos))} sharing=
+              {String(Boolean(sharing))} shareNearby={String(Boolean(shareNearby))} enabled=
+              {String(Boolean(presenceEnabled))}
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2 pointer-events-auto sm:justify-end">
           {isSettings ? (
