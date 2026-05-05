@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { invalidateMeSubscriptionCache } from "@/lib/client/me-subscription";
+import { invalidateDemoMeCache } from "@/lib/client/demo-me";
 
 type Props = { signedIn: boolean; isAdmin?: boolean };
 
@@ -14,6 +15,7 @@ export function HomeHeader({ signedIn, isAdmin = false }: Props) {
     try {
       await fetch("/api/demo/sign-out", { method: "POST" });
       invalidateMeSubscriptionCache();
+      invalidateDemoMeCache();
       window.location.assign("/");
     } finally {
       setBusy(false);

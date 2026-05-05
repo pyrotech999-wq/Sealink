@@ -64,6 +64,12 @@ const DEFAULT_ZOOM = 6;
 /** When true: no client calls to map presence, broadcast, vicinity inbox, or anchor live APIs from this tree. */
 const EMERGENCY_DISABLE_LIVE_MAP_APIS = true;
 
+/**
+ * Emergency exception: allow read-only `/api/map/live` polling (broadcasts + reply alerts) while keeping
+ * nearby presence, IFM presence, and anchor live APIs disabled.
+ */
+const EMERGENCY_REENABLE_MAP_LIVE_POLLING = true;
+
 /** Statute miles → metres (for ~5 mi “nearby” ring). */
 const NEARBY_RING_METRES = 5 * 1609.344;
 
@@ -1544,7 +1550,7 @@ export default function HomeLocationMap({
           signedIn={signedIn}
           readLat={forecastLat}
           readLng={forecastLng}
-          emergencyDisableLiveMapApis={EMERGENCY_DISABLE_LIVE_MAP_APIS}
+          emergencyDisableLiveMapApis={EMERGENCY_DISABLE_LIVE_MAP_APIS && !EMERGENCY_REENABLE_MAP_LIVE_POLLING}
         />
       ) : null}
 

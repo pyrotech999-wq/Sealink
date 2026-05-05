@@ -9,6 +9,7 @@ import { oauthErrorMessage } from "@/lib/oauth-ui-messages";
 import { safeInternalPathFromNextParam } from "@/lib/safe-internal-next-path";
 import { useRouter } from "next/navigation";
 import { invalidateMeSubscriptionCache } from "@/lib/client/me-subscription";
+import { invalidateDemoMeCache } from "@/lib/client/demo-me";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -126,6 +127,7 @@ async function startDemoSession(
         /* */
       }
       invalidateMeSubscriptionCache();
+      invalidateDemoMeCache();
       window.location.assign(postSignInRedirectTarget());
     }
     return { ok: true };

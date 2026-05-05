@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 import { useBroadcastToast } from "@/components/BroadcastToastProvider";
 import { getLastKnownPosition } from "@/lib/map-last-known";
 import { suppressMessagingChromePath } from "@/lib/messaging-chrome-paths";
+import { getDemoMe } from "@/lib/client/demo-me";
+import { subscribeMapLive } from "@/lib/client/map-live-store";
 
 const WATERLINE_KEY = "sealink_broadcast_toast_waterline_v1";
 
@@ -43,16 +45,26 @@ export function BroadcastAwayToasts() {
       return;
     }
 
-    const tick = () => {
-      const geo = getLastKnownPosition();
-      if (!geo) return;
-      void (async () => {
+    let cancelled = false;
+    let signedIn = false;
+    void getDemoMe()
+      .then((d) => {
+        signedIn = d.signedIn === true;
+      })
+      .catch(() => {
+        signedIn = false;
+      });
+
+    const unsub = subscribeMapLive({
+      id: "BroadcastAwayToasts",
+      getCoords: () => {
+        const geo = getLastKnownPosition();
+        return geo ? { lat: geo.lat, lng: geo.lng } : null;
+      },
+      onData: (d) => {
+        if (cancelled || !signedIn) return;
         try {
-          const r = await fetch(
-            `/api/map/broadcast?lat=${encodeURIComponent(String(geo.lat))}&lng=${encodeURIComponent(String(geo.lng))}`,
-          );
-          const d = (await r.json()) as { messages?: Msg[] };
-          const msgs = Array.isArray(d.messages) ? d.messages : [];
+          const msgs = Array.isArray(d.messages) ? (d.messages as Msg[]) : [];
           const newest = msgs[0]?.createdAt;
           if (!newest) return;
 
@@ -71,12 +83,13 @@ export function BroadcastAwayToasts() {
         } catch {
           /* ignore */
         }
-      })();
-    };
+      },
+    });
 
-    tick();
-    const id = window.setInterval(tick, 60_000);
-    return () => window.clearInterval(id);
+    return () => {
+      cancelled = true;
+      unsub();
+    };
   }, [pathname, toast]);
 
   return null;

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getBroadcastAlertsSilenced, getMessageAlertSoundOn } from "@/lib/broadcast-alert-preferences";
 import { playVicinityDmAlertSound } from "@/lib/broadcast-alert-sound";
+import { subscribeMapLive, type MapLiveResponse } from "@/lib/client/map-live-store";
 import {
   getMessagingLastVisitIso,
   MESSAGING_LAST_VISIT_STORAGE_KEY,
@@ -24,8 +25,6 @@ type InboxRow = {
   lastAt: string;
   lastIsMine: boolean;
 };
-
-const POLL_MS = 45_000;
 
 function maxIso(a: string | undefined, b: string | undefined): string | null {
   if (!a && !b) return null;
@@ -54,6 +53,7 @@ export function HomeMessagesCtaButton({
   /** Unread area-broadcast thread replies (same ids as the top “New message received” bar). */
   const [broadcastReplyUnreadIds, setBroadcastReplyUnreadIds] = useState<string[]>([]);
   const lastDmChimeAtMs = useRef(0);
+  const liveRef = useRef<MapLiveResponse | null>(null);
 
   useEffect(() => {
     const fn = (ev: Event) => {
@@ -70,42 +70,29 @@ export function HomeMessagesCtaButton({
       setBroadcastReplyUnreadIds([]);
       return;
     }
-    let cancelled = false;
-    void (async () => {
-      try {
-        const r = await fetch(
-          `/api/broadcast-replies/alerts?lat=${encodeURIComponent(String(readLat))}&lng=${encodeURIComponent(String(readLng))}`,
-          { credentials: "same-origin", cache: "no-store" },
-        );
-        const d = (await r.json()) as { alerts?: { broadcastId?: string }[] };
-        if (cancelled || !r.ok) return;
-        const list = Array.isArray(d.alerts) ? d.alerts : [];
+
+    return subscribeMapLive({
+      id: "HomeMessagesCtaButton:alerts",
+      getCoords: () => ({ lat: readLat, lng: readLng }),
+      onData: (d) => {
+        liveRef.current = d;
+        const list = Array.isArray(d.replyAlerts) ? d.replyAlerts : [];
         setBroadcastReplyUnreadIds(
-          list.map((a) => (typeof a.broadcastId === "string" ? a.broadcastId : "")).filter(Boolean),
+          list.map((a) => {
+            const o = a as { broadcastId?: unknown };
+            return typeof o.broadcastId === "string" ? o.broadcastId : "";
+          }).filter(Boolean),
         );
-      } catch {
-        if (!cancelled) setBroadcastReplyUnreadIds([]);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+      },
+    });
   }, [signedIn, readLat, readLng]);
 
   const check = useCallback(async () => {
     if (emergencyDisableLiveMapApis) return;
     const visit = getMessagingLastVisitIso();
-    let broadcasts: BroadcastRow[] = [];
-    try {
-      const r = await fetch(
-        `/api/map/broadcast?lat=${encodeURIComponent(String(readLat))}&lng=${encodeURIComponent(String(readLng))}`,
-        { cache: "no-store" },
-      );
-      const d = (await r.json()) as { messages?: BroadcastRow[] };
-      broadcasts = Array.isArray(d.messages) ? d.messages : [];
-    } catch {
-      return;
-    }
+    const d = liveRef.current;
+    const broadcasts = Array.isArray(d?.messages) ? (d!.messages as BroadcastRow[]) : [];
+    if (!broadcasts.length && !signedIn) return;
 
     let inbox: InboxRow[] = [];
     if (signedIn) {
@@ -179,9 +166,8 @@ export function HomeMessagesCtaButton({
 
   useEffect(() => {
     if (emergencyDisableLiveMapApis) return;
+    // No polling here: the single map-live store drives updates.
     queueMicrotask(() => void check());
-    const id = window.setInterval(() => queueMicrotask(() => void check()), POLL_MS);
-    return () => window.clearInterval(id);
   }, [check, emergencyDisableLiveMapApis]);
 
   useEffect(() => {

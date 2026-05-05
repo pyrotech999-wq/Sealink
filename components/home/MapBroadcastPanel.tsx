@@ -9,6 +9,7 @@ import { LinkifiedPlainText } from "@/components/LinkifiedPlainText";
 import { mapHrefPreferCoords } from "@/lib/map-links";
 import { MOB_CANCEL_BROADCAST_INTRO } from "@/lib/map-broadcast-constants";
 import type { MapBroadcastAudience } from "@/lib/map-broadcast-store";
+import { refreshMapLive, subscribeMapLive } from "@/lib/client/map-live-store";
 import {
   BROADCAST_HIDDEN_EVENT,
   hideBroadcastId,
@@ -230,20 +231,20 @@ export function MapBroadcastPanel({
       setErr(null);
     }
     try {
-      const r = await fetch(
-        `/api/map/broadcast?lat=${encodeURIComponent(String(lat))}&lng=${encodeURIComponent(String(lng))}`,
-      );
-      const d = (await r.json()) as { messages?: BroadcastMsg[]; error?: string };
-      if (!r.ok) {
-        if (!silent) {
-          setErr(d.error || "Could not load broadcasts");
-          setMessages([]);
-        }
-        return;
-      }
-      const msgs = Array.isArray(d.messages) ? d.messages : [];
+      const d = await refreshMapLive();
+      const msgs = Array.isArray(d.messages) ? (d.messages as BroadcastMsg[]) : [];
       setMessages(msgs);
       if (silent) setErr(null);
+
+      const unread = Array.isArray(d.replyAlerts) ? (d.replyAlerts as { broadcastId?: string }[]) : [];
+      const ids = unread
+        .map((a) => (typeof a.broadcastId === "string" ? a.broadcastId : ""))
+        .filter(Boolean);
+      try {
+        window.dispatchEvent(new CustomEvent("sealink-broadcast-reply-unread-ids", { detail: { ids } }));
+      } catch {
+        /* */
+      }
 
       const newest = msgs[0]?.createdAt;
       if (!newest) return;
@@ -276,13 +277,31 @@ export function MapBroadcastPanel({
     }
   }, []);
 
-  const POLL_MS = 60_000;
-
   useEffect(() => {
+    if (!signedIn) return;
+    const unsub = subscribeMapLive({
+      id: "MapBroadcastPanel",
+      getCoords: () => ({ lat: coordsRef.current.readLat, lng: coordsRef.current.readLng }),
+      onData: (d) => {
+        const msgs = Array.isArray(d.messages) ? (d.messages as BroadcastMsg[]) : [];
+        setMessages(msgs);
+        setErr(null);
+        setLoading(false);
+
+        const unread = Array.isArray(d.replyAlerts) ? (d.replyAlerts as { broadcastId?: string }[]) : [];
+        const ids = unread
+          .map((a) => (typeof a.broadcastId === "string" ? a.broadcastId : ""))
+          .filter(Boolean);
+        try {
+          window.dispatchEvent(new CustomEvent("sealink-broadcast-reply-unread-ids", { detail: { ids } }));
+        } catch {
+          /* */
+        }
+      },
+    });
     queueMicrotask(() => void load());
-    const id = window.setInterval(() => queueMicrotask(() => void load({ silent: true })), POLL_MS);
-    return () => window.clearInterval(id);
-  }, [load]);
+    return unsub;
+  }, [load, signedIn]);
 
   const prevCoords = useRef<{ lat: number; lng: number } | null>(null);
   useEffect(() => {
@@ -382,7 +401,7 @@ export function MapBroadcastPanel({
     setPosting(true);
     setErr(null);
     try {
-      const r = await fetch("/api/map/broadcast", {
+      const r = await fetch("/api/map/live", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -424,7 +443,7 @@ export function MapBroadcastPanel({
     }
     setErr(null);
     try {
-      const r = await fetch("/api/map/broadcast", {
+      const r = await fetch("/api/map/live", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: m.id }),

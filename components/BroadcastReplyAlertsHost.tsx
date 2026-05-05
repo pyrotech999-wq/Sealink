@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { getLastKnownPosition } from "@/lib/map-last-known";
 import { suppressMessagingChromePath } from "@/lib/messaging-chrome-paths";
+import { getDemoMe } from "@/lib/client/demo-me";
+import { subscribeMapLive } from "@/lib/client/map-live-store";
 
 type Alert = {
   broadcastId: string;
@@ -29,52 +31,31 @@ export function BroadcastReplyAlertsHost() {
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
-    void fetch("/api/demo/me", { credentials: "same-origin", cache: "no-store" })
-      .then((r) => r.json() as Promise<{ signedIn?: boolean }>)
+    void getDemoMe()
       .then((d) => setSignedIn(Boolean(d.signedIn)))
       .catch(() => setSignedIn(false));
   }, [pathname]);
 
-  const tick = useCallback(() => {
+  useEffect(() => {
     if (!signedIn) {
       setAlerts([]);
       dispatchUnread([]);
       return;
     }
-    const geo = getLastKnownPosition();
-    if (!geo) {
-      setAlerts([]);
-      dispatchUnread([]);
-      return;
-    }
-    void (async () => {
-      try {
-        const r = await fetch(
-          `/api/broadcast-replies/alerts?lat=${encodeURIComponent(String(geo.lat))}&lng=${encodeURIComponent(String(geo.lng))}`,
-          { credentials: "same-origin", cache: "no-store" },
-        );
-        const d = (await r.json()) as { alerts?: Alert[]; error?: string };
-        if (!r.ok) {
-          setAlerts([]);
-          dispatchUnread([]);
-          return;
-        }
-        const list = Array.isArray(d.alerts) ? d.alerts : [];
+    return subscribeMapLive({
+      id: "BroadcastReplyAlertsHost",
+      getCoords: () => {
+        const geo = getLastKnownPosition();
+        return geo ? { lat: geo.lat, lng: geo.lng } : null;
+      },
+      onData: (d) => {
+        const list = Array.isArray(d.replyAlerts) ? (d.replyAlerts as Alert[]) : [];
         setAlerts(list);
         dispatchUnread(list.map((a) => a.broadcastId));
         setIndex((i) => (list.length === 0 ? 0 : Math.min(i, list.length - 1)));
-      } catch {
-        setAlerts([]);
-        dispatchUnread([]);
-      }
-    })();
-  }, [signedIn]);
-
-  useEffect(() => {
-    tick();
-    const id = window.setInterval(tick, 60_000);
-    return () => window.clearInterval(id);
-  }, [tick]);
+      },
+    });
+  }, [signedIn, pathname]);
 
   if (!signedIn || suppressMessagingChromePath(pathname) || alerts.length === 0) return null;
 

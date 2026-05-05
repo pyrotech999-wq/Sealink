@@ -9,10 +9,10 @@ import { LinkifiedPlainText } from "@/components/LinkifiedPlainText";
 import { mapHrefPreferCoords } from "@/lib/map-links";
 import { hideBroadcastId, readHiddenBroadcastIds } from "@/lib/broadcast-hidden";
 import { isBareMetaDataDeletionPage } from "@/lib/messaging-chrome-paths";
+import { subscribeMapLive } from "@/lib/client/map-live-store";
 
 const WATERLINE_KEY = "sealink_mob_incoming_waterline_v1";
 const DISMISSED_KEY = "sealink_mob_dismissed_ids_v1";
-const POLL_MS = 20_000;
 const GEO_MAX_AGE_MS = 2 * 60 * 60 * 1000;
 
 type ApiMsg = {
@@ -117,7 +117,7 @@ export function MobIncomingAlertHost() {
     }
     setDeleting(true);
     try {
-      const r = await fetch("/api/map/broadcast", {
+      const r = await fetch("/api/map/live", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: cur.id }),
@@ -162,18 +162,15 @@ export function MobIncomingAlertHost() {
   useEffect(() => {
     if (!sessionOk) return;
 
-    const tick = () => {
-      const geo = getLastKnownPosition(GEO_MAX_AGE_MS);
-      if (!geo) return;
-
-      void (async () => {
+    const unsub = subscribeMapLive({
+      id: "MobIncomingAlertHost",
+      getCoords: () => {
+        const geo = getLastKnownPosition(GEO_MAX_AGE_MS);
+        return geo ? { lat: geo.lat, lng: geo.lng } : null;
+      },
+      onData: (d) => {
         try {
-          const r = await fetch(
-            `/api/map/broadcast?lat=${encodeURIComponent(String(geo.lat))}&lng=${encodeURIComponent(String(geo.lng))}`,
-          );
-          const d = (await r.json()) as { messages?: ApiMsg[] };
-          if (!r.ok) return;
-          const messages = Array.isArray(d.messages) ? d.messages : [];
+          const messages = Array.isArray(d.messages) ? (d.messages as ApiMsg[]) : [];
           const newest = messages[0]?.createdAt;
           if (!newest) return;
 
@@ -210,12 +207,10 @@ export function MobIncomingAlertHost() {
         } catch {
           /* ignore */
         }
-      })();
-    };
+      },
+    });
 
-    tick();
-    const id = window.setInterval(tick, POLL_MS);
-    return () => window.clearInterval(id);
+    return unsub;
   }, [sessionOk, silence]);
 
   if (isBareMetaDataDeletionPage(pathname)) return null;

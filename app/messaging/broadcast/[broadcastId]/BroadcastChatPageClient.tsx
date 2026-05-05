@@ -122,7 +122,7 @@ export function BroadcastChatPageClient({ broadcastId }: { broadcastId: string }
     if (!broadcastId || readLat == null || readLng == null) return;
     try {
       const r = await fetch(
-        `/api/map/broadcast?lat=${encodeURIComponent(String(readLat))}&lng=${encodeURIComponent(String(readLng))}`,
+        `/api/map/live?lat=${encodeURIComponent(String(readLat))}&lng=${encodeURIComponent(String(readLng))}`,
         { credentials: "same-origin", cache: "no-store" },
       );
       const d = (await r.json()) as { messages?: BroadcastRow[] };
