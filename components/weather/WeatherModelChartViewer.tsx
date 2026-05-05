@@ -2,13 +2,14 @@
 
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AttributionControl,
   CircleMarker,
   MapContainer,
   Marker,
   Popup,
+  Rectangle,
   TileLayer,
   useMap,
 } from "react-leaflet";
@@ -17,11 +18,11 @@ import { WEATHER_CHART_REGIONS, getWeatherChartRegion, type WeatherChartRegionId
 type LayerId = "wind10m" | "waves" | "pressure_msl" | "precipitation" | "temperature_2m";
 
 const LAYERS: { id: LayerId; label: string; description: string }[] = [
-  { id: "wind10m", label: "10 m wind", description: "GFS wind speed (kn) and direction at each point — arrows show where the wind blows." },
-  { id: "waves", label: "Waves", description: "Marine wave height (m) and direction from Open‑Meteo — arrows show swell propagation." },
-  { id: "pressure_msl", label: "Sea-level pressure", description: "MSLP (hPa) as coloured markers." },
-  { id: "precipitation", label: "Precipitation", description: "Hourly precipitation (mm) as coloured markers." },
-  { id: "temperature_2m", label: "2 m temperature", description: "Air temperature (°C) as coloured markers." },
+  { id: "wind10m", label: "10 m wind", description: "GFS wind (kn): arrow points downwind; size and colour scale with speed." },
+  { id: "waves", label: "Waves", description: "Marine wave height (m) and direction — arrows where swell is meaningful." },
+  { id: "pressure_msl", label: "Sea-level pressure", description: "MSLP (hPa) as semi-transparent tiles." },
+  { id: "precipitation", label: "Precipitation", description: "Hourly precipitation (mm) as semi-transparent tiles." },
+  { id: "temperature_2m", label: "2 m temperature", description: "Air temperature (°C) as semi-transparent tiles." },
 ];
 
 const STEP_H = 3;
@@ -43,8 +44,10 @@ type MapPoint = {
 type ApiOk = {
   ok: true;
   region: WeatherChartRegionId;
+  layer: LayerId;
   leadHours: number;
   timeIso: string | null;
+  validCount: number;
   points: MapPoint[];
   fetchedAtIso: string;
 };
@@ -53,26 +56,24 @@ function clamp(n: number, a: number, b: number): number {
   return Math.max(a, Math.min(b, n));
 }
 
-/** Meteorological FROM → rotation (deg) for an arrow that points where the flow goes (CSS, clockwise from north). */
 function flowRotationFromFromDeg(fromDeg: number): number {
-  const v = ((fromDeg + 180) % 360 + 360) % 360;
-  return v;
+  return ((fromDeg + 180) % 360 + 360) % 360;
 }
 
 function windColorKn(kn: number): string {
   const t = clamp(kn / 40, 0, 1);
-  if (t < 0.33) return `rgba(56,189,248,${0.85 + t * 0.1})`;
-  if (t < 0.66) return `rgba(250,204,21,${0.9})`;
-  return `rgba(248,113,113,${0.95})`;
+  if (t < 0.33) return `rgba(56,189,248,${0.88 + t * 0.08})`;
+  if (t < 0.66) return `rgba(250,204,21,0.92)`;
+  return `rgba(248,113,113,0.95)`;
 }
 
 function windArrowIcon(fromDeg: number, speedKn: number): L.DivIcon {
   const rot = flowRotationFromFromDeg(fromDeg);
   const t = clamp(speedKn / 48, 0, 1);
-  const h = Math.round(12 + t * 16);
+  const h = Math.round(14 + t * 20);
   const w = Math.max(5, Math.round(h * 0.42));
   const color = windColorKn(speedKn);
-  const html = `<div style="width:0;height:0;border-left:${w}px solid transparent;border-right:${w}px solid transparent;border-bottom:${h}px solid ${color};transform:rotate(${rot}deg);transform-origin:50% 72%;filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))"></div>`;
+  const html = `<div style="width:0;height:0;border-left:${w}px solid transparent;border-right:${w}px solid transparent;border-bottom:${h}px solid ${color};transform:rotate(${rot}deg);transform-origin:50% 72%;filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))"></div>`;
   return L.divIcon({
     className: "sealink-model-wind-arrow",
     html,
@@ -98,16 +99,16 @@ function waveHeightColor(m: number): string {
   const r = Math.round(a[0] + (b[0] - a[0]) * localT);
   const g = Math.round(a[1] + (b[1] - a[1]) * localT);
   const bl = Math.round(a[2] + (b[2] - a[2]) * localT);
-  return `rgba(${r},${g},${bl},0.88)`;
+  return `rgba(${r},${g},${bl},0.82)`;
 }
 
 function waveArrowIcon(fromDeg: number, heightM: number): L.DivIcon {
   const rot = flowRotationFromFromDeg(fromDeg);
   const t = clamp(heightM / 4, 0.2, 1);
-  const h = Math.round(10 + t * 12);
+  const h = Math.round(12 + t * 14);
   const w = Math.max(4, Math.round(h * 0.4));
-  const color = "rgba(147,197,253,0.95)";
-  const html = `<div style="width:0;height:0;border-left:${w}px solid transparent;border-right:${w}px solid transparent;border-bottom:${h}px solid ${color};transform:rotate(${rot}deg);transform-origin:50% 72%;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))"></div>`;
+  const color = "rgba(186,230,253,0.95)";
+  const html = `<div style="width:0;height:0;border-left:${w}px solid transparent;border-right:${w}px solid transparent;border-bottom:${h}px solid ${color};transform:rotate(${rot}deg);transform-origin:50% 72%;filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))"></div>`;
   return L.divIcon({
     className: "sealink-model-wave-arrow",
     html,
@@ -121,7 +122,7 @@ function precipColor(mm: number): string {
   const r = Math.round(180 + 75 * t);
   const g = Math.round(220 - 140 * t);
   const b = Math.round(255 - 200 * t);
-  return `rgba(${r},${g},${b},0.85)`;
+  return `rgba(${r},${g},${b},0.72)`;
 }
 
 function pressureColor(hpa: number): string {
@@ -129,7 +130,7 @@ function pressureColor(hpa: number): string {
   const r = Math.round(80 + 175 * t);
   const g = Math.round(160 + 60 * (1 - Math.abs(t - 0.5) * 2));
   const b = Math.round(240 - 180 * t);
-  return `rgba(${r},${g},${b},0.88)`;
+  return `rgba(${r},${g},${b},0.72)`;
 }
 
 function tempColor(c: number): string {
@@ -137,7 +138,7 @@ function tempColor(c: number): string {
   const r = Math.round(50 + 205 * t);
   const g = Math.round(100 + 155 * (1 - Math.abs(t - 0.45)));
   const b = Math.round(220 - 200 * t);
-  return `rgba(${r},${g},${b},0.88)`;
+  return `rgba(${r},${g},${b},0.72)`;
 }
 
 function FitBoundsTrigger({
@@ -154,6 +155,97 @@ function FitBoundsTrigger({
   return null;
 }
 
+function LayerLegend({ layer }: { layer: LayerId }) {
+  if (layer === "wind10m") {
+    return (
+      <div className="rounded-lg border border-zinc-200 bg-white/95 px-3 py-2 text-[10px] shadow-sm dark:border-zinc-700 dark:bg-zinc-950/95">
+        <div className="font-semibold text-zinc-800 dark:text-zinc-100">Wind speed (kn)</div>
+        <div
+          className="mt-1 h-2.5 w-full rounded-md"
+          style={{
+            background: "linear-gradient(90deg, rgb(56,189,248), rgb(250,204,21), rgb(248,113,113))",
+          }}
+        />
+        <div className="mt-0.5 flex justify-between font-mono text-zinc-500 dark:text-zinc-400">
+          <span>0</span>
+          <span>20</span>
+          <span>40+</span>
+        </div>
+      </div>
+    );
+  }
+  if (layer === "waves") {
+    return (
+      <div className="rounded-lg border border-zinc-200 bg-white/95 px-3 py-2 text-[10px] shadow-sm dark:border-zinc-700 dark:bg-zinc-950/95">
+        <div className="font-semibold text-zinc-800 dark:text-zinc-100">Wave height (m)</div>
+        <div
+          className="mt-1 h-2.5 w-full rounded-md"
+          style={{
+            background: "linear-gradient(90deg, rgb(15,80,160), rgb(80,210,200), rgb(240,210,90), rgb(220,60,60))",
+          }}
+        />
+        <div className="mt-0.5 flex justify-between font-mono text-zinc-500 dark:text-zinc-400">
+          <span>0</span>
+          <span>2</span>
+          <span>5+</span>
+        </div>
+      </div>
+    );
+  }
+  if (layer === "pressure_msl") {
+    return (
+      <div className="rounded-lg border border-zinc-200 bg-white/95 px-3 py-2 text-[10px] shadow-sm dark:border-zinc-700 dark:bg-zinc-950/95">
+        <div className="font-semibold text-zinc-800 dark:text-zinc-100">Pressure (hPa)</div>
+        <div
+          className="mt-1 h-2.5 w-full rounded-md"
+          style={{
+            background: "linear-gradient(90deg, rgb(80,120,240), rgb(140,235,160), rgb(255,140,90))",
+          }}
+        />
+        <div className="mt-0.5 flex justify-between font-mono text-zinc-500 dark:text-zinc-400">
+          <span>980</span>
+          <span>1010</span>
+          <span>1050</span>
+        </div>
+      </div>
+    );
+  }
+  if (layer === "precipitation") {
+    return (
+      <div className="rounded-lg border border-zinc-200 bg-white/95 px-3 py-2 text-[10px] shadow-sm dark:border-zinc-700 dark:bg-zinc-950/95">
+        <div className="font-semibold text-zinc-800 dark:text-zinc-100">Precipitation (mm / h)</div>
+        <div
+          className="mt-1 h-2.5 w-full rounded-md"
+          style={{
+            background: "linear-gradient(90deg, rgba(200,230,255,0.9), rgb(100,180,255), rgb(255,120,80))",
+          }}
+        />
+        <div className="mt-0.5 flex justify-between font-mono text-zinc-500 dark:text-zinc-400">
+          <span>0</span>
+          <span>2</span>
+          <span>8+</span>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-lg border border-zinc-200 bg-white/95 px-3 py-2 text-[10px] shadow-sm dark:border-zinc-700 dark:bg-zinc-950/95">
+      <div className="font-semibold text-zinc-800 dark:text-zinc-100">Temperature (°C)</div>
+      <div
+        className="mt-1 h-2.5 w-full rounded-md"
+        style={{
+          background: "linear-gradient(90deg, rgb(70,120,255), rgb(140,235,160), rgb(255,100,70))",
+        }}
+      />
+      <div className="mt-0.5 flex justify-between font-mono text-zinc-500 dark:text-zinc-400">
+        <span>-5</span>
+        <span>15</span>
+        <span>30+</span>
+      </div>
+    </div>
+  );
+}
+
 export function WeatherModelChartViewer() {
   const [region, setRegion] = useState<WeatherChartRegionId>("europe");
   const [layer, setLayer] = useState<LayerId>("wind10m");
@@ -163,34 +255,56 @@ export function WeatherModelChartViewer() {
   const [data, setData] = useState<ApiOk | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const fetchGen = useRef(0);
 
   const regionConfig = useMemo(() => getWeatherChartRegion(region), [region]);
   const activeLayer = useMemo(() => LAYERS.find((l) => l.id === layer) ?? LAYERS[0], [layer]);
 
+  const cellHalfDeg = useMemo(() => regionConfig.stepDeg * 0.4, [regionConfig.stepDeg]);
+
   useEffect(() => {
-    let cancelled = false;
+    console.info("WEATHER_STEP_CHANGE", { region, layer, lead });
+  }, [region, layer, lead]);
+
+  useEffect(() => {
+    const gen = ++fetchGen.current;
+    const ac = new AbortController();
+    setLoading(true);
+    setLoadErr(null);
+    setData(null);
+
     (async () => {
-      setLoading(true);
-      setLoadErr(null);
       try {
-        const qs = new URLSearchParams({ region, lead: String(lead) });
-        const r = await fetch(`/api/weather/model-map-data?${qs.toString()}`, { cache: "no-store" });
+        const qs = new URLSearchParams({ region, lead: String(lead), layer });
+        const r = await fetch(`/api/weather/model-map-data?${qs.toString()}`, { cache: "no-store", signal: ac.signal });
         const j = (await r.json()) as ApiOk | { error?: string };
+        if (gen !== fetchGen.current) return;
         if (!r.ok || !("ok" in j) || !j.ok) throw new Error((j as { error?: string }).error || "Fetch failed");
-        if (!cancelled) setData(j);
+        setData(j);
       } catch (e) {
-        if (!cancelled) {
-          setData(null);
-          setLoadErr(e instanceof Error ? e.message : "Could not load forecast grid");
-        }
+        if (e instanceof DOMException && e.name === "AbortError") return;
+        if (gen !== fetchGen.current) return;
+        setData(null);
+        setLoadErr(e instanceof Error ? e.message : "Could not load forecast grid");
       } finally {
-        if (!cancelled) setLoading(false);
+        if (gen === fetchGen.current) setLoading(false);
       }
     })();
-    return () => {
-      cancelled = true;
-    };
-  }, [region, lead]);
+
+    return () => ac.abort();
+  }, [region, lead, layer]);
+
+  useEffect(() => {
+    if (!data || loading) return;
+    if (data.leadHours !== lead || data.layer !== layer || data.region !== region) return;
+    console.info("WEATHER_GRID_RENDER", {
+      region: data.region,
+      layer: data.layer,
+      leadHours: data.leadHours,
+      validCount: data.validCount,
+      pointCount: data.points.length,
+    });
+  }, [data, loading, lead, layer, region]);
 
   useEffect(() => {
     if (!playing) return;
@@ -211,13 +325,17 @@ export function WeatherModelChartViewer() {
   const leadIndex = Math.max(0, HOURS.indexOf(lead));
   const points = data?.points ?? [];
 
+  const dataMatchesUi =
+    data != null && data.leadHours === lead && data.layer === layer && data.region === region;
+  const timestepEmpty = dataMatchesUi && data.validCount === 0 && !loading;
+
   return (
     <section className="flex flex-col gap-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
           <h2 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Model chart viewer</h2>
           <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
-            OpenStreetMap basemap with GFS / marine overlays from Open‑Meteo (server-cached). No Wetterzentrale, no chart iframes.
+            OpenStreetMap + Open‑Meteo (GFS / marine). Data loads per region, layer, and forecast hour (server cache ~12 min).
           </p>
         </div>
       </div>
@@ -247,15 +365,20 @@ export function WeatherModelChartViewer() {
           <div className="space-y-1">
             <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">{activeLayer.label}</div>
             <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">{activeLayer.description}</p>
-            {data?.timeIso ? (
-              <p className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400">Step: +{lead}h · {data.timeIso}</p>
+            {dataMatchesUi && data.timeIso ? (
+              <p className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400">
+                Step: +{lead}h · {data.timeIso} · {data.validCount} points
+              </p>
             ) : null}
           </div>
           <div className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 ring-1 ring-zinc-200 dark:bg-zinc-950 dark:ring-zinc-800">
             <div className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-300">Region</div>
             <select
               value={region}
-              onChange={(e) => setRegion(e.target.value as WeatherChartRegionId)}
+              onChange={(e) => {
+                setRegion(e.target.value as WeatherChartRegionId);
+                setFitTick((n) => n + 1);
+              }}
               className="rounded-lg bg-zinc-50 px-2 py-1 text-xs font-semibold text-zinc-900 ring-1 ring-zinc-200 dark:bg-zinc-900 dark:text-zinc-100 dark:ring-zinc-700"
             >
               {WEATHER_CHART_REGIONS.map((r) => (
@@ -270,7 +393,7 @@ export function WeatherModelChartViewer() {
         <div className="mt-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-              Timeline · <span className="font-mono text-zinc-900 dark:text-zinc-100">+{lead}h</span> · 3-hour steps · ~5 days
+              Timeline · <span className="font-mono text-zinc-900 dark:text-zinc-100">+{lead}h</span> · 3-hour steps
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -328,12 +451,24 @@ export function WeatherModelChartViewer() {
         </p>
       ) : null}
 
+      {timestepEmpty ? (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-100">
+          No usable data for <strong>{activeLayer.label}</strong> at <strong>+{lead}h</strong> in this region (try another hour, layer, or coastal area for waves).
+        </p>
+      ) : null}
+
       <div className="relative min-h-[min(72vh,760px)] overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="pointer-events-none absolute left-3 top-3 z-[400] max-w-[220px]">
+          <LayerLegend layer={layer} />
+        </div>
+
         {loading ? (
-          <div className="pointer-events-none absolute inset-0 z-[500] flex items-center justify-center bg-zinc-950/25 text-xs font-semibold text-zinc-800 dark:text-zinc-100">
-            Loading forecast grid…
+          <div className="pointer-events-none absolute inset-0 z-[500] flex flex-col items-center justify-center gap-1 bg-zinc-950/30 text-xs font-semibold text-zinc-900 dark:text-zinc-50">
+            <span>Loading +{lead}h…</span>
+            <span className="text-[10px] font-normal text-zinc-600 dark:text-zinc-300">{activeLayer.label}</span>
           </div>
         ) : null}
+
         <MapContainer
           className="h-[min(72vh,760px)] w-full"
           bounds={regionConfig.mapBounds}
@@ -348,13 +483,17 @@ export function WeatherModelChartViewer() {
           />
           <FitBoundsTrigger bounds={regionConfig.mapBounds} trigger={fitTick} />
 
-          {layer === "wind10m"
+          {dataMatchesUi && layer === "wind10m"
             ? points.map((p, i) => {
                 const sp = p.windSpeedKn;
                 const dir = p.windDirFromDeg;
                 if (sp == null || dir == null || !Number.isFinite(sp) || !Number.isFinite(dir)) return null;
                 return (
-                  <Marker key={`w-${i}`} position={[p.lat, p.lng]} icon={windArrowIcon(dir, sp)}>
+                  <Marker
+                    key={`w-${lead}-${i}-${sp}-${dir}`}
+                    position={[p.lat, p.lng]}
+                    icon={windArrowIcon(dir, sp)}
+                  >
                     <Popup>
                       <div className="text-xs">
                         <div className="font-semibold">10 m wind</div>
@@ -367,17 +506,17 @@ export function WeatherModelChartViewer() {
               })
             : null}
 
-          {layer === "waves"
+          {dataMatchesUi && layer === "waves"
             ? points.map((p, i) => {
                 const h = p.waveHeightM;
                 if (h == null || !Number.isFinite(h) || h < 0.05) return null;
                 const color = waveHeightColor(h);
                 return (
                   <CircleMarker
-                    key={`wh-${i}`}
+                    key={`wh-${lead}-${i}-${h}`}
                     center={[p.lat, p.lng]}
-                    radius={6 + clamp(h, 0, 4) * 2}
-                    pathOptions={{ color: "rgba(255,255,255,0.35)", weight: 1, fillColor: color, fillOpacity: 0.9 }}
+                    radius={7 + clamp(h, 0, 4) * 2.2}
+                    pathOptions={{ color: "rgba(255,255,255,0.35)", weight: 1, fillColor: color, fillOpacity: 0.88 }}
                   >
                     <Popup>
                       <div className="text-xs">
@@ -390,13 +529,13 @@ export function WeatherModelChartViewer() {
               })
             : null}
 
-          {layer === "waves"
+          {dataMatchesUi && layer === "waves"
             ? points.map((p, i) => {
                 const h = p.waveHeightM;
                 const wd = p.waveDirFromDeg;
-                if (h == null || wd == null || !Number.isFinite(h) || h < 0.15 || !Number.isFinite(wd)) return null;
+                if (h == null || wd == null || !Number.isFinite(h) || h < 0.12 || !Number.isFinite(wd)) return null;
                 return (
-                  <Marker key={`wa-${i}`} position={[p.lat, p.lng]} icon={waveArrowIcon(wd, h)}>
+                  <Marker key={`wa-${lead}-${i}-${h}-${wd}`} position={[p.lat, p.lng]} icon={waveArrowIcon(wd, h)}>
                     <Popup>
                       <div className="text-xs">
                         <div className="font-semibold">Wave direction</div>
@@ -408,63 +547,86 @@ export function WeatherModelChartViewer() {
               })
             : null}
 
-          {layer === "pressure_msl"
+          {dataMatchesUi && layer === "pressure_msl"
             ? points.map((p, i) => {
                 const hpa = p.pressureHpa;
                 if (hpa == null || !Number.isFinite(hpa)) return null;
                 const color = pressureColor(hpa);
+                const d = cellHalfDeg;
                 return (
-                  <CircleMarker
-                    key={`p-${i}`}
-                    center={[p.lat, p.lng]}
-                    radius={7}
-                    pathOptions={{ color: "rgba(255,255,255,0.25)", weight: 1, fillColor: color, fillOpacity: 0.9 }}
+                  <Rectangle
+                    key={`p-${lead}-${i}-${hpa}`}
+                    bounds={[
+                      [p.lat - d, p.lng - d],
+                      [p.lat + d, p.lng + d],
+                    ]}
+                    pathOptions={{
+                      color: "rgba(255,255,255,0.15)",
+                      weight: 1,
+                      fillColor: color,
+                      fillOpacity: 0.55,
+                    }}
                   >
                     <Popup>
                       <div className="text-xs font-semibold">{Math.round(hpa)} hPa</div>
                     </Popup>
-                  </CircleMarker>
+                  </Rectangle>
                 );
               })
             : null}
 
-          {layer === "precipitation"
+          {dataMatchesUi && layer === "precipitation"
             ? points.map((p, i) => {
                 const mm = p.precipMm;
                 if (mm == null || !Number.isFinite(mm)) return null;
                 const color = precipColor(mm);
-                const r = mm < 0.05 ? 4 : 5 + clamp(mm, 0, 6);
+                const d = cellHalfDeg * (mm < 0.05 ? 0.65 : 1);
                 return (
-                  <CircleMarker
-                    key={`pr-${i}`}
-                    center={[p.lat, p.lng]}
-                    radius={r}
-                    pathOptions={{ color: "rgba(255,255,255,0.2)", weight: 1, fillColor: color, fillOpacity: 0.88 }}
+                  <Rectangle
+                    key={`pr-${lead}-${i}-${mm}`}
+                    bounds={[
+                      [p.lat - d, p.lng - d],
+                      [p.lat + d, p.lng + d],
+                    ]}
+                    pathOptions={{
+                      color: "rgba(255,255,255,0.12)",
+                      weight: 1,
+                      fillColor: color,
+                      fillOpacity: 0.52,
+                    }}
                   >
                     <Popup>
                       <div className="text-xs font-semibold">{mm.toFixed(2)} mm/h</div>
                     </Popup>
-                  </CircleMarker>
+                  </Rectangle>
                 );
               })
             : null}
 
-          {layer === "temperature_2m"
+          {dataMatchesUi && layer === "temperature_2m"
             ? points.map((p, i) => {
                 const tc = p.tempC;
                 if (tc == null || !Number.isFinite(tc)) return null;
                 const color = tempColor(tc);
+                const d = cellHalfDeg;
                 return (
-                  <CircleMarker
-                    key={`t-${i}`}
-                    center={[p.lat, p.lng]}
-                    radius={6}
-                    pathOptions={{ color: "rgba(255,255,255,0.25)", weight: 1, fillColor: color, fillOpacity: 0.9 }}
+                  <Rectangle
+                    key={`t-${lead}-${i}-${tc}`}
+                    bounds={[
+                      [p.lat - d, p.lng - d],
+                      [p.lat + d, p.lng + d],
+                    ]}
+                    pathOptions={{
+                      color: "rgba(255,255,255,0.15)",
+                      weight: 1,
+                      fillColor: color,
+                      fillOpacity: 0.55,
+                    }}
                   >
                     <Popup>
                       <div className="text-xs font-semibold">{tc.toFixed(1)} °C</div>
                     </Popup>
-                  </CircleMarker>
+                  </Rectangle>
                 );
               })
             : null}
@@ -472,7 +634,7 @@ export function WeatherModelChartViewer() {
       </div>
 
       <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
-        Pan and zoom the map. Wind/wave arrows point <strong>downwind</strong> / <strong>along swell propagation</strong> (from meteorological “from” directions in the API).
+        Arrows use meteorological “from” directions from the API and are drawn <strong>downwind</strong> (wind) or <strong>along propagation</strong> (waves).
       </p>
     </section>
   );
