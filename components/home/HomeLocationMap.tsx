@@ -415,7 +415,9 @@ export default function HomeLocationMap({
       getLabel: () => `${(boatInput || "Boat").trim()} · ${(fullName || "").trim()}`.trim().slice(0, 40),
       onPeers: (peers) => setNearbyPeers(peers),
       onUnauthorized: () => setNearbyPeers([]),
-    }).then(() => setLastNearbyRefreshOkAtMs(Date.now()));
+    }).then((ok) => {
+      if (ok) setLastNearbyRefreshOkAtMs(Date.now());
+    });
   }, [
     signedIn,
     sharing,

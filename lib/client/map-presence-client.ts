@@ -14,7 +14,7 @@ type StartOpts = {
 const GKEY = "__sealink_map_presence_client_v1";
 
 type State = {
-  inflightManual: Promise<void> | null;
+  inflightManual: Promise<boolean> | null;
   lastManualAtMs: number;
 };
 
