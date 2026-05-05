@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import { WeatherMapClientWrapper } from "@/components/weather/WeatherMapClientWrapper";
 
+/** Avoid stale HTML/chunks at the edge after weather UI changes. */
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Weather & sea",
-  description: "GFS synoptic charts and marine-oriented weather on SeaLink",
+  description: "GFS model charts rendered from Open-Meteo data (no embedded external chart sites).",
 };
 
 export default function WeatherPage() {
