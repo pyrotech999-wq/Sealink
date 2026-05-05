@@ -1,7 +1,7 @@
 "use client";
 
 import L from "leaflet";
-import { Fragment, useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { CircleMarker, Popup, useMap } from "react-leaflet";
 
 /** Open‑Meteo GFS hourly `precipitation` — mm for that hour (shown as mm/h). */
@@ -55,16 +55,21 @@ function drawPrecipCanvas(
   if (w <= 0 || h <= 0) return;
 
   const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
-  canvas.width = Math.floor(w * dpr);
-  canvas.height = Math.floor(h * dpr);
+  const pw = Math.floor(w * dpr);
+  const ph = Math.floor(h * dpr);
+  canvas.width = pw;
+  canvas.height = ph;
   canvas.style.width = `${w}px`;
   canvas.style.height = `${h}px`;
 
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, w, h);
-  ctx.globalCompositeOperation = "source-over";
+  const off = document.createElement("canvas");
+  off.width = pw;
+  off.height = ph;
+  const octx = off.getContext("2d");
+  if (!octx) return;
+  octx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  octx.clearRect(0, 0, w, h);
+  octx.globalCompositeOperation = "source-over";
 
   const visible = points.filter((p) => p.mm >= PRECIP_MIN_DRAW).sort((a, b) => a.mm - b.mm);
 
@@ -78,34 +83,27 @@ function drawPrecipCanvas(
     const { r, g, b } = precipRgb(p.mm);
     const peak = LAYER_OPACITY * Math.min(0.95, 0.38 + Math.min(p.mm / 6, 1) * 0.55);
 
-    const grd = ctx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, R);
+    const grd = octx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, R);
     grd.addColorStop(0, `rgba(${r},${g},${b},${peak})`);
     grd.addColorStop(0.35, `rgba(${r},${g},${b},${peak * 0.5})`);
     grd.addColorStop(0.65, `rgba(${r},${g},${b},${peak * 0.18})`);
     grd.addColorStop(1, `rgba(${r},${g},${b},0)`);
 
-    ctx.fillStyle = grd;
-    ctx.beginPath();
-    ctx.arc(pt.x, pt.y, R, 0, Math.PI * 2);
-    ctx.fill();
+    octx.fillStyle = grd;
+    octx.beginPath();
+    octx.arc(pt.x, pt.y, R, 0, Math.PI * 2);
+    octx.fill();
   }
 
-  ctx.filter = "blur(10px)";
-  ctx.globalCompositeOperation = "source-over";
-  const blurred = document.createElement("canvas");
-  blurred.width = canvas.width;
-  blurred.height = canvas.height;
-  const bctx = blurred.getContext("2d");
-  if (bctx) {
-    bctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    bctx.drawImage(canvas, 0, 0, w, h);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.filter = "none";
-    ctx.clearRect(0, 0, w, h);
-    ctx.globalAlpha = 0.92;
-    ctx.drawImage(blurred, 0, 0, w, h);
-    ctx.globalAlpha = 1;
-  }
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  ctx.filter = "blur(12px)";
+  ctx.globalAlpha = 0.96;
+  ctx.drawImage(off, 0, 0, w, h);
+  ctx.filter = "none";
+  ctx.globalAlpha = 1;
 }
 
 /**
