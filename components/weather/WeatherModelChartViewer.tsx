@@ -65,8 +65,60 @@ type ApiBatch = {
 const CLIENT_FETCH_THROTTLE_MS = 2500;
 const CLIENT_RETRY_DELAY_MS = 7000;
 
+/** Keep grid responses for 6h; initial load reads from localStorage before any fetch. */
+const GRID_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+const GRID_CACHE_LS_KEY = "sealink-weather-model-grid-v1";
+
+type GridCacheEntry = { storedAtMs: number; data: ApiOk };
+
 function gridCacheKey(region: WeatherChartRegionId, layer: LayerId, leadHours: number): string {
   return `${region}|${layer}|${leadHours}`;
+}
+
+function gridEntryFresh(e: GridCacheEntry): boolean {
+  return Date.now() - e.storedAtMs < GRID_CACHE_MAX_AGE_MS;
+}
+
+function readPersistedGridCache(): Map<string, GridCacheEntry> {
+  const out = new Map<string, GridCacheEntry>();
+  if (typeof window === "undefined") return out;
+  try {
+    const raw = localStorage.getItem(GRID_CACHE_LS_KEY);
+    if (!raw) return out;
+    const parsed = JSON.parse(raw) as { entries?: Record<string, GridCacheEntry> };
+    const now = Date.now();
+    for (const [k, v] of Object.entries(parsed.entries ?? {})) {
+      if (!v?.data?.ok || typeof v.storedAtMs !== "number") continue;
+      if (now - v.storedAtMs >= GRID_CACHE_MAX_AGE_MS) continue;
+      out.set(k, v);
+    }
+  } catch {
+    /* ignore */
+  }
+  return out;
+}
+
+function persistGridCache(map: Map<string, GridCacheEntry>) {
+  if (typeof window === "undefined") return;
+  try {
+    const now = Date.now();
+    const entries: Record<string, GridCacheEntry> = {};
+    for (const [k, v] of map) {
+      if (now - v.storedAtMs < GRID_CACHE_MAX_AGE_MS) entries[k] = v;
+    }
+    localStorage.setItem(GRID_CACHE_LS_KEY, JSON.stringify({ v: 1, entries }));
+  } catch {
+    /* quota */
+  }
+}
+
+function getFreshGridData(map: Map<string, GridCacheEntry>, key: string): ApiOk | null {
+  const e = map.get(key);
+  return e && gridEntryFresh(e) ? e.data : null;
+}
+
+function getAnyGridData(map: Map<string, GridCacheEntry>, key: string): ApiOk | null {
+  return map.get(key)?.data ?? null;
 }
 
 function uniqSortedLeads(values: number[]): number[] {

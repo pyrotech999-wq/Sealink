@@ -3,8 +3,8 @@ import { buildRegionGridCapped, getWeatherChartRegion, type WeatherChartRegionId
 
 export const runtime = "nodejs";
 
-/** 10–15 min target (middle). */
-const CACHE_TTL_MS = 12 * 60 * 1000;
+/** Series cache: reuse Open‑Meteo fetch for up to 6h (then refresh on next request). */
+const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const MAX_LEAD_H = 117;
 
 /** One upstream request covers all timesteps; cap hourly length. */
