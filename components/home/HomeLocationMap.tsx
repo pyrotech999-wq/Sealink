@@ -58,7 +58,7 @@ import { isLikelyIOS } from "@/lib/location-env";
 import { getNativeLocationBridge } from "@/lib/native-location-bridge";
 import { getDeviceName, getOrCreateDeviceId } from "@/lib/device-id";
 import { clampGeoAccuracyM, humanGeolocationMessage } from "@/lib/geolocation-utils";
-import { refreshNearbyPresenceNow, startNearbyPresence } from "@/lib/client/map-presence-client";
+import { refreshNearbyPresenceNow } from "@/lib/client/map-presence-client";
 const DEFAULT_CENTER: [number, number] = [DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng];
 const DEFAULT_ZOOM = 6;
 
@@ -369,29 +369,10 @@ export default function HomeLocationMap({
     });
   }, [sharing, pos?.lat, pos?.lng, deviceId]);
 
-  // Nearby friends (safe mode): max 1 POST + 1 GET per 60s, hidden-tab paused, no retries.
-  useEffect(() => {
-    if (!EMERGENCY_REENABLE_NEARBY_PRESENCE) return;
-    if (!signedIn) {
-      setNearbyPeers([]);
-      return;
-    }
-    if (!sharing || !pos || !shareNearby) {
-      setNearbyPeers([]);
-      return;
-    }
-    return startNearbyPresence({
-      signedIn,
-      shareNearby,
-      getCoords: () => ({ lat: pos.lat, lng: pos.lng }),
-      getLabel: () => `${(boatInput || "Boat").trim()} · ${(fullName || "").trim()}`.trim().slice(0, 40),
-      onPeers: (peers) => setNearbyPeers(peers),
-      onUnauthorized: () => {
-        // Stop updating peers until user logs in again.
-        setNearbyPeers([]);
-      },
-    });
-  }, [signedIn, sharing, pos?.lat, pos?.lng, shareNearby, boatInput, fullName]);
+  // Emergency mode: no automatic presence polling. Manual refresh only.
+
+  const [nearbyRefreshBlockedUntilMs, setNearbyRefreshBlockedUntilMs] = useState(0);
+  const nearbyRefreshBlocked = typeof window !== "undefined" && Date.now() < nearbyRefreshBlockedUntilMs;
 
   const [monitoredFix, setMonitoredFix] = useState<{ lat: number; lng: number; at: string } | null>(null);
 
@@ -1281,6 +1262,8 @@ export default function HomeLocationMap({
               onClick={() => {
                 if (!EMERGENCY_REENABLE_NEARBY_PRESENCE) return;
                 if (!signedIn || !sharing || !pos || !shareNearby) return;
+                if (nearbyRefreshBlocked) return;
+                setNearbyRefreshBlockedUntilMs(Date.now() + 60_000);
                 refreshNearbyPresenceNow({
                   signedIn,
                   shareNearby,
@@ -1290,9 +1273,10 @@ export default function HomeLocationMap({
                   onUnauthorized: () => setNearbyPeers([]),
                 });
               }}
+              disabled={nearbyRefreshBlocked}
               className="w-full rounded-lg border border-blue-300 bg-white px-3 py-2 text-xs font-semibold text-blue-900 shadow-sm hover:bg-blue-50 dark:border-blue-800 dark:bg-zinc-900 dark:text-blue-100 dark:hover:bg-blue-950/50"
             >
-              Refresh nearby boats
+              Refresh nearby users
             </button>
           ) : null}
         </>
