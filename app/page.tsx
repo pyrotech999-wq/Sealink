@@ -6,6 +6,7 @@ import { HomeMainCtas } from "@/components/HomeMainCtas";
 import { HomeMarinaBookingCta } from "@/components/home/HomeMarinaBookingCta";
 import { SeaLinkBrandFooter } from "@/components/SeaLinkBrandFooter";
 import { ShareAppLink } from "@/components/home/ShareAppLink";
+import { SeasTheDayButton } from "@/components/home/SeasTheDayButton";
 import { DEMO_SESSION_COOKIE, DEMO_SESSION_VALUE } from "@/lib/demo-session";
 import { getAuthUser } from "@/lib/auth";
 import { getProfileFirstNameForUser } from "@/lib/profiles-server";
@@ -43,6 +44,10 @@ export default async function Home() {
             You&apos;re signed in. Posting adverts and broadcasts is tied to your account email.
           </p>
         ) : null}
+
+        <div className="mt-4">
+          <SeasTheDayButton />
+        </div>
 
         <HomeLocationMapLoader signedIn={signedIn} />
 

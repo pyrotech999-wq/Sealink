@@ -1177,6 +1177,12 @@ export default function HomeLocationMap({
     return () => window.clearTimeout(t);
   }, []);
 
+  useEffect(() => {
+    const onOpen = () => setLifeSeasOpen(true);
+    window.addEventListener("sealink-seas-the-day-open", onOpen);
+    return () => window.removeEventListener("sealink-seas-the-day-open", onOpen);
+  }, []);
+
   const setSharingOn = useCallback((on: boolean) => {
     if (!on) {
       setShareNearby(false);
@@ -1521,13 +1527,6 @@ export default function HomeLocationMap({
               </p>
             ) : null}
           </div>
-          <button
-            type="button"
-            onClick={() => setLifeSeasOpen(true)}
-            className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-teal-300 bg-teal-50 px-4 text-sm font-semibold text-teal-900 shadow-sm hover:bg-teal-100 dark:border-teal-800 dark:bg-teal-950/60 dark:text-teal-100 dark:hover:bg-teal-900/70"
-          >
-            Sea&apos;s the day!
-          </button>
         </div>
       </div>
 
