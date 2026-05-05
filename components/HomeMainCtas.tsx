@@ -8,7 +8,7 @@ export function HomeMainCtas({ signedIn }: Props) {
       <div className="mt-8 flex flex-col gap-3">
         <div className="flex flex-col gap-3 sm:flex-row">
           <Link
-            href="/local-map"
+            href="/weather"
             className="inline-flex h-11 items-center justify-center rounded-lg bg-green-600 px-5 text-sm font-medium text-white hover:bg-green-700"
           >
             Open weather & sea
