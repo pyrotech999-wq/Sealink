@@ -45,17 +45,21 @@ export async function manualRefreshNearbyPresence(opts: StartOpts): Promise<void
 
   const now = Date.now();
   if (s.lastManualAtMs && now - s.lastManualAtMs < 60_000) return;
-  if (s.inflightManual) return s.inflightManual;
+  if (s.inflightManual) {
+    console.info("PRESENCE_MANUAL_SKIPPED_INFLIGHT");
+    return s.inflightManual;
+  }
 
   const coords = opts.getCoords();
   if (!coords) return;
   const label = opts.getLabel().trim().slice(0, 40) || "Nearby boat";
 
   s.lastManualAtMs = now;
-  console.info("PRESENCE_MANUAL_REFRESH");
+  console.info("PRESENCE_MANUAL_START");
 
   const doWork = async () => {
     // POST heartbeat once
+    console.info("PRESENCE_MANUAL_POST");
     const post = await fetch("/api/map/presence", {
       method: "POST",
       credentials: "same-origin",
@@ -68,6 +72,7 @@ export async function manualRefreshNearbyPresence(opts: StartOpts): Promise<void
     }
 
     // GET peers once
+    console.info("PRESENCE_MANUAL_GET");
     const url = `/api/map/presence?lat=${encodeURIComponent(String(coords.lat))}&lng=${encodeURIComponent(String(coords.lng))}`;
     const get = await fetch(url, { credentials: "same-origin", cache: "no-store" });
     if (get.status === 401) {
@@ -80,7 +85,11 @@ export async function manualRefreshNearbyPresence(opts: StartOpts): Promise<void
     opts.onPeers(peers);
   };
 
-  s.inflightManual = doWork().finally(() => {
+  // Set inflight immediately to prevent same-tick duplicates.
+  s.inflightManual = doWork()
+    .catch(() => undefined)
+    .finally(() => {
+      console.info("PRESENCE_MANUAL_DONE");
     s.inflightManual = null;
   });
   return s.inflightManual;
