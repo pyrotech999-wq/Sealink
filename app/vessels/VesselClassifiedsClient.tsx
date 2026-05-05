@@ -226,6 +226,67 @@ export function VesselClassifiedsClient() {
     };
   }, [editPreviews]);
 
+  const [listingPhotoIdx, setListingPhotoIdx] = useState<Record<string, number>>({});
+  const [lightbox, setLightbox] = useState<{ listingId: string; urls: string[]; idx: number } | null>(null);
+
+  function listingImageIndex(listingId: string, len: number): number {
+    if (len <= 0) return 0;
+    const raw = listingPhotoIdx[listingId];
+    if (raw == null || !Number.isFinite(raw)) return 0;
+    return Math.max(0, Math.min(len - 1, raw));
+  }
+
+  function setListingImageIndex(listingId: string, len: number, idx: number) {
+    if (len <= 0) return;
+    setListingPhotoIdx((m) => ({ ...m, [listingId]: Math.max(0, Math.min(len - 1, idx)) }));
+  }
+
+  function bumpListingImage(listingId: string, len: number, delta: number) {
+    const cur = listingImageIndex(listingId, len);
+    setListingImageIndex(listingId, len, cur + delta);
+  }
+
+  function openImageLightbox(listingId: string, urls: string[], idx: number) {
+    if (!urls.length) return;
+    const i = Math.max(0, Math.min(urls.length - 1, idx));
+    setLightbox({ listingId, urls, idx: i });
+  }
+
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setLightbox(null);
+        return;
+      }
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        setLightbox((prev) => {
+          if (!prev) return null;
+          const nextIdx = Math.max(0, Math.min(prev.urls.length - 1, prev.idx - 1));
+          setListingPhotoIdx((m) => ({ ...m, [prev.listingId]: nextIdx }));
+          return { ...prev, idx: nextIdx };
+        });
+      }
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        setLightbox((prev) => {
+          if (!prev) return null;
+          const nextIdx = Math.max(0, Math.min(prev.urls.length - 1, prev.idx + 1));
+          setListingPhotoIdx((m) => ({ ...m, [prev.listingId]: nextIdx }));
+          return { ...prev, idx: nextIdx };
+        });
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [lightbox]);
+
   async function createListing() {
     if (!signedIn) {
       setPostMsg("Sign in to post a boat listing.");
@@ -778,14 +839,68 @@ export function VesselClassifiedsClient() {
                   </div>
                 </div>
                 {editingId === l.id ? null : l.imageUrls?.length ? (
-                  <a
-                    href={l.imageUrls[0]!}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-3 block overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900"
-                  >
-                    <img src={l.imageUrls[0]!} alt="" className="h-56 w-full object-cover" loading="lazy" />
-                  </a>
+                  (() => {
+                    const urls = l.imageUrls;
+                    const idx = listingImageIndex(l.id, urls.length);
+                    const cur = urls[idx]!;
+                    const multi = urls.length > 1;
+                    return (
+                      <div className="mt-3">
+                        <div className="relative overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900">
+                          {multi ? (
+                            <button
+                              type="button"
+                              aria-label="Previous photo"
+                              onClick={() => bumpListingImage(l.id, urls.length, -1)}
+                              className="absolute left-2 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-lg font-semibold text-white shadow hover:bg-black/70"
+                            >
+                              ‹
+                            </button>
+                          ) : null}
+                          {multi ? (
+                            <button
+                              type="button"
+                              aria-label="Next photo"
+                              onClick={() => bumpListingImage(l.id, urls.length, 1)}
+                              className="absolute right-2 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-lg font-semibold text-white shadow hover:bg-black/70"
+                            >
+                              ›
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="block w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-green-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
+                            onClick={() => openImageLightbox(l.id, urls, idx)}
+                          >
+                            <img src={cur} alt="" className="h-56 w-full object-cover" loading="lazy" />
+                          </button>
+                          {multi ? (
+                            <p className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-medium text-white">
+                              {idx + 1} / {urls.length}
+                            </p>
+                          ) : null}
+                        </div>
+                        {multi ? (
+                          <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+                            {urls.map((src, i) => (
+                              <button
+                                key={`${l.id}-thumb-${i}`}
+                                type="button"
+                                onClick={() => setListingImageIndex(l.id, urls.length, i)}
+                                className={`shrink-0 overflow-hidden rounded-lg border-2 transition-colors ${
+                                  i === idx
+                                    ? "border-green-600 ring-2 ring-green-600/30"
+                                    : "border-zinc-200 dark:border-zinc-700"
+                                }`}
+                              >
+                                <img src={src} alt="" className="h-16 w-20 object-cover" loading="lazy" />
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })()
                 ) : null}
                 {editingId === l.id ? null : l.locationLabel ? <p className="mt-3 text-xs text-zinc-500">{l.locationLabel}</p> : null}
                 {editingId === l.id ? null : (
@@ -813,21 +928,6 @@ export function VesselClassifiedsClient() {
                   </div>
                 )}
 
-                {editingId === l.id ? null : l.imageUrls?.length && l.imageUrls.length > 1 ? (
-                  <div className="mt-3 grid grid-cols-4 gap-2">
-                    {l.imageUrls.slice(1, 8).map((src) => (
-                      <a
-                        key={src}
-                        href={src}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="block overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800"
-                      >
-                        <img src={src} alt="" className="h-20 w-full object-cover" loading="lazy" />
-                      </a>
-                    ))}
-                  </div>
-                ) : null}
               </li>
             ))}
           </ul>
@@ -1074,6 +1174,72 @@ export function VesselClassifiedsClient() {
           )}
         </div>
       </section>
+      {lightbox && lightbox.urls.length ? (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Photo viewer"
+          onClick={() => setLightbox(null)}
+        >
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={() => setLightbox(null)}
+            className="absolute right-3 top-3 z-10 rounded-lg bg-white/10 px-3 py-1.5 text-sm font-semibold text-white hover:bg-white/20"
+          >
+            Close
+          </button>
+          {lightbox.urls.length > 1 ? (
+            <>
+              <button
+                type="button"
+                aria-label="Previous photo"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setLightbox((prev) => {
+                    if (!prev) return null;
+                    const nextIdx = Math.max(0, Math.min(prev.urls.length - 1, prev.idx - 1));
+                    setListingPhotoIdx((m) => ({ ...m, [prev.listingId]: nextIdx }));
+                    return { ...prev, idx: nextIdx };
+                  });
+                }}
+                className="absolute left-2 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 text-2xl font-semibold text-white hover:bg-white/25 sm:left-4"
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                aria-label="Next photo"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setLightbox((prev) => {
+                    if (!prev) return null;
+                    const nextIdx = Math.max(0, Math.min(prev.urls.length - 1, prev.idx + 1));
+                    setListingPhotoIdx((m) => ({ ...m, [prev.listingId]: nextIdx }));
+                    return { ...prev, idx: nextIdx };
+                  });
+                }}
+                className="absolute right-2 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 text-2xl font-semibold text-white hover:bg-white/25 sm:right-4"
+              >
+                ›
+              </button>
+            </>
+          ) : null}
+          <div className="flex max-h-full max-w-full flex-col items-center" onClick={(e) => e.stopPropagation()}>
+            <img
+              src={lightbox.urls[lightbox.idx]!}
+              alt=""
+              className="max-h-[85vh] max-w-full object-contain"
+            />
+            {lightbox.urls.length > 1 ? (
+              <p className="mt-3 text-sm font-medium text-white/90">
+                {lightbox.idx + 1} / {lightbox.urls.length}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
