@@ -50,7 +50,28 @@ type ApiOk = {
   validCount: number;
   points: MapPoint[];
   fetchedAtIso: string;
+  stale?: boolean;
 };
+
+type ApiBatch = {
+  ok: true;
+  batch: true;
+  region: WeatherChartRegionId;
+  layer: LayerId;
+  stale?: boolean;
+  items: ApiOk[];
+};
+
+const CLIENT_FETCH_THROTTLE_MS = 2500;
+const CLIENT_RETRY_DELAY_MS = 7000;
+
+function gridCacheKey(region: WeatherChartRegionId, layer: LayerId, leadHours: number): string {
+  return `${region}|${layer}|${leadHours}`;
+}
+
+function uniqSortedLeads(values: number[]): number[] {
+  return [...new Set(values)].sort((a, b) => a - b);
+}
 
 function clamp(n: number, a: number, b: number): number {
   return Math.max(a, Math.min(b, n));
@@ -294,7 +315,12 @@ export function WeatherModelChartViewer() {
   const [data, setData] = useState<ApiOk | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [staleNotice, setStaleNotice] = useState(false);
   const fetchGen = useRef(0);
+  const clientGridCache = useRef(new Map<string, ApiOk>());
+  const fetchThrottleUntil = useRef(0);
+  const regionLayerBoot = useRef(false);
+  const prevRegionLayer = useRef({ region, layer });
 
   const regionConfig = useMemo(() => getWeatherChartRegion(region), [region]);
   const activeLayer = useMemo(() => LAYERS.find((l) => l.id === layer) ?? LAYERS[0], [layer]);
@@ -308,23 +334,103 @@ export function WeatherModelChartViewer() {
   useEffect(() => {
     const gen = ++fetchGen.current;
     const ac = new AbortController();
+
+    const regionChanged = prevRegionLayer.current.region !== region;
+    const layerChanged = prevRegionLayer.current.layer !== layer;
+    const regionLayerChanged = !regionLayerBoot.current || regionChanged || layerChanged;
+    regionLayerBoot.current = true;
+    if (regionLayerChanged) {
+      if (regionChanged) {
+        const prefix = `${region}|`;
+        for (const k of [...clientGridCache.current.keys()]) {
+          if (!k.startsWith(prefix)) clientGridCache.current.delete(k);
+        }
+      }
+      prevRegionLayer.current = { region, layer };
+      setData(null);
+      setStaleNotice(false);
+    }
+
+    const leadsWanted = regionLayerChanged ? uniqSortedLeads([0, 3, 6, lead]) : [lead];
+    const missing = leadsWanted.filter((lh) => !clientGridCache.current.has(gridCacheKey(region, layer, lh)));
+
+    const applyCurrentFromServerCache = () => {
+      const hit = clientGridCache.current.get(gridCacheKey(region, layer, lead));
+      if (hit && gen === fetchGen.current) {
+        setData(hit);
+        setStaleNotice(!!hit.stale);
+        setLoadErr(null);
+      }
+    };
+
+    if (missing.length === 0) {
+      applyCurrentFromServerCache();
+      setLoading(false);
+      return () => ac.abort();
+    }
+
     setLoading(true);
     setLoadErr(null);
-    setData(null);
+    if (!regionLayerChanged) {
+      applyCurrentFromServerCache();
+    }
 
     (async () => {
       try {
-        const qs = new URLSearchParams({ region, lead: String(lead), layer });
-        const r = await fetch(`/api/weather/model-map-data?${qs.toString()}`, { cache: "no-store", signal: ac.signal });
-        const j = (await r.json()) as ApiOk | { error?: string };
+        const waitThrottle = Math.max(0, fetchThrottleUntil.current - Date.now());
+        if (waitThrottle > 0) await new Promise((r) => setTimeout(r, waitThrottle));
+        if (gen !== fetchGen.current || ac.signal.aborted) return;
+
+        const qs = new URLSearchParams({ region, layer, leads: missing.join(",") });
+        let r = await fetch(`/api/weather/model-map-data?${qs.toString()}`, { cache: "no-store", signal: ac.signal });
+        if ((r.status === 429 || r.status === 502) && gen === fetchGen.current && !ac.signal.aborted) {
+          await new Promise((res) => setTimeout(res, CLIENT_RETRY_DELAY_MS));
+          if (gen !== fetchGen.current || ac.signal.aborted) return;
+          r = await fetch(`/api/weather/model-map-data?${qs.toString()}`, { cache: "no-store", signal: ac.signal });
+        }
+        fetchThrottleUntil.current = Date.now() + CLIENT_FETCH_THROTTLE_MS;
+
+        const j = (await r.json()) as ApiOk | ApiBatch | { error?: string };
         if (gen !== fetchGen.current) return;
-        if (!r.ok || !("ok" in j) || !j.ok) throw new Error((j as { error?: string }).error || "Fetch failed");
-        setData(j);
+        if (!r.ok) throw new Error((j as { error?: string }).error || `HTTP ${r.status}`);
+
+        if ("batch" in j && j.batch && Array.isArray((j as ApiBatch).items)) {
+          const b = j as ApiBatch;
+          const batchStale = !!b.stale;
+          for (const item of b.items) {
+            if (!item?.ok) continue;
+            clientGridCache.current.set(gridCacheKey(item.region, item.layer, item.leadHours), {
+              ...item,
+              stale: !!(item.stale || batchStale),
+            });
+          }
+        } else if ("ok" in j && j.ok && !("batch" in j && j.batch)) {
+          const one = j as ApiOk;
+          clientGridCache.current.set(gridCacheKey(one.region, one.layer, one.leadHours), one);
+        } else {
+          throw new Error((j as { error?: string }).error || "Fetch failed");
+        }
+
+        const cur = clientGridCache.current.get(gridCacheKey(region, layer, lead));
+        if (gen !== fetchGen.current) return;
+        if (cur) {
+          setData(cur);
+          setStaleNotice(!!cur.stale);
+          setLoadErr(null);
+        } else {
+          throw new Error("Missing timestep in batch response");
+        }
       } catch (e) {
         if (e instanceof DOMException && e.name === "AbortError") return;
         if (gen !== fetchGen.current) return;
-        setData(null);
-        setLoadErr(e instanceof Error ? e.message : "Could not load forecast grid");
+        const cur = clientGridCache.current.get(gridCacheKey(region, layer, lead));
+        if (cur) {
+          setData(cur);
+          setStaleNotice(!!cur.stale);
+          setLoadErr(null);
+        } else {
+          setLoadErr(e instanceof Error ? e.message : "Could not load forecast grid");
+        }
       } finally {
         if (gen === fetchGen.current) setLoading(false);
       }
@@ -342,6 +448,7 @@ export function WeatherModelChartViewer() {
       leadHours: data.leadHours,
       validCount: data.validCount,
       pointCount: data.points.length,
+      stale: !!data.stale,
     });
   }, [data, loading, lead, layer, region]);
 
@@ -362,17 +469,26 @@ export function WeatherModelChartViewer() {
   }, []);
 
   const leadIndex = Math.max(0, HOURS.indexOf(lead));
-  const points = data?.points ?? [];
 
-  const dataMatchesUi =
-    data != null && data.leadHours === lead && data.layer === layer && data.region === region;
-  const timestepEmpty = dataMatchesUi && data.validCount === 0 && !loading;
+  const fromClientGrid = clientGridCache.current.get(gridCacheKey(region, layer, lead)) ?? null;
+  const mapFrame: ApiOk | null =
+    fromClientGrid ??
+    (data != null && data.region === region && data.layer === layer && data.leadHours === lead
+      ? data
+      : data != null && data.region === region && data.layer === layer && loading
+        ? data
+        : null);
+
+  const showMapLayer = mapFrame != null && mapFrame.region === region && mapFrame.layer === layer;
+  const uiMatches = showMapLayer && mapFrame.leadHours === lead;
+  const points = mapFrame?.points ?? [];
+  const mapFrameLead = mapFrame?.leadHours ?? lead;
+  const timestepEmpty = uiMatches && mapFrame.validCount === 0 && !loading;
 
   const pressureDisplay = useMemo(() => {
-    if (layer !== "pressure_msl" || !data || loading) return null;
-    if (data.leadHours !== lead || data.layer !== "pressure_msl" || data.region !== region) return null;
+    if (layer !== "pressure_msl" || !mapFrame || !showMapLayer) return null;
 
-    const entries = data.points
+    const entries = mapFrame.points
       .map((p, i) => ({ p, i, h: p.pressureHpa }))
       .filter((x): x is { p: MapPoint; i: number; h: number } => x.h != null && Number.isFinite(x.h));
     if (entries.length === 0) {
@@ -405,7 +521,7 @@ export function WeatherModelChartViewer() {
       : null;
 
     return { labels, low: showLH ? low : null, high: showLH ? high : null, lowPos, highPos };
-  }, [layer, data, loading, lead, region, regionConfig.stepDeg]);
+  }, [layer, mapFrame, showMapLayer, regionConfig.stepDeg]);
 
   return (
     <section className="flex flex-col gap-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 sm:p-5">
@@ -413,7 +529,8 @@ export function WeatherModelChartViewer() {
         <div className="space-y-1">
           <h2 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Model chart viewer</h2>
           <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
-            OpenStreetMap + Open‑Meteo (GFS / marine). Data loads per region, layer, and forecast hour (server cache ~12 min).
+            OpenStreetMap + Open‑Meteo (GFS / marine). One server request covers all timesteps per region/layer (~12 min cache);
+            +0h/+3h/+6h preload when you change region or layer; other hours load when you move the timeline.
           </p>
         </div>
       </div>
@@ -443,9 +560,9 @@ export function WeatherModelChartViewer() {
           <div className="space-y-1">
             <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">{activeLayer.label}</div>
             <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">{activeLayer.description}</p>
-            {dataMatchesUi && data.timeIso ? (
+            {uiMatches && mapFrame?.timeIso ? (
               <p className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400">
-                Step: +{lead}h · {data.timeIso} · {data.validCount} points
+                Step: +{lead}h · {mapFrame.timeIso} · {mapFrame.validCount} points
               </p>
             ) : null}
           </div>
@@ -529,6 +646,13 @@ export function WeatherModelChartViewer() {
         </p>
       ) : null}
 
+      {staleNotice && !loadErr ? (
+        <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950 dark:border-sky-900/50 dark:bg-sky-950/50 dark:text-sky-100">
+          Using cached data — forecast service was rate-limited or temporarily unavailable; showing the last good grid for this
+          region and layer.
+        </p>
+      ) : null}
+
       {timestepEmpty ? (
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-100">
           No usable data for <strong>{activeLayer.label}</strong> at <strong>+{lead}h</strong> in this region (try another hour, layer, or coastal area for waves).
@@ -561,14 +685,14 @@ export function WeatherModelChartViewer() {
           />
           <FitBoundsTrigger bounds={regionConfig.mapBounds} trigger={fitTick} />
 
-          {dataMatchesUi && layer === "wind10m"
+          {showMapLayer && layer === "wind10m"
             ? points.map((p, i) => {
                 const sp = p.windSpeedKn;
                 const dir = p.windDirFromDeg;
                 if (sp == null || dir == null || !Number.isFinite(sp) || !Number.isFinite(dir)) return null;
                 return (
                   <Marker
-                    key={`w-${lead}-${i}-${sp}-${dir}`}
+                    key={`w-${mapFrameLead}-${i}-${sp}-${dir}`}
                     position={[p.lat, p.lng]}
                     icon={windArrowIcon(dir, sp)}
                   >
@@ -584,14 +708,14 @@ export function WeatherModelChartViewer() {
               })
             : null}
 
-          {dataMatchesUi && layer === "waves"
+          {showMapLayer && layer === "waves"
             ? points.map((p, i) => {
                 const h = p.waveHeightM;
                 if (h == null || !Number.isFinite(h) || h < 0.05) return null;
                 const color = waveHeightColor(h);
                 return (
                   <CircleMarker
-                    key={`wh-${lead}-${i}-${h}`}
+                    key={`wh-${mapFrameLead}-${i}-${h}`}
                     center={[p.lat, p.lng]}
                     radius={7 + clamp(h, 0, 4) * 2.2}
                     pathOptions={{ color: "rgba(255,255,255,0.35)", weight: 1, fillColor: color, fillOpacity: 0.88 }}
@@ -607,13 +731,13 @@ export function WeatherModelChartViewer() {
               })
             : null}
 
-          {dataMatchesUi && layer === "waves"
+          {showMapLayer && layer === "waves"
             ? points.map((p, i) => {
                 const h = p.waveHeightM;
                 const wd = p.waveDirFromDeg;
                 if (h == null || wd == null || !Number.isFinite(h) || h < 0.12 || !Number.isFinite(wd)) return null;
                 return (
-                  <Marker key={`wa-${lead}-${i}-${h}-${wd}`} position={[p.lat, p.lng]} icon={waveArrowIcon(wd, h)}>
+                  <Marker key={`wa-${mapFrameLead}-${i}-${h}-${wd}`} position={[p.lat, p.lng]} icon={waveArrowIcon(wd, h)}>
                     <Popup>
                       <div className="text-xs">
                         <div className="font-semibold">Wave direction</div>
@@ -625,9 +749,9 @@ export function WeatherModelChartViewer() {
               })
             : null}
 
-          {dataMatchesUi && layer === "pressure_msl" && pressureDisplay
+          {showMapLayer && layer === "pressure_msl" && pressureDisplay
             ? pressureDisplay.labels.map(({ p, i, h }) => (
-                <Marker key={`pl-${lead}-${i}-${h}`} position={[p.lat, p.lng]} icon={pressureLabelIcon(h)}>
+                <Marker key={`pl-${mapFrameLead}-${i}-${h}`} position={[p.lat, p.lng]} icon={pressureLabelIcon(h)}>
                   <Popup>
                     <div className="text-xs">
                       <div className="font-semibold">MSLP</div>
@@ -638,9 +762,9 @@ export function WeatherModelChartViewer() {
               ))
             : null}
 
-          {dataMatchesUi && layer === "pressure_msl" && pressureDisplay?.low && pressureDisplay.lowPos ? (
+          {showMapLayer && layer === "pressure_msl" && pressureDisplay?.low && pressureDisplay.lowPos ? (
             <Marker
-              key={`p-L-${lead}-${pressureDisplay.low.h}`}
+              key={`p-L-${mapFrameLead}-${pressureDisplay.low.h}`}
               position={pressureDisplay.lowPos}
               icon={extremaPressureIcon("L")}
             >
@@ -653,9 +777,9 @@ export function WeatherModelChartViewer() {
             </Marker>
           ) : null}
 
-          {dataMatchesUi && layer === "pressure_msl" && pressureDisplay?.high && pressureDisplay.highPos ? (
+          {showMapLayer && layer === "pressure_msl" && pressureDisplay?.high && pressureDisplay.highPos ? (
             <Marker
-              key={`p-H-${lead}-${pressureDisplay.high.h}`}
+              key={`p-H-${mapFrameLead}-${pressureDisplay.high.h}`}
               position={pressureDisplay.highPos}
               icon={extremaPressureIcon("H")}
             >
@@ -668,7 +792,7 @@ export function WeatherModelChartViewer() {
             </Marker>
           ) : null}
 
-          {dataMatchesUi && layer === "precipitation"
+          {showMapLayer && layer === "precipitation"
             ? points.map((p, i) => {
                 const mm = p.precipMm;
                 if (mm == null || !Number.isFinite(mm)) return null;
@@ -676,7 +800,7 @@ export function WeatherModelChartViewer() {
                 const d = cellHalfDeg * (mm < 0.05 ? 0.65 : 1);
                 return (
                   <Rectangle
-                    key={`pr-${lead}-${i}-${mm}`}
+                    key={`pr-${mapFrameLead}-${i}-${mm}`}
                     bounds={[
                       [p.lat - d, p.lng - d],
                       [p.lat + d, p.lng + d],
@@ -696,7 +820,7 @@ export function WeatherModelChartViewer() {
               })
             : null}
 
-          {dataMatchesUi && layer === "temperature_2m"
+          {showMapLayer && layer === "temperature_2m"
             ? points.map((p, i) => {
                 const tc = p.tempC;
                 if (tc == null || !Number.isFinite(tc)) return null;
@@ -704,7 +828,7 @@ export function WeatherModelChartViewer() {
                 const d = cellHalfDeg;
                 return (
                   <Rectangle
-                    key={`t-${lead}-${i}-${tc}`}
+                    key={`t-${mapFrameLead}-${i}-${tc}`}
                     bounds={[
                       [p.lat - d, p.lng - d],
                       [p.lat + d, p.lng + d],
