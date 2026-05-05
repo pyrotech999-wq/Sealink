@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AttributionControl, MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 import { SeaLinkBrandFooter } from "@/components/SeaLinkBrandFooter";
+import { subscribeSharedPoller } from "@/lib/client/shared-poller";
 import { distanceMiles } from "@/lib/geo-haversine";
 import { clampGeoAccuracyM, humanGeolocationMessage } from "@/lib/geolocation-utils";
 import { isContactPickerAvailable, pickEmailsFromDeviceContacts } from "@/lib/device-contact-picker";
@@ -20,8 +21,8 @@ import { getAvatarDataUrl, getBoatName, getFullName, getProfilePhone } from "@/l
 
 const IFM_SHARE_CONTACT_KEY = "sealink_ifm_share_contact_v1";
 
-/** Set `false` to restore POST/GET to `/api/ifm/presence` and the 20s peer poll. */
-const IFM_PRESENCE_CLIENT_DISABLED = true;
+/** Client-side IFM presence toggle. */
+const IFM_PRESENCE_CLIENT_DISABLED = false;
 
 type FilterMode = "all" | "friends" | "local";
 
@@ -258,8 +259,11 @@ export function IfmMapClient() {
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadPeers();
-    const id = window.setInterval(() => void loadPeers(), 20_000);
-    return () => window.clearInterval(id);
+    return subscribeSharedPoller(
+      "sealink:/api/ifm/presence:peers",
+      async () => void loadPeers(),
+      { enabled: true, minIntervalMs: 30_000, maxIntervalMs: 60_000 },
+    );
   }, [loadPeers]);
 
   const refreshFriendsList = useCallback(async () => {
