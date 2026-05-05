@@ -281,7 +281,7 @@ export default function HelpPage() {
             <Section id="weather" title="Weather &amp; sea map">
               <p>
                 Open{" "}
-                <Link href="/local-map" className="font-medium text-emerald-400 hover:underline">
+                <Link href="/weather" className="font-medium text-emerald-400 hover:underline">
                   Weather &amp; sea
                 </Link>{" "}
                 for a full-screen style forecast map. It can start at your location if permitted, but you can pan and
