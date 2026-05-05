@@ -414,8 +414,10 @@ export async function GET(req: Request): Promise<Response> {
     ]);
 
     const stormglassFull = stormglassPack.table;
+    // WorldTides fallback uses the user's requested coordinates (not marina-adjusted tideCoords),
+    // and is cached broadly by rounded lat/lng for 12h.
     const tideTableFull =
-      noaaFull?.events?.length || stormglassFull?.events?.length ? null : await fetchWorldTidesTable(tideCoords);
+      noaaFull?.events?.length || stormglassFull?.events?.length ? null : await fetchWorldTidesTable(coords);
 
     if (!rUser.ok) return NextResponse.json({ error: `Marine request failed (${rUser.status})` }, { status: 502 });
     const dataUser = (await rUser.json()) as MarineResp;
