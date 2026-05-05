@@ -9,11 +9,11 @@ import {
   MapContainer,
   Marker,
   Popup,
-  Rectangle,
   TileLayer,
   useMap,
 } from "react-leaflet";
 import { PrecipitationCanvasOverlay, PrecipitationHitMarkers } from "@/components/weather/PrecipitationCanvasOverlay";
+import { TemperatureCanvasOverlay, TemperatureHitMarkers } from "@/components/weather/TemperatureCanvasOverlay";
 import { WEATHER_CHART_REGIONS, getWeatherChartRegion, type WeatherChartRegionId } from "@/lib/weather/model-chart-regions";
 
 type LayerId = "wind10m" | "waves" | "pressure_msl" | "precipitation" | "temperature_2m";
@@ -27,7 +27,11 @@ const LAYERS: { id: LayerId; label: string; description: string }[] = [
     label: "Precipitation",
     description: "Hourly precipitation (mm/h): soft blended field from the grid (Open‑Meteo GFS).",
   },
-  { id: "temperature_2m", label: "2 m temperature", description: "Air temperature (°C) as semi-transparent tiles." },
+  {
+    id: "temperature_2m",
+    label: "2 m temperature",
+    description: "Air temperature (°C): smooth blended field from the grid (Open‑Meteo GFS).",
+  },
 ];
 
 const STEP_H = 3;
@@ -234,14 +238,6 @@ function extremaPressureIcon(letter: "L" | "H"): L.DivIcon {
   });
 }
 
-function tempColor(c: number): string {
-  const t = clamp((c + 5) / 35, 0, 1);
-  const r = Math.round(50 + 205 * t);
-  const g = Math.round(100 + 155 * (1 - Math.abs(t - 0.45)));
-  const b = Math.round(220 - 200 * t);
-  return `rgba(${r},${g},${b},0.72)`;
-}
-
 function FitBoundsTrigger({
   bounds,
   trigger,
@@ -347,17 +343,22 @@ function LayerLegend({ layer }: { layer: LayerId }) {
     );
   }
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white/95 px-3 py-2 text-[10px] shadow-sm dark:border-zinc-700 dark:bg-zinc-950/95">
-      <div className="font-semibold text-zinc-800 dark:text-zinc-100">Temperature (°C)</div>
+    <div className="max-w-[240px] rounded-lg border border-zinc-200 bg-white/95 px-3 py-2 text-[10px] shadow-sm dark:border-zinc-700 dark:bg-zinc-950/95">
+      <div className="font-semibold text-zinc-800 dark:text-zinc-100">2 m temperature (°C)</div>
+      <p className="mt-0.5 text-[9px] text-zinc-500 dark:text-zinc-400">GFS hourly step; tap the map for a grid value.</p>
       <div
-        className="mt-1 h-2.5 w-full rounded-md"
+        className="mt-2 h-3 w-full rounded-md border border-zinc-200/80 dark:border-zinc-600/80"
         style={{
-          background: "linear-gradient(90deg, rgb(70,120,255), rgb(140,235,160), rgb(255,100,70))",
+          background:
+            "linear-gradient(90deg, rgb(88,28,135) 0%, rgb(37,99,235) 18%, rgb(34,197,94) 38%, rgb(250,204,21) 55%, rgb(249,115,22) 72%, rgb(220,38,38) 88%, rgb(185,28,28) 100%)",
         }}
       />
-      <div className="mt-0.5 flex justify-between font-mono text-zinc-500 dark:text-zinc-400">
-        <span>-5</span>
-        <span>15</span>
+      <div className="mt-1 flex flex-wrap justify-between gap-x-1 font-mono text-[9px] text-zinc-600 dark:text-zinc-400">
+        <span>&lt;-10</span>
+        <span>-10–0</span>
+        <span>0–10</span>
+        <span>10–20</span>
+        <span>20–30</span>
         <span>30+</span>
       </div>
     </div>
@@ -383,8 +384,6 @@ export function WeatherModelChartViewer() {
 
   const regionConfig = useMemo(() => getWeatherChartRegion(region), [region]);
   const activeLayer = useMemo(() => LAYERS.find((l) => l.id === layer) ?? LAYERS[0], [layer]);
-
-  const cellHalfDeg = useMemo(() => regionConfig.stepDeg * 0.4, [regionConfig.stepDeg]);
 
   useEffect(() => {
     console.info("WEATHER_STEP_CHANGE", { region, layer, lead });
@@ -597,6 +596,13 @@ export function WeatherModelChartViewer() {
     return mapFrame.points
       .map((p) => ({ lat: p.lat, lng: p.lng, mm: p.precipMm }))
       .filter((p): p is { lat: number; lng: number; mm: number } => p.mm != null && Number.isFinite(p.mm));
+  }, [layer, mapFrame, showMapLayer]);
+
+  const tempPoints = useMemo(() => {
+    if (layer !== "temperature_2m" || !mapFrame || !showMapLayer) return [];
+    return mapFrame.points
+      .map((p) => ({ lat: p.lat, lng: p.lng, tempC: p.tempC }))
+      .filter((p): p is { lat: number; lng: number; tempC: number } => p.tempC != null && Number.isFinite(p.tempC));
   }, [layer, mapFrame, showMapLayer]);
 
   return (
@@ -882,33 +888,16 @@ export function WeatherModelChartViewer() {
             </>
           ) : null}
 
-          {showMapLayer && layer === "temperature_2m"
-            ? points.map((p, i) => {
-                const tc = p.tempC;
-                if (tc == null || !Number.isFinite(tc)) return null;
-                const color = tempColor(tc);
-                const d = cellHalfDeg;
-                return (
-                  <Rectangle
-                    key={`t-${mapFrameLead}-${i}-${tc}`}
-                    bounds={[
-                      [p.lat - d, p.lng - d],
-                      [p.lat + d, p.lng + d],
-                    ]}
-                    pathOptions={{
-                      color: "rgba(255,255,255,0.15)",
-                      weight: 1,
-                      fillColor: color,
-                      fillOpacity: 0.55,
-                    }}
-                  >
-                    <Popup>
-                      <div className="text-xs font-semibold">{tc.toFixed(1)} °C</div>
-                    </Popup>
-                  </Rectangle>
-                );
-              })
-            : null}
+          {showMapLayer && layer === "temperature_2m" && tempPoints.length > 0 ? (
+            <>
+              <TemperatureCanvasOverlay
+                points={tempPoints}
+                gridStepDeg={regionConfig.stepDeg}
+                leadKey={mapFrameLead}
+              />
+              <TemperatureHitMarkers points={tempPoints} leadKey={mapFrameLead} />
+            </>
+          ) : null}
         </MapContainer>
       </div>
 
