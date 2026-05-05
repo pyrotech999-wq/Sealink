@@ -23,7 +23,7 @@ type OmLoc = {
   hourly?: OmHourly;
 };
 
-export type ModelMapPoint = {
+type ModelMapPoint = {
   lat: number;
   lng: number;
   windSpeedKn?: number | null;
