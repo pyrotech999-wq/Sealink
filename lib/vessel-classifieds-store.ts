@@ -62,7 +62,7 @@ function normalise(row: unknown): VesselClassifiedListing | null {
   if (typeof r.title !== "string" || typeof r.description !== "string") return null;
 
   const status = (r.status as VesselListingStatus) ?? "draft";
-  const imageUrls = Array.isArray(r.imageUrls) ? r.imageUrls.filter((u) => typeof u === "string").slice(0, 3) : [];
+  const imageUrls = Array.isArray(r.imageUrls) ? r.imageUrls.filter((u) => typeof u === "string").slice(0, 8) : [];
 
   return {
     id: r.id,
@@ -88,6 +88,9 @@ function normalise(row: unknown): VesselClassifiedListing | null {
     year: typeof r.year === "number" && Number.isFinite(r.year) ? r.year : null,
     lengthFt: typeof r.lengthFt === "number" && Number.isFinite(r.lengthFt) ? r.lengthFt : null,
     makeModel: typeof r.makeModel === "string" ? r.makeModel : null,
+    contactEmail: typeof r.contactEmail === "string" ? r.contactEmail : null,
+    contactPhone: typeof r.contactPhone === "string" ? r.contactPhone : null,
+    contactPhonePublic: r.contactPhonePublic === true,
     imageUrls,
   };
 }
@@ -187,6 +190,9 @@ export function buildDraftListing(ownerUid: string): VesselClassifiedListing {
     year: null,
     lengthFt: null,
     makeModel: null,
+    contactEmail: null,
+    contactPhone: null,
+    contactPhonePublic: false,
     imageUrls: [],
   };
 }

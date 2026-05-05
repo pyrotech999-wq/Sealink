@@ -57,7 +57,8 @@ export async function POST(req: Request) {
     fd.get("useFreeSlot") === "true" ||
     String(fd.get("useFreeSlot") ?? "").toLowerCase() === "on";
 
-  const { title, description, categoryId, locationLabel, makeModel, year, lengthFt, priceGbp, files } = parsed.data;
+  const { title, description, categoryId, locationLabel, makeModel, year, lengthFt, priceGbp, contactEmail, contactPhone, contactPhonePublic, files } =
+    parsed.data;
 
   const row = buildDraftListing(u.uid);
   row.title = title;
@@ -68,6 +69,9 @@ export async function POST(req: Request) {
   row.year = year;
   row.lengthFt = lengthFt;
   row.priceGbp = priceGbp;
+  row.contactEmail = contactEmail.slice(0, 200);
+  row.contactPhone = contactPhone ? contactPhone.slice(0, 40) : null;
+  row.contactPhonePublic = Boolean(contactPhonePublic);
 
   if (files.length) {
     const parts = await Promise.all(
@@ -103,6 +107,9 @@ type UpdateBody = {
   year?: unknown;
   lengthFt?: unknown;
   makeModel?: unknown;
+  contactEmail?: unknown;
+  contactPhone?: unknown;
+  contactPhonePublic?: unknown;
 };
 
 export async function PATCH(req: Request) {
@@ -131,6 +138,19 @@ export async function PATCH(req: Request) {
     if (!isVesselCategoryId(String(categoryId))) return null;
     if (title.trim().length < 5 || title.trim().length > 160) return null;
     if (description.trim().length < 30 || description.trim().length > 12_000) return null;
+    const nextEmail = typeof body.contactEmail === "string" ? body.contactEmail.trim() : l.contactEmail ?? "";
+    if (nextEmail.length < 6 || nextEmail.length > 200) return null;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) return null;
+    const nextPhone = typeof body.contactPhone === "string" ? body.contactPhone.trim().slice(0, 40) : l.contactPhone;
+    const nextPhonePublic =
+      body.contactPhonePublic === true ||
+      body.contactPhonePublic === "1" ||
+      body.contactPhonePublic === "true" ||
+      String(body.contactPhonePublic ?? "").toLowerCase() === "on"
+        ? true
+        : body.contactPhonePublic === false
+          ? false
+          : l.contactPhonePublic;
     return {
       ...l,
       title: title.trim(),
@@ -141,6 +161,9 @@ export async function PATCH(req: Request) {
       year: num(body.year) ?? l.year,
       lengthFt: num(body.lengthFt) ?? l.lengthFt,
       makeModel: typeof body.makeModel === "string" ? body.makeModel.trim().slice(0, 80) : l.makeModel,
+      contactEmail: nextEmail,
+      contactPhone: nextPhone || null,
+      contactPhonePublic: nextPhonePublic,
     };
   };
 

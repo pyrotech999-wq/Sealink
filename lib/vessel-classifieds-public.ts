@@ -5,6 +5,11 @@ export function toPublicVesselListing(
   viewerUid: string,
 ): VesselClassifiedPublic {
   const { ownerUid, ...rest } = l;
-  return { ...rest, isOwner: ownerUid === viewerUid };
+  const isOwner = ownerUid === viewerUid;
+  return {
+    ...rest,
+    contactPhone: rest.contactPhonePublic || isOwner ? rest.contactPhone : null,
+    isOwner,
+  };
 }
 

@@ -60,6 +60,11 @@ export type VesselClassifiedListing = {
   lengthFt: number | null;
   makeModel: string | null;
 
+  // Contact details
+  contactEmail: string | null; // used for "Email seller"
+  contactPhone: string | null; // optional
+  contactPhonePublic: boolean; // show/hide phone to non-owners
+
   imageUrls: string[]; // public /uploads/vessels/<id>/...
 };
 

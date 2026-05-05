@@ -9,7 +9,7 @@ function rowToListing(r: Record<string, unknown>): VesselClassifiedListing | nul
   if (typeof r.category_id !== "string" || !isVesselCategoryId(r.category_id)) return null;
   if (typeof r.title !== "string" || typeof r.description !== "string") return null;
   const status = (r.status as VesselListingStatus) ?? "draft";
-  const imageUrls = Array.isArray(r.image_urls) ? r.image_urls.filter((u): u is string => typeof u === "string").slice(0, 3) : [];
+  const imageUrls = Array.isArray(r.image_urls) ? r.image_urls.filter((u): u is string => typeof u === "string").slice(0, 8) : [];
 
   return {
     id: r.id,
@@ -35,6 +35,9 @@ function rowToListing(r: Record<string, unknown>): VesselClassifiedListing | nul
     year: typeof r.year === "number" && Number.isFinite(r.year) ? r.year : null,
     lengthFt: typeof r.length_ft === "number" && Number.isFinite(r.length_ft) ? r.length_ft : null,
     makeModel: typeof r.make_model === "string" ? r.make_model : null,
+    contactEmail: typeof r.contact_email === "string" ? r.contact_email : null,
+    contactPhone: typeof r.contact_phone === "string" ? r.contact_phone : null,
+    contactPhonePublic: r.contact_phone_public === true,
     imageUrls,
   };
 }
@@ -58,6 +61,9 @@ function listingToRow(l: VesselClassifiedListing): Record<string, unknown> {
     year: l.year,
     length_ft: l.lengthFt,
     make_model: l.makeModel,
+    contact_email: l.contactEmail,
+    contact_phone: l.contactPhone,
+    contact_phone_public: l.contactPhonePublic,
     image_urls: l.imageUrls,
   };
 }

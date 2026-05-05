@@ -25,8 +25,18 @@ export type ParsedVesselForm = {
   year: number | null;
   lengthFt: number | null;
   priceGbp: number | null;
+  contactEmail: string;
+  contactPhone: string;
+  contactPhonePublic: boolean;
   files: File[];
 };
+
+function isEmailish(v: string): boolean {
+  const s = v.trim();
+  if (s.length < 6 || s.length > 200) return false;
+  // Simple sanity check; we only need a usable mailto target.
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+}
 
 export function parseVesselClassifiedFormData(fd: FormData): { ok: true; data: ParsedVesselForm } | { ok: false; error: string; status: number } {
   const title = typeof fd.get("title") === "string" ? String(fd.get("title")) : "";
@@ -34,6 +44,12 @@ export function parseVesselClassifiedFormData(fd: FormData): { ok: true; data: P
   const categoryId = typeof fd.get("categoryId") === "string" ? String(fd.get("categoryId")) : "";
   const locationLabel = typeof fd.get("locationLabel") === "string" ? String(fd.get("locationLabel")).trim() : "";
   const makeModel = typeof fd.get("makeModel") === "string" ? String(fd.get("makeModel")).trim() : "";
+  const contactEmail = typeof fd.get("contactEmail") === "string" ? String(fd.get("contactEmail")).trim() : "";
+  const contactPhone = typeof fd.get("contactPhone") === "string" ? String(fd.get("contactPhone")).trim() : "";
+  const contactPhonePublic =
+    fd.get("contactPhonePublic") === "1" ||
+    fd.get("contactPhonePublic") === "true" ||
+    String(fd.get("contactPhonePublic") ?? "").toLowerCase() === "on";
 
   const year = num(fd.get("year"));
   const lengthFt = num(fd.get("lengthFt"));
@@ -44,6 +60,8 @@ export function parseVesselClassifiedFormData(fd: FormData): { ok: true; data: P
   if (description.trim().length < 30 || description.trim().length > 12_000) {
     return { ok: false, error: "Description must be 30–12,000 characters.", status: 400 };
   }
+  if (!isEmailish(contactEmail)) return { ok: false, error: "Please enter a valid contact email.", status: 400 };
+  if (contactPhone && contactPhone.length > 40) return { ok: false, error: "Phone number is too long.", status: 400 };
 
   const files = fd
     .getAll("images")
@@ -67,6 +85,9 @@ export function parseVesselClassifiedFormData(fd: FormData): { ok: true; data: P
       year: year != null ? Math.max(1900, Math.min(2100, Math.round(year))) : null,
       lengthFt: lengthFt != null ? Math.max(0, Math.min(300, Math.round(lengthFt * 10) / 10)) : null,
       priceGbp: priceGbp != null ? Math.max(0, Math.min(999_999_999, Math.round(priceGbp * 100) / 100)) : null,
+      contactEmail,
+      contactPhone,
+      contactPhonePublic,
       files,
     },
   };

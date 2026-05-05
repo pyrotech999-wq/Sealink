@@ -18,6 +18,9 @@ type PublicListing = {
   year: number | null;
   lengthFt: number | null;
   makeModel: string | null;
+  contactEmail: string | null;
+  contactPhone: string | null;
+  contactPhonePublic: boolean;
   imageUrls: string[];
   createdAt: string;
   expiresAt: string;
@@ -48,6 +51,9 @@ export function VesselClassifiedsClient() {
   const [year, setYear] = useState("");
   const [lengthFt, setLengthFt] = useState("");
   const [makeModel, setMakeModel] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
+  const [contactPhonePublic, setContactPhonePublic] = useState(false);
   const [images, setImages] = useState<File[]>([]);
   const previews = useMemo(() => images.map((f) => URL.createObjectURL(f)), [images]);
 
@@ -194,6 +200,23 @@ export function VesselClassifiedsClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signedIn]);
 
+  const [editingId, setEditingId] = useState<string>("");
+  const [editDraft, setEditDraft] = useState<{
+    title: string;
+    description: string;
+    categoryId: VesselCategoryId;
+    priceGbp: string;
+    locationLabel: string;
+    year: string;
+    lengthFt: string;
+    makeModel: string;
+    contactEmail: string;
+    contactPhone: string;
+    contactPhonePublic: boolean;
+  } | null>(null);
+  const [editBusy, setEditBusy] = useState(false);
+  const [editMsg, setEditMsg] = useState<string | null>(null);
+
   async function createListing() {
     if (!signedIn) {
       setPostMsg("Sign in to post a boat listing.");
@@ -211,6 +234,9 @@ export function VesselClassifiedsClient() {
       fd.set("year", year);
       fd.set("lengthFt", lengthFt);
       fd.set("makeModel", makeModel);
+      fd.set("contactEmail", contactEmail);
+      fd.set("contactPhone", contactPhone);
+      if (contactPhonePublic) fd.set("contactPhonePublic", "1");
       for (const f of images.slice(0, 8)) fd.append("images", f);
       if (useFreeSlot && freeSlots > 0) fd.set("useFreeSlot", "1");
 
@@ -225,6 +251,73 @@ export function VesselClassifiedsClient() {
       setPostMsg("Network error");
     } finally {
       setPosting(false);
+    }
+  }
+
+  function startEdit(l: PublicListing) {
+    if (!l.isOwner) return;
+    setEditMsg(null);
+    setEditingId(l.id);
+    setEditDraft({
+      title: l.title ?? "",
+      description: l.description ?? "",
+      categoryId: l.categoryId,
+      priceGbp: typeof l.priceGbp === "number" ? String(l.priceGbp) : "",
+      locationLabel: l.locationLabel ?? "",
+      year: typeof l.year === "number" ? String(l.year) : "",
+      lengthFt: typeof l.lengthFt === "number" ? String(l.lengthFt) : "",
+      makeModel: l.makeModel ?? "",
+      contactEmail: l.contactEmail ?? "",
+      contactPhone: l.contactPhone ?? "",
+      contactPhonePublic: Boolean(l.contactPhonePublic),
+    });
+  }
+
+  function cancelEdit() {
+    setEditingId("");
+    setEditDraft(null);
+    setEditBusy(false);
+    setEditMsg(null);
+  }
+
+  async function saveEdit(id: string) {
+    if (!editDraft || !editingId || editingId !== id) return;
+    setEditBusy(true);
+    setEditMsg(null);
+    try {
+      const body = {
+        id,
+        title: editDraft.title,
+        description: editDraft.description,
+        categoryId: editDraft.categoryId,
+        priceGbp: editDraft.priceGbp,
+        locationLabel: editDraft.locationLabel,
+        year: editDraft.year,
+        lengthFt: editDraft.lengthFt,
+        makeModel: editDraft.makeModel,
+        contactEmail: editDraft.contactEmail,
+        contactPhone: editDraft.contactPhone,
+        contactPhonePublic: editDraft.contactPhonePublic,
+      };
+      const r = await fetch("/api/vessels/classifieds", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+        credentials: "same-origin",
+      });
+      const d = (await r.json()) as { listing?: PublicListing; error?: string };
+      if (!r.ok || !d.listing) {
+        setEditMsg(d.error || "Could not save changes");
+        return;
+      }
+      const next = d.listing;
+      setListings((prev) => prev.map((x) => (x.id === next.id ? next : x)));
+      setMine((prev) => prev.map((x) => (x.id === next.id ? next : x)));
+      cancelEdit();
+    } catch {
+      setEditMsg("Network error");
+    } finally {
+      setEditBusy(false);
     }
   }
 
@@ -418,6 +511,276 @@ export function VesselClassifiedsClient() {
         </section>
       ) : null}
 
+      {/* Post a boat advert moved below listings */}
+
+      <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Browse active listings</h2>
+          <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 sm:w-64">
+            Category
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+            >
+              <option value="">All categories</option>
+              {VESSEL_CATEGORIES.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        {err ? (
+          <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+            {err}
+          </p>
+        ) : null}
+
+        {loading ? (
+          <p className="mt-3 text-sm text-zinc-500">Loading…</p>
+        ) : listings.length === 0 ? (
+          <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">No boat listings yet.</p>
+        ) : (
+          <ul className="mt-4 space-y-3">
+            {listings.map((l) => (
+              <li key={l.id} className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-green-800 dark:text-green-400">
+                      {catLabel(l.categoryId)}
+                    </p>
+                    {editingId === l.id && editDraft ? (
+                      <div className="mt-2 grid gap-3">
+                        <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                          Title
+                          <input
+                            value={editDraft.title}
+                            onChange={(e) => setEditDraft((p) => (p ? { ...p, title: e.target.value } : p))}
+                            className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+                          />
+                        </label>
+                        <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                          Description
+                          <textarea
+                            rows={5}
+                            value={editDraft.description}
+                            onChange={(e) => setEditDraft((p) => (p ? { ...p, description: e.target.value } : p))}
+                            className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+                          />
+                        </label>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                            Category
+                            <select
+                              value={editDraft.categoryId}
+                              onChange={(e) =>
+                                setEditDraft((p) => (p ? { ...p, categoryId: e.target.value as VesselCategoryId } : p))
+                              }
+                              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+                            >
+                              {VESSEL_CATEGORIES.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                  {c.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                            Price (GBP)
+                            <input
+                              inputMode="decimal"
+                              value={editDraft.priceGbp}
+                              onChange={(e) => setEditDraft((p) => (p ? { ...p, priceGbp: e.target.value } : p))}
+                              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+                            />
+                          </label>
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-3">
+                          <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                            Year
+                            <input
+                              inputMode="numeric"
+                              value={editDraft.year}
+                              onChange={(e) => setEditDraft((p) => (p ? { ...p, year: e.target.value } : p))}
+                              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+                            />
+                          </label>
+                          <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                            Length (ft)
+                            <input
+                              inputMode="decimal"
+                              value={editDraft.lengthFt}
+                              onChange={(e) => setEditDraft((p) => (p ? { ...p, lengthFt: e.target.value } : p))}
+                              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+                            />
+                          </label>
+                          <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                            Make / model
+                            <input
+                              value={editDraft.makeModel}
+                              onChange={(e) => setEditDraft((p) => (p ? { ...p, makeModel: e.target.value } : p))}
+                              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+                            />
+                          </label>
+                        </div>
+                        <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                          Location (optional)
+                          <input
+                            value={editDraft.locationLabel}
+                            onChange={(e) =>
+                              setEditDraft((p) => (p ? { ...p, locationLabel: e.target.value } : p))
+                            }
+                            className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+                          />
+                        </label>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                            Contact email
+                            <input
+                              inputMode="email"
+                              value={editDraft.contactEmail}
+                              onChange={(e) =>
+                                setEditDraft((p) => (p ? { ...p, contactEmail: e.target.value } : p))
+                              }
+                              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+                            />
+                          </label>
+                          <div className="grid gap-2">
+                            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                              Telephone (optional)
+                              <input
+                                inputMode="tel"
+                                value={editDraft.contactPhone}
+                                onChange={(e) =>
+                                  setEditDraft((p) => (p ? { ...p, contactPhone: e.target.value } : p))
+                                }
+                                className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+                              />
+                            </label>
+                            <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                              <input
+                                type="checkbox"
+                                checked={editDraft.contactPhonePublic}
+                                onChange={(e) =>
+                                  setEditDraft((p) => (p ? { ...p, contactPhonePublic: e.target.checked } : p))
+                                }
+                              />
+                              Show telephone number on listing
+                            </label>
+                          </div>
+                        </div>
+                        {editMsg ? (
+                          <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+                            {editMsg}
+                          </p>
+                        ) : null}
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            disabled={editBusy}
+                            onClick={() => void saveEdit(l.id)}
+                            className="h-9 rounded-lg bg-green-600 px-3 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+                          >
+                            {editBusy ? "Saving…" : "Save changes"}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={editBusy}
+                            onClick={() => cancelEdit()}
+                            className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-900 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <h3 className="mt-1 text-lg font-semibold text-zinc-900 dark:text-zinc-50">{l.title}</h3>
+                        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                          {l.makeModel ? <span className="mr-2">{l.makeModel}</span> : null}
+                          {l.year ? <span className="mr-2">{l.year}</span> : null}
+                          {l.lengthFt ? <span>{l.lengthFt} ft</span> : null}
+                        </p>
+                      </>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                    {typeof l.priceGbp === "number" ? (
+                      <span className="rounded-lg bg-zinc-100 px-2 py-1 text-sm font-semibold text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200">
+                        £{l.priceGbp.toLocaleString("en-GB")}
+                      </span>
+                    ) : null}
+                    {l.isOwner && editingId !== l.id ? (
+                      <button
+                        type="button"
+                        onClick={() => startEdit(l)}
+                        className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-900 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                      >
+                        Edit
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+                {editingId === l.id ? null : l.imageUrls?.length ? (
+                  <a
+                    href={l.imageUrls[0]!}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-3 block overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900"
+                  >
+                    <img src={l.imageUrls[0]!} alt="" className="h-56 w-full object-cover" loading="lazy" />
+                  </a>
+                ) : null}
+                {editingId === l.id ? null : l.locationLabel ? <p className="mt-3 text-xs text-zinc-500">{l.locationLabel}</p> : null}
+                {editingId === l.id ? null : (
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-zinc-700 dark:text-zinc-300">{l.description}</p>
+                )}
+
+                {editingId === l.id ? null : (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {l.contactEmail ? (
+                      <a
+                        href={`mailto:${l.contactEmail}?subject=${encodeURIComponent(`Boat for sale: ${l.title}`)}`}
+                        className="inline-flex h-9 items-center justify-center rounded-lg bg-green-600 px-3 text-sm font-semibold text-white hover:bg-green-700"
+                      >
+                        Email for details
+                      </a>
+                    ) : null}
+                    {l.contactPhone ? (
+                      <a
+                        href={`tel:${l.contactPhone}`}
+                        className="inline-flex h-9 items-center justify-center rounded-lg border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-900 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                      >
+                        Call {l.contactPhone}
+                      </a>
+                    ) : null}
+                  </div>
+                )}
+
+                {editingId === l.id ? null : l.imageUrls?.length && l.imageUrls.length > 1 ? (
+                  <div className="mt-3 grid grid-cols-4 gap-2">
+                    {l.imageUrls.slice(1, 8).map((src) => (
+                      <a
+                        key={src}
+                        href={src}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800"
+                      >
+                        <img src={src} alt="" className="h-20 w-full object-cover" loading="lazy" />
+                      </a>
+                    ))}
+                  </div>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
       <section
         id="post-boat"
         className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950"
@@ -425,8 +788,7 @@ export function VesselClassifiedsClient() {
         <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Post a boat advert</h2>
         {signedIn === false ? (
           <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
-            Sign in to post a boat listing.
-            {" "}
+            Sign in to post a boat listing.{" "}
             <Link className="underline" href="/sign-in">
               Sign in
             </Link>
@@ -538,6 +900,39 @@ export function VesselClassifiedsClient() {
             />
           </label>
 
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+              Contact email
+              <input
+                inputMode="email"
+                value={contactEmail}
+                onChange={(e) => setContactEmail(e.target.value)}
+                placeholder="e.g. you@example.com"
+                className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+              />
+            </label>
+            <div className="grid gap-2">
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                Telephone (optional)
+                <input
+                  inputMode="tel"
+                  value={contactPhone}
+                  onChange={(e) => setContactPhone(e.target.value)}
+                  placeholder="e.g. +44 7700 900123"
+                  className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+                />
+              </label>
+              <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                <input
+                  type="checkbox"
+                  checked={contactPhonePublic}
+                  onChange={(e) => setContactPhonePublic(e.target.checked)}
+                />
+                Show telephone number on listing
+              </label>
+            </div>
+          </div>
+
           <div>
             <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
               Photos (up to 8)
@@ -581,84 +976,6 @@ export function VesselClassifiedsClient() {
             {posting ? "Creating…" : useFreeSlot && freeSlots > 0 ? "Post with complimentary slot" : "Create draft advert"}
           </button>
         </div>
-      </section>
-
-      <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-        <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Browse active listings</h2>
-        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
-          <label className="block flex-1 text-xs font-medium text-zinc-700 dark:text-zinc-300">
-            Search
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search title/description…"
-              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
-            />
-          </label>
-          <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 sm:w-64">
-            Category
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
-            >
-              <option value="">All categories</option>
-              {VESSEL_CATEGORIES.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        {err ? (
-          <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
-            {err}
-          </p>
-        ) : null}
-
-        {loading ? (
-          <p className="mt-3 text-sm text-zinc-500">Loading…</p>
-        ) : listings.length === 0 ? (
-          <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">No boat listings yet.</p>
-        ) : (
-          <ul className="mt-4 space-y-3">
-            {listings.map((l) => (
-              <li key={l.id} className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wide text-green-800 dark:text-green-400">
-                      {catLabel(l.categoryId)}
-                    </p>
-                    <h3 className="mt-1 text-lg font-semibold text-zinc-900 dark:text-zinc-50">{l.title}</h3>
-                    <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                      {l.makeModel ? <span className="mr-2">{l.makeModel}</span> : null}
-                      {l.year ? <span className="mr-2">{l.year}</span> : null}
-                      {l.lengthFt ? <span>{l.lengthFt} ft</span> : null}
-                    </p>
-                  </div>
-                  {typeof l.priceGbp === "number" ? (
-                    <span className="rounded-lg bg-zinc-100 px-2 py-1 text-sm font-semibold text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200">
-                      £{l.priceGbp.toLocaleString("en-GB")}
-                    </span>
-                  ) : null}
-                </div>
-                {l.locationLabel ? <p className="mt-2 text-xs text-zinc-500">{l.locationLabel}</p> : null}
-                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-zinc-700 dark:text-zinc-300">{l.description}</p>
-                {l.imageUrls?.length ? (
-                  <div className="mt-3 grid grid-cols-3 gap-2">
-                    {l.imageUrls.slice(0, 8).map((src) => (
-                      <a key={src} href={src} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800">
-                        <img src={src} alt="" className="h-24 w-full object-cover" loading="lazy" />
-                      </a>
-                    ))}
-                  </div>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        )}
       </section>
 
       <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
