@@ -34,6 +34,16 @@ function pruneCache(): void {
   for (const [k] of drop) memoryCache.delete(k);
 }
 
+function pngResponse(buf: Buffer, headers: Record<string, string>): NextResponse {
+  return new NextResponse(buf as unknown as BodyInit, {
+    status: 200,
+    headers: {
+      "Content-Type": "image/png",
+      ...headers,
+    },
+  });
+}
+
 async function fetchPng(path: string): Promise<Buffer> {
   const url = `${WZ_ORIGIN}/maps/${path}`;
   const res = await fetch(url, {
@@ -99,19 +109,15 @@ export async function GET(req: Request): Promise<Response> {
   const now = Date.now();
   const hit = memoryCache.get(key);
   if (hit && now - hit.storedAt < CACHE_MS) {
-    return new NextResponse(hit.body, {
-      status: 200,
-      headers: {
-        "Content-Type": "image/png",
-        "Cache-Control": "public, max-age=21600, s-maxage=21600",
-        "X-Sealink-Map-Cache": "HIT",
-        "X-WZ-Map-Path": path,
-        "X-WZ-Map-Var": String(varId),
-      },
+    return pngResponse(hit.body, {
+      "Cache-Control": "public, max-age=21600, s-maxage=21600",
+      "X-Sealink-Map-Cache": "HIT",
+      "X-WZ-Map-Path": path,
+      "X-WZ-Map-Var": String(varId),
     });
   }
 
-  let body: Uint8Array;
+  let body: Buffer;
   try {
     const existing = inflight.get(key);
     if (existing) {
@@ -128,14 +134,10 @@ export async function GET(req: Request): Promise<Response> {
   memoryCache.set(key, { body, storedAt: now });
   pruneCache();
 
-  return new NextResponse(body, {
-    status: 200,
-    headers: {
-      "Content-Type": "image/png",
-      "Cache-Control": "public, max-age=21600, s-maxage=21600",
-      "X-Sealink-Map-Cache": "MISS",
-      "X-WZ-Map-Path": path,
-      "X-WZ-Map-Var": String(varId),
-    },
+  return pngResponse(body, {
+    "Cache-Control": "public, max-age=21600, s-maxage=21600",
+    "X-Sealink-Map-Cache": "MISS",
+    "X-WZ-Map-Path": path,
+    "X-WZ-Map-Var": String(varId),
   });
 }
