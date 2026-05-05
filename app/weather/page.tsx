@@ -3,7 +3,7 @@ import { WeatherMapClientWrapper } from "@/components/weather/WeatherMapClientWr
 
 export const metadata: Metadata = {
   title: "Weather & sea",
-  description: "Weather & sea map with GPS on SeaLink",
+  description: "GFS synoptic charts and marine-oriented weather on SeaLink",
 };
 
 export default function WeatherPage() {

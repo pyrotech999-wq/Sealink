@@ -45,7 +45,7 @@ export function WeatherGfsCharts() {
   const hourLabel = `+${snapForecastHours(forecastHours)} h`;
 
   return (
-    <section className="mt-8 flex flex-col gap-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 sm:p-5">
+    <section className="flex flex-col gap-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 sm:p-5">
       <div>
         <h2 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Synoptic charts (GFS)</h2>
         <p className="mt-1 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
