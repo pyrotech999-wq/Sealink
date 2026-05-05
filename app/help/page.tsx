@@ -319,7 +319,7 @@ export default function HelpPage() {
 
             <Section id="ifm" title="IFM — International Friends Map">
               <p>
-                <Link href="/ifm" className="font-medium text-emerald-400 hover:underline">
+                <Link href="/ifm" prefetch={false} className="font-medium text-emerald-400 hover:underline">
                   IFM
                 </Link>{" "}
                 is a separate map focused on discovering other SeaLink users (friends, local, or all modes depending on
@@ -419,7 +419,10 @@ export default function HelpPage() {
                 </li>
               </ul>
               <p>
-                Build and edit your friends list on the <Link href="/ifm" className="font-medium text-emerald-400 hover:underline">IFM</Link>{" "}
+                Build and edit your friends list on the{" "}
+                <Link href="/ifm" prefetch={false} className="font-medium text-emerald-400 hover:underline">
+                  IFM
+                </Link>{" "}
                 (friends) map. Email-based friends match by account; phone-based friends need compatible IFM presence so
                 the app can match a normalised number — if a friend never appears for restricted broadcasts, check that
                 they are on your list and using IFM with a comparable identity.

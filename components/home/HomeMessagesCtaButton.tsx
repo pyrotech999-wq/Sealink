@@ -37,7 +37,7 @@ type Props = {
   signedIn: boolean;
   readLat: number;
   readLng: number;
-  /** When true: skip `/api/map/broadcast` and `/api/vicinity-chat/inbox` polling (see HomeLocationMap). */
+  /** When true: skip live-map polling and `/api/vicinity-chat/inbox` polling (see HomeLocationMap). */
   emergencyDisableLiveMapApis?: boolean;
 };
 

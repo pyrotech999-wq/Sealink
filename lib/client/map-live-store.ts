@@ -51,6 +51,8 @@ async function fetchOnce(): Promise<MapLiveResponse> {
   const coords = pickCoords(s);
   if (!coords) return {};
 
+  // TEMP (maintenance): this module is the single fetch point for `/api/map/live`.
+  // If production logs show legacy endpoints, those callers are not coming from current client code.
   s.inFlight = fetch(
     `/api/map/live?lat=${encodeURIComponent(String(coords.lat))}&lng=${encodeURIComponent(String(coords.lng))}`,
     { credentials: "same-origin", cache: "no-store" },

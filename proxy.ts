@@ -104,6 +104,13 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Only enforce plan gate on full document navigations.
+  // This avoids duplicate `/api/me/subscription` checks during initial load (RSC/data fetches, prefetches, etc.).
+  const accept = request.headers.get("accept") ?? "";
+  if (!accept.includes("text/html")) {
+    return NextResponse.next();
+  }
+
   const origin = request.nextUrl.origin;
   const cookie = request.headers.get("cookie") ?? "";
   try {
