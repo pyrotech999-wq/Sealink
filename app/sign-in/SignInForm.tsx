@@ -8,6 +8,7 @@ import { LAST_SIGNIN_EMAIL_STORAGE_KEY, normaliseEmail } from "@/lib/email-norma
 import { oauthErrorMessage } from "@/lib/oauth-ui-messages";
 import { safeInternalPathFromNextParam } from "@/lib/safe-internal-next-path";
 import { useRouter } from "next/navigation";
+import { invalidateMeSubscriptionCache } from "@/lib/client/me-subscription";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -124,6 +125,7 @@ async function startDemoSession(
       } catch {
         /* */
       }
+      invalidateMeSubscriptionCache();
       window.location.assign(postSignInRedirectTarget());
     }
     return { ok: true };

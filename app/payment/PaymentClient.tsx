@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { BillingPlan } from "@/lib/pricing";
 import { ANNUAL_GBP, MONTHLY_GBP, recurringPriceGbp, TRIAL_DAYS } from "@/lib/pricing";
+import { getMeSubscription } from "@/lib/client/me-subscription";
 
 type Props = {
   showCanceled?: boolean;
@@ -40,19 +41,7 @@ export function PaymentClient({
   } | null>(null);
 
   useEffect(() => {
-    void fetch("/api/me/subscription", { credentials: "same-origin", cache: "no-store" })
-      .then(async (r) => {
-        if (!r.ok) {
-          setAccess(null);
-          setIsAdmin(false);
-          return null;
-        }
-        return (await r.json()) as {
-          hasAccess?: boolean;
-          isAdmin?: boolean;
-          source?: "reserved" | "admin_grant" | "paypal" | "stripe" | "none";
-        };
-      })
+    void getMeSubscription()
       .then((d) => {
         if (!d || typeof d.hasAccess !== "boolean") {
           setAccess(null);

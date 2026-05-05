@@ -3,6 +3,24 @@ import { NextResponse } from "next/server";
 import { DEMO_SESSION_COOKIE, DEMO_SESSION_VALUE } from "@/lib/demo-session";
 import { safeInternalPathFromNextParam } from "@/lib/safe-internal-next-path";
 
+function isNextInternalOrAsset(pathname: string): boolean {
+  return (
+    pathname.startsWith("/_next") ||
+    pathname === "/favicon.ico" ||
+    pathname === "/robots.txt" ||
+    pathname === "/manifest.webmanifest" ||
+    pathname === "/sw"
+  );
+}
+
+function isObviousBotProbe(pathname: string): boolean {
+  return (
+    pathname.startsWith("/wp-admin") ||
+    pathname.startsWith("/wp-login.php") ||
+    pathname.startsWith("/xmlrpc.php")
+  );
+}
+
 /**
  * Unauthenticated users may only hit auth pages, account-deletion URLs, legal pages
  * (needed for sign-up checkboxes), and selected API routes (auth, session probe, Stripe webhooks).
@@ -61,6 +79,10 @@ function isExemptFromPlanGate(pathname: string): boolean {
 
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
+
+  if (isNextInternalOrAsset(path)) return NextResponse.next();
+  if (isObviousBotProbe(path)) return new NextResponse("Blocked", { status: 403 });
+
   const hasSession = request.cookies.get(DEMO_SESSION_COOKIE)?.value === DEMO_SESSION_VALUE;
 
   if (hasSession && (path === "/sign-in" || path.startsWith("/sign-in/"))) {
