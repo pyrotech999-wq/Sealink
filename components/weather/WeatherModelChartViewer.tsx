@@ -13,6 +13,7 @@ import {
   TileLayer,
   useMap,
 } from "react-leaflet";
+import { PrecipitationCanvasOverlay, PrecipitationHitMarkers } from "@/components/weather/PrecipitationCanvasOverlay";
 import { WEATHER_CHART_REGIONS, getWeatherChartRegion, type WeatherChartRegionId } from "@/lib/weather/model-chart-regions";
 
 type LayerId = "wind10m" | "waves" | "pressure_msl" | "precipitation" | "temperature_2m";
@@ -21,7 +22,11 @@ const LAYERS: { id: LayerId; label: string; description: string }[] = [
   { id: "wind10m", label: "10 m wind", description: "GFS wind (kn): arrow points downwind; size and colour scale with speed." },
   { id: "waves", label: "Waves", description: "Marine wave height (m) and direction — arrows where swell is meaningful." },
   { id: "pressure_msl", label: "Sea-level pressure", description: "MSLP (hPa): sampled value labels, low/high centres (L/H)." },
-  { id: "precipitation", label: "Precipitation", description: "Hourly precipitation (mm) as semi-transparent tiles." },
+  {
+    id: "precipitation",
+    label: "Precipitation",
+    description: "Hourly precipitation (mm/h): soft blended field from the grid (Open‑Meteo GFS).",
+  },
   { id: "temperature_2m", label: "2 m temperature", description: "Air temperature (°C) as semi-transparent tiles." },
 ];
 
@@ -195,14 +200,6 @@ function waveArrowIcon(fromDeg: number, heightM: number): L.DivIcon {
   });
 }
 
-function precipColor(mm: number): string {
-  const t = clamp(mm / 8, 0, 1);
-  const r = Math.round(180 + 75 * t);
-  const g = Math.round(220 - 140 * t);
-  const b = Math.round(255 - 200 * t);
-  return `rgba(${r},${g},${b},0.72)`;
-}
-
 /** Low &lt; 1000, normal 1000–1020, high &gt; 1020 hPa. */
 function pressureLabelColors(hpa: number): { bg: string; fg: string; border: string } {
   if (hpa < 1000) {
@@ -329,19 +326,23 @@ function LayerLegend({ layer }: { layer: LayerId }) {
   }
   if (layer === "precipitation") {
     return (
-      <div className="rounded-lg border border-zinc-200 bg-white/95 px-3 py-2 text-[10px] shadow-sm dark:border-zinc-700 dark:bg-zinc-950/95">
-        <div className="font-semibold text-zinc-800 dark:text-zinc-100">Precipitation (mm / h)</div>
+      <div className="max-w-[220px] rounded-lg border border-zinc-200 bg-white/95 px-3 py-2 text-[10px] shadow-sm dark:border-zinc-700 dark:bg-zinc-950/95">
+        <div className="font-semibold text-zinc-800 dark:text-zinc-100">Precipitation</div>
+        <p className="mt-0.5 text-[9px] text-zinc-500 dark:text-zinc-400">Hourly step — mm per hour (mm/h) from GFS.</p>
         <div
-          className="mt-1 h-2.5 w-full rounded-md"
+          className="mt-2 h-3 w-full rounded-md border border-zinc-200/80 dark:border-zinc-600/80"
           style={{
-            background: "linear-gradient(90deg, rgba(200,230,255,0.9), rgb(100,180,255), rgb(255,120,80))",
+            background:
+              "linear-gradient(90deg, rgba(186,230,255,0.25) 0%, rgb(147,204,255) 12%, rgb(37,99,235) 35%, rgb(234,179,8) 62%, rgb(220,38,38) 100%)",
           }}
         />
-        <div className="mt-0.5 flex justify-between font-mono text-zinc-500 dark:text-zinc-400">
-          <span>0</span>
-          <span>2</span>
+        <div className="mt-1 flex justify-between gap-1 font-mono text-[9px] text-zinc-600 dark:text-zinc-400">
+          <span>0–0.2</span>
+          <span>1</span>
+          <span>3</span>
           <span>8+</span>
         </div>
+        <p className="mt-1 text-[9px] text-zinc-500 dark:text-zinc-400">&lt;0.2 mm/h not shaded. Tap a cell for exact value.</p>
       </div>
     );
   }
