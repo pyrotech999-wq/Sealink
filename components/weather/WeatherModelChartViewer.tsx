@@ -367,6 +367,45 @@ export function WeatherModelChartViewer() {
     data != null && data.leadHours === lead && data.layer === layer && data.region === region;
   const timestepEmpty = dataMatchesUi && data.validCount === 0 && !loading;
 
+  const pressureDisplay = useMemo(() => {
+    if (layer !== "pressure_msl" || !data || loading) return null;
+    if (data.leadHours !== lead || data.layer !== "pressure_msl" || data.region !== region) return null;
+
+    const entries = data.points
+      .map((p, i) => ({ p, i, h: p.pressureHpa }))
+      .filter((x): x is { p: MapPoint; i: number; h: number } => x.h != null && Number.isFinite(x.h));
+    if (entries.length === 0) {
+      return { labels: [] as { p: MapPoint; i: number; h: number }[], low: null, high: null, lowPos: null, highPos: null };
+    }
+
+    let low = entries[0]!;
+    let high = entries[0]!;
+    for (const e of entries) {
+      if (e.h < low.h) low = e;
+      if (e.h > high.h) high = e;
+    }
+
+    const MAX_LABELS = 26;
+    const stride = Math.max(1, Math.ceil(entries.length / MAX_LABELS));
+    const labeled = new Set<number>();
+    for (let k = 0; k < entries.length; k += stride) labeled.add(entries[k]!.i);
+    labeled.add(low.i);
+    labeled.add(high.i);
+
+    const labels = entries.filter((e) => labeled.has(e.i));
+
+    const showLH = entries.length >= 2 && Math.abs(high.h - low.h) >= 0.35;
+    const off = regionConfig.stepDeg * 0.62;
+    const lowPos: [number, number] | null = showLH
+      ? [low.p.lat + off * 0.55, low.p.lng - off * 0.38]
+      : null;
+    const highPos: [number, number] | null = showLH
+      ? [high.p.lat - off * 0.48, high.p.lng + off * 0.42]
+      : null;
+
+    return { labels, low: showLH ? low : null, high: showLH ? high : null, lowPos, highPos };
+  }, [layer, data, loading, lead, region, regionConfig.stepDeg]);
+
   return (
     <section className="flex flex-col gap-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -496,7 +535,7 @@ export function WeatherModelChartViewer() {
       ) : null}
 
       <div className="relative min-h-[min(72vh,760px)] overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="pointer-events-none absolute left-3 top-3 z-[400] max-w-[220px]">
+        <div className={`pointer-events-none absolute left-3 top-3 z-[400] ${layer === "pressure_msl" ? "max-w-[270px]" : "max-w-[220px]"}`}>
           <LayerLegend layer={layer} />
         </div>
 
@@ -585,33 +624,48 @@ export function WeatherModelChartViewer() {
               })
             : null}
 
-          {dataMatchesUi && layer === "pressure_msl"
-            ? points.map((p, i) => {
-                const hpa = p.pressureHpa;
-                if (hpa == null || !Number.isFinite(hpa)) return null;
-                const color = pressureColor(hpa);
-                const d = cellHalfDeg;
-                return (
-                  <Rectangle
-                    key={`p-${lead}-${i}-${hpa}`}
-                    bounds={[
-                      [p.lat - d, p.lng - d],
-                      [p.lat + d, p.lng + d],
-                    ]}
-                    pathOptions={{
-                      color: "rgba(255,255,255,0.15)",
-                      weight: 1,
-                      fillColor: color,
-                      fillOpacity: 0.55,
-                    }}
-                  >
-                    <Popup>
-                      <div className="text-xs font-semibold">{Math.round(hpa)} hPa</div>
-                    </Popup>
-                  </Rectangle>
-                );
-              })
+          {dataMatchesUi && layer === "pressure_msl" && pressureDisplay
+            ? pressureDisplay.labels.map(({ p, i, h }) => (
+                <Marker key={`pl-${lead}-${i}-${h}`} position={[p.lat, p.lng]} icon={pressureLabelIcon(h)}>
+                  <Popup>
+                    <div className="text-xs">
+                      <div className="font-semibold">MSLP</div>
+                      <div className="font-mono">{Math.round(h)} hPa</div>
+                    </div>
+                  </Popup>
+                </Marker>
+              ))
             : null}
+
+          {dataMatchesUi && layer === "pressure_msl" && pressureDisplay?.low && pressureDisplay.lowPos ? (
+            <Marker
+              key={`p-L-${lead}-${pressureDisplay.low.h}`}
+              position={pressureDisplay.lowPos}
+              icon={extremaPressureIcon("L")}
+            >
+              <Popup>
+                <div className="text-xs">
+                  <div className="font-semibold">Low centre (grid)</div>
+                  <div className="font-mono">{Math.round(pressureDisplay.low.h)} hPa</div>
+                </div>
+              </Popup>
+            </Marker>
+          ) : null}
+
+          {dataMatchesUi && layer === "pressure_msl" && pressureDisplay?.high && pressureDisplay.highPos ? (
+            <Marker
+              key={`p-H-${lead}-${pressureDisplay.high.h}`}
+              position={pressureDisplay.highPos}
+              icon={extremaPressureIcon("H")}
+            >
+              <Popup>
+                <div className="text-xs">
+                  <div className="font-semibold">High centre (grid)</div>
+                  <div className="font-mono">{Math.round(pressureDisplay.high.h)} hPa</div>
+                </div>
+              </Popup>
+            </Marker>
+          ) : null}
 
           {dataMatchesUi && layer === "precipitation"
             ? points.map((p, i) => {
