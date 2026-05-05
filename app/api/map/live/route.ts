@@ -11,6 +11,41 @@ import { listUnreadBroadcastReplyAlerts } from "@/lib/broadcast-reply-store";
 
 export const runtime = "nodejs";
 
+type LivePayload = { ok: true; messages: unknown[]; replyAlerts: unknown[] };
+
+type CacheEntry = {
+  expiresAtMs: number;
+  payload: LivePayload;
+};
+
+type DedupeEntry = {
+  promise: Promise<LivePayload>;
+};
+
+const G_CACHE = "__sealink_map_live_cache_v1";
+
+function caches(): {
+  cache: Map<string, CacheEntry>;
+  inflight: Map<string, DedupeEntry>;
+} {
+  const g = globalThis as unknown as Record<string, { cache: Map<string, CacheEntry>; inflight: Map<string, DedupeEntry> } | undefined>;
+  if (!g[G_CACHE]) {
+    g[G_CACHE] = { cache: new Map(), inflight: new Map() };
+  }
+  return g[G_CACHE]!;
+}
+
+function ttlMs(): number {
+  // 20–30 seconds jitter to spread load across instances.
+  return 20_000 + Math.floor(Math.random() * 10_001);
+}
+
+function bucketCoord(n: number): number {
+  // Bucket to ~0.01° (~1.1km lat), good enough for caching without exploding keys.
+  // Broadcasts are already radius-filtered server-side; this is purely a work-dedup hint.
+  return Math.round(n * 100) / 100;
+}
+
 function clampLatLng(lat: number, lng: number): { lat: number; lng: number } | null {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
   if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
@@ -29,12 +64,47 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "lat and lng required" }, { status: 400 });
     }
 
-    const messages = await listBroadcastsNear(coords.lat, coords.lng, viewer?.uid ?? null, viewer?.isAdmin ?? false);
-    const replyAlerts = viewer
-      ? await listUnreadBroadcastReplyAlerts(viewer.uid, coords.lat, coords.lng, viewer.isAdmin)
-      : [];
+    const { cache, inflight } = caches();
+    const viewerKey = viewer ? `${viewer.uid}:${viewer.isAdmin ? "a" : "u"}` : "anon";
+    const key = `v=${viewerKey}|lat=${bucketCoord(coords.lat)}|lng=${bucketCoord(coords.lng)}`;
+    const now = Date.now();
 
-    const res = NextResponse.json({ ok: true as const, messages, replyAlerts });
+    const hit = cache.get(key);
+    if (hit && hit.expiresAtMs > now) {
+      console.info("MAP_LIVE_CACHE_HIT", { key });
+      const res = NextResponse.json(hit.payload);
+      if (cookieFresh) applyPresenceCookie(res, viewerId);
+      return res;
+    }
+
+    const inF = inflight.get(key);
+    if (inF) {
+      console.info("MAP_LIVE_DEDUPE", { key });
+      const payload = await inF.promise;
+      const res = NextResponse.json(payload);
+      if (cookieFresh) applyPresenceCookie(res, viewerId);
+      return res;
+    }
+
+    console.info("MAP_LIVE_CACHE_MISS", { key });
+    const promise = (async (): Promise<LivePayload> => {
+      const messages = await listBroadcastsNear(coords.lat, coords.lng, viewer?.uid ?? null, viewer?.isAdmin ?? false);
+      const replyAlerts = viewer
+        ? await listUnreadBroadcastReplyAlerts(viewer.uid, coords.lat, coords.lng, viewer.isAdmin)
+        : [];
+      return { ok: true as const, messages, replyAlerts };
+    })();
+    inflight.set(key, { promise });
+
+    let payload: LivePayload;
+    try {
+      payload = await promise;
+    } finally {
+      inflight.delete(key);
+    }
+
+    cache.set(key, { payload, expiresAtMs: now + ttlMs() });
+    const res = NextResponse.json(payload);
     if (cookieFresh) applyPresenceCookie(res, viewerId);
     return res;
   } catch (e) {
