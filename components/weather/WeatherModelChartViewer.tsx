@@ -592,6 +592,13 @@ export function WeatherModelChartViewer() {
     return { labels, low: showLH ? low : null, high: showLH ? high : null, lowPos, highPos };
   }, [layer, mapFrame, showMapLayer, regionConfig.stepDeg]);
 
+  const precipPoints = useMemo(() => {
+    if (layer !== "precipitation" || !mapFrame || !showMapLayer) return [];
+    return mapFrame.points
+      .map((p) => ({ lat: p.lat, lng: p.lng, mm: p.precipMm }))
+      .filter((p): p is { lat: number; lng: number; mm: number } => p.mm != null && Number.isFinite(p.mm));
+  }, [layer, mapFrame, showMapLayer]);
+
   return (
     <section className="flex flex-col gap-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -864,33 +871,16 @@ export function WeatherModelChartViewer() {
             </Marker>
           ) : null}
 
-          {showMapLayer && layer === "precipitation"
-            ? points.map((p, i) => {
-                const mm = p.precipMm;
-                if (mm == null || !Number.isFinite(mm)) return null;
-                const color = precipColor(mm);
-                const d = cellHalfDeg * (mm < 0.05 ? 0.65 : 1);
-                return (
-                  <Rectangle
-                    key={`pr-${mapFrameLead}-${i}-${mm}`}
-                    bounds={[
-                      [p.lat - d, p.lng - d],
-                      [p.lat + d, p.lng + d],
-                    ]}
-                    pathOptions={{
-                      color: "rgba(255,255,255,0.12)",
-                      weight: 1,
-                      fillColor: color,
-                      fillOpacity: 0.52,
-                    }}
-                  >
-                    <Popup>
-                      <div className="text-xs font-semibold">{mm.toFixed(2)} mm/h</div>
-                    </Popup>
-                  </Rectangle>
-                );
-              })
-            : null}
+          {showMapLayer && layer === "precipitation" && precipPoints.length > 0 ? (
+            <>
+              <PrecipitationCanvasOverlay
+                points={precipPoints}
+                gridStepDeg={regionConfig.stepDeg}
+                leadKey={mapFrameLead}
+              />
+              <PrecipitationHitMarkers points={precipPoints} leadKey={mapFrameLead} />
+            </>
+          ) : null}
 
           {showMapLayer && layer === "temperature_2m"
             ? points.map((p, i) => {
