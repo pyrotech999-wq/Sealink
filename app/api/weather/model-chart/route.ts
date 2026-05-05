@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { buildRegionGrid, getWeatherChartRegion, type WeatherChartRegionId } from "@/lib/weather/model-chart-regions";
+import { buildRegionGridCapped, getWeatherChartRegion, type WeatherChartRegionId } from "@/lib/weather/model-chart-regions";
 
 export const runtime = "nodejs";
 
@@ -173,9 +173,7 @@ function hex(c: [number, number, number]): string {
 
 async function fetchOpenMeteoGrid(region: WeatherChartRegionId, signal?: AbortSignal): Promise<GridCacheEntry> {
   const r = getWeatherChartRegion(region);
-  const { points } = buildRegionGrid(r);
-  const MAX_POINTS = 420;
-  const pts = points.slice(0, MAX_POINTS);
+  const { points: pts } = buildRegionGridCapped(r);
 
   const url = new URL("https://api.open-meteo.com/v1/gfs");
   url.searchParams.set("timezone", "GMT");
