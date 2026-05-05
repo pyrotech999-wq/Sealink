@@ -160,6 +160,7 @@ export async function GET(req: Request): Promise<Response> {
 
   const existing = inflight.get(key);
   if (existing) {
+    console.info("WEATHER_GRID_CACHE_HIT", { region, layer, leadHours, source: "inflight" });
     const v = await existing;
     return NextResponse.json(v, { headers: { "X-Sealink-Model-Map-Cache": "HIT-INFLIGHT" } });
   }
