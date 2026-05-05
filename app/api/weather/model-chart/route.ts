@@ -91,6 +91,86 @@ function escapeXml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\"/g, "&quot;");
 }
 
+type Stop = { v: number; c: [number, number, number] };
+
+function layerMeta(layer: LayerId): {
+  title: string;
+  unit: string;
+  stops: Stop[];
+  formatTick: (v: number) => string;
+} {
+  switch (layer) {
+    case "wind10m":
+      return {
+        title: "10 m wind",
+        unit: "kn",
+        stops: [
+          { v: 0, c: [40, 80, 140] },
+          { v: 10, c: [80, 140, 255] },
+          { v: 20, c: [80, 220, 200] },
+          { v: 30, c: [120, 235, 160] },
+          { v: 40, c: [255, 220, 120] },
+          { v: 55, c: [255, 120, 80] },
+        ],
+        formatTick: (v) => `${Math.round(v)}`,
+      };
+    case "temperature_2m":
+      return {
+        title: "2 m temperature",
+        unit: "°C",
+        stops: [
+          { v: -20, c: [70, 120, 255] },
+          { v: 0, c: [120, 220, 255] },
+          { v: 10, c: [140, 235, 160] },
+          { v: 20, c: [255, 220, 120] },
+          { v: 30, c: [255, 140, 90] },
+          { v: 40, c: [255, 70, 70] },
+        ],
+        formatTick: (v) => `${Math.round(v)}`,
+      };
+    case "precipitation":
+      return {
+        title: "Precipitation (hourly)",
+        unit: "mm",
+        stops: [
+          { v: 0, c: [20, 20, 30] },
+          { v: 0.2, c: [80, 140, 255] },
+          { v: 1, c: [60, 220, 200] },
+          { v: 3, c: [60, 220, 120] },
+          { v: 8, c: [255, 220, 90] },
+          { v: 15, c: [255, 120, 80] },
+        ],
+        formatTick: (v) => (v < 1 ? v.toFixed(1) : `${Math.round(v)}`),
+      };
+    case "pressure_msl":
+      return {
+        title: "Sea-level pressure",
+        unit: "hPa",
+        stops: [
+          { v: 980, c: [70, 120, 255] },
+          { v: 1000, c: [120, 220, 255] },
+          { v: 1015, c: [140, 235, 160] },
+          { v: 1030, c: [255, 220, 120] },
+          { v: 1045, c: [255, 140, 90] },
+        ],
+        formatTick: (v) => `${Math.round(v)}`,
+      };
+    default: {
+      const _exhaustive: never = layer;
+      return _exhaustive;
+    }
+  }
+}
+
+function hex(c: [number, number, number]): string {
+  return `#${c
+    .map((x) => {
+      const s = Math.max(0, Math.min(255, Math.round(x))).toString(16).padStart(2, "0");
+      return s;
+    })
+    .join("")}`;
+}
+
 async function fetchOpenMeteoGrid(region: WeatherChartRegionId, signal?: AbortSignal): Promise<GridCacheEntry> {
   const r = getWeatherChartRegion(region);
   const { points } = buildRegionGrid(r);
@@ -121,6 +201,7 @@ function renderSvg(opts: {
 }): string {
   const r = getWeatherChartRegion(opts.region);
   const { latMin, latMax, lonMin, lonMax } = r.bbox;
+  const meta = layerMeta(opts.layer);
 
   const W = 1100;
   const H = 720;
@@ -154,7 +235,7 @@ function renderSvg(opts: {
     parts.push(`<line x1="${pad}" y1="${y}" x2="${pad + innerW}" y2="${y}" stroke="rgba(255,255,255,.05)"/>`);
   }
 
-  const title = `GFS · ${r.label} · ${opts.layer}`;
+  const title = `GFS · ${r.label} · ${meta.title}`;
   parts.push(
     `<text x="${pad}" y="${pad - 12}" fill="rgba(255,255,255,.85)" font-size="14" font-family="ui-sans-serif, system-ui" font-weight="600">${escapeXml(
       title,
@@ -169,34 +250,6 @@ function renderSvg(opts: {
   const cellW = (step / (lonMax - lonMin)) * innerW;
   const cellH = (step / (latMax - latMin)) * innerH;
 
-  type Stop = { v: number; c: [number, number, number] };
-  const scalarStops: Stop[] =
-    opts.layer === "temperature_2m"
-      ? [
-          { v: -20, c: [70, 120, 255] as [number, number, number] },
-          { v: 0, c: [120, 220, 255] as [number, number, number] },
-          { v: 10, c: [140, 235, 160] as [number, number, number] },
-          { v: 20, c: [255, 220, 120] as [number, number, number] },
-          { v: 30, c: [255, 140, 90] as [number, number, number] },
-          { v: 40, c: [255, 70, 70] as [number, number, number] },
-        ]
-      : opts.layer === "precipitation"
-        ? [
-            { v: 0, c: [20, 20, 30] as [number, number, number] },
-            { v: 0.2, c: [80, 140, 255] as [number, number, number] },
-            { v: 1, c: [60, 220, 200] as [number, number, number] },
-            { v: 3, c: [60, 220, 120] as [number, number, number] },
-            { v: 8, c: [255, 220, 90] as [number, number, number] },
-            { v: 15, c: [255, 120, 80] as [number, number, number] },
-          ]
-        : [
-            { v: 980, c: [70, 120, 255] as [number, number, number] },
-            { v: 1000, c: [120, 220, 255] as [number, number, number] },
-            { v: 1015, c: [140, 235, 160] as [number, number, number] },
-            { v: 1030, c: [255, 220, 120] as [number, number, number] },
-            { v: 1045, c: [255, 140, 90] as [number, number, number] },
-          ];
-
   // scalar underlay for pressure/temp/precip, and also for wind magnitude
   for (const p of opts.grid.points) {
     const lat = p.latitude;
@@ -210,17 +263,7 @@ function renderSvg(opts: {
     if (opts.layer === "pressure_msl") v = p.hourly?.pressure_msl?.[idx];
     if (opts.layer === "wind10m") v = p.hourly?.windspeed_10m?.[idx];
 
-    const fill =
-      opts.layer === "wind10m"
-        ? colorScale(Number(v ?? NaN), [
-            { v: 0, c: [40, 80, 140] as [number, number, number] },
-            { v: 10, c: [80, 140, 255] as [number, number, number] },
-            { v: 20, c: [80, 220, 200] as [number, number, number] },
-            { v: 30, c: [120, 235, 160] as [number, number, number] },
-            { v: 40, c: [255, 220, 120] as [number, number, number] },
-            { v: 55, c: [255, 120, 80] as [number, number, number] },
-          ])
-        : colorScale(Number(v ?? NaN), scalarStops);
+    const fill = colorScale(Number(v ?? NaN), meta.stops);
 
     parts.push(
       `<rect x="${x - cellW / 2}" y="${y - cellH / 2}" width="${cellW}" height="${cellH}" fill="${fill}" opacity="0.9"/>`,
@@ -251,6 +294,45 @@ function renderSvg(opts: {
         `<line x1="${x2}" y1="${y2}" x2="${x2 + Math.sin(a2) * ah}" y2="${y2 + Math.cos(a2) * ah}" stroke="${stroke}" stroke-width="1.4"/>`,
       );
     }
+  }
+
+  // Legend / key
+  const legendW = 320;
+  const legendH = 84;
+  const lx = pad + innerW - legendW;
+  const ly = pad + innerH - legendH;
+
+  const gradId = "legendGrad";
+  const stops = meta.stops;
+  parts.push(
+    `<defs>`,
+    `<linearGradient id="${gradId}" x1="0" y1="0" x2="1" y2="0">`,
+    ...stops.map((s, i) => {
+      const off = stops.length === 1 ? 0 : (i / (stops.length - 1)) * 100;
+      return `<stop offset="${off}%" stop-color="${hex(s.c)}" stop-opacity="0.95"/>`;
+    }),
+    `</linearGradient>`,
+    `</defs>`,
+  );
+
+  parts.push(
+    `<rect x="${lx}" y="${ly}" width="${legendW}" height="${legendH}" rx="10" fill="rgba(0,0,0,.35)" stroke="rgba(255,255,255,.10)"/>`,
+    `<text x="${lx + 12}" y="${ly + 22}" fill="rgba(255,255,255,.85)" font-size="12" font-family="ui-sans-serif, system-ui" font-weight="700">${escapeXml(
+      `${meta.title} (${meta.unit})`,
+    )}</text>`,
+    `<rect x="${lx + 12}" y="${ly + 32}" width="${legendW - 24}" height="14" rx="7" fill="url(#${gradId})" stroke="rgba(255,255,255,.12)"/>`,
+  );
+
+  const tickVals = [stops[0]!.v, stops[Math.floor(stops.length / 2)]!.v, stops[stops.length - 1]!.v];
+  const tickXs = [lx + 12, lx + 12 + (legendW - 24) * 0.5, lx + 12 + (legendW - 24)];
+  for (let i = 0; i < tickVals.length; i++) {
+    const tx = tickXs[i]!;
+    parts.push(
+      `<line x1="${tx}" y1="${ly + 48}" x2="${tx}" y2="${ly + 56}" stroke="rgba(255,255,255,.25)"/>`,
+      `<text x="${tx}" y="${ly + 72}" text-anchor="${i === 0 ? "start" : i === 2 ? "end" : "middle"}" fill="rgba(255,255,255,.60)" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">${escapeXml(
+        meta.formatTick(tickVals[i]!),
+      )}</text>`,
+    );
   }
 
   parts.push(
