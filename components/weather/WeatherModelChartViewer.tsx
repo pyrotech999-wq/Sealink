@@ -374,7 +374,8 @@ export function WeatherModelChartViewer() {
   const [loading, setLoading] = useState(false);
   const [staleNotice, setStaleNotice] = useState(false);
   const fetchGen = useRef(0);
-  const clientGridCache = useRef(new Map<string, ApiOk>());
+  const clientGridCache = useRef(new Map<string, GridCacheEntry>());
+  const gridCacheHydrated = useRef(false);
   const fetchThrottleUntil = useRef(0);
   const regionLayerBoot = useRef(false);
   const prevRegionLayer = useRef({ region, layer });
@@ -392,6 +393,12 @@ export function WeatherModelChartViewer() {
     const gen = ++fetchGen.current;
     const ac = new AbortController();
 
+    const map = clientGridCache.current;
+    if (!gridCacheHydrated.current && typeof window !== "undefined") {
+      gridCacheHydrated.current = true;
+      for (const [k, v] of readPersistedGridCache()) map.set(k, v);
+    }
+
     const regionChanged = prevRegionLayer.current.region !== region;
     const layerChanged = prevRegionLayer.current.layer !== layer;
     const regionLayerChanged = !regionLayerBoot.current || regionChanged || layerChanged;
@@ -399,9 +406,10 @@ export function WeatherModelChartViewer() {
     if (regionLayerChanged) {
       if (regionChanged) {
         const prefix = `${region}|`;
-        for (const k of [...clientGridCache.current.keys()]) {
-          if (!k.startsWith(prefix)) clientGridCache.current.delete(k);
+        for (const k of [...map.keys()]) {
+          if (!k.startsWith(prefix)) map.delete(k);
         }
+        persistGridCache(map);
       }
       prevRegionLayer.current = { region, layer };
       setData(null);
@@ -409,10 +417,10 @@ export function WeatherModelChartViewer() {
     }
 
     const leadsWanted = regionLayerChanged ? uniqSortedLeads([0, 3, 6, lead]) : [lead];
-    const missing = leadsWanted.filter((lh) => !clientGridCache.current.has(gridCacheKey(region, layer, lh)));
+    const missing = leadsWanted.filter((lh) => !getFreshGridData(map, gridCacheKey(region, layer, lh)));
 
     const applyCurrentFromServerCache = () => {
-      const hit = clientGridCache.current.get(gridCacheKey(region, layer, lead));
+      const hit = getFreshGridData(map, gridCacheKey(region, layer, lead));
       if (hit && gen === fetchGen.current) {
         setData(hit);
         setStaleNotice(!!hit.stale);
@@ -451,24 +459,27 @@ export function WeatherModelChartViewer() {
         if (gen !== fetchGen.current) return;
         if (!r.ok) throw new Error((j as { error?: string }).error || `HTTP ${r.status}`);
 
+        const nowMs = Date.now();
         if ("batch" in j && j.batch && Array.isArray((j as ApiBatch).items)) {
           const b = j as ApiBatch;
           const batchStale = !!b.stale;
           for (const item of b.items) {
             if (!item?.ok) continue;
-            clientGridCache.current.set(gridCacheKey(item.region, item.layer, item.leadHours), {
+            const data: ApiOk = {
               ...item,
               stale: !!(item.stale || batchStale),
-            });
+            };
+            map.set(gridCacheKey(item.region, item.layer, item.leadHours), { storedAtMs: nowMs, data });
           }
         } else if ("ok" in j && j.ok && !("batch" in j && j.batch)) {
           const one = j as ApiOk;
-          clientGridCache.current.set(gridCacheKey(one.region, one.layer, one.leadHours), one);
+          map.set(gridCacheKey(one.region, one.layer, one.leadHours), { storedAtMs: nowMs, data: one });
         } else {
           throw new Error((j as { error?: string }).error || "Fetch failed");
         }
+        persistGridCache(map);
 
-        const cur = clientGridCache.current.get(gridCacheKey(region, layer, lead));
+        const cur = getFreshGridData(map, gridCacheKey(region, layer, lead));
         if (gen !== fetchGen.current) return;
         if (cur) {
           setData(cur);
@@ -480,7 +491,7 @@ export function WeatherModelChartViewer() {
       } catch (e) {
         if (e instanceof DOMException && e.name === "AbortError") return;
         if (gen !== fetchGen.current) return;
-        const cur = clientGridCache.current.get(gridCacheKey(region, layer, lead));
+        const cur = getAnyGridData(map, gridCacheKey(region, layer, lead));
         if (cur) {
           setData(cur);
           setStaleNotice(!!cur.stale);
@@ -527,7 +538,7 @@ export function WeatherModelChartViewer() {
 
   const leadIndex = Math.max(0, HOURS.indexOf(lead));
 
-  const fromClientGrid = clientGridCache.current.get(gridCacheKey(region, layer, lead)) ?? null;
+  const fromClientGrid = getFreshGridData(clientGridCache.current, gridCacheKey(region, layer, lead));
   const mapFrame: ApiOk | null =
     fromClientGrid ??
     (data != null && data.region === region && data.layer === layer && data.leadHours === lead
@@ -586,8 +597,9 @@ export function WeatherModelChartViewer() {
         <div className="space-y-1">
           <h2 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Model chart viewer</h2>
           <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
-            OpenStreetMap + Open‑Meteo (GFS / marine). One server request covers all timesteps per region/layer (~12 min cache);
-            +0h/+3h/+6h preload when you change region or layer; other hours load when you move the timeline.
+            OpenStreetMap + Open‑Meteo (GFS / marine). Grids are cached up to 6h (browser + server); the page checks that cache
+            before requesting. One server fetch covers all timesteps per region/layer. +0h/+3h/+6h preload when you change region
+            or layer; other hours load when you move the timeline.
           </p>
         </div>
       </div>
