@@ -34,7 +34,7 @@ function pruneCache(): void {
   for (const [k] of drop) memoryCache.delete(k);
 }
 
-async function fetchPng(path: string): Promise<Uint8Array> {
+async function fetchPng(path: string): Promise<Buffer> {
   const url = `${WZ_ORIGIN}/maps/${path}`;
   const res = await fetch(url, {
     headers: {
@@ -47,7 +47,7 @@ async function fetchPng(path: string): Promise<Uint8Array> {
   if (!res.ok) {
     throw new Error(`WZ maps HTTP ${res.status}`);
   }
-  const buf = new Uint8Array(await res.arrayBuffer());
+  const buf = Buffer.from(await res.arrayBuffer());
   if (buf.length < 200) {
     throw new Error("WZ maps empty or too small");
   }
