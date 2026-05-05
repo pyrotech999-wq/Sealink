@@ -212,12 +212,12 @@ function renderSvg(opts: {
     const fill =
       opts.layer === "wind10m"
         ? colorScale(Number(v ?? NaN), [
-            { v: 0, c: [40, 80, 140] },
-            { v: 10, c: [80, 140, 255] },
-            { v: 20, c: [80, 220, 200] },
-            { v: 30, c: [120, 235, 160] },
-            { v: 40, c: [255, 220, 120] },
-            { v: 55, c: [255, 120, 80] },
+            { v: 0, c: [40, 80, 140] as [number, number, number] },
+            { v: 10, c: [80, 140, 255] as [number, number, number] },
+            { v: 20, c: [80, 220, 200] as [number, number, number] },
+            { v: 30, c: [120, 235, 160] as [number, number, number] },
+            { v: 40, c: [255, 220, 120] as [number, number, number] },
+            { v: 55, c: [255, 120, 80] as [number, number, number] },
           ])
         : colorScale(Number(v ?? NaN), scalarStops);
 
