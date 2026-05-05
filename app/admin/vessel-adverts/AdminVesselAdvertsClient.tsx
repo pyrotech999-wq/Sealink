@@ -133,7 +133,7 @@ export function AdminVesselAdvertsClient() {
       fd.set("year", year);
       fd.set("lengthFt", lengthFt);
       fd.set("makeModel", makeModel);
-      for (const f of images.slice(0, 3)) fd.append("images", f);
+      for (const f of images.slice(0, 8)) fd.append("images", f);
 
       const r = await fetch("/api/admin/vessel-listings/create-comped", { method: "POST", body: fd, credentials: "same-origin" });
       const d = (await r.json()) as { error?: string };
@@ -358,7 +358,7 @@ export function AdminVesselAdvertsClient() {
               multiple
               onChange={(e) => {
                 const files = Array.from(e.target.files ?? []);
-                setImages((prev) => [...prev, ...files].slice(0, 3));
+                setImages((prev) => [...prev, ...files].slice(0, 8));
                 e.target.value = "";
               }}
               className="mt-1 block w-full text-sm"

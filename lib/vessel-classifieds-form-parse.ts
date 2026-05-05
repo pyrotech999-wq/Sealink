@@ -1,6 +1,6 @@
 import { isVesselCategoryId, type VesselCategoryId } from "@/lib/vessel-classifieds-types";
 
-export const VESSEL_FORM_MAX_IMAGES = 3;
+export const VESSEL_FORM_MAX_IMAGES = 8;
 export const VESSEL_FORM_MAX_IMAGE_BYTES = 3 * 1024 * 1024;
 
 function extFromContentType(ct: string): string | null {

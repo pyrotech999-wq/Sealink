@@ -211,7 +211,7 @@ export function VesselClassifiedsClient() {
       fd.set("year", year);
       fd.set("lengthFt", lengthFt);
       fd.set("makeModel", makeModel);
-      for (const f of images.slice(0, 3)) fd.append("images", f);
+      for (const f of images.slice(0, 8)) fd.append("images", f);
       if (useFreeSlot && freeSlots > 0) fd.set("useFreeSlot", "1");
 
       const r = await fetch("/api/vessels/classifieds", { method: "POST", body: fd, credentials: "same-origin" });
@@ -309,11 +309,23 @@ export function VesselClassifiedsClient() {
           ← Buy & Sell
         </Link>
         <h1 className="mt-4 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Boats for sale</h1>
-        <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-          Paid boat adverts run for <strong>6 months</strong>. Price: <strong>£30</strong> per listing — pay with PayPal
-          {stripeListingReady ? " or card (Stripe)" : ""}. If you have a <strong>promotional code</strong> from SeaLink, redeem
-          it below for complimentary listing slots (no payment for that post).
-        </p>
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <label className="block flex-1 text-xs font-medium text-zinc-700 dark:text-zinc-300">
+            Search boats for sale
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search title/description…"
+              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+            />
+          </label>
+          <a
+            href="#post-boat"
+            className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg bg-green-600 px-4 text-sm font-semibold text-white hover:bg-green-700"
+          >
+            Add a boat for sale
+          </a>
+        </div>
       </div>
 
       {signedIn && reminders.length ? (
@@ -406,7 +418,10 @@ export function VesselClassifiedsClient() {
         </section>
       ) : null}
 
-      <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+      <section
+        id="post-boat"
+        className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950"
+      >
         <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Post a boat advert</h2>
         {signedIn === false ? (
           <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
@@ -525,7 +540,7 @@ export function VesselClassifiedsClient() {
 
           <div>
             <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-              Photos (up to 3)
+              Photos (up to 8)
               <input
                 type="file"
                 accept="image/*"
@@ -533,7 +548,7 @@ export function VesselClassifiedsClient() {
                 onChange={(e) => {
                   const files = Array.from(e.target.files ?? []);
                   if (!files.length) return;
-                  setImages((prev) => [...prev, ...files].slice(0, 3));
+                  setImages((prev) => [...prev, ...files].slice(0, 8));
                   e.target.value = "";
                 }}
                 className="mt-1 block w-full text-sm text-zinc-700 file:mr-4 file:rounded-lg file:border-0 file:bg-zinc-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-zinc-800 hover:file:bg-zinc-200 dark:text-zinc-200 dark:file:bg-zinc-800 dark:file:text-zinc-100 dark:hover:file:bg-zinc-700"
@@ -633,7 +648,7 @@ export function VesselClassifiedsClient() {
                 <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-zinc-700 dark:text-zinc-300">{l.description}</p>
                 {l.imageUrls?.length ? (
                   <div className="mt-3 grid grid-cols-3 gap-2">
-                    {l.imageUrls.slice(0, 3).map((src) => (
+                    {l.imageUrls.slice(0, 8).map((src) => (
                       <a key={src} href={src} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800">
                         <img src={src} alt="" className="h-24 w-full object-cover" loading="lazy" />
                       </a>
