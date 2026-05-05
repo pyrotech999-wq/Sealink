@@ -88,18 +88,23 @@ function windColorKn(kn: number): string {
   return `rgba(248,113,113,0.95)`;
 }
 
+/** Minimum box so one tap opens the popup on touch (fat-finger friendly). */
+const MARKER_TOUCH_MIN_PX = 44;
+
 function windArrowIcon(fromDeg: number, speedKn: number): L.DivIcon {
   const rot = flowRotationFromFromDeg(fromDeg);
   const t = clamp(speedKn / 48, 0, 1);
   const h = Math.round(14 + t * 20);
   const w = Math.max(5, Math.round(h * 0.42));
   const color = windColorKn(speedKn);
-  const html = `<div style="width:0;height:0;border-left:${w}px solid transparent;border-right:${w}px solid transparent;border-bottom:${h}px solid ${color};transform:rotate(${rot}deg);transform-origin:50% 72%;filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))"></div>`;
+  const boxW = Math.max(w * 2, MARKER_TOUCH_MIN_PX);
+  const boxH = Math.max(h, MARKER_TOUCH_MIN_PX);
+  const html = `<div class="sealink-model-wind-hit" style="width:${boxW}px;height:${boxH}px;display:flex;align-items:center;justify-content:center;pointer-events:auto"><div style="width:0;height:0;border-left:${w}px solid transparent;border-right:${w}px solid transparent;border-bottom:${h}px solid ${color};transform:rotate(${rot}deg);transform-origin:50% 72%;filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))"></div></div>`;
   return L.divIcon({
     className: "sealink-model-wind-arrow",
     html,
-    iconSize: [w * 2, h],
-    iconAnchor: [w, Math.round(h * 0.72)],
+    iconSize: [boxW, boxH],
+    iconAnchor: [Math.round(boxW / 2), Math.round(boxH / 2)],
   });
 }
 
@@ -672,7 +677,7 @@ export function WeatherModelChartViewer() {
         ) : null}
 
         <MapContainer
-          className="h-[min(72vh,760px)] w-full"
+          className="sealink-model-chart-map h-[min(72vh,760px)] w-full"
           bounds={regionConfig.mapBounds}
           boundsOptions={{ padding: [18, 18], maxZoom: 12 }}
           scrollWheelZoom
@@ -711,19 +716,23 @@ export function WeatherModelChartViewer() {
           {showMapLayer && layer === "waves"
             ? points.map((p, i) => {
                 const h = p.waveHeightM;
+                const wd = p.waveDirFromDeg;
                 if (h == null || !Number.isFinite(h) || h < 0.05) return null;
                 const color = waveHeightColor(h);
+                const showDir =
+                  wd != null && Number.isFinite(wd) && Number.isFinite(h) && h >= 0.12;
                 return (
                   <CircleMarker
                     key={`wh-${mapFrameLead}-${i}-${h}`}
                     center={[p.lat, p.lng]}
-                    radius={7 + clamp(h, 0, 4) * 2.2}
+                    radius={9 + clamp(h, 0, 4) * 2.2}
                     pathOptions={{ color: "rgba(255,255,255,0.35)", weight: 1, fillColor: color, fillOpacity: 0.88 }}
                   >
                     <Popup>
                       <div className="text-xs">
-                        <div className="font-semibold">Wave height</div>
+                        <div className="font-semibold">Waves</div>
                         <div>{h.toFixed(2)} m</div>
+                        {showDir ? <div className="text-zinc-500">Direction (from) {Math.round(wd!)}°</div> : null}
                       </div>
                     </Popup>
                   </CircleMarker>
@@ -737,14 +746,12 @@ export function WeatherModelChartViewer() {
                 const wd = p.waveDirFromDeg;
                 if (h == null || wd == null || !Number.isFinite(h) || h < 0.12 || !Number.isFinite(wd)) return null;
                 return (
-                  <Marker key={`wa-${mapFrameLead}-${i}-${h}-${wd}`} position={[p.lat, p.lng]} icon={waveArrowIcon(wd, h)}>
-                    <Popup>
-                      <div className="text-xs">
-                        <div className="font-semibold">Wave direction</div>
-                        <div>From {Math.round(wd)}°</div>
-                      </div>
-                    </Popup>
-                  </Marker>
+                  <Marker
+                    key={`wa-${mapFrameLead}-${i}-${h}-${wd}`}
+                    position={[p.lat, p.lng]}
+                    icon={waveArrowIcon(wd, h)}
+                    interactive={false}
+                  />
                 );
               })
             : null}

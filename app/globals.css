@@ -37,6 +37,13 @@ body {
   border: none !important;
 }
 
+/* Weather model chart: fewer double-tap quirks on mobile; fat-finger targets use enlarged div-icons */
+.leaflet-container.sealink-model-chart-map .leaflet-marker-icon,
+.leaflet-container.sealink-model-chart-map canvas,
+.leaflet-container.sealink-model-chart-map .leaflet-interactive {
+  touch-action: manipulation;
+}
+
 @keyframes sealink-mob-flash {
   0%,
   100% {
