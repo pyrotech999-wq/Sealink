@@ -71,8 +71,8 @@ const EMERGENCY_DISABLE_LIVE_MAP_APIS = true;
  */
 const EMERGENCY_REENABLE_MAP_LIVE_POLLING = true;
 
-/** Safe-mode re-enable: nearby presence at low frequency (60s). */
-const EMERGENCY_REENABLE_NEARBY_PRESENCE = true;
+/** Nearby presence is intentionally disabled on Home; use `/local-map` instead. */
+const EMERGENCY_REENABLE_NEARBY_PRESENCE = false;
 
 /** Statute miles → metres (for ~5 mi “nearby” ring). */
 const NEARBY_RING_METRES = 5 * 1609.344;
@@ -369,7 +369,7 @@ export default function HomeLocationMap({
     });
   }, [sharing, pos?.lat, pos?.lng, deviceId]);
 
-  // Nearby presence (safe mode): max 1 POST + 1 GET per 60s, hidden-tab paused, no retries.
+  // Nearby presence stays disabled on Home; `/local-map` owns presence.
   useEffect(() => {
     if (!EMERGENCY_REENABLE_NEARBY_PRESENCE) return;
     if (!signedIn) {
@@ -1251,47 +1251,51 @@ export default function HomeLocationMap({
         <span className="font-semibold">Show profile image on map pin</span>
       </label>
 
-      <label
-        className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 text-[11px] leading-snug ${
-          sharing && !pos
-            ? "cursor-wait border-blue-200/80 bg-blue-50/50 text-blue-900 dark:border-blue-900/40 dark:bg-blue-950/25 dark:text-blue-100"
-            : "border-blue-200 bg-blue-50/90 text-blue-950 dark:border-blue-900/50 dark:bg-blue-950/35 dark:text-blue-100"
-        }`}
-      >
-        <input
-          type="checkbox"
-          className="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-400 text-blue-600 disabled:opacity-50"
-          checked={shareNearby}
-          disabled={Boolean(sharing && !pos)}
-          onChange={(e) => {
-            const on = e.target.checked;
-            setShareNearby(on);
-            setShareNearbyPeers(on);
-            if (!on) setNearbyPeers([]);
-          }}
-        />
-        <span className="font-semibold">Show me to nearby SeaLink users (~5 mi)</span>
-      </label>
+      {EMERGENCY_REENABLE_NEARBY_PRESENCE ? (
+        <>
+          <label
+            className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 text-[11px] leading-snug ${
+              sharing && !pos
+                ? "cursor-wait border-blue-200/80 bg-blue-50/50 text-blue-900 dark:border-blue-900/40 dark:bg-blue-950/25 dark:text-blue-100"
+                : "border-blue-200 bg-blue-50/90 text-blue-950 dark:border-blue-900/50 dark:bg-blue-950/35 dark:text-blue-100"
+            }`}
+          >
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-400 text-blue-600 disabled:opacity-50"
+              checked={shareNearby}
+              disabled={Boolean(sharing && !pos)}
+              onChange={(e) => {
+                const on = e.target.checked;
+                setShareNearby(on);
+                setShareNearbyPeers(on);
+                if (!on) setNearbyPeers([]);
+              }}
+            />
+            <span className="font-semibold">Show me to nearby SeaLink users (~5 mi)</span>
+          </label>
 
-      {sharing && pos && shareNearby ? (
-        <button
-          type="button"
-          onClick={() => {
-            if (!EMERGENCY_REENABLE_NEARBY_PRESENCE) return;
-            if (!signedIn || !sharing || !pos || !shareNearby) return;
-            refreshNearbyPresenceNow({
-              signedIn,
-              shareNearby,
-              getCoords: () => ({ lat: pos.lat, lng: pos.lng }),
-              getLabel: () => `${(boatInput || "Boat").trim()} · ${(fullName || "").trim()}`.trim().slice(0, 40),
-              onPeers: (peers) => setNearbyPeers(peers),
-              onUnauthorized: () => setNearbyPeers([]),
-            });
-          }}
-          className="w-full rounded-lg border border-blue-300 bg-white px-3 py-2 text-xs font-semibold text-blue-900 shadow-sm hover:bg-blue-50 dark:border-blue-800 dark:bg-zinc-900 dark:text-blue-100 dark:hover:bg-blue-950/50"
-        >
-          Refresh nearby boats
-        </button>
+          {sharing && pos && shareNearby ? (
+            <button
+              type="button"
+              onClick={() => {
+                if (!EMERGENCY_REENABLE_NEARBY_PRESENCE) return;
+                if (!signedIn || !sharing || !pos || !shareNearby) return;
+                refreshNearbyPresenceNow({
+                  signedIn,
+                  shareNearby,
+                  getCoords: () => ({ lat: pos.lat, lng: pos.lng }),
+                  getLabel: () => `${(boatInput || "Boat").trim()} · ${(fullName || "").trim()}`.trim().slice(0, 40),
+                  onPeers: (peers) => setNearbyPeers(peers),
+                  onUnauthorized: () => setNearbyPeers([]),
+                });
+              }}
+              className="w-full rounded-lg border border-blue-300 bg-white px-3 py-2 text-xs font-semibold text-blue-900 shadow-sm hover:bg-blue-50 dark:border-blue-800 dark:bg-zinc-900 dark:text-blue-100 dark:hover:bg-blue-950/50"
+            >
+              Refresh nearby boats
+            </button>
+          ) : null}
+        </>
       ) : null}
 
       <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-[11px] leading-snug text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
