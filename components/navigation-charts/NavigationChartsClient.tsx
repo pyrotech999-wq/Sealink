@@ -13,6 +13,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { KapMetadata } from "@/lib/navigation-charts/kap-types";
+import { PilotChartsDownloads } from "@/components/navigation-charts/PilotChartsDownloads";
 import { extractKapRaster, type KapRasterResult } from "@/lib/navigation-charts/extract-kap-raster";
 import { parseKapFile } from "@/lib/navigation-charts/parse-kap";
 
@@ -334,6 +335,8 @@ export function NavigationChartsClient() {
           avoid us hosting copyrighted rasters without permission.
         </p>
       </section>
+
+      <PilotChartsDownloads />
 
       {statusBanner}
 
