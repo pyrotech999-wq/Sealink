@@ -2,7 +2,8 @@ import type { KapMetadata } from "@/lib/navigation-charts/kap-types";
 import { getKapBinaryPayloadByteOffset } from "@/lib/navigation-charts/parse-kap";
 
 const MAX_DIM = 32000;
-const MAX_PIXELS = 25_000_000;
+/** Large pilot / planning KAPs (e.g. OpenCPN) can exceed 25M px; cap still guards against accidental OOM in the browser. */
+const MAX_PIXELS = 60_000_000;
 
 export type KapRasterResult = {
   dataUrl: string;
@@ -114,7 +115,10 @@ export function extractKapRaster(buf: ArrayBuffer, metadata: KapMetadata): KapRa
     throw new Error(`Raster dimensions ${w}×${h} exceed safe limit (${MAX_DIM}).`);
   }
   if (w * h > MAX_PIXELS) {
-    throw new Error(`Raster pixel count (${w * h}) exceeds safe limit (${MAX_PIXELS}).`);
+    throw new Error(
+      `Raster pixel count (${w * h}) exceeds SeaLink’s browser decode limit (${MAX_PIXELS.toLocaleString()} px). ` +
+        `Try a smaller-scale chart cell, or open this file in OpenCPN / a desktop chart app.`,
+    );
   }
 
   const u8 = new Uint8Array(buf);
