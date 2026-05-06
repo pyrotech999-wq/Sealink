@@ -182,7 +182,8 @@ export function WeatherForecast7Day({ lat, lng }: Props) {
             Next {HOME_DAILY_FORECAST_DAYS}-day wind forecast
           </h3>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Daily maximum wind at 10 m with dominant direction (map timeline uses 3-hour steps). Each card’s arrow points{" "}
+            Daily maximum wind and gust at 10 m (knots primary; mph in smaller type) with dominant direction (map timeline
+            uses 3-hour steps). Each card’s arrow points{" "}
             <span className="font-medium text-zinc-600 dark:text-zinc-300">downwind</span>. Sea state is a guide only. Data:{" "}
             <a
               href="https://open-meteo.com/"
@@ -211,7 +212,7 @@ export function WeatherForecast7Day({ lat, lng }: Props) {
           ? Array.from({ length: HOME_DAILY_FORECAST_DAYS }, (_, i) => (
               <div
                 key={i}
-                className="h-36 animate-pulse rounded-xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900"
+                className="h-44 animate-pulse rounded-xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900"
               />
             ))
           : !rows?.length
@@ -223,7 +224,11 @@ export function WeatherForecast7Day({ lat, lng }: Props) {
             : rows.map((day) => {
               const mph = day.maxMph;
               const kn = mphToKnots(mph);
-              const tier = seaStateForMaxWindMph(mph);
+              const gustMph = day.gustMaxMph;
+              const gustKn = gustMph != null ? mphToKnots(gustMph) : null;
+              // Colour band reflects the highest wind parameter available (gusts can be the real risk driver).
+              const tierBasisMph = Math.max(mph, gustMph ?? 0);
+              const tier = seaStateForMaxWindMph(tierBasisMph);
               const { dow, dayMonth } = formatDayLabel(day.date);
               const dirDeg = day.windDirDominantDeg;
               const dirNorm = dirDeg != null ? Math.round(((dirDeg % 360) + 360) % 360) : null;
@@ -247,8 +252,15 @@ export function WeatherForecast7Day({ lat, lng }: Props) {
                     </span>
                   </div>
                   <WindDirectionDisc fromDeg={dirDeg} title={arrowTitle} />
-                  <p className="mt-2 text-xl font-bold tabular-nums">{Math.round(mph)} mph</p>
-                  <p className="text-sm font-semibold tabular-nums opacity-90">{Math.round(kn)} kn</p>
+                  <p className="mt-2 text-xl font-bold tabular-nums">{Math.round(kn)} kn</p>
+                  <p className="text-xs font-medium tabular-nums opacity-85">{Math.round(mph)} mph</p>
+                  {gustKn != null ? (
+                    <div className="mt-1.5 border-t border-current/15 pt-1.5">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide opacity-80">Max gust</p>
+                      <p className="text-base font-bold tabular-nums">{Math.round(gustKn)} kn</p>
+                      <p className="text-[11px] font-medium tabular-nums opacity-85">{Math.round(gustMph!)} mph</p>
+                    </div>
+                  ) : null}
                   <p className="mt-1.5 text-[11px] font-medium leading-snug opacity-95">
                     {dirLabel != null && dirNorm != null ? (
                       <>

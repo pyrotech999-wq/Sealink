@@ -253,6 +253,7 @@ export default function HomeLocationMap({
   const localDeviceName = useMemo(() => (typeof window !== "undefined" ? getDeviceName() : ""), []);
   const [monitorDeviceLabel, setMonitorDeviceLabel] = useState<string>("");
   const [anchorMonitor, setAnchorMonitor] = useState<{ monitorDeviceId: string | null; alertDeviceIds: string[] } | null>(null);
+  const anchorCfgLoadedFromServerRef = useRef(false);
   const [shareNearby, setShareNearby] = useState(() =>
     typeof window !== "undefined" ? getShareNearbyPeers() : false,
   );
@@ -463,6 +464,32 @@ export default function HomeLocationMap({
     anchorCfgRef.current = anchorCfg;
   }, [anchorCfg]);
 
+  // Load server-backed geofence config so both devices can reset/sync.
+  useEffect(() => {
+    if (EMERGENCY_DISABLE_LIVE_MAP_APIS) return;
+    if (!sharing) return;
+    let disposed = false;
+    void (async () => {
+      try {
+        const r = await fetch("/api/anchor/geofence", { cache: "no-store" });
+        if (!r.ok) return;
+        const d = (await r.json()) as { config?: typeof anchorCfg };
+        const cfg = d.config;
+        if (disposed) return;
+        if (cfg && typeof cfg === "object") {
+          anchorCfgLoadedFromServerRef.current = true;
+          setAnchorCfg(cfg);
+          setAnchorAlertConfig(cfg);
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      disposed = true;
+    };
+  }, [sharing]);
+
   useEffect(() => {
     anchorGpsStabilizerRef.current = createAnchorGpsStabilizer();
     if (!anchorCfg.armed) queueMicrotask(() => setAnchorLocQuality(null));
@@ -579,10 +606,16 @@ export default function HomeLocationMap({
         : Math.max(8, Math.round(pos.accuracyM || 0));
 
     // Update last bearing so angle checks have a baseline even after reload.
-    if (anchorCfg.lastBearingDeg == null && Number.isFinite(brng)) {
+      if (anchorCfg.lastBearingDeg == null && Number.isFinite(brng)) {
       const next = { ...anchorCfg, lastBearingDeg: brng };
       queueMicrotask(() => setAnchorCfg(next));
       setAnchorAlertConfig(next);
+        void fetch("/api/anchor/geofence", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ lastBearingDeg: brng }),
+          keepalive: true,
+        }).catch(() => undefined);
       return;
     }
 
@@ -618,6 +651,12 @@ export default function HomeLocationMap({
     const next = { ...anchorCfg, lastAlertAt: new Date(now).toISOString(), lastBearingDeg: brng };
     queueMicrotask(() => setAnchorCfg(next));
     setAnchorAlertConfig(next);
+      void fetch("/api/anchor/geofence", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lastAlertAt: new Date(now).toISOString(), lastBearingDeg: brng }),
+        keepalive: true,
+      }).catch(() => undefined);
 
     const parts: string[] = [];
     if (driftTriggered) parts.push(`drifted ~${Math.round(m)}m (limit ${anchorCfg.radiusM}m)`);
@@ -1760,31 +1799,102 @@ export default function HomeLocationMap({
                   </button>
                 ) : null}
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  if (EMERGENCY_DISABLE_LIVE_MAP_APIS) {
-                    setActiveAnchorAlert(null);
-                    return;
-                  }
-                  const id = activeAnchorAlert.id;
-                  void (async () => {
-                    try {
-                      await fetch("/api/anchor/alerts", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ seenId: id }),
-                      });
-                    } catch {
-                      /* ignore */
+              <div className="flex shrink-0 flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Reset: re-anchor to latest fix from the configured monitor device, without changing the monitor selection.
+                    stopAlarm();
+                    const seenId = activeAnchorAlert.id;
+                    void (async () => {
+                      if (!EMERGENCY_DISABLE_LIVE_MAP_APIS) {
+                        try {
+                          await fetch("/api/anchor/alerts", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ seenId }),
+                          });
+                        } catch {
+                          /* ignore */
+                        }
+                      }
+
+                      if (!EMERGENCY_DISABLE_LIVE_MAP_APIS) {
+                        try {
+                          const serverMonitor = anchorMonitor?.monitorDeviceId;
+                          const effectiveMonitor = serverMonitor
+                            ? serverMonitor
+                            : anchorCfgRef.current.monitorDeviceId === "this"
+                              ? deviceId
+                              : anchorCfgRef.current.monitorDeviceId;
+                          let fix: { lat: number; lng: number } | null = null;
+                          if (effectiveMonitor === deviceId && pos) fix = { lat: pos.lat, lng: pos.lng };
+                          if (!fix) {
+                            const r = await fetch("/api/anchor/devices", { cache: "no-store" });
+                            const d = (await r.json()) as { devices?: { deviceId: string; lastLat: number | null; lastLng: number | null }[] };
+                            const row = d.devices?.find((x) => x.deviceId === effectiveMonitor);
+                            if (row && typeof row.lastLat === "number" && typeof row.lastLng === "number") {
+                              fix = { lat: row.lastLat, lng: row.lastLng };
+                            }
+                          }
+                          if (fix) {
+                            const merged = { ...anchorCfgRef.current, lat: fix.lat, lng: fix.lng, lastAlertAt: null, lastBearingDeg: null };
+                            setAnchorCfg(merged);
+                            setAnchorAlertConfig(merged);
+                            await fetch("/api/anchor/geofence", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ lat: fix.lat, lng: fix.lng, lastAlertAt: null, lastBearingDeg: null }),
+                            });
+                          } else {
+                            await fetch("/api/anchor/geofence", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ lastAlertAt: null, lastBearingDeg: null }),
+                            });
+                          }
+                        } catch {
+                          /* ignore */
+                        }
+                      } else {
+                        const merged = { ...anchorCfgRef.current, lastAlertAt: null, lastBearingDeg: null };
+                        setAnchorCfg(merged);
+                        setAnchorAlertConfig(merged);
+                      }
+                      setActiveAnchorAlert(null);
+                    })();
+                  }}
+                  className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+                >
+                  Reset anchor
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    stopAlarm();
+                    if (EMERGENCY_DISABLE_LIVE_MAP_APIS) {
+                      setActiveAnchorAlert(null);
+                      return;
                     }
-                    setActiveAnchorAlert(null);
-                  })();
-                }}
-                className="rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700"
-              >
-                Seen
-              </button>
+                    const id = activeAnchorAlert.id;
+                    void (async () => {
+                      try {
+                        await fetch("/api/anchor/alerts", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ seenId: id }),
+                        });
+                      } catch {
+                        /* ignore */
+                      }
+                      setActiveAnchorAlert(null);
+                    })();
+                  }}
+                  className="rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700"
+                >
+                  Seen
+                </button>
+              </div>
             </div>
             <p className="mt-3 text-xs leading-5 text-zinc-600 dark:text-zinc-400">
               This alert will show on every device signed into your account until you press “Seen”.
@@ -1823,6 +1933,13 @@ export default function HomeLocationMap({
           };
           setAnchorCfg(merged);
           setAnchorAlertConfig(merged);
+          if (!EMERGENCY_DISABLE_LIVE_MAP_APIS && sharing) {
+            void fetch("/api/anchor/geofence", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(merged),
+            }).catch(() => undefined);
+          }
         }}
       />
     </section>

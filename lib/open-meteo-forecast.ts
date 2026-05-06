@@ -1,6 +1,8 @@
 export type DailyForecastRow = {
   date: string;
   maxMph: number;
+  /** Daily maximum 10 m gust (mph), when API returns it. */
+  gustMaxMph: number | null;
   /** Degrees, direction wind blows *from* (met convention); daily dominant at 10 m. */
   windDirDominantDeg: number | null;
   wmo: number | null;
@@ -22,8 +24,8 @@ type OpenMeteoDaily = {
 };
 
 const DAILY_PARAM_TRIES = [
-  "wind_speed_10m_max,wind_direction_10m_dominant,weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,rain_sum,precipitation_probability_max,sunshine_duration,dew_point_2m_max,relative_humidity_2m_max,pressure_msl_max",
-  "wind_speed_10m_max,wind_direction_10m_dominant,weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,rain_sum,precipitation_probability_max,sunshine_duration",
+  "wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,rain_sum,precipitation_probability_max,sunshine_duration,dew_point_2m_max,relative_humidity_2m_max,pressure_msl_max",
+  "wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,rain_sum,precipitation_probability_max,sunshine_duration",
 ] as const;
 
 function num(v: unknown): number | null {
@@ -71,6 +73,7 @@ export async function fetchDailyForecast(
   const d = data.daily;
   const times = d.time ?? [];
   const speeds = arr(d, "wind_speed_10m_max") ?? [];
+  const gusts = arr(d, "wind_gusts_10m_max") ?? [];
   const windDirs = arr(d, "wind_direction_10m_dominant") ?? [];
   const wmo = arr(d, "weather_code") ?? [];
   const tmax = arr(d, "temperature_2m_max") ?? [];
@@ -86,9 +89,13 @@ export async function fetchDailyForecast(
   return times.map((date, i) => {
     const rawM = speeds[i];
     const maxMph = typeof rawM === "number" && !Number.isNaN(rawM) ? rawM : 0;
+    const rawG = gusts[i];
+    const gustMaxMph =
+      typeof rawG === "number" && !Number.isNaN(rawG) && rawG > 0 ? rawG : null;
     return {
       date,
       maxMph,
+      gustMaxMph,
       windDirDominantDeg: num(windDirs[i]),
       wmo: num(wmo[i]),
       tempMaxC: num(tmax[i]),
