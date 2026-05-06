@@ -16,6 +16,26 @@ export function extractKapHeaderText(buf: ArrayBuffer): string {
   return new TextDecoder("latin1").decode(u8.subarray(0, end));
 }
 
+/** Byte index of first SUB (0x1A) that terminates the text header, or -1. */
+export function findKapHeaderTerminatorIndex(buf: ArrayBuffer): number {
+  const u8 = new Uint8Array(buf);
+  const scanLen = Math.min(u8.byteLength, HEADER_SCAN_MAX);
+  for (let i = 0; i < scanLen; i++) {
+    if (u8[i] === 0x1a) return i;
+  }
+  return -1;
+}
+
+/** First byte index of packed BSB raster after SUB (+ optional NUL), per GDAL BSB. */
+export function getKapBinaryPayloadByteOffset(buf: ArrayBuffer): number {
+  const u8 = new Uint8Array(buf);
+  const sep = findKapHeaderTerminatorIndex(buf);
+  if (sep < 0) throw new Error("No KAP header terminator (0x1A SUB) found.");
+  const after = sep + 1;
+  if (after < u8.length && u8[after] === 0x00) return sep + 2;
+  return sep + 1;
+}
+
 /** Merge continuation lines (4 leading spaces) per BSB/KAP convention. */
 export function normalizeKapLines(header: string): string[] {
   const rawLines = header.split(/\r?\n/);
