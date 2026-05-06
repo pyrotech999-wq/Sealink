@@ -2,7 +2,7 @@
 
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AttributionControl, ImageOverlay, MapContainer, TileLayer, useMap } from "react-leaflet";
 
 // TODO: Tide / weather overlays — compositor layer above chart raster (GRIB or tile service).
@@ -39,11 +39,16 @@ function chartPlaceholderDataUrl(dark: boolean): string {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
-function FitBounds({ bounds, trigger }: { bounds: L.LatLngBoundsExpression; trigger: number }) {
+function FitBoundsChart({ chartBounds }: { chartBounds: [[number, number], [number, number]] | null }) {
   const map = useMap();
+  const key = chartBounds ? JSON.stringify(chartBounds) : "default";
   useEffect(() => {
-    map.fitBounds(bounds, { padding: [12, 12], maxZoom: 14, animate: false });
-  }, [map, bounds, trigger]);
+    const b = chartBounds
+      ? L.latLngBounds(chartBounds[0] as L.LatLngTuple, chartBounds[1] as L.LatLngTuple)
+      : L.latLngBounds([40, -12], [58, 8]);
+    map.fitBounds(b, { padding: [12, 12], maxZoom: 14, animate: false });
+    window.setTimeout(() => map.invalidateSize(), 0);
+  }, [map, key]);
   return null;
 }
 
@@ -76,16 +81,11 @@ export default function NavigationChartsMap({
   const dark = useHtmlDarkClass();
   const placeholderUrl = useMemo(() => chartPlaceholderDataUrl(dark), [dark]);
   const imageUrl = overlayUrl ?? placeholderUrl;
-  const [fitTick, setFitTick] = useState(0);
 
   const latLngBounds = useMemo(() => {
     if (!chartBounds) return L.latLngBounds([40, -12], [58, 8]);
     const [[s, w], [n, e]] = chartBounds;
     return L.latLngBounds([s, w], [n, e]);
-  }, [chartBounds]);
-
-  useEffect(() => {
-    setFitTick((t) => t + 1);
   }, [chartBounds]);
 
   const baseUrl = dark
@@ -95,10 +95,6 @@ export default function NavigationChartsMap({
     ? '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
     : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 
-  const onMapReady = useCallback(() => {
-    window.setTimeout(() => setFitTick((t) => t + 1), 100);
-  }, []);
-
   return (
     <div className="relative isolate h-[min(58dvh,520px)] w-full min-h-[280px] overflow-hidden rounded-2xl border border-zinc-200 ring-1 ring-zinc-200/80 dark:border-zinc-700 dark:ring-zinc-800 [&_.leaflet-control-attribution]:max-w-[min(100%,calc(100vw-2rem))] [&_.leaflet-control-attribution]:whitespace-normal [&_.leaflet-control-attribution]:text-[10px]">
       <MapContainer
@@ -107,7 +103,6 @@ export default function NavigationChartsMap({
         className="h-full w-full bg-zinc-900"
         scrollWheelZoom
         attributionControl={false}
-        whenReady={onMapReady}
       >
         <AttributionControl position="bottomright" prefix={false} />
         <TileLayer attribution={baseAttr} url={baseUrl} subdomains={dark ? "abcd" : "abc"} maxZoom={19} />
@@ -120,7 +115,7 @@ export default function NavigationChartsMap({
           />
         ) : null}
         <MapResizeFix />
-        <FitBounds bounds={latLngBounds} trigger={fitTick} />
+        <FitBoundsChart chartBounds={chartBounds} />
         {showRasterOverlay ? (
           <ImageOverlay
             key={imageUrl}
