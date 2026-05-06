@@ -41,14 +41,13 @@ function chartPlaceholderDataUrl(dark: boolean): string {
 
 function FitBoundsChart({ chartBounds }: { chartBounds: [[number, number], [number, number]] | null }) {
   const map = useMap();
-  const key = chartBounds ? JSON.stringify(chartBounds) : "default";
   useEffect(() => {
     const b = chartBounds
       ? L.latLngBounds(chartBounds[0] as L.LatLngTuple, chartBounds[1] as L.LatLngTuple)
       : L.latLngBounds([40, -12], [58, 8]);
     map.fitBounds(b, { padding: [12, 12], maxZoom: 14, animate: false });
     window.setTimeout(() => map.invalidateSize(), 0);
-  }, [map, key]);
+  }, [map, chartBounds]);
   return null;
 }
 

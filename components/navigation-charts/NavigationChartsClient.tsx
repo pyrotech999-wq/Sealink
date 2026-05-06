@@ -149,7 +149,7 @@ export function NavigationChartsClient() {
       <NavigationChartsMap
         chartBounds={metadata?.bounds ?? null}
         overlayUrl={rasterObjectUrl}
-        metadata={metadata}
+        showRasterOverlay={Boolean(metadata)}
       />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
