@@ -413,15 +413,16 @@ export function AnchorAlertModal({
               <button
                 type="button"
                 onClick={() => {
-                  if (emergencyDisableLiveMapApis) return;
                   const ids: string[] = [];
                   if (alertMode === "this" || alertMode === "both") ids.push(deviceId);
                   if ((alertMode === "other" || alertMode === "both") && alertOtherId) ids.push(alertOtherId);
-                  void fetch("/api/anchor/monitor", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ alertDeviceIds: ids }),
-                  });
+                  if (!emergencyDisableLiveMapApis) {
+                    void fetch("/api/anchor/monitor", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ alertDeviceIds: ids }),
+                    });
+                  }
                 }}
                 className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
               >
@@ -515,7 +516,6 @@ export function AnchorAlertModal({
               type="button"
               disabled={!canSet}
               onClick={() => {
-                if (emergencyDisableLiveMapApis) return;
                 const n = parseAnchorRadiusM(Number(radius));
                 const a = angleEnabled
                   ? Math.max(0, Math.min(359, Math.round(Number(angleDeg) || ANGLE_DEFAULT_ON)))
@@ -525,11 +525,13 @@ export function AnchorAlertModal({
                 const ids: string[] = [];
                 if (alertMode === "this" || alertMode === "both") ids.push(deviceId);
                 if ((alertMode === "other" || alertMode === "both") && alertOtherId) ids.push(alertOtherId);
-                void fetch("/api/anchor/monitor", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ monitorDeviceId: chosenMonitor, alertDeviceIds: ids }),
-                });
+                if (!emergencyDisableLiveMapApis) {
+                  void fetch("/api/anchor/monitor", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ monitorDeviceId: chosenMonitor, alertDeviceIds: ids }),
+                  });
+                }
                 onUpdate({
                   ...config,
                   lat: pos!.lat,

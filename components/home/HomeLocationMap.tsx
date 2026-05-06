@@ -586,7 +586,6 @@ export default function HomeLocationMap({
 
   // Anchor alert check (runs whenever position updates).
   useEffect(() => {
-    if (EMERGENCY_DISABLE_LIVE_MAP_APIS) return;
     if (!sharing || !pos) return;
     const anchorCfg = anchorCfgRef.current;
     if (!anchorCfg.armed || anchorCfg.lat == null || anchorCfg.lng == null) return;
@@ -610,12 +609,14 @@ export default function HomeLocationMap({
       const next = { ...anchorCfg, lastBearingDeg: brng };
       queueMicrotask(() => setAnchorCfg(next));
       setAnchorAlertConfig(next);
+      if (!EMERGENCY_DISABLE_LIVE_MAP_APIS) {
         void fetch("/api/anchor/geofence", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ lastBearingDeg: brng }),
           keepalive: true,
         }).catch(() => undefined);
+      }
       return;
     }
 
@@ -651,12 +652,14 @@ export default function HomeLocationMap({
     const next = { ...anchorCfg, lastAlertAt: new Date(now).toISOString(), lastBearingDeg: brng };
     queueMicrotask(() => setAnchorCfg(next));
     setAnchorAlertConfig(next);
+    if (!EMERGENCY_DISABLE_LIVE_MAP_APIS) {
       void fetch("/api/anchor/geofence", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ lastAlertAt: new Date(now).toISOString(), lastBearingDeg: brng }),
         keepalive: true,
       }).catch(() => undefined);
+    }
 
     const parts: string[] = [];
     if (driftTriggered) parts.push(`drifted ~${Math.round(m)}m (limit ${anchorCfg.radiusM}m)`);
@@ -665,25 +668,31 @@ export default function HomeLocationMap({
 
     // Prefer server inbox (syncs across devices), but fall back to local overlay if the request fails
     // (e.g. signed out / network issues) so the user can always press “Seen”.
-    void (async () => {
-      try {
-        const r = await fetch("/api/anchor/alerts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: msg, kind: "alert" }),
-          keepalive: true,
-        });
-        if (!r.ok) {
+    if (EMERGENCY_DISABLE_LIVE_MAP_APIS) {
+      if (!activeAnchorAlertRef.current) {
+        setActiveAnchorAlert({ id: `local-${now}`, message: msg, createdAt: new Date(now).toISOString() });
+      }
+    } else {
+      void (async () => {
+        try {
+          const r = await fetch("/api/anchor/alerts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message: msg, kind: "alert" }),
+            keepalive: true,
+          });
+          if (!r.ok) {
+            if (!activeAnchorAlertRef.current) {
+              setActiveAnchorAlert({ id: `local-${now}`, message: msg, createdAt: new Date(now).toISOString() });
+            }
+          }
+        } catch {
           if (!activeAnchorAlertRef.current) {
             setActiveAnchorAlert({ id: `local-${now}`, message: msg, createdAt: new Date(now).toISOString() });
           }
         }
-      } catch {
-        if (!activeAnchorAlertRef.current) {
-          setActiveAnchorAlert({ id: `local-${now}`, message: msg, createdAt: new Date(now).toISOString() });
-        }
-      }
-    })();
+      })();
+    }
 
     try {
       if ("Notification" in window && Notification.permission === "granted") {
