@@ -70,6 +70,10 @@ function decimalLngOne(deg: number, hem: string): number {
   return hem.toUpperCase() === "W" ? -v : v;
 }
 
+/** REF/n, px, py, lat°, lon° (signed decimals) — common in BSB 3 / OpenCPN examples. */
+const REF_PX_LATLON_SIGNED_RE =
+  /^REF\/(\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/;
+
 /** Try decimal degrees after pixel columns: REF/n, W, px, py, lat, NS, lon, EW */
 const REF_DECIMAL_RE =
   /^REF\/(\d+)\s*,\s*([A-Za-z]?)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*([\d.]+)\s*,\s*([NSns])\s*,\s*([\d.]+)\s*,\s*([EWew])/;
@@ -80,7 +84,22 @@ const REF_DEG_MIN_RE =
 
 function parseRefLine(line: string): KapGeoReferencePoint | null {
   const t = line.trim();
-  let m = t.match(REF_DECIMAL_RE);
+  let m = t.match(REF_PX_LATLON_SIGNED_RE);
+  if (m) {
+    const lat = parseFloat(m[4]!);
+    const lng = parseFloat(m[5]!);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      return {
+        index: Number(m[1]),
+        pixelX: Number(m[2]),
+        pixelY: Number(m[3]),
+        lat,
+        lng,
+        raw: t,
+      };
+    }
+  }
+  m = t.match(REF_DECIMAL_RE);
   if (m) {
     const lat = decimalLatOne(parseFloat(m[5]!), m[6]!);
     const lng = decimalLngOne(parseFloat(m[7]!), m[8]!);
@@ -176,6 +195,27 @@ function parseBsbFields(segment: string): Record<string, string> {
   return out;
 }
 
+/** RA= is always width,height — naive comma-splitting breaks it (RA=800,600 → RA=800 only). */
+function extractRaFromHeaderText(s: string): { w: number; h: number } | null {
+  const m = s.match(/\bRA\s*=\s*(\d+)\s*,\s*(\d+)/i);
+  if (!m) return null;
+  const w = Number(m[1]);
+  const h = Number(m[2]);
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return null;
+  return { w, h };
+}
+
+/**
+ * NA= may run to NU= without a comma (OpenCPN / pilot charts). Comma-splitting also breaks NA when
+ * the name contains commas. Prefer boundary before NU= / RA=.
+ */
+function extractNaFromHeaderText(s: string): string | null {
+  const m = s.match(/\bNA\s*=\s*(.+?)(?=\s+NU\s*=|\s*,\s*NU\s*=|\s*,\s*RA\s*=|\s+RA\s*=|$)/i);
+  if (m?.[1]) return m[1].trim();
+  const m2 = s.match(/\bNA\s*=\s*([^,]+)/i);
+  return m2?.[1]?.trim() ?? null;
+}
+
 /** Initial KAP/BSB text-header parse; packed raster is decoded separately in `extract-kap-raster.ts`. */
 export function parseKapFile(buf: ArrayBuffer): KapParseResult {
   if (buf.byteLength < 32) {
@@ -212,21 +252,28 @@ export function parseKapFile(buf: ArrayBuffer): KapParseResult {
     }
 
     if (raw.startsWith("BSB/") || raw.startsWith("NOS/")) {
-      const fields = parseBsbFields(raw.replace(/^BSB\//i, "").replace(/^NOS\//i, ""));
-      if (fields.NA) metadata.chartName = fields.NA;
-      if (fields.RA) {
-        const raM = fields.RA.match(/(\d+)\s*,\s*(\d+)/);
-        if (raM) {
-          metadata.rasterWidth = Number(raM[1]);
-          metadata.rasterHeight = Number(raM[2]);
-        }
+      const body = raw.replace(/^BSB\//i, "").replace(/^NOS\//i, "");
+      const fields = parseBsbFields(body);
+      const na = extractNaFromHeaderText(body) ?? fields.NA ?? null;
+      if (na) metadata.chartName = na;
+      const ra = extractRaFromHeaderText(body);
+      if (ra) {
+        metadata.rasterWidth = ra.w;
+        metadata.rasterHeight = ra.h;
       }
       continue;
     }
 
     if (raw.startsWith("CHT/")) {
-      const fields = parseBsbFields(raw.slice(4));
-      if (fields.NA) metadata.chartName = fields.NA;
+      const body = raw.slice(4);
+      const fields = parseBsbFields(body);
+      const na = extractNaFromHeaderText(body) ?? fields.NA ?? null;
+      if (na) metadata.chartName = na;
+      const ra = extractRaFromHeaderText(body);
+      if (ra) {
+        metadata.rasterWidth = ra.w;
+        metadata.rasterHeight = ra.h;
+      }
       continue;
     }
 
@@ -269,8 +316,29 @@ export function parseKapFile(buf: ArrayBuffer): KapParseResult {
     }
 
     if (/^PLY\//i.test(raw)) {
+      const afterIdx = raw.replace(/^PLY\/\d+/i, "").trim();
+      if (
+        afterIdx &&
+        /^[-.\d]+\s*,\s*[-.\d]+/.test(afterIdx) &&
+        Math.abs(parseFloat(afterIdx.split(/[,\s]+/)[0] ?? "999") ?? 999) <= 90
+      ) {
+        const cm = afterIdx.match(/^([-.\d]+)\s*,\s*([-.\d]+)/);
+        if (cm) {
+          const lat = parseFloat(cm[1]!);
+          const lng = parseFloat(cm[2]!);
+          if (
+            Number.isFinite(lat) &&
+            Number.isFinite(lng) &&
+            Math.abs(lat) <= 90 &&
+            Math.abs(lng) <= 180
+          ) {
+            metadata.polygonCorners.push({ lat, lng });
+          }
+        }
+        continue;
+      }
       const { corners, nextIdx } = parsePlySection(lines, li);
-      metadata.polygonCorners = corners;
+      if (corners.length) metadata.polygonCorners = corners;
       li = nextIdx - 1;
       continue;
     }
@@ -282,6 +350,14 @@ export function parseKapFile(buf: ArrayBuffer): KapParseResult {
   ];
   metadata.bounds = boundsFromPoints(forBounds);
 
+  if (metadata.rasterWidth == null || metadata.rasterHeight == null) {
+    const ra = extractRaFromHeaderText(headerText);
+    if (ra) {
+      metadata.rasterWidth = ra.w;
+      metadata.rasterHeight = ra.h;
+    }
+  }
+
   const hasStructure =
     metadata.version != null ||
     metadata.chartName != null ||
@@ -292,12 +368,6 @@ export function parseKapFile(buf: ArrayBuffer): KapParseResult {
     return { ok: false, error: "Invalid KAP file — header did not contain chart metadata." };
   }
 
-  /** Fallback framing when REF/PLY could not yield bounds (placeholder overlay only). */
-  const FALLBACK_BOUNDS: [[number, number], [number, number]] = [
-    [49.2, -5.8],
-    [50.8, -3.4],
-  ];
-  if (!metadata.bounds) metadata.bounds = FALLBACK_BOUNDS;
-
+  /** No fake bounds: if REF/PLY did not yield a box, leave null so the map does not jump to the wrong ocean. */
   return { ok: true, metadata, headerTextLength: headerText.length };
 }
