@@ -10,11 +10,12 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { KapMetadata } from "@/lib/navigation-charts/kap-types";
 import { PilotChartsDownloads } from "@/components/navigation-charts/PilotChartsDownloads";
 import { extractKapRaster, type KapRasterResult } from "@/lib/navigation-charts/extract-kap-raster";
+import { iBoatingMarineChartsAppUrl } from "@/lib/navigation-charts/iboating-charts-url";
 import { parseKapFile } from "@/lib/navigation-charts/parse-kap";
 
 const NavigationChartsMap = dynamic(() => import("./NavigationChartsMap"), {
