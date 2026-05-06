@@ -29,6 +29,18 @@ const NavigationChartsMap = dynamic(() => import("./NavigationChartsMap"), {
   ),
 });
 
+const EncNavigationMap = dynamic(() => import("./EncNavigationMap"), {
+  ssr: false,
+  loading: () => (
+    <div
+      className="flex h-[min(58dvh,520px)] min-h-[280px] w-full items-center justify-center rounded-2xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900/60"
+      aria-busy="true"
+    >
+      <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">Loading ENC map…</p>
+    </div>
+  ),
+});
+
 type LoadStatus = "idle" | "loading" | "success" | "error";
 
 type LoadPhase = "idle" | "parsing" | "extracting" | "overlay" | "rendering" | "ready";
@@ -347,6 +359,28 @@ export function NavigationChartsClient() {
         fitBoundsNonce={fitBoundsNonce}
         showDebugBounds
       />
+
+      <section className="space-y-3">
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+            ENC map viewer (NOAA)
+          </h2>
+          <p className="max-w-2xl text-xs leading-relaxed text-zinc-600 dark:text-zinc-400 sm:text-sm">
+            Electronic Navigational Chart (ENC) cells from NOAA&apos;s public{" "}
+            <a
+              href="https://nauticalcharts.noaa.gov/data/gis-data-and-services.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
+            >
+              Chart Tools
+            </a>{" "}
+            service (US waters and US territories). For passage planning curiosity only — not for primary
+            navigation; use an approved ECDIS or paper charts for safety-of-life decisions.
+          </p>
+        </div>
+        <EncNavigationMap />
+      </section>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
         <input
