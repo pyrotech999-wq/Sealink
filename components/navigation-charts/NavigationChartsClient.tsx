@@ -82,68 +82,153 @@ export function NavigationChartsClient() {
 
     if (!file.name.toLowerCase().endsWith(".kap")) {
       setStatus("error");
+      setErrorKind("parse");
       setStatusDetail("Please choose a .kap file.");
       setUploadedFile(null);
       setMetadata(null);
+      setRasterObjectUrl(null);
+      setDecodedImageSize(null);
+      setLoadPhase("idle");
+      revokeRasterUrl(rasterUrlRef.current);
+      rasterUrlRef.current = null;
       return;
     }
 
     setStatus("loading");
-    setStatusDetail("Loading chart…");
+    setErrorKind("none");
+    setLoadPhase("parsing");
+    setStatusDetail("Parsing KAP…");
     setUploadedFile(file);
     setMetadata(null);
-    if (rasterObjectUrl) {
-      URL.revokeObjectURL(rasterObjectUrl);
-      setRasterObjectUrl(null);
-    }
+    setDecodedImageSize(null);
+    revokeRasterUrl(rasterUrlRef.current);
+    rasterUrlRef.current = null;
+    setRasterObjectUrl(null);
+
+    const yieldPaint = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
 
     try {
       const buf = await file.arrayBuffer();
+      await yieldPaint();
+
       const result = parseKapFile(buf);
       if (!result.ok) {
         setStatus("error");
+        setErrorKind("parse");
+        setLoadPhase("idle");
         setStatusDetail(result.error);
         setMetadata(null);
         return;
       }
+
       setMetadata(result.metadata);
+      setLoadPhase("extracting");
+      setStatusDetail("Extracting raster…");
+      await yieldPaint();
+
+      let raster: ReturnType<typeof extractKapRaster>;
+      try {
+        raster = extractKapRaster(buf, result.metadata);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setStatus("error");
+        setErrorKind("raster");
+        setLoadPhase("idle");
+        setStatusDetail(msg);
+        revokeRasterUrl(rasterUrlRef.current);
+        rasterUrlRef.current = null;
+        setRasterObjectUrl(null);
+        return;
+      }
+
+      setDecodedImageSize({ width: raster.width, height: raster.height });
+      setLoadPhase("overlay");
+      setStatusDetail("Generating overlay…");
+      await yieldPaint();
+
+      const blob = await (await fetch(raster.dataUrl)).blob();
+      const objectUrl = URL.createObjectURL(blob);
+      revokeRasterUrl(rasterUrlRef.current);
+      rasterUrlRef.current = objectUrl;
+      setRasterObjectUrl(objectUrl);
+
+      setLoadPhase("rendering");
+      setStatusDetail("Rendering chart…");
+      await yieldPaint();
+
+      setFitBoundsNonce((n) => n + 1);
+      setLoadPhase("ready");
       setStatus("success");
       setStatusDetail("Chart loaded successfully");
-    } catch {
+    } catch (err) {
       setStatus("error");
-      setStatusDetail("Could not read the file.");
+      setErrorKind("read");
+      setLoadPhase("idle");
+      setStatusDetail(err instanceof Error ? err.message : "Could not read the file.");
       setMetadata(null);
+      setDecodedImageSize(null);
+      revokeRasterUrl(rasterUrlRef.current);
+      rasterUrlRef.current = null;
+      setRasterObjectUrl(null);
     }
-  }, [rasterObjectUrl]);
+  }, []);
 
   const onOpenOpenCpnClick = useCallback(() => {
     // TODO: OpenCPN — document export path or platform URL scheme; no in-app OpenCPN runtime.
   }, []);
 
+  const phaseOrder: LoadPhase[] = ["parsing", "extracting", "overlay", "rendering"];
+  const phaseIndex = (p: LoadPhase) => phaseOrder.indexOf(p);
+
   const statusBanner =
     status === "idle" ? null : (
-      <p
-        role="status"
-        aria-live="polite"
-        className={`rounded-xl border px-3 py-2 text-sm ${
-          status === "loading"
-            ? "border-sky-200 bg-sky-50 text-sky-950 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-100"
-            : status === "success"
-              ? "border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900/50 dark:bg-emerald-950/35 dark:text-emerald-100"
-              : "border-red-200 bg-red-50 text-red-900 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100"
-        }`}
-      >
-        {status === "error" ? (
-          <>
-            <span className="font-semibold">Invalid KAP file</span>
-            {statusDetail ? (
-              <span className="mt-1 block text-xs font-normal leading-snug opacity-90">{statusDetail}</span>
-            ) : null}
-          </>
-        ) : (
-          <span className="font-medium">{statusDetail}</span>
-        )}
-      </p>
+      <div className="space-y-2">
+        <p
+          role="status"
+          aria-live="polite"
+          className={`rounded-xl border px-3 py-2 text-sm ${
+            status === "loading"
+              ? "border-sky-200 bg-sky-50 text-sky-950 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-100"
+              : status === "success"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900/50 dark:bg-emerald-950/35 dark:text-emerald-100"
+                : "border-red-200 bg-red-50 text-red-900 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100"
+          }`}
+        >
+          {status === "error" ? (
+            <>
+              <span className="font-semibold">
+                {errorKind === "raster" ? "Raster extraction failed" : "Invalid KAP file"}
+              </span>
+              {statusDetail ? (
+                <span className="mt-1 block text-xs font-normal leading-snug opacity-90">{statusDetail}</span>
+              ) : null}
+            </>
+          ) : (
+            <span className="font-medium">{statusDetail}</span>
+          )}
+        </p>
+        {status === "loading" ? (
+          <ol className="flex flex-wrap gap-x-4 gap-y-1 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-300">
+            {phaseOrder.map((key) => {
+              const cur = phaseIndex(loadPhase);
+              const idx = phaseIndex(key);
+              const done = cur > idx || loadPhase === "ready";
+              const active = loadPhase === key;
+              return (
+                <li
+                  key={key}
+                  className={`flex items-center gap-1.5 ${active ? "font-semibold text-sky-800 dark:text-sky-200" : ""}`}
+                >
+                  <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[10px] leading-none">
+                    {done ? "✓" : active ? "…" : ""}
+                  </span>
+                  {PHASE_LABELS[key]}
+                </li>
+              );
+            })}
+          </ol>
+        ) : null}
+      </div>
     );
 
   return (
@@ -247,7 +332,9 @@ export function NavigationChartsClient() {
       <NavigationChartsMap
         chartBounds={metadata?.bounds ?? null}
         overlayUrl={rasterObjectUrl}
-        showRasterOverlay={Boolean(metadata)}
+        showRasterOverlay={Boolean(metadata && rasterObjectUrl)}
+        fitBoundsNonce={fitBoundsNonce}
+        showDebugBounds
       />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
