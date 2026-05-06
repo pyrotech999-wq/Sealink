@@ -375,11 +375,12 @@ export function NavigationChartsClient() {
             >
               Chart Tools
             </a>{" "}
-            service (US waters and US territories). For passage planning curiosity only — not for primary
+            service (US waters and US territories). When you load a KAP above, this map pans to the same geographic bounds
+            so you can compare raster and ENC in one place. For passage planning curiosity only — not for primary
             navigation; use an approved ECDIS or paper charts for safety-of-life decisions.
           </p>
         </div>
-        <EncNavigationMap />
+        <EncNavigationMap chartBounds={metadata?.bounds ?? null} fitBoundsNonce={fitBoundsNonce} />
         <p className="text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
           ENC cells © NOAA Office of Coast Survey —{" "}
           <a

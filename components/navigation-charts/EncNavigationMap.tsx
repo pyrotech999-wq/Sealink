@@ -13,6 +13,33 @@ export const NOAA_ENC_MAPSERVER =
 const DEFAULT_CENTER: L.LatLngExpression = [39.5, -75.2];
 const DEFAULT_ZOOM = 8;
 
+type Props = {
+  /** When set (e.g. from loaded KAP), ENC map matches the same geographic frame as the raster viewer. */
+  chartBounds: [[number, number], [number, number]] | null;
+  /** Bumps when KAP bounds change so this map refits. */
+  fitBoundsNonce?: number;
+};
+
+function FitBoundsEnc({
+  chartBounds,
+  fitBoundsNonce,
+}: {
+  chartBounds: [[number, number], [number, number]] | null;
+  fitBoundsNonce?: number;
+}) {
+  const map = useMap();
+  useEffect(() => {
+    if (chartBounds) {
+      const b = L.latLngBounds(chartBounds[0] as L.LatLngTuple, chartBounds[1] as L.LatLngTuple);
+      map.fitBounds(b, { padding: [12, 12], maxZoom: 14, animate: false });
+    } else {
+      map.setView(DEFAULT_CENTER, DEFAULT_ZOOM, { animate: false });
+    }
+    window.setTimeout(() => map.invalidateSize(), 0);
+  }, [map, chartBounds, fitBoundsNonce]);
+  return null;
+}
+
 function useHtmlDarkClass(): boolean {
   const [dark, setDark] = useState(false);
   useEffect(() => {
@@ -70,7 +97,7 @@ function NoaaEncLayer() {
   ) : null;
 }
 
-export default function EncNavigationMap() {
+export default function EncNavigationMap({ chartBounds, fitBoundsNonce = 0 }: Props) {
   const dark = useHtmlDarkClass();
   const baseUrl = dark
     ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
@@ -91,6 +118,7 @@ export default function EncNavigationMap() {
         <AttributionControl position="bottomright" prefix={false} />
         <TileLayer attribution={baseAttr} url={baseUrl} subdomains={dark ? "abcd" : "abc"} maxZoom={19} opacity={0.35} />
         <MapResizeFix />
+        <FitBoundsEnc chartBounds={chartBounds} fitBoundsNonce={fitBoundsNonce} />
         <NoaaEncLayer />
       </MapContainer>
     </div>
