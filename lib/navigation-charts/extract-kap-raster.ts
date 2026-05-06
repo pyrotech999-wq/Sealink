@@ -18,7 +18,7 @@ function buildPaletteRgba(metadata: KapMetadata): Uint8ClampedArray {
   for (const e of metadata.paletteEntries) {
     if (Number.isFinite(e.index)) maxIdx = Math.max(maxIdx, e.index);
   }
-  const len = Math.max(maxIdx + 1, 128);
+  const len = Math.max(maxIdx + 1, 256);
   const pal = new Uint8ClampedArray(len * 4);
   for (let i = 0; i < len; i++) {
     const o = i * 4;

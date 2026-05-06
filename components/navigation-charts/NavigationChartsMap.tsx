@@ -3,7 +3,14 @@
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useEffect, useMemo, useState } from "react";
-import { AttributionControl, ImageOverlay, MapContainer, TileLayer, useMap } from "react-leaflet";
+import {
+  AttributionControl,
+  ImageOverlay,
+  MapContainer,
+  Rectangle,
+  TileLayer,
+  useMap,
+} from "react-leaflet";
 
 // TODO: Tide / weather overlays — compositor layer above chart raster (GRIB or tile service).
 // TODO: GPS vessel overlay — Leaflet marker synced to watchPosition with COG/SOG styling.
@@ -17,6 +24,10 @@ type Props = {
   overlayOpacity?: number;
   /** When true, draw georeferenced image overlay (placeholder until raster decode exists). */
   showRasterOverlay: boolean;
+  /** Bumps when chart bounds change so the map refits (e.g. new KAP load). */
+  fitBoundsNonce?: number;
+  /** Temporary debug: red stroke around chartBounds. */
+  showDebugBounds?: boolean;
 };
 
 function useHtmlDarkClass(): boolean {
@@ -39,7 +50,13 @@ function chartPlaceholderDataUrl(dark: boolean): string {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
-function FitBoundsChart({ chartBounds }: { chartBounds: [[number, number], [number, number]] | null }) {
+function FitBoundsChart({
+  chartBounds,
+  fitBoundsNonce,
+}: {
+  chartBounds: [[number, number], [number, number]] | null;
+  fitBoundsNonce?: number;
+}) {
   const map = useMap();
   useEffect(() => {
     const b = chartBounds
@@ -47,7 +64,7 @@ function FitBoundsChart({ chartBounds }: { chartBounds: [[number, number], [numb
       : L.latLngBounds([40, -12], [58, 8]);
     map.fitBounds(b, { padding: [12, 12], maxZoom: 14, animate: false });
     window.setTimeout(() => map.invalidateSize(), 0);
-  }, [map, chartBounds]);
+  }, [map, chartBounds, fitBoundsNonce]);
   return null;
 }
 
@@ -71,15 +88,23 @@ function MapResizeFix() {
 const DEFAULT_CENTER: L.LatLngExpression = [49.5, -4.5];
 const DEFAULT_ZOOM = 6;
 
+function effectiveOverlayOpacity(overlayOpacity: number | undefined): number {
+  if (overlayOpacity == null || overlayOpacity === 0 || Number.isNaN(overlayOpacity)) return 0.85;
+  return overlayOpacity;
+}
+
 export default function NavigationChartsMap({
   chartBounds,
   overlayUrl,
-  overlayOpacity = 0.55,
+  overlayOpacity,
   showRasterOverlay,
+  fitBoundsNonce = 0,
+  showDebugBounds = true,
 }: Props) {
   const dark = useHtmlDarkClass();
   const placeholderUrl = useMemo(() => chartPlaceholderDataUrl(dark), [dark]);
   const imageUrl = overlayUrl ?? placeholderUrl;
+  const opacity = effectiveOverlayOpacity(overlayOpacity);
 
   const latLngBounds = useMemo(() => {
     if (!chartBounds) return L.latLngBounds([40, -12], [58, 8]);
@@ -114,13 +139,24 @@ export default function NavigationChartsMap({
           />
         ) : null}
         <MapResizeFix />
-        <FitBoundsChart chartBounds={chartBounds} />
+        <FitBoundsChart chartBounds={chartBounds} fitBoundsNonce={fitBoundsNonce} />
+        {showRasterOverlay && chartBounds && showDebugBounds ? (
+          <Rectangle
+            bounds={latLngBounds}
+            pathOptions={{
+              color: "#ef4444",
+              weight: 2,
+              fillOpacity: 0,
+              dashArray: "6 6",
+            }}
+          />
+        ) : null}
         {showRasterOverlay ? (
           <ImageOverlay
             key={imageUrl}
             url={imageUrl}
             bounds={latLngBounds}
-            opacity={overlayOpacity}
+            opacity={opacity}
             interactive={false}
           />
         ) : null}
