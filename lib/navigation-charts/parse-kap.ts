@@ -210,8 +210,10 @@ function extractRaFromHeaderText(s: string): { w: number; h: number } | null {
  * the name contains commas. Prefer boundary before NU= / RA=.
  */
 function extractNaFromHeaderText(s: string): string | null {
-  const m = s.match(/\bNA\s*=\s*(.+?)(?=\s+NU\s*=|\s*,\s*NU\s*=|\s*,\s*RA\s*=|\s+RA\s*=|$)/i);
-  if (m?.[1]) return m[1].trim();
+  const m = s.match(
+    /\bNA\s*=\s*(.+?)(?=\s+NU\s*=|\s*NU\s*=|\s*,\s*NU\s*=|\s*,\s*RA\s*=|\s+RA\s*=|$)/i,
+  );
+  if (m?.[1]) return m[1].trim().replace(/\s+NU\s*=\s*$/i, "").trim();
   const m2 = s.match(/\bNA\s*=\s*([^,]+)/i);
   return m2?.[1]?.trim() ?? null;
 }
@@ -317,11 +319,7 @@ export function parseKapFile(buf: ArrayBuffer): KapParseResult {
 
     if (/^PLY\//i.test(raw)) {
       const afterIdx = raw.replace(/^PLY\/\d+/i, "").trim();
-      if (
-        afterIdx &&
-        /^[-.\d]+\s*,\s*[-.\d]+/.test(afterIdx) &&
-        Math.abs(parseFloat(afterIdx.split(/[,\s]+/)[0] ?? "999") ?? 999) <= 90
-      ) {
+      if (afterIdx) {
         const cm = afterIdx.match(/^([-.\d]+)\s*,\s*([-.\d]+)/);
         if (cm) {
           const lat = parseFloat(cm[1]!);
@@ -333,9 +331,9 @@ export function parseKapFile(buf: ArrayBuffer): KapParseResult {
             Math.abs(lng) <= 180
           ) {
             metadata.polygonCorners.push({ lat, lng });
+            continue;
           }
         }
-        continue;
       }
       const { corners, nextIdx } = parsePlySection(lines, li);
       if (corners.length) metadata.polygonCorners = corners;

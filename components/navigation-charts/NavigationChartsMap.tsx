@@ -61,7 +61,7 @@ function FitBoundsChart({
   useEffect(() => {
     const b = chartBounds
       ? L.latLngBounds(chartBounds[0] as L.LatLngTuple, chartBounds[1] as L.LatLngTuple)
-      : L.latLngBounds([40, -12], [58, 8]);
+      : L.latLngBounds([26, -18], [48, 40]);
     map.fitBounds(b, { padding: [12, 12], maxZoom: 14, animate: false });
     window.setTimeout(() => map.invalidateSize(), 0);
   }, [map, chartBounds, fitBoundsNonce]);
@@ -85,8 +85,9 @@ function MapResizeFix() {
   return null;
 }
 
-const DEFAULT_CENTER: L.LatLngExpression = [49.5, -4.5];
-const DEFAULT_ZOOM = 6;
+/** When no chart bounds yet: central Mediterranean / southern Europe (not a fake “chart” box). */
+const DEFAULT_CENTER: L.LatLngExpression = [37.5, 14];
+const DEFAULT_ZOOM = 5;
 
 function effectiveOverlayOpacity(overlayOpacity: number | undefined): number {
   if (overlayOpacity == null || overlayOpacity === 0 || Number.isNaN(overlayOpacity)) return 0.85;
@@ -107,7 +108,7 @@ export default function NavigationChartsMap({
   const opacity = effectiveOverlayOpacity(overlayOpacity);
 
   const latLngBounds = useMemo(() => {
-    if (!chartBounds) return L.latLngBounds([40, -12], [58, 8]);
+    if (!chartBounds) return L.latLngBounds([26, -18], [48, 40]);
     const [[s, w], [n, e]] = chartBounds;
     return L.latLngBounds([s, w], [n, e]);
   }, [chartBounds]);
