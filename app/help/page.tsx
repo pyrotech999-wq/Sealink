@@ -4,7 +4,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Help | SeaLink",
   description:
-    "How to use SeaLink: home map, Anchor alarm, sharing, Weather & sea (OPC charts, UKMO MSLP, interactive GFS wind/waves), IFM, Buy & Sell, marinas, anchor watch, broadcasts, and more.",
+    "How to use SeaLink: home map, Anchor alarm, sharing, Weather & sea (OPC charts, UKMO MSLP, interactive GFS wind/waves), navigation charts (KAP upload), IFM, Buy & Sell, marinas, anchor watch, broadcasts, and more.",
 };
 
 const DEV_EMAIL = "pyrotech999@hotmail.co.uk";
@@ -135,7 +135,7 @@ export default function HelpPage() {
                   Sign in
                 </Link>{" "}
                 if you already have one. Use the <strong className="text-zinc-200">top navigation bar</strong> (Home, Anchor,
-                IFM, Messages when signed in, Weather &amp; sea, Buy &amp; Sell) on every screen size — it stays visible while
+                IFM, Messages when signed in, Weather &amp; sea, Navigation charts, Buy &amp; Sell) on every screen size — it stays visible while
                 you scroll.
               </p>
               <ul className="list-disc space-y-1 pl-5 text-zinc-400">
@@ -154,6 +154,13 @@ export default function HelpPage() {
                   OPC) plus an interactive GFS wind and wave viewer; see the detailed section below.
                 </li>
                 <li>
+                  <strong className="text-zinc-300">Navigation charts</strong> —{" "}
+                  <Link href="/navigation-charts" className="font-medium text-emerald-400 hover:underline">
+                    upload your own .kap
+                  </Link>{" "}
+                  (BSB/KAP) for a map preview; you supply charts you are licensed to use.
+                </li>
+                <li>
                   <strong className="text-zinc-300">IFM</strong> — International Friends Map for seeing other users.
                 </li>
                 <li>
@@ -170,7 +177,7 @@ export default function HelpPage() {
             <Section id="navigation" title="Finding your way around">
               <p>
                 <strong className="text-zinc-200">Top navigation</strong> (all sizes): quick jumps to Home, Anchor, IFM,
-                Messages (when you are signed in), Weather &amp; sea, and Buy &amp; Sell (then choose boats or gear). The
+                Messages (when you are signed in), Weather &amp; sea, Navigation charts, and Buy &amp; Sell (then choose boats or gear). The
                 active page is highlighted in green.
               </p>
               <p>

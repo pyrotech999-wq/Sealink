@@ -5,7 +5,8 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Navigation Charts",
-  description: "Marine navigation charts workspace — KAP/BSB and OpenCPN integration coming soon.",
+  description:
+    "Upload and preview your own KAP/BSB raster charts — parse header, decode raster, and view on a map with georeference bounds.",
 };
 
 export default function NavigationChartsPage() {
