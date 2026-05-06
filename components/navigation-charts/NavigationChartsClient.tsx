@@ -360,41 +360,6 @@ export function NavigationChartsClient() {
         showDebugBounds
       />
 
-      <section className="space-y-3">
-        <div className="space-y-1">
-          <h2 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-            ENC map viewer (NOAA)
-          </h2>
-          <p className="max-w-2xl text-xs leading-relaxed text-zinc-600 dark:text-zinc-400 sm:text-sm">
-            Electronic Navigational Chart (ENC) cells from NOAA&apos;s public{" "}
-            <a
-              href="https://nauticalcharts.noaa.gov/data/gis-data-and-services.html"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
-            >
-              Chart Tools
-            </a>{" "}
-            service (US waters and US territories). When you load a KAP above, this map pans to the same geographic bounds
-            so you can compare raster and ENC in one place. For passage planning curiosity only — not for primary
-            navigation; use an approved ECDIS or paper charts for safety-of-life decisions.
-          </p>
-        </div>
-        <EncNavigationMap chartBounds={metadata?.bounds ?? null} fitBoundsNonce={fitBoundsNonce} />
-        <p className="text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
-          ENC cells © NOAA Office of Coast Survey —{" "}
-          <a
-            href="https://www.noaa.gov/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
-          >
-            NOAA
-          </a>
-          .
-        </p>
-      </section>
-
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
         <input
           ref={fileInputRef}
@@ -420,6 +385,41 @@ export function NavigationChartsClient() {
           Open in OpenCPN
         </button>
       </div>
+
+      <section className="space-y-3">
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+            ENC map viewer (NOAA)
+          </h2>
+          <p className="max-w-2xl text-xs leading-relaxed text-zinc-600 dark:text-zinc-400 sm:text-sm">
+            Electronic Navigational Chart (ENC) cells from NOAA&apos;s public{" "}
+            <a
+              href="https://nauticalcharts.noaa.gov/data/gis-data-and-services.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
+            >
+              Chart Tools
+            </a>{" "}
+            service (US waters and US territories). When you load a KAP in the top viewer, this map pans to the same geographic bounds
+            so you can compare raster and ENC in one place. For passage planning curiosity only — not for primary
+            navigation; use an approved ECDIS or paper charts for safety-of-life decisions.
+          </p>
+        </div>
+        <EncNavigationMap chartBounds={metadata?.bounds ?? null} fitBoundsNonce={fitBoundsNonce} />
+        <p className="text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
+          ENC cells © NOAA Office of Coast Survey —{" "}
+          <a
+            href="https://www.noaa.gov/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
+          >
+            NOAA
+          </a>
+          .
+        </p>
+      </section>
 
       {metadata ? (
         <section
