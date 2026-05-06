@@ -30,6 +30,9 @@ function isExemptFromSessionGate(pathname: string): boolean {
   if (pathname === "/api/stripe/webhook") return true;
   if (pathname === "/api/demo/me") return true;
   if (pathname === "/api/demo/sign-in" || pathname === "/api/demo/sign-out") return true;
+  // Public chart proxies (used by <img> tags on /weather).
+  if (pathname === "/api/weather/opc-chart") return true;
+  if (pathname === "/api/weather/metoffice-surface-pressure") return true;
 
   if (pathname.startsWith("/_next")) return true;
   if (pathname === "/favicon.ico") return true;
