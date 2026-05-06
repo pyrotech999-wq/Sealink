@@ -76,6 +76,11 @@ export function NavigationChartsClient() {
   const [loadPhase, setLoadPhase] = useState<LoadPhase>("idle");
   const [fitBoundsNonce, setFitBoundsNonce] = useState(0);
 
+  const iBoatingHref = useMemo(
+    () => iBoatingMarineChartsAppUrl(metadata?.bounds ?? null),
+    [metadata?.bounds],
+  );
+
   useEffect(() => {
     return () => {
       revokeRasterUrl(rasterUrlRef.current);
@@ -420,6 +425,40 @@ export function NavigationChartsClient() {
           </a>
           .
         </p>
+
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50/90 px-3 py-3 dark:border-zinc-700 dark:bg-zinc-950/50">
+          <p className="text-xs font-medium text-zinc-800 dark:text-zinc-200">Other web chart viewers</p>
+          <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-600 dark:text-zinc-400">
+            SeaLink cannot embed or restream commercial chart apps. You can open{" "}
+            <a
+              href="https://gpsnauticalcharts.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
+            >
+              GPS Nautical Charts / i-Boating
+            </a>{" "}
+            in a new tab — same family of viewer as{" "}
+            <a
+              href="https://fishing-app.gpsnauticalcharts.com/i-boating-fishing-web-app/fishing-marine-charts-navigation.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-mono text-[10px] text-zinc-500 dark:text-zinc-500"
+            >
+              fishing-app.gpsnauticalcharts.com
+            </a>
+            . Their catalogue, pricing, and terms apply; not affiliated with SeaLink.
+          </p>
+          <a
+            href={iBoatingHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 inline-flex h-10 w-full items-center justify-center rounded-lg border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800 sm:w-auto"
+          >
+            Open i-Boating charts (new tab)
+            {metadata?.bounds ? " · centred on your KAP bounds" : ""}
+          </a>
+        </div>
       </section>
 
       {metadata ? (
