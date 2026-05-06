@@ -19,6 +19,7 @@ export function HomeLocationMapLoader({
   sharingUiMode = "home",
   anchorPlacement = "full",
   showHomeMapExtras = true,
+  showNearbyFriends = true,
 }: {
   signedIn?: boolean;
   sharingUiMode?: "home" | "settings";
@@ -26,6 +27,8 @@ export function HomeLocationMapLoader({
   anchorPlacement?: "full" | "compact";
   /** When false: omit weather strip, messages CTA, and Life on Seas modal (e.g. dedicated anchor page). */
   showHomeMapExtras?: boolean;
+  /** When false: hide friends UI and nearby peer pins (e.g. anchor-only page). */
+  showNearbyFriends?: boolean;
 }) {
   return (
     <HomeLocationMap
@@ -33,6 +36,7 @@ export function HomeLocationMapLoader({
       sharingUiMode={sharingUiMode}
       anchorPlacement={anchorPlacement}
       showHomeMapExtras={showHomeMapExtras}
+      showNearbyFriends={showNearbyFriends}
     />
   );
 }

@@ -198,6 +198,7 @@ export default function HomeLocationMap({
   sharingUiMode = "home",
   anchorPlacement = "full",
   showHomeMapExtras = true,
+  showNearbyFriends = true,
 }: {
   signedIn?: boolean;
   /** `home`: map + link to settings. `settings`: options + share toggle only (no map). */
@@ -205,6 +206,8 @@ export default function HomeLocationMap({
   /** `full`: anchor controls + modal here. `compact`: pill only — open /anchor-alarm to arm or change settings. */
   anchorPlacement?: "full" | "compact";
   showHomeMapExtras?: boolean;
+  /** When false: hide friends toggle, nearby ring, and peer pins (e.g. dedicated anchor page). */
+  showNearbyFriends?: boolean;
 }) {
   const isSettings = sharingUiMode === "settings";
   const anchorCompact = anchorPlacement === "compact" && !isSettings;
@@ -264,6 +267,7 @@ export default function HomeLocationMap({
     typeof window !== "undefined" ? getShareNearbyPeers() : false,
   );
   const [nearbyPeers, setNearbyPeers] = useState<NearbyPeer[]>([]);
+  const friendsActive = showNearbyFriends && shareNearby;
   const posRef = useRef<LatLngAcc | null>(null);
   useEffect(() => {
     posRef.current = pos;
@@ -335,7 +339,7 @@ export default function HomeLocationMap({
   }, []);
 
   const presenceEnabled = Boolean(
-    EMERGENCY_REENABLE_NEARBY_PRESENCE && signedIn && sharing && pos && shareNearby,
+    EMERGENCY_REENABLE_NEARBY_PRESENCE && signedIn && sharing && pos && friendsActive,
   );
 
   const [presenceDebugUi, setPresenceDebugUi] = useState(false);
@@ -354,11 +358,13 @@ export default function HomeLocationMap({
       sharing: Boolean(sharing),
       gps: Boolean(pos),
       shareNearby: Boolean(shareNearby),
+      showNearbyFriends,
+      friendsActive: Boolean(friendsActive),
       presenceEnabled,
       flag: EMERGENCY_REENABLE_NEARBY_PRESENCE,
       hidden: typeof document !== "undefined" ? document.visibilityState !== "visible" : false,
     });
-  }, [signedIn, sharing, Boolean(pos), shareNearby, presenceEnabled]);
+  }, [signedIn, sharing, Boolean(pos), shareNearby, showNearbyFriends, friendsActive, presenceEnabled]);
 
   // Report this device's last fix (for cross-device monitoring).
   useEffect(() => {
@@ -439,6 +445,7 @@ export default function HomeLocationMap({
 
   const requestNearbyManualRefresh = useCallback(() => {
     if (!EMERGENCY_REENABLE_NEARBY_PRESENCE) return;
+    if (!showNearbyFriends) return;
     if (!signedIn || !sharing || !shareNearby) return;
     if (!refreshCoords) return;
     if (nearbyRefreshBlocked) return;
@@ -459,6 +466,7 @@ export default function HomeLocationMap({
     refreshCoords?.lat,
     refreshCoords?.lng,
     shareNearby,
+    showNearbyFriends,
     boatInput,
     fullName,
     nearbyRefreshBlocked,
@@ -1500,7 +1508,7 @@ export default function HomeLocationMap({
               ← Back to map
             </Link>
           ) : null}
-          {!isSettings && sharing ? (
+          {!isSettings && sharing && showNearbyFriends ? (
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
@@ -1555,11 +1563,13 @@ export default function HomeLocationMap({
             {anchorCompact && !anchorCfg.armed ? (
               <Link
                 href="/anchor-alarm"
-                className="relative z-50 inline-flex h-6 items-center gap-1 rounded-full border border-red-300 bg-red-50 px-2 text-[11px] font-semibold text-red-900 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100 dark:hover:bg-red-950/60"
+                className="relative z-50 inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-full border border-red-300 bg-red-50 px-3 py-1 text-xs font-semibold text-red-900 hover:bg-red-100 sm:min-h-9 sm:px-3.5 sm:text-sm dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100 dark:hover:bg-red-950/60"
                 title="Open Anchor alarm page to arm or change settings"
               >
-                OFF
-                <span className="max-w-[160px] truncate font-normal opacity-80">· Tap to set up</span>
+                <span className="shrink-0">Anchor</span>
+                <span className="text-red-800/90 dark:text-red-100/90">·</span>
+                <span className="shrink-0">Off</span>
+                <span className="min-w-0 truncate font-medium opacity-85">· Tap to set up</span>
               </Link>
             ) : (
               <button
@@ -1573,17 +1583,19 @@ export default function HomeLocationMap({
                     setAnchorOpen(true);
                   }
                 }}
-                className={`relative z-50 inline-flex h-6 items-center gap-1 rounded-full border px-2 text-[11px] font-semibold ${
+                className={`relative z-50 inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold sm:min-h-9 sm:px-3.5 sm:text-sm ${
                   anchorCfg.armed
                     ? "border-green-300 bg-green-50 text-green-900 hover:bg-green-100 dark:border-green-900/50 dark:bg-green-950/40 dark:text-green-100 dark:hover:bg-green-950/60"
                     : "border-red-300 bg-red-50 text-red-900 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100 dark:hover:bg-red-950/60"
                 }`}
-                title={anchorCfg.armed ? "Turn anchor alert off" : "Open anchor alert settings"}
+                title={anchorCfg.armed ? "Turn anchor alarm off" : "Open anchor alert settings"}
               >
-                {anchorCfg.armed ? "ON" : "OFF"}
+                <span className="shrink-0">Anchor</span>
+                <span className="opacity-80">·</span>
+                <span className="shrink-0">{anchorCfg.armed ? "On" : "Off"}</span>
                 {anchorCfg.armed ? (
-                  <span className="max-w-[200px] truncate font-normal opacity-80">
-                    · {monitorDeviceLabel ? `Monitoring ${monitorDeviceLabel}` : "Monitoring…"}
+                  <span className="min-w-0 truncate text-left font-medium opacity-90">
+                    · Monitoring {monitorDeviceLabel || "…"}
                   </span>
                 ) : null}
               </button>
@@ -1674,7 +1686,7 @@ export default function HomeLocationMap({
                         weight: 1,
                       }}
                     />
-                    {shareNearby ? (
+                    {friendsActive ? (
                       <Circle
                         center={[mapPinPos.lat, mapPinPos.lng]}
                         radius={NEARBY_RING_METRES}
@@ -1687,18 +1699,20 @@ export default function HomeLocationMap({
                         }}
                       />
                     ) : null}
-                    {nearbyPeers.map((p) => (
-                      <Marker
-                        key={`nearby-${p.id}`}
-                        position={[p.lat, p.lng]}
-                        icon={buildNearbyPinIcon(p.avatarDataUrl || "")}
-                        zIndexOffset={620}
-                      >
-                        <Popup maxWidth={200}>
-                          <NearbyPeerPopupBody label={p.label} />
-                        </Popup>
-                      </Marker>
-                    ))}
+                    {friendsActive
+                      ? nearbyPeers.map((p) => (
+                          <Marker
+                            key={`nearby-${p.id}`}
+                            position={[p.lat, p.lng]}
+                            icon={buildNearbyPinIcon(p.avatarDataUrl || "")}
+                            zIndexOffset={620}
+                          >
+                            <Popup maxWidth={200}>
+                              <NearbyPeerPopupBody label={p.label} />
+                            </Popup>
+                          </Marker>
+                        ))
+                      : null}
                     <Marker
                       key={`${boatInput}:${pinAvatarPeek ? "peek" : "circle"}:${avatarUrl ? avatarUrl.slice(0, 24) : "no-avatar"}`}
                       position={[mapPinPos.lat, mapPinPos.lng]}

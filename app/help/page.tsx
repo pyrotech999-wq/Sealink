@@ -4,7 +4,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Help | SeaLink",
   description:
-    "How to use SeaLink: home map, sharing, weather, IFM, Buy & Sell (boats & gear), marinas, anchor watch, broadcasts, and more.",
+    "How to use SeaLink: home map, Anchor alarm page, sharing, weather, IFM, Buy & Sell (boats & gear), marinas, anchor watch, broadcasts, and more.",
 };
 
 const DEV_EMAIL = "pyrotech999@hotmail.co.uk";
@@ -134,12 +134,20 @@ export default function HelpPage() {
                 <Link href="/sign-in" className="font-medium text-emerald-400 hover:underline">
                   Sign in
                 </Link>{" "}
-                if you already have one. Use the <strong className="text-zinc-200">top navigation bar</strong> (Home, IFM,
-                Messages, Weather &amp; sea, Buy &amp; Sell) on every screen size — it stays visible while you scroll.
+                if you already have one. Use the <strong className="text-zinc-200">top navigation bar</strong> (Home, Anchor,
+                IFM, Messages when signed in, Weather &amp; sea, Buy &amp; Sell) on every screen size — it stays visible while
+                you scroll.
               </p>
               <ul className="list-disc space-y-1 pl-5 text-zinc-400">
                 <li>
                   <strong className="text-zinc-300">Home</strong> — your main map, sea summary, shortcuts, and sharing.
+                </li>
+                <li>
+                  <strong className="text-zinc-300">Anchor</strong> —{" "}
+                  <Link href="/anchor-alarm" className="font-medium text-emerald-400 hover:underline">
+                    Anchor alarm
+                  </Link>{" "}
+                  page: full geofence controls and map (focused on anchor watch; no nearby-friends layer there).
                 </li>
                 <li>
                   <strong className="text-zinc-300">Weather &amp; sea</strong> — global forecast map (wind, waves, rain,
@@ -161,9 +169,9 @@ export default function HelpPage() {
 
             <Section id="navigation" title="Finding your way around">
               <p>
-                <strong className="text-zinc-200">Top navigation</strong> (desktop / tablet): quick jumps to Home, IFM,
-                Messages, Weather &amp; sea, and Buy &amp; Sell (then choose boats or gear). The active page is highlighted in
-                green.
+                <strong className="text-zinc-200">Top navigation</strong> (all sizes): quick jumps to Home, Anchor, IFM,
+                Messages (when you are signed in), Weather &amp; sea, and Buy &amp; Sell (then choose boats or gear). The
+                active page is highlighted in green.
               </p>
               <p>
                 <strong className="text-zinc-200">Home header</strong> (black bar on Home): Plans, Admin (if you are an
@@ -182,7 +190,7 @@ export default function HelpPage() {
                 ): extra shortcuts such as profile and plans — useful if you bookmark it or follow an old link.
               </p>
               <p className="rounded-lg border border-zinc-700/80 bg-zinc-950/60 px-3 py-2 text-xs text-zinc-400">
-                <strong className="text-zinc-300">Hint:</strong> Marinas are not on the main five tabs; open them from the
+                <strong className="text-zinc-300">Hint:</strong> Marinas are not in the top navigation row; open them from the
                 home screen call-to-action{" "}
                 <span className="text-zinc-300">&quot;Marina berths&quot;</span> block when it appears, or go directly to{" "}
                 <Link href="/marinas" className="font-medium text-emerald-400 hover:underline">
@@ -195,8 +203,14 @@ export default function HelpPage() {
             <Section id="home-map" title="Home map &amp; GPS sharing">
               <p>
                 The large map on <Link href="/" className="font-medium text-emerald-400 hover:underline">Home</Link> can
-                show your position, wind timeline, optional nearby users, broadcasts, and tools like anchor watch. It loads
-                best with a good GPS fix outdoors or near a window.
+                show your position, wind timeline, optional nearby users, broadcasts, and anchor status. Full anchor setup
+                (arm/disarm dialog, radius, devices) lives on the{" "}
+                <Link href="/anchor-alarm" className="font-medium text-emerald-400 hover:underline">
+                  Anchor alarm
+                </Link>{" "}
+                page — on Home you still see a compact pill such as <strong className="text-zinc-200">Anchor · Off</strong>{" "}
+                (tap to open the Anchor page) or <strong className="text-zinc-200">Anchor · On · Monitoring …</strong> (tap
+                to disarm quickly). It loads best with a good GPS fix outdoors or near a window.
               </p>
               <p>
                 <strong className="text-zinc-200">Share my location on this map</strong> (green / grey button): when
@@ -228,7 +242,7 @@ export default function HelpPage() {
                 </li>
                 <li>
                   <strong className="text-zinc-300">Nearby (~5 mi):</strong> optional visibility to other SeaLink users
-                  in range when sharing is on.
+                  in range when sharing is on (on Home only — the Anchor alarm page omits friends so the map stays focused).
                 </li>
               </ul>
               <p className="rounded-lg border border-zinc-700/80 bg-zinc-950/60 px-3 py-2 text-xs text-zinc-400">
@@ -435,8 +449,30 @@ export default function HelpPage() {
 
             <Section id="anchor" title="Anchor watch &amp; geofence">
               <p>
-                Anchor tools on the home map let you define an allowed swing circle and monitor whether your reported
-                position stays inside it. Quality indicators reflect GPS stability — poor GPS causes false confidence.
+                Open <strong className="text-zinc-200">Anchor alarm</strong> from the top bar or go to{" "}
+                <Link href="/anchor-alarm" className="font-medium text-emerald-400 hover:underline">
+                  /anchor-alarm
+                </Link>
+                . There you can define an allowed swing circle, choose which device monitors movement, and arm the geofence
+                at your current fix. The map shows your orange anchor ring while armed. That page is intentionally simple: it
+                does <strong className="text-zinc-200">not</strong> show the optional nearby-friends ring or other users’
+                pins — turn on <strong className="text-zinc-200">Show friends</strong> on{" "}
+                <Link href="/" className="font-medium text-emerald-400 hover:underline">
+                  Home
+                </Link>{" "}
+                or in{" "}
+                <Link href="/map-sharing" className="font-medium text-emerald-400 hover:underline">
+                  Map sharing
+                </Link>{" "}
+                if you want that layer.
+              </p>
+              <p>
+                On <Link href="/" className="font-medium text-emerald-400 hover:underline">Home</Link>, a compact status
+                line next to the map duplicates whether anchor watch is on or off; use it for a quick disarm or follow the
+                link when disarmed to return to the full Anchor alarm page.
+              </p>
+              <p>
+                Quality indicators reflect GPS stability — poor GPS causes false confidence.
               </p>
               <ul className="list-disc space-y-1 pl-5 text-zinc-400">
                 <li>Arm anchor watch only after your GPS ring is reasonably tight and you are actually anchored.</li>

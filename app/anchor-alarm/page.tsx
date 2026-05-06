@@ -30,7 +30,12 @@ export default async function AnchorAlarmPage() {
           ON/OFF status — open this page for full settings.
         </p>
 
-        <HomeLocationMapLoader signedIn={signedIn} anchorPlacement="full" showHomeMapExtras={false} />
+        <HomeLocationMapLoader
+          signedIn={signedIn}
+          anchorPlacement="full"
+          showHomeMapExtras={false}
+          showNearbyFriends={false}
+        />
 
         <SeaLinkBrandFooter />
       </main>
