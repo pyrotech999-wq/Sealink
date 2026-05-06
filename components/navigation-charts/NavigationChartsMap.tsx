@@ -5,8 +5,6 @@ import "leaflet/dist/leaflet.css";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AttributionControl, ImageOverlay, MapContainer, TileLayer, useMap } from "react-leaflet";
 
-import type { KapMetadata } from "@/lib/navigation-charts/kap-types";
-
 // TODO: Tide / weather overlays — compositor layer above chart raster (GRIB or tile service).
 // TODO: GPS vessel overlay — Leaflet marker synced to watchPosition with COG/SOG styling.
 // TODO: Offline chart cache — persist parsed metadata + extracted bitmap in IndexedDB / Capacitor filesystem.
@@ -17,7 +15,8 @@ type Props = {
   /** Placeholder or future decoded raster URL (object URL / data URL). */
   overlayUrl: string | null;
   overlayOpacity?: number;
-  metadata: KapMetadata | null;
+  /** When true, draw georeferenced image overlay (placeholder until raster decode exists). */
+  showRasterOverlay: boolean;
 };
 
 function useHtmlDarkClass(): boolean {
@@ -68,7 +67,12 @@ function MapResizeFix() {
 const DEFAULT_CENTER: L.LatLngExpression = [49.5, -4.5];
 const DEFAULT_ZOOM = 6;
 
-export default function NavigationChartsMap({ chartBounds, overlayUrl, overlayOpacity = 0.55, metadata }: Props) {
+export default function NavigationChartsMap({
+  chartBounds,
+  overlayUrl,
+  overlayOpacity = 0.55,
+  showRasterOverlay,
+}: Props) {
   const dark = useHtmlDarkClass();
   const placeholderUrl = useMemo(() => chartPlaceholderDataUrl(dark), [dark]);
   const imageUrl = overlayUrl ?? placeholderUrl;
@@ -117,7 +121,7 @@ export default function NavigationChartsMap({ chartBounds, overlayUrl, overlayOp
         ) : null}
         <MapResizeFix />
         <FitBounds bounds={latLngBounds} trigger={fitTick} />
-        {metadata ? (
+        {showRasterOverlay ? (
           <ImageOverlay url={imageUrl} bounds={latLngBounds} opacity={overlayOpacity} interactive={false} />
         ) : null}
       </MapContainer>
