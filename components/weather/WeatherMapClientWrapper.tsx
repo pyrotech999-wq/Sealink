@@ -1,5 +1,6 @@
 "use client";
 
+import { MetOfficeUkMedEuropePressureBox } from "@/components/weather/MetOfficeUkMedEuropePressureBox";
 import { OpcChartsBox } from "@/components/weather/OpcChartsBox";
 import { WeatherCombinedMap } from "@/components/weather/WeatherCombinedMap";
 
@@ -13,6 +14,7 @@ export function WeatherMapClientWrapper() {
         </p>
       </div>
 
+      <MetOfficeUkMedEuropePressureBox />
       <WeatherCombinedMap />
       <OpcChartsBox />
     </div>
