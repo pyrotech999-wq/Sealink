@@ -13,6 +13,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { KapMetadata } from "@/lib/navigation-charts/kap-types";
+import { extractKapRaster } from "@/lib/navigation-charts/extract-kap-raster";
 import { parseKapFile } from "@/lib/navigation-charts/parse-kap";
 
 const NavigationChartsMap = dynamic(() => import("./NavigationChartsMap"), {
@@ -29,19 +30,40 @@ const NavigationChartsMap = dynamic(() => import("./NavigationChartsMap"), {
 
 type LoadStatus = "idle" | "loading" | "success" | "error";
 
+type LoadPhase = "idle" | "parsing" | "extracting" | "overlay" | "rendering" | "ready";
+
+type ErrorKind = "parse" | "raster" | "read" | "none";
+
+const PHASE_LABELS: Record<Exclude<LoadPhase, "idle" | "ready">, string> = {
+  parsing: "Parsing KAP",
+  extracting: "Extracting raster",
+  overlay: "Generating overlay",
+  rendering: "Rendering chart",
+};
+
+function revokeRasterUrl(url: string | null) {
+  if (url?.startsWith("blob:")) URL.revokeObjectURL(url);
+}
+
 export function NavigationChartsClient() {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const rasterUrlRef = useRef<string | null>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [metadata, setMetadata] = useState<KapMetadata | null>(null);
   const [rasterObjectUrl, setRasterObjectUrl] = useState<string | null>(null);
+  const [decodedImageSize, setDecodedImageSize] = useState<{ width: number; height: number } | null>(null);
   const [status, setStatus] = useState<LoadStatus>("idle");
   const [statusDetail, setStatusDetail] = useState<string>("");
+  const [errorKind, setErrorKind] = useState<ErrorKind>("none");
+  const [loadPhase, setLoadPhase] = useState<LoadPhase>("idle");
+  const [fitBoundsNonce, setFitBoundsNonce] = useState(0);
 
   useEffect(() => {
     return () => {
-      if (rasterObjectUrl) URL.revokeObjectURL(rasterObjectUrl);
+      revokeRasterUrl(rasterUrlRef.current);
+      rasterUrlRef.current = null;
     };
-  }, [rasterObjectUrl]);
+  }, []);
 
   useEffect(() => {
     if (metadata) {
