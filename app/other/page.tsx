@@ -27,6 +27,12 @@ export default function OtherPage() {
           >
             Plans & payment
           </Link>
+          <Link
+            href="/navigation-charts"
+            className="inline-flex h-11 max-w-xs items-center justify-center rounded-lg border border-zinc-300 bg-white px-5 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+          >
+            Navigation charts
+          </Link>
         </div>
       </main>
     </div>
