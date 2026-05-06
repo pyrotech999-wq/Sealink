@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getRegion, type FaxChartTypeId, type FaxRegionId, type FaxSourceId } from "@/lib/weather/fax-charts";
 import { getOpcFamily, getOpcRegion } from "@/lib/weather/opc-products";
+import type { OpcTimelineKey } from "@/lib/weather/opc-products";
 
 export const runtime = "nodejs";
 
@@ -109,8 +110,8 @@ export async function GET(req: Request): Promise<Response> {
         chartType === "surface_pressure" ? "surface" : chartType === "wind_wave" || chartType === "sea_state" || chartType === "wave_height_direction" ? "wind_wave" : "surface";
       const fam = getOpcFamily(opcRegion, famId);
 
-      const timelineKey = hour === 0 ? "analysis" : (`${hour}h` as const);
-      const product = fam.productsByTimeline[timelineKey];
+      const timelineKey: OpcTimelineKey = hour === 0 ? "analysis" : (String(hour) + "h") as OpcTimelineKey;
+      const product = fam.productsByTimeline[timelineKey as OpcTimelineKey];
       if (!product) {
         return NextResponse.json({ ok: false, error: "Unavailable forecast hour for this chart type" }, { status: 400 });
       }
