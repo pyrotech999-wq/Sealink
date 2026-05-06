@@ -30,11 +30,24 @@ export function normalizeKapLines(header: string): string[] {
   return out;
 }
 
-function latLngDecimal(deg: number, min: number, hem: string): number {
-  let v = Math.abs(deg) + min / 60;
-  const h = hem.toUpperCase();
-  if (h === "S" || h === "W") v = -v;
-  return v;
+function decimalLat(deg: number, min: number, hem: string): number {
+  const v = Math.abs(deg) + min / 60;
+  return hem.toUpperCase() === "S" ? -v : v;
+}
+
+function decimalLng(deg: number, min: number, hem: string): number {
+  const v = Math.abs(deg) + min / 60;
+  return hem.toUpperCase() === "W" ? -v : v;
+}
+
+function decimalLatOne(deg: number, hem: string): number {
+  const v = Math.abs(deg);
+  return hem.toUpperCase() === "S" ? -v : v;
+}
+
+function decimalLngOne(deg: number, hem: string): number {
+  const v = Math.abs(deg);
+  return hem.toUpperCase() === "W" ? -v : v;
 }
 
 /** Try decimal degrees after pixel columns: REF/n, W, px, py, lat, NS, lon, EW */
@@ -49,8 +62,8 @@ function parseRefLine(line: string): KapGeoReferencePoint | null {
   const t = line.trim();
   let m = t.match(REF_DECIMAL_RE);
   if (m) {
-    const lat = latLngDecimal(parseFloat(m[5]!), 0, m[6]!);
-    const lng = latLngDecimal(parseFloat(m[7]!), 0, m[8]!);
+    const lat = decimalLatOne(parseFloat(m[5]!), m[6]!);
+    const lng = decimalLngOne(parseFloat(m[7]!), m[8]!);
     return {
       index: Number(m[1]),
       corner: m[2] || undefined,
@@ -63,8 +76,8 @@ function parseRefLine(line: string): KapGeoReferencePoint | null {
   }
   m = t.match(REF_DEG_MIN_RE);
   if (m) {
-    const lat = latLngDecimal(Number(m[5]!), parseFloat(m[6]!), m[7]!);
-    const lng = latLngDecimal(Number(m[8]!), parseFloat(m[9]!), m[10]!);
+    const lat = decimalLat(Number(m[5]!), parseFloat(m[6]!), m[7]!);
+    const lng = decimalLng(Number(m[8]!), parseFloat(m[9]!), m[10]!);
     return {
       index: Number(m[1]),
       corner: m[2] || undefined,
@@ -85,6 +98,14 @@ function parsePlySection(lines: string[], startIdx: number): { corners: { lat: n
   if (!head) return { corners: [], nextIdx: startIdx };
   const n = Number(head[1]);
   const corners: { lat: number; lng: number }[] = [];
+  const rest = line.replace(/^PLY\/\d+/i, "").trim();
+  if (rest) {
+    const nums = rest.split(/[, \t]+/).map((s) => parseFloat(s.trim())).filter((x) => Number.isFinite(x));
+    for (let k = 0; k + 1 < nums.length && corners.length < n; k += 2) {
+      corners.push({ lat: nums[k]!, lng: nums[k + 1]! });
+    }
+    if (corners.length >= n) return { corners, nextIdx: startIdx + 1 };
+  }
   let i = startIdx + 1;
   while (corners.length < n && i < lines.length) {
     const L = lines[i]!.trim();
@@ -112,7 +133,7 @@ function boundsFromPoints(pts: { lat: number; lng: number }[]): [[number, number
     minLng = Math.min(minLng, p.lng);
     maxLng = Math.max(maxLng, p.lng);
   }
-  if (!Number.isFinite(minLat) || minLat === maxLat) return null;
+  if (!Number.isFinite(minLat) || (maxLat - minLat < 1e-6 && maxLng - minLng < 1e-6)) return null;
   const padLat = Math.max((maxLat - minLat) * 0.02, 0.001);
   const padLng = Math.max((maxLng - minLng) * 0.02, 0.001);
   return [
@@ -177,10 +198,10 @@ export function parseKapFile(buf: ArrayBuffer): KapParseResult {
       const fields = parseBsbFields(raw.replace(/^BSB\//i, "").replace(/^NOS\//i, ""));
       if (fields.NA) metadata.chartName = fields.NA;
       if (fields.RA) {
-        const ra = fields.RA.split(/[,x]/i).map((s) => parseInt(s.trim(), 10));
-        if (ra.length >= 2 && Number.isFinite(ra[0]) && Number.isFinite(ra[1])) {
-          metadata.rasterWidth = ra[0]!;
-          metadata.rasterHeight = ra[1]!;
+        const raM = fields.RA.match(/(\d+)\s*,\s*(\d+)/);
+        if (raM) {
+          metadata.rasterWidth = Number(raM[1]);
+          metadata.rasterHeight = Number(raM[2]);
         }
       }
       continue;
@@ -229,12 +250,22 @@ export function parseKapFile(buf: ArrayBuffer): KapParseResult {
   ];
   metadata.bounds = boundsFromPoints(forBounds);
 
-  if (!metadata.chartName && metadata.referencePoints.length === 0 && metadata.polygonCorners.length === 0) {
-    return {
-      ok: false,
-      error: "Invalid KAP file — could not read chart name or georeference corners.",
-    };
+  const hasStructure =
+    metadata.version != null ||
+    metadata.chartName != null ||
+    metadata.rasterWidth != null ||
+    metadata.referencePoints.length > 0 ||
+    metadata.polygonCorners.length > 0;
+  if (!hasStructure) {
+    return { ok: false, error: "Invalid KAP file — header did not contain chart metadata." };
   }
+
+  /** Fallback framing when REF/PLY could not yield bounds (placeholder overlay only). */
+  const FALLBACK_BOUNDS: [[number, number], [number, number]] = [
+    [49.2, -5.8],
+    [50.8, -3.4],
+  ];
+  if (!metadata.bounds) metadata.bounds = FALLBACK_BOUNDS;
 
   return { ok: true, metadata, headerTextLength: headerText.length };
 }
