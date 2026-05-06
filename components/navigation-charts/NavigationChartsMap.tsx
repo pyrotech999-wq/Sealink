@@ -122,7 +122,13 @@ export default function NavigationChartsMap({
         <MapResizeFix />
         <FitBounds bounds={latLngBounds} trigger={fitTick} />
         {showRasterOverlay ? (
-          <ImageOverlay url={imageUrl} bounds={latLngBounds} opacity={overlayOpacity} interactive={false} />
+          <ImageOverlay
+            key={imageUrl}
+            url={imageUrl}
+            bounds={latLngBounds}
+            opacity={overlayOpacity}
+            interactive={false}
+          />
         ) : null}
       </MapContainer>
     </div>
