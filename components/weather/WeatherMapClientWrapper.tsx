@@ -1,6 +1,7 @@
 "use client";
 
 import { WeatherModelChartViewer } from "@/components/weather/WeatherModelChartViewer";
+import { OpcChartsBox } from "@/components/weather/OpcChartsBox";
 
 export function WeatherMapClientWrapper() {
   return (
@@ -11,6 +12,7 @@ export function WeatherMapClientWrapper() {
           Self-hosted forecast map layers built from Open-Meteo grid data (no external iframes).
         </p>
       </div>
+      <OpcChartsBox />
       <WeatherModelChartViewer />
     </div>
   );
