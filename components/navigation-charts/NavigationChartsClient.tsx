@@ -170,6 +170,31 @@ export function NavigationChartsClient() {
             </a>
           </li>
           <li>
+            <strong className="text-zinc-800 dark:text-zinc-200">OpenCPN pilot charts (free):</strong> the OpenCPN team
+            distributes digital <strong className="text-zinc-800 dark:text-zinc-200">US Pilot Charts</strong> in BSB/KAP
+            for ocean passage planning (not substitute for up-to-date ENC/RNC for pilotage). Downloads are{" "}
+            <span className="font-mono text-zinc-600 dark:text-zinc-400">.7z</span> archives — extract with{" "}
+            <a
+              href="https://www.7-zip.org/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
+            >
+              7-Zip
+            </a>{" "}
+            (or e.g. Keka on Mac), then upload the <span className="font-mono text-zinc-600 dark:text-zinc-400">.kap</span>{" "}
+            files here.{" "}
+            <a
+              href="https://opencpn.org/OpenCPN/info/pilotcharts.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
+            >
+              Pilot charts download page
+            </a>
+            .
+          </li>
+          <li>
             <strong className="text-zinc-800 dark:text-zinc-200">Elsewhere:</strong> UKHO, Imray, NV Charts, etc. sell or
             license raster/ENC products; follow each publisher&apos;s terms (often tied to a specific app or device count).
           </li>
