@@ -47,6 +47,12 @@ export type GearListing = {
   description: string;
   categoryId: GearCategoryId;
   priceLabel: string | null;
+  /** Contact email shown on the listing (mailto target). */
+  contactEmail: string | null;
+  /** Optional phone number; only shown when contactPhonePublic is true (or to owner). */
+  contactPhone: string | null;
+  /** Whether to show phone number publicly to non-owners. */
+  contactPhonePublic: boolean;
   /** Public paths under /public (e.g. `/uploads/gear/<id>/<file>.jpg`). Max 3. */
   imageUrls: string[];
   createdAt: string;

@@ -99,8 +99,9 @@ export function VesselClassifiedsClient() {
     void (async () => {
       try {
         const r = await fetch("/api/demo/me");
-        const d = (await r.json()) as { signedIn?: boolean };
+        const d = (await r.json()) as { signedIn?: boolean; email?: string };
         setSignedIn(Boolean(d.signedIn));
+        if (typeof d.email === "string" && d.email && !contactEmail) setContactEmail(d.email);
       } catch {
         setSignedIn(false);
       }
@@ -711,6 +712,7 @@ export function VesselClassifiedsClient() {
                           <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
                             Contact email
                             <input
+                            required
                               inputMode="email"
                               value={editDraft.contactEmail}
                               onChange={(e) =>
@@ -910,14 +912,17 @@ export function VesselClassifiedsClient() {
                 {editingId === l.id ? null : (
                   <div className="mt-3 flex flex-wrap gap-2">
                     {l.contactEmail ? (
-                      <a
-                        href={`mailto:${l.contactEmail}?subject=${encodeURIComponent(`Boat for sale: ${l.title}`)}`}
-                        className="inline-flex h-9 items-center justify-center rounded-lg bg-green-600 px-3 text-sm font-semibold text-white hover:bg-green-700"
-                      >
-                        Email for details
-                      </a>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <a
+                          href={`mailto:${l.contactEmail}?subject=${encodeURIComponent(`Boat for sale: ${l.title}`)}`}
+                          className="inline-flex h-9 items-center justify-center rounded-lg bg-green-600 px-3 text-sm font-semibold text-white hover:bg-green-700"
+                        >
+                          Email me
+                        </a>
+                        <span className="text-xs text-zinc-600 dark:text-zinc-300">{l.contactEmail}</span>
+                      </div>
                     ) : null}
-                    {l.contactPhone ? (
+                    {l.contactPhone && (l.isOwner || l.contactPhonePublic) ? (
                       <a
                         href={`tel:${l.contactPhone}`}
                         className="inline-flex h-9 items-center justify-center rounded-lg border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-900 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
@@ -1057,6 +1062,7 @@ export function VesselClassifiedsClient() {
             <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
               Contact email
               <input
+                required
                 inputMode="email"
                 value={contactEmail}
                 onChange={(e) => setContactEmail(e.target.value)}

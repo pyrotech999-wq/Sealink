@@ -2,6 +2,7 @@
 
 import { OpcChartsBox } from "@/components/weather/OpcChartsBox";
 import { WeatherCombinedMap } from "@/components/weather/WeatherCombinedMap";
+import { WeatherchartsUkMedEuropePressureBox } from "@/components/weather/WeatherchartsUkMedEuropePressureBox";
 
 export function WeatherMapClientWrapper() {
   return (
@@ -13,6 +14,7 @@ export function WeatherMapClientWrapper() {
         </p>
       </div>
 
+      <WeatherchartsUkMedEuropePressureBox />
       <WeatherCombinedMap />
       <OpcChartsBox />
     </div>

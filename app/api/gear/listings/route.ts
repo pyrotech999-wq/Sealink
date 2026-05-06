@@ -17,6 +17,9 @@ type CreateBody = {
   categoryId?: unknown;
   priceLabel?: unknown;
   confirmNotVessel?: unknown;
+  contactEmail?: unknown;
+  contactPhone?: unknown;
+  contactPhonePublic?: unknown;
 };
 
 const MAX_IMAGES = 3;
@@ -35,6 +38,12 @@ function isTruthyFlag(v: unknown): boolean {
   if (typeof v !== "string") return false;
   const s = v.trim().toLowerCase();
   return s === "true" || s === "1" || s === "on" || s === "yes";
+}
+
+function isEmailish(v: string): boolean {
+  const s = v.trim();
+  if (s.length < 6 || s.length > 200) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 }
 
 export async function GET(req: Request) {
@@ -110,6 +119,9 @@ export async function POST(req: Request) {
         categoryId: fd.get("categoryId"),
         priceLabel: fd.get("priceLabel"),
         confirmNotVessel: fd.get("confirmNotVessel"),
+        contactEmail: fd.get("contactEmail"),
+        contactPhone: fd.get("contactPhone"),
+        contactPhonePublic: fd.get("contactPhonePublic"),
       };
       imageFiles = fd
         .getAll("images")
@@ -135,6 +147,9 @@ export async function POST(req: Request) {
   const description = typeof body.description === "string" ? body.description : "";
   const categoryId = typeof body.categoryId === "string" ? body.categoryId : "";
   const priceRaw = typeof body.priceLabel === "string" ? body.priceLabel.trim() : "";
+  const contactEmailRaw = typeof body.contactEmail === "string" ? body.contactEmail.trim() : "";
+  const contactPhoneRaw = typeof body.contactPhone === "string" ? body.contactPhone.trim() : "";
+  const contactPhonePublic = isTruthyFlag(body.contactPhonePublic);
 
   if (!isGearCategoryId(categoryId)) {
     return NextResponse.json({ error: "Invalid category" }, { status: 400 });
@@ -143,6 +158,13 @@ export async function POST(req: Request) {
   const textErr = validateGearText(title, description);
   if (textErr) {
     return NextResponse.json({ error: textErr }, { status: 400 });
+  }
+
+  if (!isEmailish(contactEmailRaw)) {
+    return NextResponse.json({ error: "Please enter a valid contact email." }, { status: 400 });
+  }
+  if (contactPhoneRaw && contactPhoneRaw.length > 40) {
+    return NextResponse.json({ error: "Phone number is too long." }, { status: 400 });
   }
 
   const priceLabel = priceRaw ? priceRaw.slice(0, 80) : null;
@@ -175,6 +197,9 @@ export async function POST(req: Request) {
     description: description.trim(),
     categoryId: categoryId as GearCategoryId,
     priceLabel,
+    contactEmail: contactEmailRaw.slice(0, 200),
+    contactPhone: contactPhoneRaw ? contactPhoneRaw.slice(0, 40) : null,
+    contactPhonePublic,
     imageUrls: urls,
     createdAt: now.toISOString(),
     expiresAt: defaultExpiresAt(now),

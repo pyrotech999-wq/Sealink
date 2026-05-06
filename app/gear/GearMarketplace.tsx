@@ -39,6 +39,28 @@ export function GearMarketplace() {
   const [confirmNotVessel, setConfirmNotVessel] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formMsg, setFormMsg] = useState<string | null>(null);
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
+  const [contactPhonePublic, setContactPhonePublic] = useState(false);
+
+  const [listingPhotoIdx, setListingPhotoIdx] = useState<Record<string, number>>({});
+
+  function listingImageIndex(listingId: string, len: number): number {
+    if (len <= 0) return 0;
+    const raw = listingPhotoIdx[listingId];
+    if (raw == null || !Number.isFinite(raw)) return 0;
+    return Math.max(0, Math.min(len - 1, raw));
+  }
+
+  function setListingImageIndex(listingId: string, len: number, idx: number) {
+    if (len <= 0) return;
+    setListingPhotoIdx((m) => ({ ...m, [listingId]: Math.max(0, Math.min(len - 1, idx)) }));
+  }
+
+  function bumpListingImage(listingId: string, len: number, delta: number) {
+    const cur = listingImageIndex(listingId, len);
+    setListingImageIndex(listingId, len, cur + delta);
+  }
 
   useEffect(() => {
     const t = window.setTimeout(() => setQDebounced(q.trim()), 320);
@@ -57,6 +79,28 @@ export function GearMarketplace() {
         setIsAdmin(false);
       }
     })();
+  }, []);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const r = await fetch("/api/gear/session", { cache: "no-store" });
+        if (!r.ok) return;
+        const d = (await r.json()) as { email?: string };
+        if (typeof d.email === "string" && d.email && !contactEmail) setContactEmail(d.email);
+      } catch {
+        /* ignore */
+      }
+      try {
+        const r2 = await fetch("/api/profiles/me", { cache: "no-store" });
+        if (!r2.ok) return;
+        const d2 = (await r2.json()) as { phone?: string | null };
+        if (typeof d2.phone === "string" && d2.phone && !contactPhone) setContactPhone(d2.phone);
+      } catch {
+        /* ignore */
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadReminders = useCallback(async () => {
@@ -127,6 +171,9 @@ export function GearMarketplace() {
       fd.set("categoryId", catPick);
       fd.set("priceLabel", priceLabel.trim() || "");
       fd.set("confirmNotVessel", confirmNotVessel ? "true" : "false");
+      fd.set("contactEmail", contactEmail.trim());
+      fd.set("contactPhone", contactPhone.trim());
+      if (contactPhonePublic) fd.set("contactPhonePublic", "1");
       for (const f of images.slice(0, 3)) fd.append("images", f);
 
       const res = await fetch("/api/gear/listings", {
@@ -499,31 +546,103 @@ export function GearMarketplace() {
                 ) : (
                   <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-zinc-700 dark:text-zinc-300">{l.description}</p>
                 )}
-                {Array.isArray(l.imageUrls) && l.imageUrls.length > 0 ? (
-                  <div className="mt-3 grid grid-cols-3 gap-2">
-                    {l.imageUrls.slice(0, 3).map((src) => (
-                      <a
-                        key={src}
-                        href={src}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="group block overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900"
-                      >
-                        <img
-                          src={src}
-                          alt=""
-                          className="h-24 w-full object-cover transition group-hover:scale-[1.01]"
-                          loading="lazy"
-                        />
-                      </a>
-                    ))}
-                  </div>
+                {editingId === l.id ? null : l.imageUrls?.length ? (
+                  (() => {
+                    const urls = l.imageUrls;
+                    const idx = listingImageIndex(l.id, urls.length);
+                    const cur = urls[idx]!;
+                    const multi = urls.length > 1;
+                    return (
+                      <div className="mt-3">
+                        <div className="relative overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900">
+                          {multi ? (
+                            <button
+                              type="button"
+                              aria-label="Previous photo"
+                              onClick={() => bumpListingImage(l.id, urls.length, -1)}
+                              className="absolute left-2 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-lg font-semibold text-white shadow hover:bg-black/70"
+                            >
+                              ‹
+                            </button>
+                          ) : null}
+                          {multi ? (
+                            <button
+                              type="button"
+                              aria-label="Next photo"
+                              onClick={() => bumpListingImage(l.id, urls.length, 1)}
+                              className="absolute right-2 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-lg font-semibold text-white shadow hover:bg-black/70"
+                            >
+                              ›
+                            </button>
+                          ) : null}
+                          <a
+                            href={cur}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="block w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-green-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={cur} alt="" className="h-56 w-full object-cover" loading="lazy" />
+                          </a>
+                          {multi ? (
+                            <p className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-medium text-white">
+                              {idx + 1} / {urls.length}
+                            </p>
+                          ) : null}
+                        </div>
+                        {multi ? (
+                          <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+                            {urls.slice(0, 3).map((src, i) => (
+                              <button
+                                key={`${l.id}-thumb-${i}`}
+                                type="button"
+                                onClick={() => setListingImageIndex(l.id, urls.length, i)}
+                                className={`shrink-0 overflow-hidden rounded-lg border-2 transition-colors ${
+                                  i === idx
+                                    ? "border-green-600 ring-2 ring-green-600/30"
+                                    : "border-zinc-200 dark:border-zinc-700"
+                                }`}
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={src} alt="" className="h-16 w-20 object-cover" loading="lazy" />
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })()
                 ) : null}
                 <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
                   Listed {fmtDate(l.createdAt)} · removes on or after {fmtDate(l.expiresAt)} ({l.daysUntilExpiry}
                   {" "}
                   day{l.daysUntilExpiry === 1 ? "" : "s"} left)
                 </p>
+                {editingId === l.id ? null : (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {l.contactEmail ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <a
+                          href={`mailto:${l.contactEmail}?subject=${encodeURIComponent(`Boat gear ${l.kind === "wanted" ? "wanted" : "for sale"}: ${l.title}`)}`}
+                          className="inline-flex h-9 items-center justify-center rounded-lg bg-green-600 px-3 text-sm font-semibold text-white hover:bg-green-700"
+                        >
+                          Email me
+                        </a>
+                        <span className="text-xs text-zinc-600 dark:text-zinc-300">{l.contactEmail}</span>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-zinc-600 dark:text-zinc-300">Contact email not provided.</span>
+                    )}
+                    {l.contactPhone && (l.isOwner || l.contactPhonePublic) ? (
+                      <a
+                        href={`tel:${l.contactPhone}`}
+                        className="inline-flex h-9 items-center justify-center rounded-lg border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-900 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                      >
+                        Call {l.contactPhone}
+                      </a>
+                    ) : null}
+                  </div>
+                )}
                 {l.isOwner || isAdmin ? (
                   <div className="mt-3 flex flex-wrap gap-2">
                     {l.daysUntilExpiry > 0 && l.daysUntilExpiry <= reminderDays ? (
@@ -567,7 +686,9 @@ export function GearMarketplace() {
       </section>
 
       <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-        <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Post equipment</h2>
+        <h2 id="post-gear" className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
+          Post equipment
+        </h2>
         <form onSubmit={(e) => void onSubmit(e)} className="mt-4 space-y-4">
           {signedIn === false ? (
             <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
@@ -636,6 +757,39 @@ export function GearMarketplace() {
                 className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
               />
             </label>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+              Contact email
+              <input
+                required
+                inputMode="email"
+                value={contactEmail}
+                onChange={(e) => setContactEmail(e.target.value)}
+                placeholder="e.g. you@example.com"
+                className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+              />
+            </label>
+            <div className="grid gap-2">
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                Telephone (optional)
+                <input
+                  inputMode="tel"
+                  value={contactPhone}
+                  onChange={(e) => setContactPhone(e.target.value)}
+                  placeholder="e.g. +44 7700 900123"
+                  className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+                />
+              </label>
+              <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                <input
+                  type="checkbox"
+                  checked={contactPhonePublic}
+                  onChange={(e) => setContactPhonePublic(e.target.checked)}
+                />
+                Show telephone number on listing
+              </label>
+            </div>
           </div>
           <div>
             <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
