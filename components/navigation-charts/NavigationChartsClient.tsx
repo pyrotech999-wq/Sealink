@@ -140,9 +140,60 @@ export function NavigationChartsClient() {
           Navigation Charts
         </h1>
         <p className="max-w-2xl text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-          Upload a BSB/KAP header to preview georeference on the map. Raster decoding and ENC support will follow.
+          Upload your own <strong className="font-medium text-zinc-700 dark:text-zinc-300">.kap</strong> (BSB/KAP raster)
+          to preview georeference. SeaLink does not ship chart bundles — you obtain charts under their licence, then open
+          them here. Raster decode in-app will follow.
         </p>
       </header>
+
+      <section className="rounded-2xl border border-zinc-200 bg-white p-4 text-sm leading-relaxed text-zinc-700 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/80 dark:text-zinc-300 sm:p-5">
+        <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">How chart files work</h2>
+        <p className="mt-2 text-xs sm:text-sm">
+          Raster charts are usually <strong className="text-zinc-800 dark:text-zinc-200">copyrighted</strong>. We cannot
+          bulk-download or redistribute them for everyone without agreements with each hydrographic office. The practical
+          model is <strong className="text-zinc-800 dark:text-zinc-200">bring your own chart</strong>: you download or buy
+          charts you are entitled to use, copy the <span className="font-mono text-zinc-600 dark:text-zinc-400">.kap</span>{" "}
+          onto your phone or tablet, then tap <strong className="text-zinc-800 dark:text-zinc-200">Upload KAP Chart</strong>.
+        </p>
+        <ul className="mt-3 list-disc space-y-1.5 pl-5 text-xs sm:text-sm">
+          <li>
+            <strong className="text-zinc-800 dark:text-zinc-200">United States (free):</strong> NOAA publishes raster
+            nautical charts (RNC) in BSB/KAP form — use the official catalog and download the cells you need, then upload
+            here.{" "}
+            <a
+              href="https://www.nauticalcharts.noaa.gov/charts/noaa-raster-charts.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
+            >
+              NOAA raster charts
+            </a>
+          </li>
+          <li>
+            <strong className="text-zinc-800 dark:text-zinc-200">Elsewhere:</strong> UKHO, Imray, NV Charts, etc. sell or
+            license raster/ENC products; follow each publisher&apos;s terms (often tied to a specific app or device count).
+          </li>
+          <li>
+            <strong className="text-zinc-800 dark:text-zinc-200">Already use OpenCPN?</strong> Chart folders you maintain
+            there are often the same <span className="font-mono text-zinc-600 dark:text-zinc-400">.kap</span> files — copy
+            one file across and upload. See also{" "}
+            <a
+              href="https://opencpn.org/wiki/doku.php?id=opencpn:chart_sources"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
+            >
+              OpenCPN chart sources
+            </a>
+            .
+          </li>
+        </ul>
+        <p className="mt-3 rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-[11px] text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100">
+          <strong className="text-amber-900 dark:text-amber-200">Product note:</strong> A future &quot;chart shop&quot;
+          inside SeaLink would need contracts and payment with each publisher. Until then, uploads keep licensing clear and
+          avoid us hosting copyrighted rasters without permission.
+        </p>
+      </section>
 
       {statusBanner}
 
