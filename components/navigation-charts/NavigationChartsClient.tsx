@@ -13,7 +13,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { KapMetadata } from "@/lib/navigation-charts/kap-types";
-import { extractKapRaster } from "@/lib/navigation-charts/extract-kap-raster";
+import { extractKapRaster, type KapRasterResult } from "@/lib/navigation-charts/extract-kap-raster";
 import { parseKapFile } from "@/lib/navigation-charts/parse-kap";
 
 const NavigationChartsMap = dynamic(() => import("./NavigationChartsMap"), {
@@ -122,11 +122,12 @@ export function NavigationChartsClient() {
       }
 
       setMetadata(result.metadata);
+      setFitBoundsNonce((n) => n + 1);
       setLoadPhase("extracting");
       setStatusDetail("Extracting raster…");
       await yieldPaint();
 
-      let raster: ReturnType<typeof extractKapRaster>;
+      let raster: KapRasterResult;
       try {
         raster = extractKapRaster(buf, result.metadata);
       } catch (err) {
@@ -197,7 +198,11 @@ export function NavigationChartsClient() {
           {status === "error" ? (
             <>
               <span className="font-semibold">
-                {errorKind === "raster" ? "Raster extraction failed" : "Invalid KAP file"}
+                {errorKind === "raster"
+                  ? "Raster extraction failed"
+                  : errorKind === "read"
+                    ? "Could not load file"
+                    : "Invalid KAP file"}
               </span>
               {statusDetail ? (
                 <span className="mt-1 block text-xs font-normal leading-snug opacity-90">{statusDetail}</span>
@@ -220,7 +225,7 @@ export function NavigationChartsClient() {
                   className={`flex items-center gap-1.5 ${active ? "font-semibold text-sky-800 dark:text-sky-200" : ""}`}
                 >
                   <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[10px] leading-none">
-                    {done ? "✓" : active ? "…" : ""}
+                    {done ? "✓" : active ? "…" : "○"}
                   </span>
                   {PHASE_LABELS[key]}
                 </li>
@@ -366,33 +371,55 @@ export function NavigationChartsClient() {
       {metadata ? (
         <section
           className="rounded-2xl border border-zinc-200 bg-white p-4 text-sm shadow-sm dark:border-zinc-800 dark:bg-zinc-900/80 sm:p-5"
-          aria-label="Chart metadata"
+          aria-label="Chart debug and metadata"
         >
-          <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Chart metadata</h2>
+          <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Chart debug</h2>
           <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2 sm:text-sm">
-            <div className="flex flex-col gap-0.5 rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-950/60">
-              <dt className="font-medium text-zinc-500 dark:text-zinc-400">File</dt>
-              <dd className="truncate font-mono text-zinc-900 dark:text-zinc-100">{uploadedFile?.name ?? "—"}</dd>
-            </div>
-            <div className="flex flex-col gap-0.5 rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-950/60">
-              <dt className="font-medium text-zinc-500 dark:text-zinc-400">Chart name</dt>
+            <div className="flex flex-col gap-0.5 rounded-lg border border-rose-200/80 bg-rose-50/50 px-3 py-2 dark:border-rose-900/40 dark:bg-rose-950/25">
+              <dt className="font-medium text-rose-800 dark:text-rose-200">Chart name</dt>
               <dd className="text-zinc-900 dark:text-zinc-100">{metadata.chartName ?? "—"}</dd>
             </div>
-            <div className="flex flex-col gap-0.5 rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-950/60">
-              <dt className="font-medium text-zinc-500 dark:text-zinc-400">Format</dt>
-              <dd className="font-mono text-zinc-900 dark:text-zinc-100">{metadata.version ?? "—"}</dd>
+            <div className="flex flex-col gap-0.5 rounded-lg border border-rose-200/80 bg-rose-50/50 px-3 py-2 dark:border-rose-900/40 dark:bg-rose-950/25">
+              <dt className="font-medium text-rose-800 dark:text-rose-200">Projection</dt>
+              <dd className="text-zinc-900 dark:text-zinc-100">{metadata.projection ?? "—"}</dd>
             </div>
-            <div className="flex flex-col gap-0.5 rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-950/60">
-              <dt className="font-medium text-zinc-500 dark:text-zinc-400">Raster (px)</dt>
+            <div className="sm:col-span-2 flex flex-col gap-0.5 rounded-lg border border-rose-200/80 bg-rose-50/50 px-3 py-2 dark:border-rose-900/40 dark:bg-rose-950/25">
+              <dt className="font-medium text-rose-800 dark:text-rose-200">Lat/lon bounds (S,W → N,E)</dt>
+              <dd className="break-all font-mono text-[11px] text-zinc-900 dark:text-zinc-100 sm:text-xs">
+                {metadata.bounds
+                  ? `${metadata.bounds[0]![0].toFixed(5)}, ${metadata.bounds[0]![1].toFixed(5)} → ${metadata.bounds[1]![0].toFixed(5)}, ${metadata.bounds[1]![1].toFixed(5)}`
+                  : "—"}
+              </dd>
+            </div>
+            <div className="flex flex-col gap-0.5 rounded-lg border border-rose-200/80 bg-rose-50/50 px-3 py-2 dark:border-rose-900/40 dark:bg-rose-950/25">
+              <dt className="font-medium text-rose-800 dark:text-rose-200">Image dimensions (decoded)</dt>
+              <dd className="font-mono text-zinc-900 dark:text-zinc-100">
+                {decodedImageSize
+                  ? `${decodedImageSize.width} × ${decodedImageSize.height} px`
+                  : rasterObjectUrl
+                    ? "—"
+                    : "Not decoded yet"}
+              </dd>
+            </div>
+            <div className="flex flex-col gap-0.5 rounded-lg border border-rose-200/80 bg-rose-50/50 px-3 py-2 dark:border-rose-900/40 dark:bg-rose-950/25">
+              <dt className="font-medium text-rose-800 dark:text-rose-200">Header RA= (px)</dt>
               <dd className="font-mono text-zinc-900 dark:text-zinc-100">
                 {metadata.rasterWidth != null && metadata.rasterHeight != null
                   ? `${metadata.rasterWidth} × ${metadata.rasterHeight}`
                   : "—"}
               </dd>
             </div>
+          </dl>
+
+          <h3 className="mt-5 text-sm font-semibold text-zinc-900 dark:text-zinc-50">File &amp; format</h3>
+          <dl className="mt-2 grid gap-2 text-xs sm:grid-cols-2 sm:text-sm">
             <div className="flex flex-col gap-0.5 rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-950/60">
-              <dt className="font-medium text-zinc-500 dark:text-zinc-400">Projection</dt>
-              <dd className="text-zinc-900 dark:text-zinc-100">{metadata.projection ?? "—"}</dd>
+              <dt className="font-medium text-zinc-500 dark:text-zinc-400">File</dt>
+              <dd className="truncate font-mono text-zinc-900 dark:text-zinc-100">{uploadedFile?.name ?? "—"}</dd>
+            </div>
+            <div className="flex flex-col gap-0.5 rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-950/60">
+              <dt className="font-medium text-zinc-500 dark:text-zinc-400">BSB version</dt>
+              <dd className="font-mono text-zinc-900 dark:text-zinc-100">{metadata.version ?? "—"}</dd>
             </div>
             <div className="flex flex-col gap-0.5 rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-950/60">
               <dt className="font-medium text-zinc-500 dark:text-zinc-400">Datum / scale</dt>
@@ -400,13 +427,9 @@ export function NavigationChartsClient() {
                 {[metadata.datum, metadata.scale].filter(Boolean).join(" · ") || "—"}
               </dd>
             </div>
-            <div className="sm:col-span-2 flex flex-col gap-0.5 rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-950/60">
-              <dt className="font-medium text-zinc-500 dark:text-zinc-400">Bounds (S,W → N,E)</dt>
-              <dd className="break-all font-mono text-[11px] text-zinc-900 dark:text-zinc-100 sm:text-xs">
-                {metadata.bounds
-                  ? `${metadata.bounds[0]![0].toFixed(4)}, ${metadata.bounds[0]![1].toFixed(4)} → ${metadata.bounds[1]![0].toFixed(4)}, ${metadata.bounds[1]![1].toFixed(4)}`
-                  : "—"}
-              </dd>
+            <div className="flex flex-col gap-0.5 rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-950/60">
+              <dt className="font-medium text-zinc-500 dark:text-zinc-400">Palette RGB/ lines</dt>
+              <dd className="font-mono text-zinc-900 dark:text-zinc-100">{metadata.paletteEntries.length}</dd>
             </div>
             <div className="sm:col-span-2 flex flex-col gap-0.5 rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-950/60">
               <dt className="font-medium text-zinc-500 dark:text-zinc-400">REF points ({metadata.referencePoints.length})</dt>
@@ -428,7 +451,7 @@ export function NavigationChartsClient() {
       <section className="rounded-2xl border border-zinc-200 bg-white/60 p-4 text-xs leading-relaxed text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-400">
         <p className="font-semibold text-zinc-800 dark:text-zinc-200">Roadmap</p>
         <ul className="mt-2 list-disc space-y-1 pl-5">
-          <li>KAP/BSB full binary decode &amp; true raster paint</li>
+          <li>KAP/BSB indexed line tables &amp; edge-case charts</li>
           <li>GPS vessel positioning</li>
           <li>Offline chart caching</li>
           <li>Chart overlays &amp; route plotting</li>

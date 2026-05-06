@@ -140,7 +140,7 @@ export default function NavigationChartsMap({
         ) : null}
         <MapResizeFix />
         <FitBoundsChart chartBounds={chartBounds} fitBoundsNonce={fitBoundsNonce} />
-        {showRasterOverlay && chartBounds && showDebugBounds ? (
+        {chartBounds && showDebugBounds ? (
           <Rectangle
             bounds={latLngBounds}
             pathOptions={{
