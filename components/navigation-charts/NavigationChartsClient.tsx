@@ -380,6 +380,18 @@ export function NavigationChartsClient() {
           </p>
         </div>
         <EncNavigationMap />
+        <p className="text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
+          ENC cells © NOAA Office of Coast Survey —{" "}
+          <a
+            href="https://www.noaa.gov/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
+          >
+            NOAA
+          </a>
+          .
+        </p>
       </section>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
