@@ -12,26 +12,13 @@ import {
   TileLayer,
   useMap,
 } from "react-leaflet";
-import { PrecipitationCanvasOverlay, PrecipitationHitMarkers } from "@/components/weather/PrecipitationCanvasOverlay";
-import { TemperatureCanvasOverlay, TemperatureHitMarkers } from "@/components/weather/TemperatureCanvasOverlay";
 import { WEATHER_CHART_REGIONS, getWeatherChartRegion, type WeatherChartRegionId } from "@/lib/weather/model-chart-regions";
 
-type LayerId = "wind10m" | "waves" | "pressure_msl" | "precipitation" | "temperature_2m";
+type LayerId = "wind10m" | "waves";
 
 const LAYERS: { id: LayerId; label: string; description: string }[] = [
   { id: "wind10m", label: "10 m wind", description: "GFS wind (kn): arrow points downwind; size and colour scale with speed." },
   { id: "waves", label: "Waves", description: "Marine wave height (m) and direction — arrows where swell is meaningful." },
-  { id: "pressure_msl", label: "Sea-level pressure", description: "MSLP (hPa): sampled value labels, low/high centres (L/H)." },
-  {
-    id: "precipitation",
-    label: "Precipitation",
-    description: "Hourly precipitation (mm/h): soft blended field from the grid (Open‑Meteo GFS).",
-  },
-  {
-    id: "temperature_2m",
-    label: "2 m temperature",
-    description: "Air temperature (°C): smooth blended field from the grid (Open‑Meteo GFS).",
-  },
 ];
 
 const STEP_H = 3;
@@ -43,9 +30,6 @@ type MapPoint = {
   lng: number;
   windSpeedKn?: number | null;
   windDirFromDeg?: number | null;
-  pressureHpa?: number | null;
-  precipMm?: number | null;
-  tempC?: number | null;
   waveHeightM?: number | null;
   waveDirFromDeg?: number | null;
 };
@@ -290,79 +274,7 @@ function LayerLegend({ layer }: { layer: LayerId }) {
       </div>
     );
   }
-  if (layer === "pressure_msl") {
-    return (
-      <div className="max-w-[260px] rounded-lg border border-zinc-200 bg-white/95 px-3 py-2 text-[10px] shadow-sm dark:border-zinc-700 dark:bg-zinc-950/95">
-        <div className="font-semibold text-zinc-800 dark:text-zinc-100">Sea-level pressure</div>
-        <ul className="mt-2 list-none space-y-1.5 text-zinc-700 dark:text-zinc-200">
-          <li className="flex items-center gap-2">
-            <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[rgb(76,29,149)]" />
-            <span>
-              Low · <span className="font-mono">&lt; 1000</span> hPa
-            </span>
-          </li>
-          <li className="flex items-center gap-2">
-            <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[rgb(87,110,96)]" />
-            <span>
-              Normal · <span className="font-mono">1000–1020</span> hPa
-            </span>
-          </li>
-          <li className="flex items-center gap-2">
-            <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[rgb(217,119,6)]" />
-            <span>
-              High · <span className="font-mono">&gt; 1020</span> hPa
-            </span>
-          </li>
-        </ul>
-        <p className="mt-2 border-t border-zinc-200 pt-1.5 text-[9px] text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
-          L / H mark the lowest / highest value in the sampled grid for this hour.
-        </p>
-      </div>
-    );
-  }
-  if (layer === "precipitation") {
-    return (
-      <div className="max-w-[220px] rounded-lg border border-zinc-200 bg-white/95 px-3 py-2 text-[10px] shadow-sm dark:border-zinc-700 dark:bg-zinc-950/95">
-        <div className="font-semibold text-zinc-800 dark:text-zinc-100">Precipitation</div>
-        <p className="mt-0.5 text-[9px] text-zinc-500 dark:text-zinc-400">Hourly step — mm per hour (mm/h) from GFS.</p>
-        <div
-          className="mt-2 h-3 w-full rounded-md border border-zinc-200/80 dark:border-zinc-600/80"
-          style={{
-            background:
-              "linear-gradient(90deg, rgba(186,230,255,0.25) 0%, rgb(147,204,255) 12%, rgb(37,99,235) 35%, rgb(234,179,8) 62%, rgb(220,38,38) 100%)",
-          }}
-        />
-        <div className="mt-1 flex justify-between gap-1 font-mono text-[9px] text-zinc-600 dark:text-zinc-400">
-          <span>0–0.2</span>
-          <span>1</span>
-          <span>3</span>
-          <span>8+</span>
-        </div>
-        <p className="mt-1 text-[9px] text-zinc-500 dark:text-zinc-400">&lt;0.2 mm/h not shaded. Tap a cell for exact value.</p>
-      </div>
-    );
-  }
-  return (
-    <div className="max-w-[240px] rounded-lg border border-zinc-200 bg-white/95 px-3 py-2 text-[10px] shadow-sm dark:border-zinc-700 dark:bg-zinc-950/95">
-      <div className="font-semibold text-zinc-800 dark:text-zinc-100">2 m temperature (°C)</div>
-      <p className="mt-0.5 text-[9px] text-zinc-500 dark:text-zinc-400">GFS hourly step; tap the map for a grid value.</p>
-      <div
-        className="mt-2 h-3 w-full rounded-md border border-zinc-200/80 dark:border-zinc-600/80"
-        style={{
-          background:
-            "linear-gradient(90deg, rgb(88,28,135) 0%, rgb(37,99,235) 18%, rgb(34,197,94) 38%, rgb(250,204,21) 55%, rgb(249,115,22) 72%, rgb(220,38,38) 88%, rgb(185,28,28) 100%)",
-        }}
-      />
-      <div className="mt-1 flex flex-wrap justify-between gap-x-1 font-mono text-[9px] text-zinc-600 dark:text-zinc-400">
-        <span>&lt;-10</span>
-        <span>-10–0</span>
-        <span>0–10</span>
-        <span>10–20</span>
-        <span>20–30</span>
-        <span>30+</span>
-      </div>
-    </div>
-  );
+  return null;
 }
 
 export function WeatherModelChartViewer() {
@@ -553,57 +465,7 @@ export function WeatherModelChartViewer() {
   const mapFrameLead = mapFrame?.leadHours ?? lead;
   const timestepEmpty = uiMatches && mapFrame.validCount === 0 && !loading;
 
-  const pressureDisplay = useMemo(() => {
-    if (layer !== "pressure_msl" || !mapFrame || !showMapLayer) return null;
-
-    const entries = mapFrame.points
-      .map((p, i) => ({ p, i, h: p.pressureHpa }))
-      .filter((x): x is { p: MapPoint; i: number; h: number } => x.h != null && Number.isFinite(x.h));
-    if (entries.length === 0) {
-      return { labels: [] as { p: MapPoint; i: number; h: number }[], low: null, high: null, lowPos: null, highPos: null };
-    }
-
-    let low = entries[0]!;
-    let high = entries[0]!;
-    for (const e of entries) {
-      if (e.h < low.h) low = e;
-      if (e.h > high.h) high = e;
-    }
-
-    const MAX_LABELS = 26;
-    const stride = Math.max(1, Math.ceil(entries.length / MAX_LABELS));
-    const labeled = new Set<number>();
-    for (let k = 0; k < entries.length; k += stride) labeled.add(entries[k]!.i);
-    labeled.add(low.i);
-    labeled.add(high.i);
-
-    const labels = entries.filter((e) => labeled.has(e.i));
-
-    const showLH = entries.length >= 2 && Math.abs(high.h - low.h) >= 0.35;
-    const off = regionConfig.stepDeg * 0.62;
-    const lowPos: [number, number] | null = showLH
-      ? [low.p.lat + off * 0.55, low.p.lng - off * 0.38]
-      : null;
-    const highPos: [number, number] | null = showLH
-      ? [high.p.lat - off * 0.48, high.p.lng + off * 0.42]
-      : null;
-
-    return { labels, low: showLH ? low : null, high: showLH ? high : null, lowPos, highPos };
-  }, [layer, mapFrame, showMapLayer, regionConfig.stepDeg]);
-
-  const precipPoints = useMemo(() => {
-    if (layer !== "precipitation" || !mapFrame || !showMapLayer) return [];
-    return mapFrame.points
-      .map((p) => ({ lat: p.lat, lng: p.lng, mm: p.precipMm }))
-      .filter((p): p is { lat: number; lng: number; mm: number } => p.mm != null && Number.isFinite(p.mm));
-  }, [layer, mapFrame, showMapLayer]);
-
-  const tempPoints = useMemo(() => {
-    if (layer !== "temperature_2m" || !mapFrame || !showMapLayer) return [];
-    return mapFrame.points
-      .map((p) => ({ lat: p.lat, lng: p.lng, tempC: p.tempC }))
-      .filter((p): p is { lat: number; lng: number; tempC: number } => p.tempC != null && Number.isFinite(p.tempC));
-  }, [layer, mapFrame, showMapLayer]);
+  // Removed: pressure/precipitation/temperature layers.
 
   return (
     <section className="flex flex-col gap-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 sm:p-5">
@@ -743,7 +605,7 @@ export function WeatherModelChartViewer() {
       ) : null}
 
       <div className="relative min-h-[min(72vh,760px)] overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900">
-        <div className={`pointer-events-none absolute left-3 top-3 z-[400] ${layer === "pressure_msl" ? "max-w-[270px]" : "max-w-[220px]"}`}>
+        <div className="pointer-events-none absolute left-3 top-3 z-[400] max-w-[220px]">
           <LayerLegend layer={layer} />
         </div>
 
@@ -834,70 +696,7 @@ export function WeatherModelChartViewer() {
               })
             : null}
 
-          {showMapLayer && layer === "pressure_msl" && pressureDisplay
-            ? pressureDisplay.labels.map(({ p, i, h }) => (
-                <Marker key={`pl-${mapFrameLead}-${i}-${h}`} position={[p.lat, p.lng]} icon={pressureLabelIcon(h)}>
-                  <Popup>
-                    <div className="text-xs">
-                      <div className="font-semibold">MSLP</div>
-                      <div className="font-mono">{Math.round(h)} hPa</div>
-                    </div>
-                  </Popup>
-                </Marker>
-              ))
-            : null}
-
-          {showMapLayer && layer === "pressure_msl" && pressureDisplay?.low && pressureDisplay.lowPos ? (
-            <Marker
-              key={`p-L-${mapFrameLead}-${pressureDisplay.low.h}`}
-              position={pressureDisplay.lowPos}
-              icon={extremaPressureIcon("L")}
-            >
-              <Popup>
-                <div className="text-xs">
-                  <div className="font-semibold">Low centre (grid)</div>
-                  <div className="font-mono">{Math.round(pressureDisplay.low.h)} hPa</div>
-                </div>
-              </Popup>
-            </Marker>
-          ) : null}
-
-          {showMapLayer && layer === "pressure_msl" && pressureDisplay?.high && pressureDisplay.highPos ? (
-            <Marker
-              key={`p-H-${mapFrameLead}-${pressureDisplay.high.h}`}
-              position={pressureDisplay.highPos}
-              icon={extremaPressureIcon("H")}
-            >
-              <Popup>
-                <div className="text-xs">
-                  <div className="font-semibold">High centre (grid)</div>
-                  <div className="font-mono">{Math.round(pressureDisplay.high.h)} hPa</div>
-                </div>
-              </Popup>
-            </Marker>
-          ) : null}
-
-          {showMapLayer && layer === "precipitation" && precipPoints.length > 0 ? (
-            <>
-              <PrecipitationCanvasOverlay
-                points={precipPoints}
-                gridStepDeg={regionConfig.stepDeg}
-                leadKey={mapFrameLead}
-              />
-              <PrecipitationHitMarkers points={precipPoints} leadKey={mapFrameLead} />
-            </>
-          ) : null}
-
-          {showMapLayer && layer === "temperature_2m" && tempPoints.length > 0 ? (
-            <>
-              <TemperatureCanvasOverlay
-                points={tempPoints}
-                gridStepDeg={regionConfig.stepDeg}
-                leadKey={mapFrameLead}
-              />
-              <TemperatureHitMarkers points={tempPoints} leadKey={mapFrameLead} />
-            </>
-          ) : null}
+          {/* Removed: pressure/precipitation/temperature overlays */}
         </MapContainer>
       </div>
 
