@@ -183,6 +183,7 @@ export function parseKapFile(buf: ArrayBuffer): KapParseResult {
     referencePoints: [],
     polygonCorners: [],
     bounds: null,
+    paletteEntries: [],
   };
 
   for (let li = 0; li < lines.length; li++) {
@@ -210,6 +211,21 @@ export function parseKapFile(buf: ArrayBuffer): KapParseResult {
     if (raw.startsWith("CHT/")) {
       const fields = parseBsbFields(raw.slice(4));
       if (fields.NA) metadata.chartName = fields.NA;
+      continue;
+    }
+
+    if (raw.startsWith("RGB/")) {
+      const m = raw.match(
+        /^RGB\/(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i,
+      );
+      if (m) {
+        metadata.paletteEntries.push({
+          index: Number(m[1]),
+          r: Number(m[2]),
+          g: Number(m[3]),
+          b: Number(m[4]),
+        });
+      }
       continue;
     }
 

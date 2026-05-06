@@ -10,6 +10,9 @@ export type KapGeoReferencePoint = {
   raw: string;
 };
 
+/** RGB/ palette entry from BSB header (index 1-based per file convention). */
+export type KapPaletteEntry = { index: number; r: number; g: number; b: number };
+
 /** Initial metadata extracted from a .kap text header (raster body not decoded). */
 export type KapMetadata = {
   chartName: string | null;
@@ -24,6 +27,8 @@ export type KapMetadata = {
   polygonCorners: { lat: number; lng: number }[];
   /** South-west and north-east corners for Leaflet [[south, west], [north, east]]. */
   bounds: [[number, number], [number, number]] | null;
+  /** Colour table from RGB/ lines (may be sparse until raster decode validates). */
+  paletteEntries: KapPaletteEntry[];
 };
 
 export type KapParseResult =
