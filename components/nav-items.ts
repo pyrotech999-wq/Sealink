@@ -7,6 +7,12 @@ export const NAV_ITEMS: readonly {
   alsoActiveFor?: readonly string[];
 }[] = [
   { href: "/", label: "Home", short: "Home" },
+  {
+    href: "/anchor-alarm",
+    label: "Anchor alarm",
+    short: "Anchor",
+    sub: "Geofence & drift alerts",
+  },
   { href: "/ifm", label: "IFM", short: "IFM", sub: "International Friends Map" },
   { href: "/messaging", label: "Messages", short: "Messages", sub: "Broadcasts & vicinity chat" },
   { href: "/weather", label: "Weather & sea", short: "Weather", sub: "Weather & sea" },

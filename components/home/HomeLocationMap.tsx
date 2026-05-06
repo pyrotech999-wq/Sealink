@@ -196,12 +196,18 @@ function buildPinIcon(boat: string, avatarUrl: string, peekAvatar: boolean): L.D
 export default function HomeLocationMap({
   signedIn = false,
   sharingUiMode = "home",
+  anchorPlacement = "full",
+  showHomeMapExtras = true,
 }: {
   signedIn?: boolean;
   /** `home`: map + link to settings. `settings`: options + share toggle only (no map). */
   sharingUiMode?: "home" | "settings";
+  /** `full`: anchor controls + modal here. `compact`: pill only — open /anchor-alarm to arm or change settings. */
+  anchorPlacement?: "full" | "compact";
+  showHomeMapExtras?: boolean;
 }) {
   const isSettings = sharingUiMode === "settings";
+  const anchorCompact = anchorPlacement === "compact" && !isSettings;
   const [boatInput, setBoatInput] = useState(() => (typeof window !== "undefined" ? getBoatName() : ""));
   const [avatarUrl] = useState(() => (typeof window !== "undefined" ? getAvatarDataUrl() : ""));
   const [pinAvatarPeek, setPinAvatarPeek] = useState(false);
@@ -1216,6 +1222,7 @@ export default function HomeLocationMap({
   }, [sharing, pos?.lat, pos?.lng]);
 
   useEffect(() => {
+    if (!showHomeMapExtras) return;
     if (typeof window === "undefined") return;
     if (wasLifeOnSeasPopupShownToday()) return;
     const t = window.setTimeout(() => {
@@ -1223,13 +1230,14 @@ export default function HomeLocationMap({
       setLifeSeasOpen(true);
     }, 1100);
     return () => window.clearTimeout(t);
-  }, []);
+  }, [showHomeMapExtras]);
 
   useEffect(() => {
+    if (!showHomeMapExtras) return;
     const onOpen = () => setLifeSeasOpen(true);
     window.addEventListener("sealink-seas-the-day-open", onOpen);
     return () => window.removeEventListener("sealink-seas-the-day-open", onOpen);
-  }, []);
+  }, [showHomeMapExtras]);
 
   const setSharingOn = useCallback((on: boolean) => {
     if (!on) {
@@ -1535,38 +1543,51 @@ export default function HomeLocationMap({
             </div>
           ) : null}
           <div className="flex flex-col items-start gap-1">
-            <button
-              type="button"
-              onClick={() => setAnchorOpen(true)}
-              className="relative z-50 inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-indigo-300 bg-indigo-50 px-4 text-sm font-semibold text-indigo-900 shadow-sm hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-100 dark:hover:bg-indigo-900/70"
-            >
-              Anchor alert
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (anchorCfg.armed) {
-                  const merged = { ...anchorCfg, armed: false, lastAlertAt: null };
-                  setAnchorCfg(merged);
-                  setAnchorAlertConfig(merged);
-                } else {
-                  setAnchorOpen(true);
-                }
-              }}
-              className={`relative z-50 inline-flex h-6 items-center gap-1 rounded-full border px-2 text-[11px] font-semibold ${
-                anchorCfg.armed
-                  ? "border-green-300 bg-green-50 text-green-900 hover:bg-green-100 dark:border-green-900/50 dark:bg-green-950/40 dark:text-green-100 dark:hover:bg-green-950/60"
-                  : "border-red-300 bg-red-50 text-red-900 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100 dark:hover:bg-red-950/60"
-              }`}
-              title={anchorCfg.armed ? "Turn anchor alert off" : "Open anchor alert settings"}
-            >
-              {anchorCfg.armed ? "ON" : "OFF"}
-              {anchorCfg.armed ? (
-                <span className="max-w-[200px] truncate font-normal opacity-80">
-                  · {monitorDeviceLabel ? `Monitoring ${monitorDeviceLabel}` : "Monitoring…"}
-                </span>
-              ) : null}
-            </button>
+            {anchorCompact ? null : (
+              <button
+                type="button"
+                onClick={() => setAnchorOpen(true)}
+                className="relative z-50 inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-indigo-300 bg-indigo-50 px-4 text-sm font-semibold text-indigo-900 shadow-sm hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-100 dark:hover:bg-indigo-900/70"
+              >
+                Anchor alert
+              </button>
+            )}
+            {anchorCompact && !anchorCfg.armed ? (
+              <Link
+                href="/anchor-alarm"
+                className="relative z-50 inline-flex h-6 items-center gap-1 rounded-full border border-red-300 bg-red-50 px-2 text-[11px] font-semibold text-red-900 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100 dark:hover:bg-red-950/60"
+                title="Open Anchor alarm page to arm or change settings"
+              >
+                OFF
+                <span className="max-w-[160px] truncate font-normal opacity-80">· Tap to set up</span>
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  if (anchorCfg.armed) {
+                    const merged = { ...anchorCfg, armed: false, lastAlertAt: null };
+                    setAnchorCfg(merged);
+                    setAnchorAlertConfig(merged);
+                  } else if (!anchorCompact) {
+                    setAnchorOpen(true);
+                  }
+                }}
+                className={`relative z-50 inline-flex h-6 items-center gap-1 rounded-full border px-2 text-[11px] font-semibold ${
+                  anchorCfg.armed
+                    ? "border-green-300 bg-green-50 text-green-900 hover:bg-green-100 dark:border-green-900/50 dark:bg-green-950/40 dark:text-green-100 dark:hover:bg-green-950/60"
+                    : "border-red-300 bg-red-50 text-red-900 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100 dark:hover:bg-red-950/60"
+                }`}
+                title={anchorCfg.armed ? "Turn anchor alert off" : "Open anchor alert settings"}
+              >
+                {anchorCfg.armed ? "ON" : "OFF"}
+                {anchorCfg.armed ? (
+                  <span className="max-w-[200px] truncate font-normal opacity-80">
+                    · {monitorDeviceLabel ? `Monitoring ${monitorDeviceLabel}` : "Monitoring…"}
+                  </span>
+                ) : null}
+              </button>
+            )}
             {anchorCfg.armed && anchorLocQuality && anchorLocQuality !== "ok" ? (
               <p className="max-w-xl rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-snug text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
                 {anchorLocQuality === "poor_accuracy"
@@ -1767,7 +1788,7 @@ export default function HomeLocationMap({
         </div>
       )}
 
-      {!isSettings ? (
+      {!isSettings && showHomeMapExtras ? (
         <HomeMessagesCtaButton
           signedIn={signedIn}
           readLat={forecastLat}
@@ -1776,17 +1797,19 @@ export default function HomeLocationMap({
         />
       ) : null}
 
-      {!isSettings ? (
-      <WeatherForecast7Day lat={forecastCoords.lat} lng={forecastCoords.lng} />
+      {!isSettings && showHomeMapExtras ? (
+        <WeatherForecast7Day lat={forecastCoords.lat} lng={forecastCoords.lng} />
       ) : null}
 
-      <LifeOnSeasDailyModal
-        open={lifeSeasOpen}
-        onClose={() => setLifeSeasOpen(false)}
-        pinLive={Boolean(sharing && pos)}
-        lat={pos?.lat ?? null}
-        lng={pos?.lng ?? null}
-      />
+      {showHomeMapExtras ? (
+        <LifeOnSeasDailyModal
+          open={lifeSeasOpen}
+          onClose={() => setLifeSeasOpen(false)}
+          pinLive={Boolean(sharing && pos)}
+          lat={pos?.lat ?? null}
+          lng={pos?.lng ?? null}
+        />
+      ) : null}
 
       {activeAnchorAlert ? (
         <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/50 px-4 py-8">
@@ -1912,45 +1935,47 @@ export default function HomeLocationMap({
         </div>
       ) : null}
 
-      <AnchorAlertModal
-        open={anchorOpen}
-        onClose={() => setAnchorOpen(false)}
-        emergencyDisableLiveMapApis={EMERGENCY_DISABLE_LIVE_MAP_APIS}
-        sharing={sharing}
-        hasFix={Boolean(pos)}
-        pos={pos ? { lat: pos.lat, lng: pos.lng } : null}
-        horizontalAccuracyM={geoAccuracyRawM}
-        anchorGpsQuality={anchorCfg.armed ? anchorLocQuality : null}
-        showIOSPreciseHint={isLikelyIOS()}
-        deviceId={deviceId}
-        monitor={anchorMonitor}
-        config={{
-          armed: anchorCfg.armed,
-          lat: anchorCfg.lat,
-          lng: anchorCfg.lng,
-          radiusM: anchorCfg.radiusM,
-          angleDeg: anchorCfg.angleDeg ?? 360,
-          monitorDeviceId: anchorCfg.monitorDeviceId,
-        }}
-        onUpdate={(next) => {
-          const anchorChanged = next.lat !== anchorCfg.lat || next.lng !== anchorCfg.lng;
-          const merged = {
-            ...anchorCfg,
-            ...next,
-            lastAlertAt: null,
-            lastBearingDeg: anchorChanged ? null : anchorCfg.lastBearingDeg,
-          };
-          setAnchorCfg(merged);
-          setAnchorAlertConfig(merged);
-          if (!EMERGENCY_DISABLE_LIVE_MAP_APIS && sharing) {
-            void fetch("/api/anchor/geofence", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(merged),
-            }).catch(() => undefined);
-          }
-        }}
-      />
+      {!anchorCompact ? (
+        <AnchorAlertModal
+          open={anchorOpen}
+          onClose={() => setAnchorOpen(false)}
+          emergencyDisableLiveMapApis={EMERGENCY_DISABLE_LIVE_MAP_APIS}
+          sharing={sharing}
+          hasFix={Boolean(pos)}
+          pos={pos ? { lat: pos.lat, lng: pos.lng } : null}
+          horizontalAccuracyM={geoAccuracyRawM}
+          anchorGpsQuality={anchorCfg.armed ? anchorLocQuality : null}
+          showIOSPreciseHint={isLikelyIOS()}
+          deviceId={deviceId}
+          monitor={anchorMonitor}
+          config={{
+            armed: anchorCfg.armed,
+            lat: anchorCfg.lat,
+            lng: anchorCfg.lng,
+            radiusM: anchorCfg.radiusM,
+            angleDeg: anchorCfg.angleDeg ?? 360,
+            monitorDeviceId: anchorCfg.monitorDeviceId,
+          }}
+          onUpdate={(next) => {
+            const anchorChanged = next.lat !== anchorCfg.lat || next.lng !== anchorCfg.lng;
+            const merged = {
+              ...anchorCfg,
+              ...next,
+              lastAlertAt: null,
+              lastBearingDeg: anchorChanged ? null : anchorCfg.lastBearingDeg,
+            };
+            setAnchorCfg(merged);
+            setAnchorAlertConfig(merged);
+            if (!EMERGENCY_DISABLE_LIVE_MAP_APIS && sharing) {
+              void fetch("/api/anchor/geofence", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(merged),
+              }).catch(() => undefined);
+            }
+          }}
+        />
+      ) : null}
     </section>
   );
 }
