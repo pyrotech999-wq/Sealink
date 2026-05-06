@@ -34,7 +34,11 @@ type LoadPhase = "idle" | "parsing" | "extracting" | "overlay" | "rendering" | "
 
 type ErrorKind = "parse" | "raster" | "read" | "none";
 
-const PHASE_LABELS: Record<Exclude<LoadPhase, "idle" | "ready">, string> = {
+const PHASE_ORDER = ["parsing", "extracting", "overlay", "rendering"] as const;
+
+type LoadPhaseStep = (typeof PHASE_ORDER)[number];
+
+const PHASE_LABELS: Record<LoadPhaseStep, string> = {
   parsing: "Parsing KAP",
   extracting: "Extracting raster",
   overlay: "Generating overlay",
@@ -178,8 +182,7 @@ export function NavigationChartsClient() {
     // TODO: OpenCPN — document export path or platform URL scheme; no in-app OpenCPN runtime.
   }, []);
 
-  const phaseOrder: LoadPhase[] = ["parsing", "extracting", "overlay", "rendering"];
-  const phaseIndex = (p: LoadPhase) => phaseOrder.indexOf(p);
+  const phaseIndex = (p: LoadPhase) => PHASE_ORDER.indexOf(p as LoadPhaseStep);
 
   const statusBanner =
     status === "idle" ? null : (
@@ -214,9 +217,9 @@ export function NavigationChartsClient() {
         </p>
         {status === "loading" ? (
           <ol className="flex flex-wrap gap-x-4 gap-y-1 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-300">
-            {phaseOrder.map((key) => {
+            {PHASE_ORDER.map((key) => {
               const cur = phaseIndex(loadPhase);
-              const idx = phaseIndex(key);
+              const idx = PHASE_ORDER.indexOf(key);
               const done = cur > idx || loadPhase === "ready";
               const active = loadPhase === key;
               return (
@@ -253,8 +256,8 @@ export function NavigationChartsClient() {
         </h1>
         <p className="max-w-2xl text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
           Upload your own <strong className="font-medium text-zinc-700 dark:text-zinc-300">.kap</strong> (BSB/KAP raster)
-          to preview georeference. SeaLink does not ship chart bundles — you obtain charts under their licence, then open
-          them here. Raster decode in-app will follow.
+          to preview georeference and decoded raster overlay. SeaLink does not ship chart bundles — you obtain charts under
+          their licence, then open them here.
         </p>
       </header>
 

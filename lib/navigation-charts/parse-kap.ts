@@ -176,11 +176,7 @@ function parseBsbFields(segment: string): Record<string, string> {
   return out;
 }
 
-/**
- * Initial KAP/BSB text-header parse — raster RLE body and colour tables are not decoded.
- * TODO: Full BSB/KAP binary section — RLE row unpack, colour map IFM/RGB, index table.
- * TODO: Raster image extraction to Canvas / ImageBitmap for true chart paint.
- */
+/** Initial KAP/BSB text-header parse; packed raster is decoded separately in `extract-kap-raster.ts`. */
 export function parseKapFile(buf: ArrayBuffer): KapParseResult {
   if (buf.byteLength < 32) {
     return { ok: false, error: "File too small to be a valid KAP chart." };
