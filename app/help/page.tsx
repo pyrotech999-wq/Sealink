@@ -4,7 +4,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Help | SeaLink",
   description:
-    "How to use SeaLink: home map, Anchor alarm page, sharing, weather, IFM, Buy & Sell (boats & gear), marinas, anchor watch, broadcasts, and more.",
+    "How to use SeaLink: home map, Anchor alarm, sharing, Weather & sea (OPC charts, UKMO MSLP, interactive GFS wind/waves), IFM, Buy & Sell, marinas, anchor watch, broadcasts, and more.",
 };
 
 const DEV_EMAIL = "pyrotech999@hotmail.co.uk";
@@ -150,8 +150,8 @@ export default function HelpPage() {
                   page: full geofence controls and map (focused on anchor watch; no nearby-friends layer there).
                 </li>
                 <li>
-                  <strong className="text-zinc-300">Weather &amp; sea</strong> — global forecast map (wind, waves, rain,
-                  pressure).
+                  <strong className="text-zinc-300">Weather &amp; sea</strong> — official-style chart images (UKMO MSLP,
+                  OPC) plus an interactive GFS wind and wave viewer; see the detailed section below.
                 </li>
                 <li>
                   <strong className="text-zinc-300">IFM</strong> — International Friends Map for seeing other users.
@@ -292,42 +292,113 @@ export default function HelpPage() {
               </ul>
             </Section>
 
-            <Section id="weather" title="Weather &amp; sea map">
+            <Section id="weather" title="Weather &amp; sea — maps and charts">
               <p>
                 Open{" "}
                 <Link href="/weather" className="font-medium text-emerald-400 hover:underline">
                   Weather &amp; sea
                 </Link>{" "}
-                for a full-screen style forecast map. It can start at your location if permitted, but you can pan and
-                zoom worldwide.
+                for <strong className="text-zinc-200">static forecast chart images</strong> (analysis and prognosis maps)
+                plus an <strong className="text-zinc-200">interactive model viewer</strong> built on OpenStreetMap. Charts are
+                fetched through SeaLink and typically <strong className="text-zinc-200">cached for about six hours</strong>,
+                so repeat views stay quick and the source sites see less load.
+              </p>
+
+              <p>
+                <strong className="text-zinc-200">How the page is laid out (top to bottom)</strong>
+              </p>
+              <ol className="list-decimal space-y-2 pl-5 text-zinc-400">
+                <li>
+                  <strong className="text-zinc-300">UK, Med &amp; Europe — surface pressure</strong> — UKMO mean sea level
+                  pressure (MSLP) analysis and forecast steps.
+                </li>
+                <li>
+                  <strong className="text-zinc-300">Surface pressure / Interactive</strong> — one card with two modes: OPC
+                  pressure panels, or the GFS-based grid viewer (wind and waves).
+                </li>
+                <li>
+                  <strong className="text-zinc-300">Ocean Prediction Centre charts</strong> — full chart browser (several
+                  chart types per ocean basin).
+                </li>
+              </ol>
+
+              <p>
+                <strong className="text-zinc-200">1. UK, Med &amp; Europe MSLP</strong>
               </p>
               <p>
-                <strong className="text-zinc-200">Base map</strong>: Satellite, Streets, or Light — pick what makes
-                overlays easiest to read for the region you are viewing.
+                Use the tabs along the top of that block — <strong className="text-zinc-300">Analysis</strong>, then{" "}
+                <strong className="text-zinc-300">T+24</strong> through <strong className="text-zinc-300">T+120</strong> — to
+                step through UK Met Office MSLP charts (via weathercharts.org). <strong className="text-zinc-300">Source</strong>{" "}
+                opens the provider page. Read them like conventional surface charts: isobar spacing, centre positions, and
+                how features move between valid times.
+              </p>
+
+              <p>
+                <strong className="text-zinc-200">2. “Surface pressure” vs “Interactive”</strong>
+              </p>
+              <p>Switch with the two buttons at the top of the middle section.</p>
+              <ul className="list-disc space-y-2 pl-5 text-zinc-400">
+                <li>
+                  <strong className="text-zinc-300">Surface pressure</strong> — US{" "}
+                  <abbr title="Ocean Prediction Center" className="no-underline">
+                    OPC
+                  </abbr>{" "}
+                  surface analysis and forecast maps. Choose <strong className="text-zinc-300">Atlantic</strong>,{" "}
+                  <strong className="text-zinc-300">Pacific</strong>, or <strong className="text-zinc-300">Alaska / Arctic</strong>
+                  , then <strong className="text-zinc-300">Analysis</strong>, <strong className="text-zinc-300">24h</strong>,{" "}
+                  <strong className="text-zinc-300">48h</strong>, <strong className="text-zinc-300">72h</strong>, or{" "}
+                  <strong className="text-zinc-300">96h</strong>. Greyed-out times are not available for that product.{" "}
+                  <strong className="text-zinc-300">OPC site</strong> links to the official loop index.
+                </li>
+                <li>
+                  <strong className="text-zinc-300">Interactive</strong> — the <strong className="text-zinc-300">Model chart viewer</strong>
+                  : OpenStreetMap with a sampled grid from <strong className="text-zinc-300">Open‑Meteo (GFS family)</strong>.
+                  Pick <strong className="text-zinc-300">10 m wind</strong> or <strong className="text-zinc-300">Waves</strong>.
+                  Wind arrows are drawn <strong className="text-zinc-200">downwind</strong>; tap a marker for speed in{" "}
+                  <strong className="text-zinc-200">knots</strong> and the direction the wind is <strong className="text-zinc-200">from</strong> (degrees). Waves show coloured circles (significant height) and, where data supports it, direction arrows; tap for height in metres and direction-from. A small <strong className="text-zinc-300">legend</strong> on the map matches colours to wind speed or wave height.
+                </li>
+              </ul>
+
+              <p>
+                <strong className="text-zinc-200">Interactive viewer — regions and time</strong>
               </p>
               <p>
-                <strong className="text-zinc-200">Overlays</strong>: <strong className="text-zinc-300">Wind</strong>{" "}
-                (particle flow), <strong className="text-zinc-300">Waves</strong> (height shading),{" "}
-                <strong className="text-zinc-300">Rain</strong>, and <strong className="text-zinc-300">Pressure</strong>.
-                Use the <strong className="text-zinc-300">Overlay</strong> slider to balance base map vs data.
+                The <strong className="text-zinc-300">Region</strong> menu reframes the map (for example Europe, North or
+                South America, Africa, Eastern Asia, Australia, plus smaller areas such as United Kingdom, Scandinavia,
+                Netherlands, France, Spain, Italy / Balkans, Turkey / Middle East, and others). The{" "}
+                <strong className="text-zinc-300">timeline</strong> uses <strong className="text-zinc-200">three-hour steps</strong> out to about{" "}
+                <strong className="text-zinc-200">+117 h</strong> from the model. Use <strong className="text-zinc-300">Play</strong> /{" "}
+                <strong className="text-zinc-300">Pause</strong> to animate, <strong className="text-zinc-300">−3h</strong> /{" "}
+                <strong className="text-zinc-300">+3h</strong> to step, or drag the <strong className="text-zinc-300">slider</strong>.
+                <strong className="text-zinc-300"> Fit region</strong> re-centres on the bounding box for the area you selected.
+                The app preloads a few nearby timesteps when you change region or layer; other hours load as you scrub (and
+                results are stored in your browser for up to six hours). If the service is rate-limited, you may see a note
+                that <strong className="text-zinc-200">cached data</strong> is shown. If a step has almost no wave points (for
+                example over land), try another hour, the other layer, or a more maritime region.
+              </p>
+
+              <p>
+                <strong className="text-zinc-200">3. Ocean Prediction Centre charts (full list)</strong>
               </p>
               <p>
-                <strong className="text-zinc-200">Time</strong>: <strong className="text-zinc-300">Play</strong> animates
-                the forecast; drag the time slider to a specific model hour. Check the legend under the map for units and
-                data sources.
+                The bottom block is a complete OPC chart picker: choose <strong className="text-zinc-300">Region</strong> (same
+                ocean basins as above), then <strong className="text-zinc-300">Chart</strong> — typically{" "}
+                <strong className="text-zinc-300">Surface pressure</strong>, <strong className="text-zinc-300">Wind &amp; wave</strong>,{" "}
+                <strong className="text-zinc-300">Wave period</strong>, and <strong className="text-zinc-300">500 mb</strong> where
+                that basin provides it. Step through <strong className="text-zinc-300">Analysis</strong> and{" "}
+                <strong className="text-zinc-300">24h–96h</strong>; use <strong className="text-zinc-300">Prev</strong> /{" "}
+                <strong className="text-zinc-300">Next</strong> to move between forecast times when those controls are enabled.
+                The header bar repeats your selection and links to the OPC site.
               </p>
-              <p>
-                <strong className="text-zinc-200">My location</strong> and <strong className="text-zinc-300">AI outlook</strong>{" "}
-                (when shown): recentre the map on you, or ask for an AI-style narrative for the map centre — treat AI text
-                as informal commentary, not a forecast product.
+
+              <p className="rounded-lg border border-zinc-700/80 bg-zinc-950/60 px-3 py-2 text-xs text-zinc-400">
+                <strong className="text-zinc-300">Note:</strong> The interactive viewer is <strong className="text-zinc-200">not</strong> a full GRIB viewer — it samples the model on a coarse grid for clarity. Synoptic judgement should still use the official chart images and your national meteorological service.
               </p>
-              <p>
-                A <strong className="text-zinc-300">storm / wind alert strip</strong> may appear above the map when
-                relevant; it is informational — always verify with official warnings.
-              </p>
+
               <p className="rounded-lg border border-amber-900/40 bg-amber-950/25 px-3 py-2 text-xs leading-5 text-amber-100/90">
                 <strong className="text-amber-200">Important:</strong> SeaLink weather is for interest and situational
-                awareness only. For any decision to go to sea, use official meteorological services and licensed charts.
+                awareness only. For any decision to go to sea, use official meteorological services, NAVAREA / coastal
+                warnings, and licensed charts — not this app alone.
               </p>
             </Section>
 
