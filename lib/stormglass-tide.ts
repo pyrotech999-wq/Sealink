@@ -22,8 +22,9 @@ function fmt(d: Date) {
   return d.toISOString().slice(0, 13);
 }
 
-function tideCacheKey(lat: number, lng: number, start: Date, end: Date): string {
-  return `${bucketCoord(lat).toFixed(1)}|${bucketCoord(lng).toFixed(1)}|${fmt(start)}|${fmt(end)}`;
+/** Location bucket only — TTL controls freshness; window (start/end) is chosen per request at fetch time. */
+function tideLocationCacheKey(lat: number, lng: number): string {
+  return `${bucketCoord(lat).toFixed(1)}|${bucketCoord(lng).toFixed(1)}`;
 }
 
 type CachedTide = { storedAt: number; value: StormglassTideTable | null };
@@ -34,10 +35,10 @@ const tideInflight = new Map<string, Promise<StormglassTideTable | null>>();
 export function peekStormglassTideExtremesCache(
   lat: number,
   lng: number,
-  start: Date,
-  end: Date,
+  _start: Date,
+  _end: Date,
 ): boolean {
-  const key = tideCacheKey(lat, lng, start, end);
+  const key = tideLocationCacheKey(lat, lng);
   const hit = tideExtremesCache.get(key);
   return Boolean(hit && Date.now() - hit.storedAt < TIDE_CACHE_TTL_MS);
 }
@@ -136,7 +137,7 @@ async function fetchStormglassTideExtremesNetwork(
 }
 
 /**
- * 60-minute RAM cache + in-flight de-duplication for tide extremes.
+ * Per-location RAM cache (12h) + in-flight de-duplication for tide extremes.
  */
 export async function fetchStormglassTideExtremesCached(
   lat: number,
@@ -145,7 +146,7 @@ export async function fetchStormglassTideExtremesCached(
   end: Date,
   signal?: AbortSignal,
 ): Promise<{ table: StormglassTideTable | null; meta: StormglassTideFetchMeta }> {
-  const key = tideCacheKey(lat, lng, start, end);
+  const key = tideLocationCacheKey(lat, lng);
   const hit = tideExtremesCache.get(key);
   if (hit && Date.now() - hit.storedAt < TIDE_CACHE_TTL_MS) {
     return { table: hit.value, meta: "memory" };

@@ -145,7 +145,7 @@ async function loadNoaaStations(): Promise<NoaaStation[]> {
   return out;
 }
 
-async function noaaTideTable(coords: { lat: number; lng: number }): Promise<{
+type NoaaTideTableFull = {
   source: "noaa";
   stationId: string;
   stationName: string;
@@ -153,7 +153,14 @@ async function noaaTideTable(coords: { lat: number; lng: number }): Promise<{
   datum: string;
   timeZone: "lst_ldt";
   events: TideTableEvent[];
-} | null> {
+};
+
+type CachedNoaaTidePredictions = { storedAt: number; value: NoaaTideTableFull | null };
+const noaaTidePredictionsCache = new Map<string, CachedNoaaTidePredictions>();
+const noaaTidePredictionsInflight = new Map<string, Promise<NoaaTideTableFull | null>>();
+const NOAA_TIDE_PREDICTIONS_TTL_MS = 12 * 60 * 60 * 1000;
+
+async function noaaTideTable(coords: { lat: number; lng: number }): Promise<NoaaTideTableFull | null> {
   const stations = await loadNoaaStations();
   if (!stations.length) return null;
 
@@ -171,51 +178,70 @@ async function noaaTideTable(coords: { lat: number; lng: number }): Promise<{
   const now = new Date();
   const begin = ymd(now);
   const end = ymd(new Date(now.getTime() + 48 * 60 * 60 * 1000));
+  const cacheKey = `${best.st.id}|${begin}|${end}`;
 
-  const api = new URL("https://api.tidesandcurrents.noaa.gov/api/prod/datagetter");
-  api.searchParams.set("product", "predictions");
-  api.searchParams.set("application", "sealink");
-  api.searchParams.set("begin_date", begin);
-  api.searchParams.set("end_date", end);
-  api.searchParams.set("datum", "MLLW");
-  api.searchParams.set("station", best.st.id);
-  api.searchParams.set("time_zone", "lst_ldt");
-  api.searchParams.set("units", "metric");
-  api.searchParams.set("interval", "hilo");
-  api.searchParams.set("format", "json");
+  const hit = noaaTidePredictionsCache.get(cacheKey);
+  if (hit && Date.now() - hit.storedAt < NOAA_TIDE_PREDICTIONS_TTL_MS) return hit.value;
 
-  const r = await fetch(api.toString(), { cache: "no-store" });
-  if (!r.ok) return null;
-  const j: unknown = await r.json();
-  const obj = typeof j === "object" && j !== null ? (j as Record<string, unknown>) : null;
-  const preds = obj?.predictions;
-  if (!Array.isArray(preds)) return null;
+  const existing = noaaTidePredictionsInflight.get(cacheKey);
+  if (existing) return existing;
 
-  const events: TideTableEvent[] = preds
-    .map((p: unknown) => {
-      const row = typeof p === "object" && p !== null ? (p as Record<string, unknown>) : null;
-      const t = typeof row?.t === "string" ? row.t : null;
-      const v = typeof row?.v === "string" ? Number(row.v) : typeof row?.v === "number" ? row.v : NaN;
-      const typ = typeof row?.type === "string" ? row.type : "";
-      if (!t || !Number.isFinite(v)) return null;
-      const kind: "high" | "low" | null = typ === "H" || typ.toLowerCase().includes("high") ? "high" : typ === "L" || typ.toLowerCase().includes("low") ? "low" : null;
-      if (!kind) return null;
-      // NOAA returns local time string without timezone, e.g. "2026-04-30 07:03"
-      const isoish = t.includes("T") ? t : t.replace(" ", "T");
-      return { kind, t: isoish, heightM: v };
+  const networkPromise: Promise<NoaaTideTableFull | null> = (async () => {
+    const api = new URL("https://api.tidesandcurrents.noaa.gov/api/prod/datagetter");
+    api.searchParams.set("product", "predictions");
+    api.searchParams.set("application", "sealink");
+    api.searchParams.set("begin_date", begin);
+    api.searchParams.set("end_date", end);
+    api.searchParams.set("datum", "MLLW");
+    api.searchParams.set("station", best!.st.id);
+    api.searchParams.set("time_zone", "lst_ldt");
+    api.searchParams.set("units", "metric");
+    api.searchParams.set("interval", "hilo");
+    api.searchParams.set("format", "json");
+
+    const r = await fetch(api.toString(), { cache: "no-store" });
+    if (!r.ok) return null;
+    const j: unknown = await r.json();
+    const obj = typeof j === "object" && j !== null ? (j as Record<string, unknown>) : null;
+    const preds = obj?.predictions;
+    if (!Array.isArray(preds)) return null;
+
+    const events: TideTableEvent[] = preds
+      .map((p: unknown) => {
+        const row = typeof p === "object" && p !== null ? (p as Record<string, unknown>) : null;
+        const t = typeof row?.t === "string" ? row.t : null;
+        const v = typeof row?.v === "string" ? Number(row.v) : typeof row?.v === "number" ? row.v : NaN;
+        const typ = typeof row?.type === "string" ? row.type : "";
+        if (!t || !Number.isFinite(v)) return null;
+        const kind: "high" | "low" | null = typ === "H" || typ.toLowerCase().includes("high") ? "high" : typ === "L" || typ.toLowerCase().includes("low") ? "low" : null;
+        if (!kind) return null;
+        // NOAA returns local time string without timezone, e.g. "2026-04-30 07:03"
+        const isoish = t.includes("T") ? t : t.replace(" ", "T");
+        return { kind, t: isoish, heightM: v };
+      })
+      .filter(Boolean) as TideTableEvent[];
+
+    if (!events.length) return null;
+    return {
+      source: "noaa" as const,
+      stationId: best!.st.id,
+      stationName: best!.st.name,
+      distanceKm: best!.dKm,
+      datum: "MLLW",
+      timeZone: "lst_ldt" as const,
+      events,
+    };
+  })()
+    .then((v) => {
+      noaaTidePredictionsCache.set(cacheKey, { storedAt: Date.now(), value: v });
+      return v;
     })
-    .filter(Boolean) as TideTableEvent[];
+    .finally(() => {
+      noaaTidePredictionsInflight.delete(cacheKey);
+    });
 
-  if (!events.length) return null;
-  return {
-    source: "noaa",
-    stationId: best.st.id,
-    stationName: best.st.name,
-    distanceKm: best.dKm,
-    datum: "MLLW",
-    timeZone: "lst_ldt",
-    events,
-  };
+  noaaTidePredictionsInflight.set(cacheKey, networkPromise);
+  return networkPromise;
 }
 
 function minMaxFinite(vals: number[]): { min: number; max: number } | null {
@@ -414,10 +440,9 @@ export async function GET(req: Request): Promise<Response> {
     ]);
 
     const stormglassFull = stormglassPack.table;
-    // WorldTides fallback uses the user's requested coordinates (not marina-adjusted tideCoords),
-    // and is cached broadly by rounded lat/lng for 12h.
+    // WorldTides fallback: same tide anchor as Stormglass/NOAA; cache keyed by rounded lat/lng for 12h.
     const tideTableFull =
-      noaaFull?.events?.length || stormglassFull?.events?.length ? null : await fetchWorldTidesTable(coords);
+      noaaFull?.events?.length || stormglassFull?.events?.length ? null : await fetchWorldTidesTable(tideCoords);
 
     if (!rUser.ok) return NextResponse.json({ error: `Marine request failed (${rUser.status})` }, { status: 502 });
     const dataUser = (await rUser.json()) as MarineResp;
