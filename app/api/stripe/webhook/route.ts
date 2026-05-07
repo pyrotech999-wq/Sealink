@@ -1,28 +1,30 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
-import { getStripe, stripeWebhookSecret } from "@/lib/stripe-server";
+import { getStripe } from "@/lib/stripe-server";
 import { persistStripeSubscriptionFromApi } from "@/lib/stripe-subscription-sync";
 import { applyVesselClassifiedStripePayment } from "@/lib/vessel-stripe-complete";
 
 export const runtime = "nodejs";
 
-export async function POST(req: Request): Promise<Response> {
-  const secret = stripeWebhookSecret();
-  if (!secret) {
-    return NextResponse.json({ error: "STRIPE_WEBHOOK_SECRET is not set." }, { status: 503 });
-  }
-
-  const body = await req.text();
-  const sig = (await headers()).get("stripe-signature");
-  if (!sig) return NextResponse.json({ error: "Missing stripe-signature" }, { status: 400 });
+export async function POST(request: Request): Promise<Response> {
+  const body = await request.text();
+  const signature = (await headers()).get("stripe-signature");
 
   let event: Stripe.Event;
   try {
-    event = getStripe().webhooks.constructEvent(body, sig, secret);
-  } catch {
-    return NextResponse.json({ error: "Invalid webhook signature" }, { status: 400 });
+    event = getStripe().webhooks.constructEvent(
+      body,
+      signature!,
+      process.env.STRIPE_WEBHOOK_SECRET!,
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    return new NextResponse(`Webhook Error: ${msg}`, { status: 400 });
   }
+
+  console.log("WEBHOOK RECEIVED");
+  console.log("EVENT TYPE", event.type);
 
   const stripe = getStripe();
 
