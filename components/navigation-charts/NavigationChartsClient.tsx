@@ -30,18 +30,6 @@ const NavigationChartsMap = dynamic(() => import("./NavigationChartsMap"), {
   ),
 });
 
-const EncNavigationMap = dynamic(() => import("./EncNavigationMap"), {
-  ssr: false,
-  loading: () => (
-    <div
-      className="flex h-[min(58dvh,520px)] min-h-[280px] w-full items-center justify-center rounded-2xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900/60"
-      aria-busy="true"
-    >
-      <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">Loading ENC map…</p>
-    </div>
-  ),
-});
-
 type LoadStatus = "idle" | "loading" | "success" | "error";
 
 type LoadPhase = "idle" | "parsing" | "extracting" | "overlay" | "rendering" | "ready";
@@ -391,41 +379,7 @@ export function NavigationChartsClient() {
           Open in OpenCPN
         </button>
       </div>
-
       <section className="space-y-3">
-        <div className="space-y-1">
-          <h2 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-            ENC map viewer (NOAA)
-          </h2>
-          <p className="max-w-2xl text-xs leading-relaxed text-zinc-600 dark:text-zinc-400 sm:text-sm">
-            Electronic Navigational Chart (ENC) cells from NOAA&apos;s public{" "}
-            <a
-              href="https://nauticalcharts.noaa.gov/data/gis-data-and-services.html"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
-            >
-              Chart Tools
-            </a>{" "}
-            service (US waters and US territories). When you load a KAP in the top viewer, this map pans to the same geographic bounds
-            so you can compare raster and ENC in one place. For passage planning curiosity only — not for primary
-            navigation; use an approved ECDIS or paper charts for safety-of-life decisions.
-          </p>
-        </div>
-        <EncNavigationMap chartBounds={metadata?.bounds ?? null} fitBoundsNonce={fitBoundsNonce} />
-        <p className="text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
-          ENC cells © NOAA Office of Coast Survey —{" "}
-          <a
-            href="https://www.noaa.gov/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
-          >
-            NOAA
-          </a>
-          .
-        </p>
-
         <div className="rounded-xl border border-zinc-200 bg-zinc-50/90 px-3 py-3 dark:border-zinc-700 dark:bg-zinc-950/50">
           <p className="text-xs font-medium text-zinc-800 dark:text-zinc-200">Other web chart viewers</p>
           <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-600 dark:text-zinc-400">
