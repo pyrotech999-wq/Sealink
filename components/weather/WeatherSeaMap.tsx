@@ -1,6 +1,7 @@
 "use client";
 
 import L from "leaflet";
+import * as EL from "esri-leaflet";
 import "leaflet/dist/leaflet.css";
 import {
   createContext,
@@ -17,6 +18,7 @@ import { AttributionControl, MapContainer, ScaleControl, TileLayer, useMap } fro
 
 type LayerMode = "wind" | "waves" | "rain" | "pressure";
 type BaseMapMode = "streets" | "light" | "satellite";
+type NauticalMode = "standard" | "seamarks" | "noaa_enc";
 
 type OpenMeteoBlock = {
   latitude?: number;
@@ -1053,10 +1055,138 @@ function WmsOverlay({ mode, opacity, timeIso }: { mode: LayerMode; opacity: numb
   return null;
 }
 
+const NOAA_ENC_MAPSERVER =
+  "https://gis.charttools.noaa.gov/arcgis/rest/services/MCS/ENCOnline/MapServer";
+
+function isLikelyUsCoverage(c: { lat: number; lng: number }): boolean {
+  // Broad brush bbox so the toggle is only encouraged in US waters.
+  return c.lat >= 10 && c.lat <= 60 && c.lng >= -140 && c.lng <= -50;
+}
+
+function NauticalOverlays({
+  nauticalMode,
+  onUsCoverageChange,
+}: {
+  nauticalMode: NauticalMode;
+  onUsCoverageChange: (v: boolean) => void;
+}) {
+  const map = useMap();
+  const [encLoading, setEncLoading] = useState(false);
+  const [encError, setEncError] = useState<string | null>(null);
+
+  // Expose a simple callback the UI can use without tightly coupling to Leaflet instances.
+  useEffect(() => {
+    const setView = () => {
+      map.setView([38, -75], 6, { animate: true });
+    };
+    (window as unknown as { __sealink_test_noaa_east_coast__?: () => void }).__sealink_test_noaa_east_coast__ = setView;
+    return () => {
+      (window as unknown as { __sealink_test_noaa_east_coast__?: () => void }).__sealink_test_noaa_east_coast__ = undefined;
+    };
+  }, [map]);
+
+  useEffect(() => {
+    const bump = () => onUsCoverageChange(isLikelyUsCoverage(map.getCenter()));
+    bump();
+    map.on("moveend", bump);
+    map.on("zoomend", bump);
+    return () => {
+      map.off("moveend", bump);
+      map.off("zoomend", bump);
+    };
+  }, [map, onUsCoverageChange]);
+
+  useEffect(() => {
+    setEncError(null);
+    setEncLoading(false);
+    if (nauticalMode !== "noaa_enc") return;
+
+    setEncLoading(true);
+
+    const makeLayer = () => {
+      const anyEL = EL as unknown as {
+        tiledMapLayer?: (opts: Record<string, unknown>) => L.Layer;
+      };
+      const tiledFromEL = anyEL.tiledMapLayer;
+      const tiledFromLeaflet = (L as unknown as { esri?: { tiledMapLayer?: (opts: Record<string, unknown>) => L.Layer } })
+        .esri?.tiledMapLayer;
+      const ctor = tiledFromEL ?? tiledFromLeaflet;
+      return ctor?.({
+        url: NOAA_ENC_MAPSERVER,
+        opacity: 1,
+        useCors: true,
+        attribution: "NOAA Office of Coast Survey",
+      });
+    };
+
+    const layer = makeLayer();
+    if (!layer) {
+      setEncLoading(false);
+      setEncError("NOAA ENC layer could not be initialised.");
+      return;
+    }
+
+    map.attributionControl?.addAttribution("NOAA Office of Coast Survey");
+
+    let tileErrors = 0;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const layerAny = layer as any;
+    const onLoad = () => setEncLoading(false);
+    const onTileError = () => {
+      tileErrors += 1;
+      if (tileErrors >= 1) {
+        setEncLoading(false);
+        setEncError("NOAA ENC tiles failed to load (network or service).");
+      }
+    };
+    layerAny.on?.("loading", () => setEncLoading(true));
+    layerAny.on?.("load", onLoad);
+    layerAny.on?.("tileerror", onTileError);
+
+    layer.addTo(map);
+    window.setTimeout(() => map.invalidateSize(), 0);
+
+    return () => {
+      layerAny.off?.("load", onLoad);
+      layerAny.off?.("tileerror", onTileError);
+      map.removeLayer(layer);
+    };
+  }, [map, nauticalMode]);
+
+  return (
+    <>
+      {nauticalMode === "seamarks" ? (
+        <TileLayer
+          attribution='Seamarks: <a href="https://openseamap.org">OpenSeaMap</a>'
+          url="https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png"
+          opacity={0.7}
+          maxZoom={18}
+        />
+      ) : null}
+
+      {nauticalMode === "noaa_enc" && encLoading ? (
+        <div className="pointer-events-none absolute inset-0 z-[900] grid place-items-center bg-black/10 dark:bg-black/25">
+          <div className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white/90 px-3 py-2 text-xs font-semibold text-zinc-800 shadow-sm dark:border-zinc-700 dark:bg-zinc-950/80 dark:text-zinc-100">
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-400/30 border-t-emerald-500" />
+            Loading NOAA ENC…
+          </div>
+        </div>
+      ) : null}
+
+      {nauticalMode === "noaa_enc" && encError ? (
+        <div className="pointer-events-none absolute inset-x-0 top-2 z-[1000] flex justify-center px-2">
+          <p className="rounded-lg bg-red-950/90 px-3 py-1.5 text-center text-xs text-red-100 shadow-lg">{encError}</p>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 function MapToolbar({
   pos,
   mode,
   timeIso,
+  onTestNoaaEastCoast,
   insightLoading,
   onStartInsight,
   onEndInsight,
@@ -1067,6 +1197,7 @@ function MapToolbar({
   pos: { lat: number; lng: number } | null;
   mode: LayerMode;
   timeIso: string;
+  onTestNoaaEastCoast: () => void;
   insightLoading: boolean;
   onStartInsight: () => void;
   onEndInsight: () => void;
@@ -1081,6 +1212,14 @@ function MapToolbar({
   return (
     <div className="leaflet-top leaflet-right" style={{ pointerEvents: "auto" }}>
       <div className="pointer-events-auto mt-14 mr-2 flex flex-col items-end gap-2">
+        <button
+          type="button"
+          onClick={onTestNoaaEastCoast}
+          className="rounded-lg border border-emerald-200 bg-emerald-50/95 px-2.5 py-1.5 text-xs font-semibold text-emerald-950 shadow-md backdrop-blur-sm hover:bg-emerald-100 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-100 dark:hover:bg-emerald-900/50"
+          title="Jump to a NOAA ENC coverage test area"
+        >
+          Test NOAA East Coast
+        </button>
         {pos ? (
           <button
             type="button"
@@ -1164,6 +1303,8 @@ function buildFrames4d(): string[] {
 export function WeatherSeaMap() {
   const [mode, setMode] = useState<LayerMode>("wind");
   const [base, setBase] = useState<BaseMapMode>("satellite");
+  const [nautical, setNautical] = useState<NauticalMode>("standard");
+  const [noaaUsCoverage, setNoaaUsCoverage] = useState(false);
   const [opacity, setOpacity] = useState(0.75);
   const [pos, setPos] = useState<{ lat: number; lng: number } | null>(null);
   const [initialCenter, setInitialCenter] = useState<[number, number] | null>(null);
@@ -1205,6 +1346,12 @@ export function WeatherSeaMap() {
 
   const center = useMemo<[number, number]>(() => initialCenter ?? [20, 0], [initialCenter]);
   const timeIso = frames[Math.min(Math.max(frameIdx, 0), frames.length - 1)] ?? new Date().toISOString();
+
+  const testNoaaEastCoast = useCallback(() => {
+    // Note: NOAA ENC coverage is US waters only.
+    setNautical("noaa_enc");
+    (window as unknown as { __sealink_test_noaa_east_coast__?: () => void }).__sealink_test_noaa_east_coast__?.();
+  }, []);
 
   useEffect(() => {
     if (!playing) return;
@@ -1315,6 +1462,46 @@ export function WeatherSeaMap() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">Charts</span>
+            <div className="inline-flex overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+              <button
+                type="button"
+                onClick={() => setNautical("standard")}
+                className={`h-8 px-3 text-xs font-semibold ${
+                  nautical === "standard"
+                    ? "bg-emerald-600 text-white"
+                    : "text-zinc-700 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                }`}
+              >
+                Standard map
+              </button>
+              <button
+                type="button"
+                onClick={() => setNautical("seamarks")}
+                className={`h-8 px-3 text-xs font-semibold ${
+                  nautical === "seamarks"
+                    ? "bg-emerald-600 text-white"
+                    : "text-zinc-700 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                }`}
+              >
+                Seamarks
+              </button>
+              <button
+                type="button"
+                onClick={() => setNautical("noaa_enc")}
+                disabled={!noaaUsCoverage}
+                className={`h-8 px-3 text-xs font-semibold disabled:opacity-50 ${
+                  nautical === "noaa_enc"
+                    ? "bg-emerald-600 text-white"
+                    : "text-zinc-700 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                }`}
+                title={noaaUsCoverage ? "NOAA ENC covers US waters only" : "Move map to US waters to enable NOAA ENC"}
+              >
+                NOAA ENC
+              </button>
+            </div>
+          </div>
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">Time</span>
             <button
@@ -1374,10 +1561,12 @@ export function WeatherSeaMap() {
           >
           <AttributionControl position="bottomright" prefix={false} />
           <ScaleControl position="bottomleft" metric imperial />
+          <NauticalOverlays nauticalMode={nautical} onUsCoverageChange={setNoaaUsCoverage} />
           <MapToolbar
             pos={pos}
             mode={mode}
             timeIso={timeIso}
+            onTestNoaaEastCoast={testNoaaEastCoast}
             insightLoading={insightLoading}
             onStartInsight={() => {
               setInsightLoading(true);
@@ -1426,6 +1615,12 @@ export function WeatherSeaMap() {
       </div>
       <div className="grid gap-2 border-t border-zinc-200 px-3 py-2 dark:border-zinc-800">
         <Legend mode={mode} />
+        {nautical === "noaa_enc" ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-950 dark:border-emerald-900/40 dark:bg-emerald-950/25 dark:text-emerald-100">
+            <span className="font-semibold">NOAA ENC covers US waters only.</span>
+            <span className="text-[11px] opacity-90">Use “Test NOAA East Coast” in the map controls.</span>
+          </div>
+        ) : null}
         {marineQuotaExceeded ? (
           <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
             Stormglass returned a rate limit (HTTP 429). Free plans have a small daily allowance — try again tomorrow, or
