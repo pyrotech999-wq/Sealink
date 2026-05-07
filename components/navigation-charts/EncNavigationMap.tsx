@@ -114,7 +114,8 @@ function NoaaEncLayer() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const onTileError = () => {
       tileErrorCount += 1;
-      if (tileErrorCount >= 2) {
+      if (tileErrorCount >= 1) {
+        setLoading(false);
         setLayerError("ENC tiles could not be loaded from NOAA (network or service).");
       }
     };
