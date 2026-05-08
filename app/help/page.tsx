@@ -522,6 +522,14 @@ export default function HelpPage() {
               <ul className="list-disc space-y-1 pl-5 text-zinc-400">
                 <li>Broadcasts are not emergency services — use VHF/DSC and phone to999/112/911 for distress.</li>
                 <li>If sending fails, confirm sharing is on and you have network connectivity.</li>
+                <li>
+                  While the app is open, SeaLink refreshes <strong className="text-zinc-300">area broadcasts</strong> from
+                  the server about <strong className="text-zinc-300">every 15 seconds</strong> when the tab is in the
+                  foreground, and about <strong className="text-zinc-300">every minute</strong> when the tab is in the
+                  background. <strong className="text-zinc-300">IFM friends</strong> and your{" "}
+                  <strong className="text-zinc-300">private / vicinity inbox</strong> use the same rhythm on Home and the
+                  Messages page; an open chat thread also refreshes on that schedule.
+                </li>
               </ul>
               <h3
                 id="messages-broadcast-audience"

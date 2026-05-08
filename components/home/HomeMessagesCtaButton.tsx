@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getBroadcastAlertsSilenced, getMessageAlertSoundOn } from "@/lib/broadcast-alert-preferences";
-import { playBroadcastAlertSound, playVicinityDmAlertSound } from "@/lib/broadcast-alert-sound";
+import { playBroadcastAlertSound } from "@/lib/broadcast-alert-sound";
 import { subscribeMapLive, type MapLiveResponse } from "@/lib/client/map-live-store";
 import {
   getMessagingLastVisitIso,
@@ -52,7 +52,6 @@ export function HomeMessagesCtaButton({
   const [openPeerUid, setOpenPeerUid] = useState<string | null>(null);
   /** Unread area-broadcast thread replies (same ids as the top “New message received” bar). */
   const [broadcastReplyUnreadIds, setBroadcastReplyUnreadIds] = useState<string[]>([]);
-  const lastDmChimeAtMs = useRef(0);
   const lastBroadcastChimeAtMs = useRef(0);
   const liveRef = useRef<MapLiveResponse | null>(null);
   const checkRef = useRef<() => Promise<void>>(async () => {});
@@ -160,19 +159,7 @@ export function HomeMessagesCtaButton({
       lastBroadcastChimeAtMs.current = newestIncomingBroadcastAt;
     }
 
-    if (
-      newFromDm &&
-      newestIncomingDmAt > lastDmChimeAtMs.current &&
-      !getBroadcastAlertsSilenced() &&
-      getMessageAlertSoundOn()
-    ) {
-      try {
-        playVicinityDmAlertSound();
-      } catch {
-        /* */
-      }
-      lastDmChimeAtMs.current = newestIncomingDmAt;
-    }
+    /* Vicinity / private: sound comes from MapBroadcastPanel inbox toasts (avoid double chime with this poll). */
 
     queueMicrotask(() => {
       setHasNew(newFlag);
