@@ -16,6 +16,9 @@ const USCG_USA_NAVIGATION_RULES_PDF_URL =
 const RNLI_MARITIME_SAR_MANUAL_URL =
   "https://rnli.org/-/media/rnli/downloads/maritime-sar-2017.pdf?rev=ae476fa675de486cbd40819b8515b144";
 
+const COLREGS_QUIZLET_FLASHCARDS_URL =
+  "https://quizlet.com/727929923/flashcards?funnelUUID=987482af-88df-4b70-9d78-dc784b4ddb01";
+
 export default function ColregsPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 pb-32 sm:px-6 sm:py-12">
@@ -77,6 +80,14 @@ export default function ColregsPage() {
             className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-emerald-500 active:bg-emerald-700"
           >
             Maritime SAR manual
+          </a>
+          <a
+            href={COLREGS_QUIZLET_FLASHCARDS_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-emerald-500 active:bg-emerald-700"
+          >
+            Flash Cards
           </a>
         </div>
       </section>
