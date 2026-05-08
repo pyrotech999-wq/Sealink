@@ -23,5 +23,23 @@ export function iBoatingMarineChartsAppUrl(bounds: [[number, number], [number, n
   else if (span > 0.35) z = 11;
   else if (span > 0.15) z = 12;
   else z = 13;
-  return `${IBOATING_MARINE_CHARTS_APP}#${z.toFixed(2)}/${lat.toFixed(5)}/${lng.toFixed(5)}/0`;
+  return iBoatingMarineChartsAppUrlForLatLng({ lat, lng, zoom: z });
+}
+
+export function iBoatingMarineChartsAppUrlForLatLng({
+  lat,
+  lng,
+  zoom = 13,
+  fourth = 0,
+}: {
+  lat: number;
+  lng: number;
+  zoom?: number;
+  fourth?: number;
+}): string {
+  const safeLat = Number.isFinite(lat) ? lat : 0;
+  const safeLng = Number.isFinite(lng) ? lng : 0;
+  const safeZoom = Number.isFinite(zoom) ? zoom : 10;
+  const safeFourth = Number.isFinite(fourth) ? fourth : 0;
+  return `${IBOATING_MARINE_CHARTS_APP}#${safeZoom.toFixed(2)}/${safeLat.toFixed(5)}/${safeLng.toFixed(5)}/${safeFourth}`;
 }

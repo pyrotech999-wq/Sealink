@@ -15,7 +15,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { KapMetadata } from "@/lib/navigation-charts/kap-types";
 import { PilotChartsDownloads } from "@/components/navigation-charts/PilotChartsDownloads";
 import { extractKapRaster, type KapRasterResult } from "@/lib/navigation-charts/extract-kap-raster";
-import { iBoatingMarineChartsAppUrl } from "@/lib/navigation-charts/iboating-charts-url";
+import {
+  IBOATING_MARINE_CHARTS_APP,
+  iBoatingMarineChartsAppUrl,
+  iBoatingMarineChartsAppUrlForLatLng,
+} from "@/lib/navigation-charts/iboating-charts-url";
 import { parseKapFile } from "@/lib/navigation-charts/parse-kap";
 
 const NavigationChartsMap = dynamic(() => import("./NavigationChartsMap"), {
@@ -54,6 +58,7 @@ function revokeRasterUrl(url: string | null) {
 export function NavigationChartsClient() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const rasterUrlRef = useRef<string | null>(null);
+  const locWatchRef = useRef<number | null>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [metadata, setMetadata] = useState<KapMetadata | null>(null);
   const [rasterObjectUrl, setRasterObjectUrl] = useState<string | null>(null);
@@ -63,6 +68,8 @@ export function NavigationChartsClient() {
   const [errorKind, setErrorKind] = useState<ErrorKind>("none");
   const [loadPhase, setLoadPhase] = useState<LoadPhase>("idle");
   const [fitBoundsNonce, setFitBoundsNonce] = useState(0);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number; accuracyM?: number } | null>(null);
+  const [locError, setLocError] = useState<string>("");
 
   const iBoatingHref = useMemo(
     () => iBoatingMarineChartsAppUrl(metadata?.bounds ?? null),
@@ -73,6 +80,10 @@ export function NavigationChartsClient() {
     return () => {
       revokeRasterUrl(rasterUrlRef.current);
       rasterUrlRef.current = null;
+      if (locWatchRef.current != null) {
+        navigator.geolocation?.clearWatch(locWatchRef.current);
+        locWatchRef.current = null;
+      }
     };
   }, []);
 
@@ -187,6 +198,43 @@ export function NavigationChartsClient() {
 
   const onOpenOpenCpnClick = useCallback(() => {
     // TODO: OpenCPN — document export path or platform URL scheme; no in-app OpenCPN runtime.
+  }, []);
+
+  const openFishingAppAtMyLocation = useCallback(() => {
+    setLocError("");
+
+    // Open a tab synchronously so popup blockers don't reject the action.
+    const win = window.open(IBOATING_MARINE_CHARTS_APP, "_blank", "noopener,noreferrer");
+
+    if (!("geolocation" in navigator)) {
+      setLocError("Geolocation is not available in this browser.");
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const accuracyM = pos.coords.accuracy;
+        setUserLocation({ lat, lng, accuracyM });
+        const zoom = accuracyM != null && Number.isFinite(accuracyM) ? (accuracyM < 80 ? 14 : accuracyM < 300 ? 13 : 12) : 13;
+        const url = iBoatingMarineChartsAppUrlForLatLng({ lat, lng, zoom });
+        if (win && !win.closed) {
+          try {
+            win.location.href = url;
+          } catch {
+            // If cross-origin location assignment fails for any reason, fall back to opening a second tab.
+            window.open(url, "_blank", "noopener,noreferrer");
+          }
+        } else {
+          window.open(url, "_blank", "noopener,noreferrer");
+        }
+      },
+      (err) => {
+        setLocError(err.message || "Could not get your location (permission denied or unavailable).");
+      },
+      { enableHighAccuracy: true, maximumAge: 15_000, timeout: 10_000 },
+    );
   }, []);
 
   const phaseIndex = (p: LoadPhase) => PHASE_ORDER.indexOf(p as LoadPhaseStep);
@@ -403,6 +451,29 @@ export function NavigationChartsClient() {
             </a>
             . Their catalogue, pricing, and terms apply; not affiliated with SeaLink.
           </p>
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            <button
+              type="button"
+              onClick={openFishingAppAtMyLocation}
+              className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800 sm:w-auto"
+            >
+              Open Fishing-App charts (at my location)
+            </button>
+            {locError ? (
+              <p className="text-[11px] text-red-700 dark:text-red-300" role="status" aria-live="polite">
+                {locError}
+              </p>
+            ) : null}
+            {userLocation ? (
+              <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
+                Last fix:{" "}
+                <span className="font-mono">
+                  {userLocation.lat.toFixed(5)}, {userLocation.lng.toFixed(5)}
+                </span>
+                {userLocation.accuracyM != null ? ` (±${Math.round(userLocation.accuracyM)}m)` : ""}
+              </p>
+            ) : null}
+          </div>
           <a
             href={iBoatingHref}
             target="_blank"
