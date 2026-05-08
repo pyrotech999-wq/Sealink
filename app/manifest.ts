@@ -1,11 +1,14 @@
 import type { MetadataRoute } from "next";
-import { resolvePublicAppOrigin } from "@/lib/public-app-url";
 
+/**
+ * PWA manifest for “Add to Home screen”.
+ *
+ * Use same-origin relative `icons[].src` paths so Android/Chrome always resolve icons correctly
+ * (absolute URLs from NEXT_PUBLIC_APP_URL can mismatch www / apex and yield a blank shortcut icon).
+ * Include both `any` and `maskable` for adaptive icons on Android.
+ */
 export default function manifest(): MetadataRoute.Manifest {
-  const origin = resolvePublicAppOrigin();
-  const v = "418800d";
   return {
-    id: `${origin}/`,
     name: "SeaLink",
     short_name: "SeaLink",
     description: "Map, weather & sea, and anchor alerts.",
@@ -17,25 +20,29 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: "#000000",
     icons: [
       {
-        src: `${origin}/pwa-192.png?v=${v}`,
+        src: "/pwa-192.png",
         sizes: "192x192",
         type: "image/png",
         purpose: "any",
       },
       {
-        src: `${origin}/pwa-512.png?v=${v}`,
+        src: "/pwa-192.png",
+        sizes: "192x192",
+        type: "image/png",
+        purpose: "maskable",
+      },
+      {
+        src: "/pwa-512.png",
         sizes: "512x512",
         type: "image/png",
         purpose: "any",
       },
       {
-        src: `${origin}/apple-touch-icon.png?v=${v}`,
-        sizes: "180x180",
+        src: "/pwa-512.png",
+        sizes: "512x512",
         type: "image/png",
-        purpose: "any",
+        purpose: "maskable",
       },
-      { src: `${origin}/icon.svg?v=${v}`, sizes: "any", type: "image/svg+xml", purpose: "any" },
     ],
   };
 }
-
