@@ -17,7 +17,7 @@ import { WEATHER_CHART_REGIONS, getWeatherChartRegion, type WeatherChartRegionId
 type LayerId = "wind10m" | "waves";
 
 const LAYERS: { id: LayerId; label: string; description: string }[] = [
-  { id: "wind10m", label: "10 m wind", description: "GFS wind (kn): arrow points downwind; size and colour scale with speed." },
+  { id: "wind10m", label: "Wind", description: "GFS wind (kn): arrow points downwind; size and colour scale with speed." },
   { id: "waves", label: "Waves", description: "Marine wave height (m) and direction — arrows where swell is meaningful." },
 ];
 
