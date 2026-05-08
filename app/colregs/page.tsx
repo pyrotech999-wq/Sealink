@@ -7,7 +7,10 @@ export const metadata: Metadata = {
     "Key COLREGs principles: responsibility, safe speed, give-way and stand-on actions, head-on, crossing, and overtaking.",
 };
 
-const RNLI_COLREGS_PDF_URL =
+const COLREGS_FULL_PDF_URL =
+  "https://www.dohle-yachts.com/wp-content/uploads/2022/07/COLREGS-The-Rules-of-the-Road.pdf";
+
+const RNLI_MARITIME_SAR_MANUAL_URL =
   "https://rnli.org/-/media/rnli/downloads/maritime-sar-2017.pdf?rev=ae476fa675de486cbd40819b8515b144";
 
 export default function ColregsPage() {
@@ -84,14 +87,25 @@ export default function ColregsPage() {
         </h2>
         <p className="mt-2 text-sm leading-6 text-zinc-400">
           <a
-            href={RNLI_COLREGS_PDF_URL}
+            href={COLREGS_FULL_PDF_URL}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             className="font-semibold text-emerald-400 hover:underline"
           >
-            COLREG&apos;S pdf
+            COLREGS — The Rules of the Road (PDF)
           </a>{" "}
-          — these are PDF pages of the rules supplied by RNLI for reading or printing.
+          — full COLREGS PDF for reading, printing, or saving offline.
+        </p>
+        <p className="mt-2 text-sm leading-6 text-zinc-400">
+          <a
+            href={RNLI_MARITIME_SAR_MANUAL_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-emerald-400 hover:underline"
+          >
+            Maritime SAR manual
+          </a>{" "}
+          — RNLI PDF reference.
         </p>
       </section>
     </div>
