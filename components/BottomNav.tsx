@@ -65,12 +65,7 @@ export function BottomNav() {
       <div className="border-zinc-800/90 bg-zinc-950 px-2 py-2">
         <ManOverboardAlertButton signedIn={signedIn} variant="dock" />
       </div>
-      {showBannerSlot ? (
-        <div className="border-t border-zinc-800/90 bg-zinc-900/80 px-2 py-1.5">
-          <p className="mb-1 text-center text-[9px] font-medium uppercase tracking-wide text-zinc-500">Sponsored</p>
-          <SiteBannerAdStrip />
-        </div>
-      ) : null}
+      {showBannerSlot ? <SiteBannerAdStrip /> : null}
       {signedIn && !suppressMessagingChromePath(pathname) ? (
         <div className="border-t border-zinc-800/90 bg-zinc-950 px-2 py-1.5">
           <label className="flex cursor-pointer items-center justify-center gap-2 text-[10px] font-medium leading-snug text-zinc-400 sm:text-[11px] sm:justify-start">

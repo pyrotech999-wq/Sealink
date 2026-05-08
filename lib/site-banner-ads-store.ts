@@ -86,46 +86,55 @@ function normaliseRecord(row: {
   };
 }
 
+async function listPublicFromFileOrKv(): Promise<SiteBannerAdRecord[]> {
+  const items = await readAllFromKvOrFile();
+  return items
+    .filter((x) => x.enabled && x.imageUrl && x.linkUrl)
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.id.localeCompare(b.id))
+    .slice(0, SITE_BANNER_ADS_MAX);
+}
+
 /** Public: enabled only, sorted, capped. */
 export async function listPublicSiteBannerAds(): Promise<SiteBannerAdRecord[]> {
   return enqueue(async () => {
     if (isSupabaseConfigured()) {
-      const sb = supabaseAdmin();
-      const { data, error } = await sb
-        .from("site_banner_ads")
-        .select("id, image_url, link_url, alt_text, sort_order, enabled, updated_at")
-        .eq("enabled", true)
-        .order("sort_order", { ascending: true })
-        .order("id", { ascending: true })
-        .limit(SITE_BANNER_ADS_MAX);
-      if (error) throw new Error(error.message);
-      const rows = (data ?? []) as {
-        id: string;
-        image_url: string;
-        link_url: string;
-        alt_text: string;
-        sort_order: number;
-        enabled: boolean;
-        updated_at: string;
-      }[];
-      return rows.map((r) =>
-        normaliseRecord({
-          id: r.id,
-          imageUrl: r.image_url,
-          linkUrl: r.link_url,
-          altText: typeof r.alt_text === "string" ? r.alt_text : "",
-          sortOrder: r.sort_order,
-          enabled: r.enabled,
-          updatedAt: r.updated_at,
-        }),
-      );
+      try {
+        const sb = supabaseAdmin();
+        const { data, error } = await sb
+          .from("site_banner_ads")
+          .select("id, image_url, link_url, alt_text, sort_order, enabled, updated_at")
+          .eq("enabled", true)
+          .order("sort_order", { ascending: true })
+          .order("id", { ascending: true })
+          .limit(SITE_BANNER_ADS_MAX);
+        if (error) throw new Error(error.message);
+        const rows = (data ?? []) as {
+          id: string;
+          image_url: string;
+          link_url: string;
+          alt_text: string;
+          sort_order: number;
+          enabled: boolean;
+          updated_at: string;
+        }[];
+        return rows.map((r) =>
+          normaliseRecord({
+            id: r.id,
+            imageUrl: r.image_url,
+            linkUrl: r.link_url,
+            altText: typeof r.alt_text === "string" ? r.alt_text : "",
+            sortOrder: r.sort_order,
+            enabled: r.enabled,
+            updatedAt: r.updated_at,
+          }),
+        );
+      } catch {
+        // Table missing (migration not applied) or transient DB error — use file/KV if any.
+        return listPublicFromFileOrKv();
+      }
     }
 
-    const items = await readAllFromKvOrFile();
-    return items
-      .filter((x) => x.enabled && x.imageUrl && x.linkUrl)
-      .sort((a, b) => a.sortOrder - b.sortOrder || a.id.localeCompare(b.id))
-      .slice(0, SITE_BANNER_ADS_MAX);
+    return listPublicFromFileOrKv();
   });
 }
 

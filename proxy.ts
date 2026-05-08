@@ -30,6 +30,8 @@ function isExemptFromSessionGate(pathname: string): boolean {
   if (pathname === "/api/stripe/webhook") return true;
   if (pathname === "/api/demo/me") return true;
   if (pathname === "/api/demo/sign-in" || pathname === "/api/demo/sign-out") return true;
+  /** Public rotating sponsor banners (bottom dock); must work without session cookies. */
+  if (pathname === "/api/site-banner-ads") return true;
   // Public chart proxies (used by <img> tags on /weather).
   if (pathname === "/api/weather/opc-chart") return true;
   if (pathname === "/api/weather/metoffice-surface-pressure") return true;
