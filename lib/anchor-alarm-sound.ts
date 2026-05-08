@@ -4,9 +4,9 @@
  */
 
 let sirenCtx: AudioContext | null = null;
-let wailIntervalId: ReturnType<typeof setInterval> | null = null;
-let vibrateIntervalId: ReturnType<typeof setInterval> | null = null;
-let maxDurationTimeoutId: ReturnType<typeof setTimeout> | null = null;
+let wailIntervalId: number | null = null;
+let vibrateIntervalId: number | null = null;
+let maxDurationTimeoutId: number | null = null;
 /** Alternate up-sweep / down-sweep each wail for a classic “woo-WOO” siren feel */
 let wailRising = true;
 
