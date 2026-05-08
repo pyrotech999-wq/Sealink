@@ -6,6 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { LinkifiedPlainText } from "@/components/LinkifiedPlainText";
 import { formatChatSenderLine } from "@/lib/format-chat-sender";
 import { getLastKnownPosition } from "@/lib/map-last-known";
+import { getMessagePollDelayMs } from "@/lib/message-poll-delays";
 
 type Msg = {
   id: string;
@@ -33,7 +34,6 @@ function fmtMsgTime(iso: string) {
 }
 
 const FETCH_MS = 28_000;
-const POLL_MS = 12_000;
 
 export function BroadcastChatPageClient({ broadcastId }: { broadcastId: string }) {
   const router = useRouter();
@@ -248,9 +248,36 @@ export function BroadcastChatPageClient({ broadcastId }: { broadcastId: string }
 
   useEffect(() => {
     if (readLat == null || readLng == null) return;
-    void fetchReplies();
-    const id = window.setInterval(() => void fetchReplies({ silent: true }), POLL_MS);
-    return () => window.clearInterval(id);
+    let cancelled = false;
+    let tid: number | null = null;
+    const scheduleAfter = (ms: number) => {
+      if (cancelled) return;
+      tid = window.setTimeout(loop, ms);
+    };
+    const loop = () => {
+      if (cancelled) return;
+      void fetchReplies({ silent: true }).finally(() => {
+        if (cancelled) return;
+        scheduleAfter(getMessagePollDelayMs());
+      });
+    };
+    void fetchReplies().finally(() => {
+      if (cancelled) return;
+      scheduleAfter(getMessagePollDelayMs());
+    });
+    const onVis = () => {
+      if (tid != null) {
+        window.clearTimeout(tid);
+        tid = null;
+      }
+      if (!cancelled) void fetchReplies({ silent: true }).finally(() => !cancelled && scheduleAfter(getMessagePollDelayMs()));
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      cancelled = true;
+      if (tid != null) window.clearTimeout(tid);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, [readLat, readLng, broadcastId, fetchReplies]);
 
   useLayoutEffect(() => {
