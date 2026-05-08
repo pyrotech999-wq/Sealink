@@ -71,6 +71,7 @@ export function NavigationChartsClient() {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number; accuracyM?: number } | null>(null);
   const [locError, setLocError] = useState<string>("");
   const [shareStatus, setShareStatus] = useState<string>("");
+  const [locating, setLocating] = useState(false);
 
   const iBoatingHref = useMemo(
     () => iBoatingMarineChartsAppUrl(metadata?.bounds ?? null),
@@ -241,8 +242,10 @@ export function NavigationChartsClient() {
   }, [iBoatingHref, userLocation]);
 
   const onSendToApp = useCallback(() => {
+    if (locating) return;
     setLocError("");
-    setShareStatus("Finding chart for your location…");
+    setLocating(true);
+    setShareStatus("Getting your location…");
 
     // Open a blank tab synchronously (avoids popup blockers), but do NOT open the chart yet.
     // We'll show a waiting message and only navigate once the GPS fix arrives.
@@ -269,7 +272,7 @@ export function NavigationChartsClient() {
   <body>
     <div class="wrap">
       <div class="card">
-        <p class="h">Finding chart for your location…</p>
+        <p class="h">Getting your location…</p>
         <p class="p">Please allow location access. We’ll open the chart as soon as a GPS fix is found.</p>
         <div class="spinner" aria-hidden="true"></div>
       </div>
@@ -285,6 +288,7 @@ export function NavigationChartsClient() {
     if (!("geolocation" in navigator)) {
       setLocError("Geolocation is not available in this browser.");
       setShareStatus("");
+      setLocating(false);
       return;
     }
 
@@ -310,6 +314,7 @@ export function NavigationChartsClient() {
         }
 
         setShareStatus("Opening chart…");
+        setLocating(false);
       },
       (err) => {
         // If GPS fails/denied, keep the tab open and fall back to the default viewer.
@@ -324,10 +329,11 @@ export function NavigationChartsClient() {
         } else {
           window.open(IBOATING_MARINE_CHARTS_APP, "_blank", "noopener,noreferrer");
         }
+        setLocating(false);
       },
-      { enableHighAccuracy: true, maximumAge: 15_000, timeout: 10_000 },
+      { enableHighAccuracy: true, maximumAge: 15_000, timeout: 30_000 },
     );
-  }, []);
+  }, [locating]);
 
   const phaseIndex = (p: LoadPhase) => PHASE_ORDER.indexOf(p as LoadPhaseStep);
 
@@ -437,9 +443,14 @@ export function NavigationChartsClient() {
             <button
               type="button"
               onClick={onSendToApp}
-              className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-emerald-600 px-4 text-base font-semibold text-white shadow-sm hover:bg-emerald-500 active:bg-emerald-700"
+              disabled={locating}
+              className={`inline-flex h-12 w-full items-center justify-center rounded-xl px-4 text-base font-semibold text-white shadow-sm ${
+                locating
+                  ? "cursor-not-allowed bg-emerald-700/70"
+                  : "bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700"
+              }`}
             >
-              Open chart in app
+              {locating ? "Getting your location…" : "Open chart in app"}
             </button>
             {locError ? (
               <p className="text-[11px] text-red-700 dark:text-red-300" role="status" aria-live="polite">
