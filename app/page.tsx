@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import { HomeHeader } from "@/components/HomeHeader";
 import { HomeLocationMapLoader } from "@/components/home/HomeLocationMapLoader";
 import { SeaStateSummaryBox } from "@/components/home/SeaStateSummaryBox";
@@ -7,18 +6,16 @@ import { HomeMarinaBookingCta } from "@/components/home/HomeMarinaBookingCta";
 import { SeaLinkBrandFooter } from "@/components/SeaLinkBrandFooter";
 import { ShareAppLink } from "@/components/home/ShareAppLink";
 import { SeasTheDayButton } from "@/components/home/SeasTheDayButton";
-import { DEMO_SESSION_COOKIE, DEMO_SESSION_VALUE } from "@/lib/demo-session";
 import { getAuthUser } from "@/lib/auth";
 import { getProfileFirstNameForUser } from "@/lib/profiles-server";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const jar = await cookies();
-  const signedIn = jar.get(DEMO_SESSION_COOKIE)?.value === DEMO_SESSION_VALUE;
   const authUser = await getAuthUser();
-  const welcomeFirstName =
-    signedIn && authUser ? await getProfileFirstNameForUser(authUser.uid) : null;
+  /** Match `/api/*` session (demo cookie + email); demo cookie alone is not enough for messaging APIs. */
+  const signedIn = Boolean(authUser);
+  const welcomeFirstName = authUser ? await getProfileFirstNameForUser(authUser.uid) : null;
 
   return (
     <div className="flex flex-1 flex-col bg-black">

@@ -1,16 +1,13 @@
-import { cookies } from "next/headers";
 import { HomeHeader } from "@/components/HomeHeader";
 import { HomeLocationMapLoader } from "@/components/home/HomeLocationMapLoader";
 import { SeaLinkBrandFooter } from "@/components/SeaLinkBrandFooter";
-import { DEMO_SESSION_COOKIE, DEMO_SESSION_VALUE } from "@/lib/demo-session";
 import { getAuthUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function MapSharingSettingsPage() {
-  const jar = await cookies();
-  const signedIn = jar.get(DEMO_SESSION_COOKIE)?.value === DEMO_SESSION_VALUE;
   const authUser = await getAuthUser();
+  const signedIn = Boolean(authUser);
 
   return (
     <div className="flex flex-1 flex-col bg-black">

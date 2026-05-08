@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getBroadcastAlertsSilenced, getMessageAlertSoundOn } from "@/lib/broadcast-alert-preferences";
 import { playBroadcastAlertSound } from "@/lib/broadcast-alert-sound";
 import { subscribeMapLive, type MapLiveResponse } from "@/lib/client/map-live-store";
+import { getMessagePollDelayMs } from "@/lib/message-poll-delays";
 import {
   getMessagingLastVisitIso,
   MESSAGING_LAST_VISIT_STORAGE_KEY,
@@ -61,6 +62,7 @@ export function HomeMessagesCtaButton({
       const ce = ev as CustomEvent<{ ids?: string[] }>;
       const ids = ce.detail?.ids;
       setBroadcastReplyUnreadIds(Array.isArray(ids) ? ids.filter((x) => typeof x === "string" && x.trim()) : []);
+      queueMicrotask(() => void checkRef.current());
     };
     window.addEventListener("sealink-broadcast-reply-unread-ids", fn);
     return () => window.removeEventListener("sealink-broadcast-reply-unread-ids", fn);
@@ -167,9 +169,7 @@ export function HomeMessagesCtaButton({
     });
   }, [readLat, readLng, signedIn, emergencyDisableLiveMapApis]);
 
-  useEffect(() => {
-    checkRef.current = check;
-  }, [check]);
+  checkRef.current = check;
 
   useEffect(() => {
     if (emergencyDisableLiveMapApis) return;
@@ -198,6 +198,38 @@ export function HomeMessagesCtaButton({
       document.removeEventListener("visibilitychange", onVis);
     };
   }, [check]);
+
+  /** Backup poll so the CTA updates even if a map-live delivery is missed (same cadence as other message polls). */
+  useEffect(() => {
+    if (emergencyDisableLiveMapApis || !signedIn) return;
+    let cancelled = false;
+    let tid: number | null = null;
+    const scheduleAfter = (ms: number) => {
+      if (cancelled) return;
+      tid = window.setTimeout(loop, ms);
+    };
+    const loop = () => {
+      if (cancelled) return;
+      void checkRef.current().finally(() => {
+        if (cancelled) return;
+        scheduleAfter(getMessagePollDelayMs());
+      });
+    };
+    scheduleAfter(getMessagePollDelayMs());
+    const onVis = () => {
+      if (tid != null) {
+        window.clearTimeout(tid);
+        tid = null;
+      }
+      if (!cancelled) void checkRef.current().finally(() => !cancelled && scheduleAfter(getMessagePollDelayMs()));
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      cancelled = true;
+      if (tid != null) window.clearTimeout(tid);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [signedIn, emergencyDisableLiveMapApis]);
 
   const firstReplyBroadcastId = broadcastReplyUnreadIds[0]?.trim() ?? "";
   const hasReplyAlerts = firstReplyBroadcastId.length > 0;
