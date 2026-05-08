@@ -54,6 +54,7 @@ export function HomeMessagesCtaButton({
   /** Unread area-broadcast thread replies (same ids as the top “New message received” bar). */
   const [broadcastReplyUnreadIds, setBroadcastReplyUnreadIds] = useState<string[]>([]);
   const lastBroadcastChimeAtMs = useRef(0);
+  const lastDmChimeAtMs = useRef(0);
   const liveRef = useRef<MapLiveResponse | null>(null);
   const checkRef = useRef<() => Promise<void>>(async () => {});
 
@@ -147,21 +148,20 @@ export function HomeMessagesCtaButton({
     const newFromDm = newestIncomingDmAt > 0;
     const newFlag = newFromBroadcast || newFromDm;
 
-    if (
-      newFromBroadcast &&
-      newestIncomingBroadcastAt > lastBroadcastChimeAtMs.current &&
-      !getBroadcastAlertsSilenced() &&
-      getMessageAlertSoundOn()
-    ) {
-      try {
-        playBroadcastAlertSound();
-      } catch {
-        /* */
+    /* Home has no MapBroadcastPanel — play the same voice here for area + private new items (Messaging page still toasts from panel). */
+    if (!getBroadcastAlertsSilenced() && getMessageAlertSoundOn()) {
+      const brNeed = newFromBroadcast && newestIncomingBroadcastAt > lastBroadcastChimeAtMs.current;
+      const dmNeed = newFromDm && newestIncomingDmAt > lastDmChimeAtMs.current;
+      if (brNeed || dmNeed) {
+        try {
+          playBroadcastAlertSound();
+        } catch {
+          /* */
+        }
+        if (brNeed) lastBroadcastChimeAtMs.current = newestIncomingBroadcastAt;
+        if (dmNeed) lastDmChimeAtMs.current = newestIncomingDmAt;
       }
-      lastBroadcastChimeAtMs.current = newestIncomingBroadcastAt;
     }
-
-    /* Vicinity / private: sound comes from MapBroadcastPanel inbox toasts (avoid double chime with this poll). */
 
     queueMicrotask(() => {
       setHasNew(newFlag);
