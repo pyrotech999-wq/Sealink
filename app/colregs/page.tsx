@@ -53,36 +53,32 @@ export default function ColregsPage() {
         <h2 className="text-base font-semibold tracking-tight text-zinc-50">
           Full regulations (PDF)
         </h2>
-        <a
-          href={USCG_USA_NAVIGATION_RULES_PDF_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-3 inline-flex h-11 w-full items-center justify-center rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-emerald-500 active:bg-emerald-700 sm:w-auto"
-        >
-          USA Navigation rules
-        </a>
-        <p className="mt-2 text-sm leading-6 text-zinc-400">
+        <div className="mt-3 flex flex-col gap-2">
+          <a
+            href={USCG_USA_NAVIGATION_RULES_PDF_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-emerald-500 active:bg-emerald-700"
+          >
+            USA Navigation rules
+          </a>
           <a
             href={COLREGS_FULL_PDF_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="font-semibold text-emerald-400 hover:underline"
+            className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-emerald-500 active:bg-emerald-700"
           >
             COLREGS — The Rules of the Road (PDF)
-          </a>{" "}
-          — full COLREGS PDF for reading, printing, or saving offline.
-        </p>
-        <p className="mt-2 text-sm leading-6 text-zinc-400">
+          </a>
           <a
             href={RNLI_MARITIME_SAR_MANUAL_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="font-semibold text-emerald-400 hover:underline"
+            className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-emerald-500 active:bg-emerald-700"
           >
             Maritime SAR manual
-          </a>{" "}
-          — RNLI PDF reference.
-        </p>
+          </a>
+        </div>
       </section>
     </div>
   );
