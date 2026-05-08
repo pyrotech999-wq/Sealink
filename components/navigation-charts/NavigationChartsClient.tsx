@@ -266,7 +266,7 @@ export function NavigationChartsClient() {
         const url = iBoatingMarineChartsAppUrlForLatLng({ lat, lng, zoom });
         window.open(url, "_blank", "noopener,noreferrer");
 
-        setShareStatus("Opening chart…");
+        setShareStatus("");
         setLocating(false);
       },
       (err) => {
