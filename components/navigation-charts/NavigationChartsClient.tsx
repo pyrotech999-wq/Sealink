@@ -349,123 +349,9 @@ export function NavigationChartsClient() {
           Navigation Charts
         </h1>
         <p className="max-w-2xl text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-          Upload your own <strong className="font-medium text-zinc-700 dark:text-zinc-300">.kap</strong> (BSB/KAP raster)
-          to preview georeference and decoded raster overlay. SeaLink does not ship chart bundles — you obtain charts under
-          their licence, then open them here.
+          Open the chart viewer centred on your current location.
         </p>
       </header>
-
-      <section className="rounded-2xl border border-zinc-200 bg-white p-4 text-sm leading-relaxed text-zinc-700 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/80 dark:text-zinc-300 sm:p-5">
-        <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">How chart files work</h2>
-        <p className="mt-2 text-xs sm:text-sm">
-          Raster charts are usually <strong className="text-zinc-800 dark:text-zinc-200">copyrighted</strong>. We cannot
-          bulk-download or redistribute them for everyone without agreements with each hydrographic office. The practical
-          model is <strong className="text-zinc-800 dark:text-zinc-200">bring your own chart</strong>: you download or buy
-          charts you are entitled to use, copy the <span className="font-mono text-zinc-600 dark:text-zinc-400">.kap</span>{" "}
-          onto your phone or tablet, then tap <strong className="text-zinc-800 dark:text-zinc-200">Upload KAP Chart</strong>.
-        </p>
-        <ul className="mt-3 list-disc space-y-1.5 pl-5 text-xs sm:text-sm">
-          <li>
-            <strong className="text-zinc-800 dark:text-zinc-200">United States (free):</strong> NOAA publishes raster
-            nautical charts (RNC) in BSB/KAP form — use the official catalog and download the cells you need, then upload
-            here.{" "}
-            <a
-              href="https://www.nauticalcharts.noaa.gov/charts/noaa-raster-charts.html"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
-            >
-              NOAA raster charts
-            </a>
-          </li>
-          <li>
-            <strong className="text-zinc-800 dark:text-zinc-200">OpenCPN pilot charts (free):</strong> the OpenCPN team
-            distributes digital <strong className="text-zinc-800 dark:text-zinc-200">US Pilot Charts</strong> in BSB/KAP
-            for ocean passage planning (not substitute for up-to-date ENC/RNC for pilotage). Downloads are{" "}
-            <span className="font-mono text-zinc-600 dark:text-zinc-400">.7z</span> archives — extract with{" "}
-            <a
-              href="https://www.7-zip.org/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
-            >
-              7-Zip
-            </a>{" "}
-            (or e.g. Keka on Mac), then upload the <span className="font-mono text-zinc-600 dark:text-zinc-400">.kap</span>{" "}
-            files here.{" "}
-            <a
-              href="https://opencpn.org/OpenCPN/info/pilotcharts.html"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
-            >
-              Pilot charts download page
-            </a>
-            .
-          </li>
-          <li>
-            <strong className="text-zinc-800 dark:text-zinc-200">Elsewhere:</strong> UKHO, Imray, NV Charts, etc. sell or
-            license raster/ENC products; follow each publisher&apos;s terms (often tied to a specific app or device count).
-          </li>
-          <li>
-            <strong className="text-zinc-800 dark:text-zinc-200">Already use OpenCPN?</strong> Chart folders you maintain
-            there are often the same <span className="font-mono text-zinc-600 dark:text-zinc-400">.kap</span> files — copy
-            one file across and upload. See also{" "}
-            <a
-              href="https://opencpn.org/wiki/doku.php?id=opencpn:chart_sources"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
-            >
-              OpenCPN chart sources
-            </a>
-            .
-          </li>
-        </ul>
-        <p className="mt-3 rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-[11px] text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100">
-          <strong className="text-amber-900 dark:text-amber-200">Product note:</strong> A future &quot;chart shop&quot;
-          inside SeaLink would need contracts and payment with each publisher. Until then, uploads keep licensing clear and
-          avoid us hosting copyrighted rasters without permission.
-        </p>
-      </section>
-
-      <PilotChartsDownloads />
-
-      {statusBanner}
-
-      <NavigationChartsMap
-        chartBounds={metadata?.bounds ?? null}
-        overlayUrl={rasterObjectUrl}
-        showRasterOverlay={Boolean(metadata && rasterObjectUrl)}
-        fitBoundsNonce={fitBoundsNonce}
-        showDebugBounds
-      />
-
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".kap,.KAP"
-          className="hidden"
-          tabIndex={-1}
-          onChange={onKapSelected}
-        />
-        <button
-          type="button"
-          onClick={onUploadKapClick}
-          aria-label="Upload KAP chart file"
-          className="inline-flex h-11 min-h-11 w-full items-center justify-center rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-emerald-500 active:bg-emerald-700 sm:flex-1 sm:min-w-[160px]"
-        >
-          Upload KAP Chart
-        </button>
-        <button
-          type="button"
-          onClick={onOpenOpenCpnClick}
-          className="inline-flex h-11 min-h-11 w-full items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800 sm:flex-1 sm:min-w-[160px]"
-        >
-          Open in OpenCPN
-        </button>
-      </div>
       <section className="space-y-3">
         <div className="rounded-xl border border-zinc-200 bg-zinc-50/90 px-3 py-3 dark:border-zinc-700 dark:bg-zinc-950/50">
           <p className="text-xs font-medium text-zinc-800 dark:text-zinc-200">Other web chart viewers</p>
@@ -491,23 +377,16 @@ export function NavigationChartsClient() {
             . Their catalogue, pricing, and terms apply; not affiliated with SeaLink.
           </p>
           <p className="mt-2 text-[11px] leading-relaxed text-zinc-600 dark:text-zinc-400">
-            Press <strong className="text-zinc-800 dark:text-zinc-200">Set my location</strong>, then tap{" "}
-            <strong className="text-zinc-800 dark:text-zinc-200">Open in app</strong>.
+            Tap <strong className="text-zinc-800 dark:text-zinc-200">Open chart in app</strong>. We&apos;ll grab your GPS
+            location first, then open the chart centred on you.
           </p>
-          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-            <button
-              type="button"
-              onClick={onSetMyLocation}
-              className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800 sm:w-auto"
-            >
-              Set my location
-            </button>
+          <div className="mt-3 flex flex-col gap-2">
             <button
               type="button"
               onClick={onSendToApp}
-              className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 px-3 text-sm font-semibold text-emerald-950 shadow-sm hover:bg-emerald-100 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-100 dark:hover:bg-emerald-950/45 sm:w-auto"
+              className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-emerald-600 px-4 text-base font-semibold text-white shadow-sm hover:bg-emerald-500 active:bg-emerald-700"
             >
-              Open in app
+              Open chart in app
             </button>
             {locError ? (
               <p className="text-[11px] text-red-700 dark:text-red-300" role="status" aria-live="polite">
@@ -529,97 +408,8 @@ export function NavigationChartsClient() {
               </p>
             ) : null}
           </div>
-          <a
-            href={iBoatingHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-3 inline-flex h-10 w-full items-center justify-center rounded-lg border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800 sm:w-auto"
-          >
-            Open i-Boating charts (new tab)
-            {metadata?.bounds ? " · centred on your KAP bounds" : ""}
-          </a>
         </div>
       </section>
-
-      {metadata ? (
-        <section
-          className="rounded-2xl border border-zinc-200 bg-white p-4 text-sm shadow-sm dark:border-zinc-800 dark:bg-zinc-900/80 sm:p-5"
-          aria-label="Chart debug and metadata"
-        >
-          <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Chart debug</h2>
-          <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2 sm:text-sm">
-            <div className="flex flex-col gap-0.5 rounded-lg border border-rose-200/80 bg-rose-50/50 px-3 py-2 dark:border-rose-900/40 dark:bg-rose-950/25">
-              <dt className="font-medium text-rose-800 dark:text-rose-200">Chart name</dt>
-              <dd className="text-zinc-900 dark:text-zinc-100">{metadata.chartName ?? "—"}</dd>
-            </div>
-            <div className="flex flex-col gap-0.5 rounded-lg border border-rose-200/80 bg-rose-50/50 px-3 py-2 dark:border-rose-900/40 dark:bg-rose-950/25">
-              <dt className="font-medium text-rose-800 dark:text-rose-200">Projection</dt>
-              <dd className="text-zinc-900 dark:text-zinc-100">{metadata.projection ?? "—"}</dd>
-            </div>
-            <div className="sm:col-span-2 flex flex-col gap-0.5 rounded-lg border border-rose-200/80 bg-rose-50/50 px-3 py-2 dark:border-rose-900/40 dark:bg-rose-950/25">
-              <dt className="font-medium text-rose-800 dark:text-rose-200">Lat/lon bounds (S,W → N,E)</dt>
-              <dd className="break-all font-mono text-[11px] text-zinc-900 dark:text-zinc-100 sm:text-xs">
-                {metadata.bounds
-                  ? `${metadata.bounds[0]![0].toFixed(5)}, ${metadata.bounds[0]![1].toFixed(5)} → ${metadata.bounds[1]![0].toFixed(5)}, ${metadata.bounds[1]![1].toFixed(5)}`
-                  : "—"}
-              </dd>
-            </div>
-            <div className="flex flex-col gap-0.5 rounded-lg border border-rose-200/80 bg-rose-50/50 px-3 py-2 dark:border-rose-900/40 dark:bg-rose-950/25">
-              <dt className="font-medium text-rose-800 dark:text-rose-200">Image dimensions (decoded)</dt>
-              <dd className="font-mono text-zinc-900 dark:text-zinc-100">
-                {decodedImageSize
-                  ? `${decodedImageSize.width} × ${decodedImageSize.height} px`
-                  : rasterObjectUrl
-                    ? "—"
-                    : "Not decoded yet"}
-              </dd>
-            </div>
-            <div className="flex flex-col gap-0.5 rounded-lg border border-rose-200/80 bg-rose-50/50 px-3 py-2 dark:border-rose-900/40 dark:bg-rose-950/25">
-              <dt className="font-medium text-rose-800 dark:text-rose-200">Header RA= (px)</dt>
-              <dd className="font-mono text-zinc-900 dark:text-zinc-100">
-                {metadata.rasterWidth != null && metadata.rasterHeight != null
-                  ? `${metadata.rasterWidth} × ${metadata.rasterHeight}`
-                  : "—"}
-              </dd>
-            </div>
-          </dl>
-
-          <h3 className="mt-5 text-sm font-semibold text-zinc-900 dark:text-zinc-50">File &amp; format</h3>
-          <dl className="mt-2 grid gap-2 text-xs sm:grid-cols-2 sm:text-sm">
-            <div className="flex flex-col gap-0.5 rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-950/60">
-              <dt className="font-medium text-zinc-500 dark:text-zinc-400">File</dt>
-              <dd className="truncate font-mono text-zinc-900 dark:text-zinc-100">{uploadedFile?.name ?? "—"}</dd>
-            </div>
-            <div className="flex flex-col gap-0.5 rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-950/60">
-              <dt className="font-medium text-zinc-500 dark:text-zinc-400">BSB version</dt>
-              <dd className="font-mono text-zinc-900 dark:text-zinc-100">{metadata.version ?? "—"}</dd>
-            </div>
-            <div className="flex flex-col gap-0.5 rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-950/60">
-              <dt className="font-medium text-zinc-500 dark:text-zinc-400">Datum / scale</dt>
-              <dd className="text-zinc-900 dark:text-zinc-100">
-                {[metadata.datum, metadata.scale].filter(Boolean).join(" · ") || "—"}
-              </dd>
-            </div>
-            <div className="flex flex-col gap-0.5 rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-950/60">
-              <dt className="font-medium text-zinc-500 dark:text-zinc-400">Palette RGB/ lines</dt>
-              <dd className="font-mono text-zinc-900 dark:text-zinc-100">{metadata.paletteEntries.length}</dd>
-            </div>
-            <div className="sm:col-span-2 flex flex-col gap-0.5 rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-950/60">
-              <dt className="font-medium text-zinc-500 dark:text-zinc-400">REF points ({metadata.referencePoints.length})</dt>
-              <dd className="max-h-32 overflow-y-auto font-mono text-[10px] leading-relaxed text-zinc-800 dark:text-zinc-200 sm:text-xs">
-                {metadata.referencePoints.length
-                  ? metadata.referencePoints
-                      .map(
-                        (r) =>
-                          `#${r.index} px(${r.pixelX},${r.pixelY}) → ${r.lat.toFixed(5)}, ${r.lng.toFixed(5)}`,
-                      )
-                      .join("\n")
-                  : "—"}
-              </dd>
-            </div>
-          </dl>
-        </section>
-      ) : null}
 
     </div>
   );
