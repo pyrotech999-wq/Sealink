@@ -37,14 +37,20 @@ export function SiteBannerAdStrip() {
     if (!visible || ads.length === 0) return;
     try {
       const prevPath = sessionStorage.getItem(ROT_PATH_KEY);
-      let idx = parseInt(sessionStorage.getItem(ROT_IDX_KEY) || "0", 10);
-      if (!Number.isFinite(idx) || idx < 0) idx = 0;
-      if (prevPath !== null && prevPath !== pathname) {
-        idx = (idx + 1) % ads.length;
+      let idx = 0;
+      if (prevPath === null) {
+        idx = 0;
+      } else if (prevPath !== pathname) {
+        const prevIdx = parseInt(sessionStorage.getItem(ROT_IDX_KEY) || "0", 10);
+        const base = Number.isFinite(prevIdx) && prevIdx >= 0 ? prevIdx : 0;
+        idx = (base + 1) % ads.length;
+      } else {
+        const cur = parseInt(sessionStorage.getItem(ROT_IDX_KEY) || "0", 10);
+        idx = Number.isFinite(cur) && cur >= 0 ? cur % ads.length : 0;
       }
       sessionStorage.setItem(ROT_PATH_KEY, pathname);
       sessionStorage.setItem(ROT_IDX_KEY, String(idx));
-      setIndex(idx % ads.length);
+      setIndex(idx);
     } catch {
       setIndex(0);
     }
@@ -64,7 +70,7 @@ export function SiteBannerAdStrip() {
       <a
         href={current.linkUrl}
         target="_blank"
-        rel="noopener noreferrer sponsored"
+        rel="noopener noreferrer nofollow sponsored"
         className="flex max-w-full items-center justify-center rounded-lg outline-none ring-zinc-500/0 transition hover:opacity-95 focus-visible:ring-2 focus-visible:ring-zinc-400"
         aria-label={current.altText || "Sponsored link"}
       >

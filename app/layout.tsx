@@ -5,7 +5,6 @@ import { BroadcastAwayToasts } from "@/components/BroadcastAwayToasts";
 import { BroadcastToastProvider } from "@/components/BroadcastToastProvider";
 import { BottomNav } from "@/components/BottomNav";
 import { CapacitorAppShell } from "@/components/CapacitorAppShell";
-import { BOTTOM_DOCK_OFFSET } from "@/lib/bottom-dock-offset";
 import { AppLoadSplash } from "@/components/AppLoadSplash";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import { SessionDeviceRegistrar } from "@/components/SessionDeviceRegistrar";
@@ -77,13 +76,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full bg-black antialiased dark`}
       style={{ backgroundColor: "#000000" }}
     >
-      <body
-        className="flex min-h-full flex-col bg-black text-zinc-100"
-        style={{
-          backgroundColor: "#000000",
-          paddingBottom: `calc(${BOTTOM_DOCK_OFFSET} + env(safe-area-inset-bottom))`,
-        }}
-      >
+      <body className="flex min-h-full flex-col bg-black text-zinc-100" style={{ backgroundColor: "#000000" }}>
         <BroadcastToastProvider>
           <CapacitorAppShell />
           <AppLoadSplash />
