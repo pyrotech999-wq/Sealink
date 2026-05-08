@@ -10,6 +10,9 @@ export const metadata: Metadata = {
 const COLREGS_FULL_PDF_URL =
   "https://www.dohle-yachts.com/wp-content/uploads/2022/07/COLREGS-The-Rules-of-the-Road.pdf";
 
+const USCG_USA_NAVIGATION_RULES_PDF_URL =
+  "https://www.navcen.uscg.gov/sites/default/files/pdf/navRules/navrules.pdf";
+
 const RNLI_MARITIME_SAR_MANUAL_URL =
   "https://rnli.org/-/media/rnli/downloads/maritime-sar-2017.pdf?rev=ae476fa675de486cbd40819b8515b144";
 
@@ -85,6 +88,14 @@ export default function ColregsPage() {
         <h2 className="text-base font-semibold tracking-tight text-zinc-50">
           Full regulations (PDF)
         </h2>
+        <a
+          href={USCG_USA_NAVIGATION_RULES_PDF_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 inline-flex h-11 w-full items-center justify-center rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-emerald-500 active:bg-emerald-700 sm:w-auto"
+        >
+          USA Navigation rules
+        </a>
         <p className="mt-2 text-sm leading-6 text-zinc-400">
           <a
             href={COLREGS_FULL_PDF_URL}
