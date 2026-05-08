@@ -1824,7 +1824,7 @@ export default function HomeLocationMap({
                 onClick={() => void startAlarm()}
                 className="mt-6 rounded-xl border-2 border-white/90 bg-black/25 px-5 py-3 text-sm font-bold text-white backdrop-blur-sm hover:bg-black/40"
               >
-                Tap to enable siren sound
+                Tap to play alarm sound
               </button>
             ) : null}
           </div>
@@ -1937,7 +1937,7 @@ export default function HomeLocationMap({
             </button>
           </div>
           <p className="bg-black/40 px-4 py-2 text-center text-[11px] text-white/75">
-            Stays on all your signed-in devices until you mark seen. Siren stops when you dismiss.
+            Stays on all your signed-in devices until you mark seen. Sound stops when you dismiss, or after 3 hours if left open.
           </p>
         </div>
       ) : null}
