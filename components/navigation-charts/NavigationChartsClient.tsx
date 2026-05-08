@@ -71,6 +71,7 @@ export function NavigationChartsClient() {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number; accuracyM?: number } | null>(null);
   const [locError, setLocError] = useState<string>("");
   const [shareStatus, setShareStatus] = useState<string>("");
+  const [mapView, setMapView] = useState<{ lat: number; lng: number; zoom: number } | null>(null);
 
   const iBoatingHref = useMemo(
     () => iBoatingMarineChartsAppUrl(metadata?.bounds ?? null),
@@ -441,6 +442,19 @@ export function NavigationChartsClient() {
             >
               Open chart in app
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                const v = mapView ?? { lat: 37.5, lng: 14, zoom: 5 };
+                const url = `/navigation-charts/print?lat=${encodeURIComponent(v.lat)}&lng=${encodeURIComponent(
+                  v.lng,
+                )}&z=${encodeURIComponent(v.zoom)}`;
+                window.open(url, "_blank", "noopener,noreferrer");
+              }}
+              className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-900 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
+            >
+              Save current chart as PDF
+            </button>
             {locError ? (
               <p className="text-[11px] text-red-700 dark:text-red-300" role="status" aria-live="polite">
                 {locError}
@@ -462,6 +476,17 @@ export function NavigationChartsClient() {
             ) : null}
           </div>
         </div>
+      </section>
+
+      <section className="space-y-2">
+        <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Map preview (this is what PDF uses)</p>
+        <NavigationChartsMap
+          chartBounds={null}
+          overlayUrl={null}
+          showRasterOverlay={false}
+          showDebugBounds={false}
+          onViewChange={setMapView}
+        />
       </section>
 
     </div>
