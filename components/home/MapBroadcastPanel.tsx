@@ -181,6 +181,7 @@ export function MapBroadcastPanel({
   const [startChatPeerUid, setStartChatPeerUid] = useState<string>("");
   const [profileByUid, setProfileByUid] = useState<Record<string, ProfileDisplay>>({});
   const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null);
+  const [messagingTab, setMessagingTab] = useState<"direct" | "area">(() => (signedIn ? "direct" : "area"));
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(() =>
     typeof window !== "undefined" ? readHiddenBroadcastIds() : new Set(),
   );
@@ -204,6 +205,7 @@ export function MapBroadcastPanel({
   useEffect(() => {
     const uid = initialOpenPeerUid?.trim();
     if (!uid || !signedIn) return;
+    setMessagingTab("direct");
     setChatPeerUid(uid);
     setChatContext("Conversation");
     queueMicrotask(() => {
@@ -212,6 +214,10 @@ export function MapBroadcastPanel({
       }
     });
   }, [signedIn, initialOpenPeerUid]);
+
+  useEffect(() => {
+    if (!signedIn) setMessagingTab("area");
+  }, [signedIn]);
 
   useEffect(() => {
     const fn = (ev: Event) => {
@@ -553,18 +559,37 @@ export function MapBroadcastPanel({
   const privateRepliesBlock = useMemo(() => {
     if (!signedIn) return null;
     return (
-      <div className="mt-4 rounded-xl border border-indigo-200/60 bg-gradient-to-b from-white/95 to-indigo-50/30 p-3 shadow-sm dark:border-indigo-900/40 dark:from-zinc-950/90 dark:to-indigo-950/20 sm:p-4">
-        <h4 className={`font-semibold text-indigo-950 dark:text-indigo-100 ${L ? "text-xl" : "text-xs"}`}>
-          Private replies
+      <div
+        className={
+          L
+            ? "rounded-2xl border border-zinc-200/90 bg-zinc-50/80 p-5 shadow-sm dark:border-zinc-700/80 dark:bg-zinc-900/40 sm:p-6"
+            : "mt-4 rounded-xl border border-indigo-200/60 bg-gradient-to-b from-white/95 to-indigo-50/30 p-3 shadow-sm dark:border-indigo-900/40 dark:from-zinc-950/90 dark:to-indigo-950/20 sm:p-4"
+        }
+      >
+        <h4
+          className={
+            L
+              ? "text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50"
+              : "text-xs font-semibold text-indigo-950 dark:text-indigo-100"
+          }
+        >
+          {L ? "Recent conversations" : "Private replies"}
         </h4>
+        <p className={`mt-1 text-zinc-600 dark:text-zinc-400 ${L ? "text-sm" : "hidden"}`}>
+          Tap a thread to continue. Only you and the other boater can read these messages.
+        </p>
         {inboxRows.length === 0 ? (
           <p
-            className={`mt-3 rounded-lg border border-dashed border-indigo-200/70 bg-white/60 px-3 py-4 text-center text-indigo-800/70 dark:border-indigo-800/50 dark:bg-zinc-900/40 dark:text-indigo-200/70 ${L ? "text-base" : "text-[11px]"}`}
+            className={`mt-3 rounded-xl border border-dashed px-3 py-4 text-center ${
+              L
+                ? "border-zinc-300/80 bg-white/80 text-sm text-zinc-600 dark:border-zinc-600 dark:bg-zinc-950/50 dark:text-zinc-400"
+                : "rounded-lg border border-indigo-200/70 bg-white/60 text-[11px] text-indigo-800/70 dark:border-indigo-800/50 dark:bg-zinc-900/40 dark:text-indigo-200/70"
+            }`}
           >
-            No private chats yet.
+            {L ? "No direct messages yet. Start one above or wait for a friend to message you." : "No private chats yet."}
           </p>
         ) : (
-          <ul className={`sealink-thread-scroll mt-3 space-y-2 overflow-y-auto pr-1 ${L ? "max-h-72" : "max-h-44"}`}>
+          <ul className={`sealink-thread-scroll mt-4 space-y-2 overflow-y-auto pr-1 ${L ? "max-h-80" : "max-h-44"}`}>
             {inboxRows.map((row) => (
               <li key={row.threadId} className="flex gap-2">
                 <button
@@ -574,16 +599,24 @@ export function MapBroadcastPanel({
                     setChatContext(row.lastBody.trim().split(/\r?\n/)[0]?.slice(0, 120));
                     setChatPeerUid(row.peerUid);
                   }}
-                  className={`flex min-w-0 flex-1 flex-col rounded-xl border border-indigo-100/90 bg-white px-3 py-2.5 text-left shadow-sm ring-indigo-400/30 transition hover:border-indigo-300 hover:ring-2 dark:border-indigo-900/40 dark:bg-zinc-900/80 dark:hover:border-indigo-700 ${
-                    L ? "py-3" : ""
-                  }`}
+                  className={
+                    L
+                      ? "flex min-w-0 flex-1 flex-col rounded-xl border border-zinc-200 bg-white px-4 py-3 text-left shadow-sm transition hover:border-zinc-300 hover:shadow-md dark:border-zinc-700 dark:bg-zinc-950 dark:hover:border-zinc-600"
+                      : "flex min-w-0 flex-1 flex-col rounded-xl border border-indigo-100/90 bg-white px-3 py-2.5 text-left shadow-sm ring-indigo-400/30 transition hover:border-indigo-300 hover:ring-2 dark:border-indigo-900/40 dark:bg-zinc-900/80 dark:hover:border-indigo-700"
+                  }
                 >
                   <div className="flex flex-wrap items-baseline justify-between gap-1">
-                    <span className={`font-semibold text-indigo-950 dark:text-indigo-100 ${L ? "text-base" : "text-xs"}`}>
-                      Conversation
+                    <span
+                      className={
+                        L
+                          ? "text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400"
+                          : "text-xs font-semibold text-indigo-950 dark:text-indigo-100"
+                      }
+                    >
+                      {L ? "Direct message" : "Conversation"}
                     </span>
                     <span
-                      className={`text-indigo-600/90 dark:text-indigo-300/90 ${L ? "text-sm" : "text-[10px]"}`}
+                      className={`truncate font-medium text-zinc-900 dark:text-zinc-100 ${L ? "max-w-[70%] text-sm" : "text-[10px] text-indigo-600/90 dark:text-indigo-300/90"}`}
                       title={row.peerUid}
                     >
                       {(() => {
@@ -595,7 +628,7 @@ export function MapBroadcastPanel({
                     </span>
                   </div>
                   <span
-                    className={`mt-1.5 line-clamp-3 text-zinc-800 dark:text-zinc-100 ${L ? "text-lg leading-snug sm:text-xl" : "text-xs leading-snug"}`}
+                    className={`mt-1.5 line-clamp-3 text-zinc-800 dark:text-zinc-100 ${L ? "text-base leading-snug sm:text-lg" : "text-xs leading-snug"}`}
                   >
                     {row.lastBody}
                   </span>
@@ -653,23 +686,27 @@ export function MapBroadcastPanel({
       .filter((o) => o.kind === "email" && o.uid);
 
     return (
-      <div className="mt-4 rounded-xl border border-emerald-200/60 bg-gradient-to-b from-white/95 to-emerald-50/30 p-4 shadow-sm dark:border-emerald-900/40 dark:from-zinc-950/90 dark:to-emerald-950/20">
-        <h4 className="text-xl font-semibold text-emerald-950 dark:text-emerald-100">Start a private message</h4>
-        <p className="mt-1 text-sm leading-snug text-emerald-900/80 dark:text-emerald-200/80">
-          Pick an IFM friend to open a 1:1 chat.
+      <div className="rounded-2xl border border-zinc-200/90 bg-white p-5 shadow-sm dark:border-zinc-700/80 dark:bg-zinc-950/60 sm:p-6">
+        <h4 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">New direct message</h4>
+        <p className="mt-1 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+          Choose someone from your IFM friends list. Manage friends on the{" "}
+          <Link href="/ifm" className="font-semibold text-indigo-600 underline-offset-2 hover:underline dark:text-indigo-400">
+            IFM map
+          </Link>
+          .
         </p>
         {friendOptions.length === 0 ? (
-          <p className="mt-3 rounded-lg border border-dashed border-emerald-200/70 bg-white/60 px-3 py-4 text-center text-emerald-800/70 dark:border-emerald-800/50 dark:bg-zinc-900/40 dark:text-emerald-200/70">
-            No email friends yet. Add them on the IFM page.
+          <p className="mt-4 rounded-xl border border-dashed border-zinc-300 bg-zinc-50/80 px-4 py-5 text-center text-sm text-zinc-600 dark:border-zinc-600 dark:bg-zinc-900/50 dark:text-zinc-400">
+            No email friends yet. Add contacts on the IFM page to message them here.
           </p>
         ) : (
-          <div className="mt-3 flex flex-wrap items-end gap-2">
-            <label className="min-w-[16rem] flex-1 text-sm font-semibold text-emerald-950 dark:text-emerald-100">
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+            <label className="min-w-[min(100%,18rem)] flex-1 text-sm font-medium text-zinc-800 dark:text-zinc-200">
               Friend
               <select
                 value={startChatPeerUid}
                 onChange={(e) => setStartChatPeerUid(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-emerald-500 dark:border-emerald-900/60 dark:bg-zinc-950 dark:text-zinc-50"
+                className="mt-1.5 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
               >
                 {friendOptions.map((o) => (
                   <option key={o.uid} value={o.uid}>
@@ -687,9 +724,9 @@ export function MapBroadcastPanel({
                 setChatContext("Conversation");
                 setChatPeerUid(uid);
               }}
-              className="h-10 rounded-lg bg-emerald-700 px-4 font-semibold text-white hover:bg-emerald-800 disabled:opacity-50 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+              className="h-11 shrink-0 rounded-xl bg-indigo-600 px-5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-indigo-600 dark:hover:bg-indigo-500"
             >
-              Message
+              Open chat
             </button>
           </div>
         )}
@@ -697,32 +734,92 @@ export function MapBroadcastPanel({
     );
   }, [signedIn, L, ifmFriends, startChatPeerUid]);
 
+  const showAreaSection = !L || !signedIn || messagingTab === "area";
+  const showDirectSection = L && signedIn && messagingTab === "direct";
+
   return (
     <section
-      className={`rounded-xl border border-indigo-200/80 bg-indigo-50/40 p-4 dark:border-indigo-900/50 dark:bg-indigo-950/25 ${
-        L ? "mx-auto max-w-4xl p-5 sm:p-6" : ""
-      }`}
+      className={
+        L
+          ? "rounded-2xl border border-zinc-200/90 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/60 sm:p-6"
+          : "rounded-xl border border-indigo-200/80 bg-indigo-50/40 p-4 dark:border-indigo-900/50 dark:bg-indigo-950/25"
+      }
     >
+      {L && signedIn ? (
+        <div
+          className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+          role="tablist"
+          aria-label="Message type"
+        >
+          <div className="inline-flex rounded-xl border border-zinc-200 bg-zinc-100/90 p-1 dark:border-zinc-700 dark:bg-zinc-950/80">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={messagingTab === "direct"}
+              onClick={() => setMessagingTab("direct")}
+              className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                messagingTab === "direct"
+                  ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-50"
+                  : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+              }`}
+            >
+              Direct messages
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={messagingTab === "area"}
+              onClick={() => setMessagingTab("area")}
+              className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                messagingTab === "area"
+                  ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-50"
+                  : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+              }`}
+            >
+              Area broadcasts
+            </button>
+          </div>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            {messagingTab === "direct"
+              ? "Private 1:1 chats with IFM friends."
+              : "Public-style posts visible to nearby boaters (~5 mi), depending on audience."}
+          </p>
+        </div>
+      ) : null}
+
+      {L && !signedIn ? (
+        <div className="mb-6 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4 dark:border-zinc-700 dark:bg-zinc-950/50 sm:px-5">
+          <p className="text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
+            <Link href="/sign-in" className="font-semibold text-indigo-600 underline-offset-2 hover:underline dark:text-indigo-400">
+              Sign in
+            </Link>{" "}
+            to send and receive direct messages. Area broadcasts below are still visible.
+          </p>
+        </div>
+      ) : null}
+
+      {showAreaSection ? (
+        <>
       <h3
         className={
           L
-            ? "text-2xl font-bold tracking-tight text-indigo-950 sm:text-3xl dark:text-indigo-100"
+            ? "text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50"
             : "text-base font-semibold tracking-tight text-indigo-950 dark:text-indigo-100"
         }
       >
         Area broadcasts (~5 mi)
       </h3>
       <p
-        className={`mt-1 leading-snug text-indigo-900/85 dark:text-indigo-200/85 ${L ? "text-base" : "text-[11px]"}`}
+        className={`mt-1 leading-snug ${L ? "text-sm text-zinc-600 dark:text-zinc-400" : "text-[11px] text-indigo-900/85 dark:text-indigo-200/85"}`}
       >
-        <strong className="font-semibold text-indigo-950 dark:text-indigo-100">Reply</strong> opens a shared thread on a
-        new page.
+        <strong className={`font-semibold ${L ? "text-zinc-800 dark:text-zinc-200" : "text-indigo-950 dark:text-indigo-100"}`}>
+          Reply
+        </strong>{" "}
+        opens a shared thread on a new page.
       </p>
 
       <label
-        className={`mt-2 inline-flex cursor-pointer items-center gap-2 font-medium text-indigo-900 dark:text-indigo-200 ${
-          L ? "text-lg" : "text-xs"
-        }`}
+        className={`mt-3 inline-flex cursor-pointer items-center gap-2 font-medium ${L ? "text-sm text-zinc-800 dark:text-zinc-200" : "text-xs text-indigo-900 dark:text-indigo-200"}`}
       >
         <input
           type="checkbox"
@@ -732,23 +829,29 @@ export function MapBroadcastPanel({
             setSoundOn(on);
             writeSoundOn(on);
           }}
-          className="size-4 rounded border-indigo-300 text-indigo-700 focus:ring-indigo-600"
+          className="size-4 rounded border-indigo-300 text-indigo-700 focus:ring-indigo-600 dark:border-zinc-600"
         />
         Message alert sound
-        <span className="font-normal text-indigo-800/70 dark:text-indigo-200/70">(defaults on)</span>
+        <span className={`font-normal ${L ? "text-zinc-500 dark:text-zinc-400" : "text-indigo-800/70 dark:text-indigo-200/70"}`}>
+          (defaults on)
+        </span>
       </label>
 
       {err ? (
         <p
           className={`mt-2 rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 ${
-            L ? "px-3 py-2 text-lg" : "text-xs"
+            L ? "px-3 py-2 text-sm" : "text-xs"
           }`}
         >
           {err}
         </p>
       ) : null}
 
-      <div className="mt-3 overflow-hidden rounded-lg border border-indigo-200/60 bg-white/90 dark:border-indigo-900/40 dark:bg-zinc-950/60">
+      <div
+        className={`mt-3 overflow-hidden rounded-xl border bg-white/90 dark:bg-zinc-950/60 ${
+          L ? "border-zinc-200 dark:border-zinc-700" : "border-indigo-200/60 dark:border-indigo-900/40"
+        }`}
+      >
         <div
           className={`sealink-thread-scroll min-h-[4.5rem] space-y-2 overflow-y-auto scroll-smooth p-2 pr-1.5 ${
             L ? "max-h-[min(55vh,28rem)] sm:max-h-[min(60vh,32rem)]" : "max-h-[11rem] sm:max-h-[12rem]"
@@ -911,7 +1014,7 @@ export function MapBroadcastPanel({
                 ) : null}
                 <div
                   className={`mt-1 whitespace-pre-wrap leading-snug text-zinc-800 dark:text-zinc-200 ${
-                    L ? "text-2xl leading-snug sm:text-3xl" : ""
+                    L ? "text-lg leading-relaxed sm:text-xl" : ""
                   }`}
                 >
                   <LinkifiedPlainText text={m.body} />
@@ -922,9 +1025,6 @@ export function MapBroadcastPanel({
         )}
         </div>
       </div>
-
-      {!L ? privateRepliesBlock : null}
-      {startChatBlock}
 
       {canSend && sendLat != null && sendLng != null ? (
         <form onSubmit={(e) => void onSend(e)} className="mt-3 space-y-2">
@@ -1016,7 +1116,7 @@ export function MapBroadcastPanel({
                     : "Short heads-up for nearby boaters…"
               }
               className={`mt-1 w-full rounded-lg border border-indigo-200 bg-white px-2 py-1.5 text-zinc-900 outline-none focus:border-indigo-500 dark:border-indigo-800 dark:bg-zinc-950 dark:text-zinc-50 ${
-                L ? "py-3 text-xl sm:text-2xl" : "text-sm"
+                L ? "py-3 text-base sm:text-lg" : "text-sm"
               }`}
             />
           </label>
@@ -1024,7 +1124,7 @@ export function MapBroadcastPanel({
             type="submit"
             disabled={posting || !draft.trim()}
             className={`rounded-lg bg-indigo-700 px-3 font-semibold text-white hover:bg-indigo-800 disabled:opacity-50 dark:bg-indigo-600 dark:hover:bg-indigo-500 ${
-              L ? "h-12 text-lg" : "h-9 text-sm"
+              L ? "h-11 text-base" : "h-9 text-sm"
             }`}
           >
             {posting
@@ -1039,19 +1139,28 @@ export function MapBroadcastPanel({
           </button>
         </form>
       ) : (
-        <p className={`mt-3 text-indigo-900/85 dark:text-indigo-200/80 ${L ? "text-lg leading-relaxed" : "text-xs"}`}>
-          Turn on <strong>Share my location on this map</strong> on the{" "}
+        <p className={`mt-3 text-indigo-900/85 dark:text-indigo-200/80 ${L ? "text-sm leading-relaxed text-zinc-600 dark:text-zinc-400" : "text-xs"}`}>
+          Turn on <strong className="text-zinc-800 dark:text-zinc-200">Share my location on this map</strong> on the{" "}
           <Link
             href="/"
-            className="font-semibold text-green-800 underline underline-offset-2 hover:text-green-700 dark:text-green-400"
+            className="font-semibold text-indigo-600 underline underline-offset-2 hover:text-indigo-500 dark:text-indigo-400"
           >
             home map
           </Link>{" "}
           to send a broadcast from your current position.
         </p>
       )}
+        </>
+      ) : null}
 
-      {L ? privateRepliesBlock : null}
+      {showDirectSection ? (
+        <div className="space-y-6">
+          {startChatBlock}
+          {privateRepliesBlock}
+        </div>
+      ) : null}
+
+      {!L && signedIn ? privateRepliesBlock : null}
 
       {chatPeerUid ? (
         <VicinityChatDrawer
