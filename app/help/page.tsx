@@ -4,7 +4,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Help | SeaLink",
   description:
-    "How to use SeaLink: home map, Anchor alarm, sharing, Weather & sea (OPC charts, UKMO MSLP, interactive GFS wind/waves), navigation charts (KAP upload), IFM, Buy & Sell, marinas, anchor watch, broadcasts, and more.",
+    "How to use SeaLink: home map, Anchor alarm (geofence audio & alerts), sharing, Weather & sea, navigation charts & COLREGs, IFM, Messages (direct & area), Buy & Sell, marinas, broadcasts, MOB, sponsors strip, PWA install, and more.",
 };
 
 const DEV_EMAIL = "pyrotech999@hotmail.co.uk";
@@ -27,14 +27,17 @@ const toc: { id: string; label: string }[] = [
   { id: "weather", label: "Weather & sea" },
   { id: "ifm", label: "IFM (friends map)" },
   { id: "marketplace", label: "Buy & Sell, gear & marinas" },
+  { id: "navigation-charts-colregs", label: "Navigation charts & COLREGs" },
   { id: "broadcasts", label: "Broadcasts & chat" },
+  { id: "messages-page", label: "Messages page" },
   { id: "messages-broadcast-audience", label: "Messages — who sees broadcasts" },
   { id: "anchor", label: "Anchor watch" },
   { id: "anchor-android-location", label: "Android location (anchor)" },
   { id: "sea-summary", label: "Sea state on Home" },
   { id: "mob", label: "Man overboard (MOB)" },
   { id: "plans", label: "Plans & payment" },
-  { id: "sounds", label: "Sounds & bottom bar" },
+  { id: "sounds", label: "Sounds & alerts" },
+  { id: "sponsors", label: "Sponsor strip" },
   { id: "share-install", label: "Share app & tips" },
   { id: "iphone-install", label: "iPhone — save as app" },
   { id: "safety", label: "Safety & official info" },
@@ -158,7 +161,18 @@ export default function HelpPage() {
                   <Link href="/navigation-charts" className="font-medium text-emerald-400 hover:underline">
                     upload your own .kap
                   </Link>{" "}
-                  (BSB/KAP) for a map preview; you supply charts you are licensed to use.
+                  (BSB/KAP) for a map preview; you supply charts you are licensed to use. The same page links to{" "}
+                  <Link href="/colregs" className="font-medium text-emerald-400 hover:underline">
+                    COLREGs
+                  </Link>{" "}
+                  (rules of the road summaries, PDFs, and flash cards).
+                </li>
+                <li>
+                  <strong className="text-zinc-300">Messages</strong> —{" "}
+                  <Link href="/messaging" className="font-medium text-emerald-400 hover:underline">
+                    /messaging
+                  </Link>{" "}
+                  for direct chats with IFM friends and area broadcasts in one place (see the Messages section below).
                 </li>
                 <li>
                   <strong className="text-zinc-300">IFM</strong> — International Friends Map for seeing other users.
@@ -185,9 +199,11 @@ export default function HelpPage() {
                 admin), profile and sign-out when signed in — or Sign in / Create account when not.
               </p>
               <p>
-                <strong className="text-zinc-200">Bottom strip</strong> (all sizes): only{" "}
-                <strong className="text-zinc-300">Man overboard</strong> and the &quot;Silence message alerts&quot; checkbox
-                — no duplicate page tabs, since those live in the top bar.
+                <strong className="text-zinc-200">Bottom strip</strong> (all sizes):{" "}
+                <strong className="text-zinc-300">Man overboard</strong>, an optional{" "}
+                <strong className="text-zinc-300">sponsor</strong> image carousel on supported pages (tap opens the
+                sponsor link), then the &quot;Silence message alerts&quot; checkbox — no duplicate page tabs, since those
+                live in the top bar.
               </p>
               <p>
                 <strong className="text-zinc-200">Other page</strong> (
@@ -468,6 +484,32 @@ export default function HelpPage() {
               </p>
             </Section>
 
+            <Section id="navigation-charts-colregs" title="Navigation charts &amp; COLREGs">
+              <p>
+                <Link href="/navigation-charts" className="font-medium text-emerald-400 hover:underline">
+                  Navigation charts
+                </Link>{" "}
+                (<span className="font-mono text-zinc-400">/navigation-charts</span>) lets you upload{" "}
+                <strong className="text-zinc-200">.kap / BSB</strong> raster charts you are entitled to use, then preview
+                them on a slippy map with pan and zoom. SeaLink does not supply charts — you provide files from your
+                publisher or conversion workflow and stay responsible for licensing and corrections.
+              </p>
+              <p>
+                The charts page also links to{" "}
+                <Link href="/colregs" className="font-medium text-emerald-400 hover:underline">
+                  COLREGs
+                </Link>{" "}
+                (<span className="font-mono text-zinc-400">/colregs</span>): short explanations of collision-regulation
+                themes, links to full-rule PDFs, and optional{" "}
+                <strong className="text-zinc-200">flash cards</strong> on Quizlet for revision. COLREGs are reference
+                only — always use official publications and local rules for compliance.
+              </p>
+              <p className="rounded-lg border border-zinc-700/80 bg-zinc-950/60 px-3 py-2 text-xs text-zinc-400">
+                <strong className="text-zinc-300">Tip:</strong> Large KAP files can be slow on mobile data; upload on Wi‑Fi
+                when possible.
+              </p>
+            </Section>
+
             <Section id="broadcasts" title="Area broadcasts &amp; vicinity chat">
               <p>
                 When signed in and sharing your location on the home map, you may be able to <strong className="text-zinc-200">send an area broadcast</strong> — a short message to other users in range (or wider if your account has global broadcast permission). Recipients may get a sound unless they silence alerts (see Sounds below).
@@ -525,6 +567,40 @@ export default function HelpPage() {
               </p>
             </Section>
 
+            <Section id="messages-page" title="Messages page — Direct &amp; area">
+              <p>
+                Open{" "}
+                <Link href="/messaging" className="font-medium text-emerald-400 hover:underline">
+                  Messages
+                </Link>{" "}
+                from the top bar when you are signed in. It brings together{" "}
+                <strong className="text-zinc-200">direct chats</strong> with people on your IFM friends list and{" "}
+                <strong className="text-zinc-200">area broadcasts</strong> (~5 mi) in one place.
+              </p>
+              <ul className="list-disc space-y-1 pl-5 text-zinc-400">
+                <li>
+                  Use the <strong className="text-zinc-300">Direct</strong> tab to pick a friend and send a private
+                  message; conversations stay between those accounts.
+                </li>
+                <li>
+                  Use the <strong className="text-zinc-300">Area</strong> tab (or the home map broadcast panel) for
+                  short heads-ups to nearby boaters, with the same audience choices as on the map (everyone nearby, IFM
+                  friends nearby, or IFM friends worldwide).
+                </li>
+                <li>
+                  Replying to a broadcast opens a <strong className="text-zinc-300">shared thread</strong> on its own
+                  page so you can follow the conversation without losing the main map.
+                </li>
+              </ul>
+              <p className="rounded-lg border border-zinc-700/80 bg-zinc-950/60 px-3 py-2 text-xs text-zinc-400">
+                <strong className="text-zinc-300">Tip:</strong> Add or manage friends on the{" "}
+                <Link href="/ifm" prefetch={false} className="font-medium text-emerald-400 hover:underline">
+                  IFM
+                </Link>{" "}
+                map first if restricted broadcasts or DMs say the recipient is unavailable.
+              </p>
+            </Section>
+
             <Section id="anchor" title="Anchor watch &amp; geofence">
               <p>
                 Open <strong className="text-zinc-200">Anchor alarm</strong> from the top bar or go to{" "}
@@ -548,6 +624,26 @@ export default function HelpPage() {
                 On <Link href="/" className="font-medium text-emerald-400 hover:underline">Home</Link>, a compact status
                 line next to the map duplicates whether anchor watch is on or off; use it for a quick disarm or follow the
                 link when disarmed to return to the full Anchor alarm page.
+              </p>
+              <p>
+                <strong className="text-zinc-200">When the geofence trips</strong> (drift or bearing change beyond your
+                limits), SeaLink shows a <strong className="text-zinc-200">full-screen alarm</strong> on devices configured
+                to receive alerts, plays a <strong className="text-zinc-200">loud warning sound</strong>, and pulses
+                vibration where the device supports it. Grant{" "}
+                <strong className="text-zinc-200">notification permission</strong> if you want an extra banner when the tab
+                is in the background (behaviour varies by browser).
+              </p>
+              <p>
+                <strong className="text-zinc-200">Sound timing:</strong> the alarm audio plays when the alert appears and{" "}
+                <strong className="text-zinc-200">repeats about every five minutes</strong> until you tap{" "}
+                <strong className="text-zinc-200">Mark seen</strong> or <strong className="text-zinc-200">Reset anchor</strong>.
+                To avoid draining attention overnight, playback <strong className="text-zinc-200">stops automatically after three hours</strong>{" "}
+                even if the red screen is still open — use the buttons to clear the alert for good. Many browsers require a{" "}
+                <strong className="text-zinc-200">tap (“play alarm sound”)</strong> the first time before audio is allowed.
+              </p>
+              <p>
+                <strong className="text-zinc-200">Cross-device:</strong> signed-in users can choose which device monitors
+                GPS and which device(s) should show the alert pop-up; settings sync when you save in the anchor dialog.
               </p>
               <p>
                 Quality indicators reflect GPS stability — poor GPS causes false confidence.
@@ -633,14 +729,37 @@ export default function HelpPage() {
               </p>
             </Section>
 
-            <Section id="sounds" title="Sounds, message alerts &amp; bottom bar">
+            <Section id="sounds" title="Sounds &amp; in-app alerts">
               <p>
-                New broadcast-related alerts can play a sound. Use <strong className="text-zinc-200">Silence message alerts</strong> in the bottom strip if you need the app quiet in a meeting or overnight — you will still see in-app indicators
-                where implemented, but audio may be suppressed.
+                <strong className="text-zinc-200">Area broadcasts &amp; vicinity / DM alerts:</strong> on the home map
+                broadcast panel, <strong className="text-zinc-200">Message alert sound</strong> (on by default) controls
+                the short chime when new nearby messages arrive. Use{" "}
+                <strong className="text-zinc-200">Silence message alerts (no sound)</strong> in the bottom strip if you
+                need the app quiet in a meeting or overnight — you will still see in-app indicators where implemented, but
+                those <strong className="text-zinc-200">broadcast-related</strong> sounds are suppressed.
+              </p>
+              <p>
+                <strong className="text-zinc-200">Anchor alarm:</strong> uses a separate, urgent alarm while a geofence
+                breach is showing. It is <strong className="text-zinc-200">not</strong> turned off by “Silence message
+                alerts” — you dismiss it from the full-screen anchor alarm (Seen / Reset anchor) or wait for the automatic
+                sound timeout described in the Anchor section.
+              </p>
+              <p>
+                <strong className="text-zinc-200">Man overboard (MOB):</strong> incoming MOB alerts from others can play
+                their own alarm until you silence them on the alert card.
               </p>
               <p className="rounded-lg border border-zinc-700/80 bg-zinc-950/60 px-3 py-2 text-xs text-zinc-400">
                 <strong className="text-zinc-300">Hint:</strong> On iOS, also check the physical mute switch and volume;
                 browsers cannot override system silent mode.
+              </p>
+            </Section>
+
+            <Section id="sponsors" title="Sponsor strip">
+              <p>
+                On Home, Anchor alarm, IFM, Messages, Weather, and Navigation charts, the bottom dock may show a thin row
+                of <strong className="text-zinc-200">rotating sponsor images</strong> between the Man overboard button and
+                the silence checkbox. Tap an image to open the sponsor&apos;s link in a new tab. Sponsors do not replace
+                navigation or safety information — they are optional community or commercial messages run by SeaLink.
               </p>
             </Section>
 
@@ -653,7 +772,9 @@ export default function HelpPage() {
               <p>
                 SeaLink can run as a <strong className="text-zinc-200">Progressive Web App</strong> or inside a native
                 wrapper on Android — install or &quot;Add to Home Screen&quot; for quicker launch and sometimes better
-                background behaviour than a disposable browser tab.
+                background behaviour than a disposable browser tab. The saved icon should match SeaLink branding; if an
+                old shortcut shows a blank tile, remove it and add the site again after updating, or clear site data for
+                the origin and retry.
               </p>
               <ul className="list-disc space-y-1 pl-5 text-zinc-400">
                 <li>Keep the app updated — forecast endpoints and tiles change over time.</li>
@@ -793,6 +914,15 @@ export default function HelpPage() {
                 <li>
                   <strong className="text-zinc-300">Payment / access:</strong> confirm card or wallet with your bank; open
                   Plans again after success; try sign-out and sign-in if entitlements look wrong.
+                </li>
+                <li>
+                  <strong className="text-zinc-300">Anchor alarm silent:</strong> interact with the page once (tap{" "}
+                  <strong className="text-zinc-200">Tap to play alarm sound</strong> on the red screen) so the browser
+                  allows audio; check volume and Do Not Disturb.
+                </li>
+                <li>
+                  <strong className="text-zinc-300">Messages not updating:</strong> confirm you are signed in, refresh the
+                  Messages page, and check network; Direct chats need the recipient on your IFM friends list.
                 </li>
               </ul>
               <p>
