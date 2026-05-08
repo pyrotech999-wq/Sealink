@@ -61,6 +61,8 @@ export function VicinityChatDrawer({
   const [deleting, setDeleting] = useState(false);
   const [draft, setDraft] = useState("");
   const [err, setErr] = useState<string | null>(null);
+  const [peerName, setPeerName] = useState<string | null>(null);
+  const [peerBoat, setPeerBoat] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const openRef = useRef(open);
@@ -162,6 +164,8 @@ export function VicinityChatDrawer({
       queueMicrotask(() => {
         setThreadId(null);
         setMessages([]);
+        setPeerName(null);
+        setPeerBoat(null);
       });
       return;
     }
@@ -169,6 +173,36 @@ export function VicinityChatDrawer({
     const id = window.setInterval(() => queueMicrotask(() => void load({ silent: true })), 14_000);
     return () => window.clearInterval(id);
   }, [open, peerUid, broadcastId, load]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (isBroadcastThread) return;
+    const uid = peerUid.trim();
+    if (!uid) return;
+    const ac = new AbortController();
+    const to = window.setTimeout(() => ac.abort(), 12_000);
+    (async () => {
+      try {
+        const r = await fetch(`/api/profiles/display?uid=${encodeURIComponent(uid)}`, {
+          credentials: "same-origin",
+          cache: "no-store",
+          signal: ac.signal,
+        });
+        const d = (await r.json()) as { fullName?: string | null; boatName?: string | null };
+        if (!r.ok) return;
+        setPeerName(typeof d.fullName === "string" && d.fullName.trim() ? d.fullName.trim() : null);
+        setPeerBoat(typeof d.boatName === "string" && d.boatName.trim() ? d.boatName.trim() : null);
+      } catch {
+        /* ignore */
+      } finally {
+        window.clearTimeout(to);
+      }
+    })();
+    return () => {
+      window.clearTimeout(to);
+      ac.abort();
+    };
+  }, [open, peerUid, isBroadcastThread]);
 
   useLayoutEffect(() => {
     if (!open || messages.length === 0) return;
@@ -257,6 +291,7 @@ export function VicinityChatDrawer({
   if (!open) return null;
 
   const peerShort = peerUid.length > 22 ? `${peerUid.slice(0, 22)}…` : peerUid;
+  const peerLabel = peerName && peerBoat ? `${peerName} · ${peerBoat}` : peerName || peerBoat || null;
   const senderLabel = (m: Msg) =>
     formatChatSenderLine(m.isMine, m.senderUid, m.senderDisplayName, m.senderBoatName);
   const bubbleText = R ? "text-lg leading-relaxed sm:text-xl" : "text-sm leading-relaxed";
@@ -286,15 +321,21 @@ export function VicinityChatDrawer({
               {isBroadcastThread ? (
                 <>
                   Original poster{" "}
-                  <span className="font-mono font-medium text-zinc-800 dark:text-zinc-200" title={peerUid}>
-                    {peerShort}
+                  <span
+                    className={peerLabel ? "font-semibold text-zinc-800 dark:text-zinc-200" : "font-mono font-medium text-zinc-800 dark:text-zinc-200"}
+                    title={peerUid}
+                  >
+                    {peerLabel ?? peerShort}
                   </span>
                 </>
               ) : (
                 <>
                   With{" "}
-                  <span className="font-mono font-medium text-zinc-800 dark:text-zinc-200" title={peerUid}>
-                    {peerShort}
+                  <span
+                    className={peerLabel ? "font-semibold text-zinc-800 dark:text-zinc-200" : "font-mono font-medium text-zinc-800 dark:text-zinc-200"}
+                    title={peerUid}
+                  >
+                    {peerLabel ?? peerShort}
                   </span>
                 </>
               )}
