@@ -38,33 +38,6 @@ function writeSoundOn(on: boolean): void {
   }
 }
 
-async function beepOnce(): Promise<void> {
-  try {
-    const AudioCtx =
-      window.AudioContext ||
-      (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
-    if (ctx.state === "suspended") await ctx.resume();
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.type = "sine";
-    o.frequency.value = 880;
-    g.gain.value = 0.0001;
-    o.connect(g);
-    g.connect(ctx.destination);
-    o.start();
-    const now = ctx.currentTime;
-    g.gain.setValueAtTime(0.0001, now);
-    g.gain.exponentialRampToValueAtTime(0.2, now + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
-    o.stop(now + 0.21);
-    window.setTimeout(() => void ctx.close().catch(() => undefined), 500);
-  } catch {
-    /* ignore */
-  }
-}
-
 function readWaterline(): string | null {
   if (typeof window === "undefined") return null;
   try {
@@ -189,7 +162,6 @@ export function MapBroadcastPanel({
 
   const coordsRef = useRef({ readLat, readLng });
   const toastRef = useRef(toast);
-  const soundOnRef = useRef(soundOn);
 
   useEffect(() => {
     coordsRef.current = { readLat, readLng };
@@ -198,10 +170,6 @@ export function MapBroadcastPanel({
   useEffect(() => {
     toastRef.current = toast;
   }, [toast]);
-
-  useEffect(() => {
-    soundOnRef.current = soundOn;
-  }, [soundOn]);
 
   useEffect(() => {
     const uid = initialOpenPeerUid?.trim();
@@ -242,6 +210,26 @@ export function MapBroadcastPanel({
     [signedIn, readLat, readLng, router],
   );
 
+  /** Toasts + WAV for new incoming area rows; advances session waterline (same rules as {@link load}). */
+  const surfaceNewAreaBroadcastAlerts = useCallback((msgs: BroadcastMsg[]) => {
+    const newest = msgs[0]?.createdAt;
+    if (!newest) return;
+    const wl = readWaterline();
+    if (wl == null) {
+      writeWaterline(newest);
+      return;
+    }
+    const t = toastRef.current;
+    if (t) {
+      for (const m of msgs) {
+        if (new Date(m.createdAt) <= new Date(wl)) break;
+        if (m.isMob) continue;
+        if (!m.isMine) t.pushToast(m.body, "broadcast", { id: m.id });
+      }
+    }
+    writeWaterline(newest);
+  }, []);
+
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent === true;
     const { readLat: lat, readLng: lng } = coordsRef.current;
@@ -265,27 +253,7 @@ export function MapBroadcastPanel({
         /* */
       }
 
-      const newest = msgs[0]?.createdAt;
-      if (!newest) return;
-
-      const wl = readWaterline();
-      if (wl == null) {
-        writeWaterline(newest);
-        return;
-      }
-
-      let shouldBeep = false;
-      const t = toastRef.current;
-      if (t) {
-        for (const m of msgs) {
-          if (new Date(m.createdAt) <= new Date(wl)) break;
-          if (m.isMob) continue;
-          if (!m.isMine) t.pushToast(m.body, "broadcast", { id: m.id });
-          if (!m.isMine) shouldBeep = true;
-        }
-      }
-      if (shouldBeep && soundOnRef.current) void beepOnce();
-      writeWaterline(newest);
+      surfaceNewAreaBroadcastAlerts(msgs);
     } catch {
       if (!silent) {
         setErr("Network error");
@@ -294,7 +262,7 @@ export function MapBroadcastPanel({
     } finally {
       if (!silent) setLoading(false);
     }
-  }, []);
+  }, [surfaceNewAreaBroadcastAlerts]);
 
   useEffect(() => {
     if (!signedIn) return;
@@ -316,11 +284,12 @@ export function MapBroadcastPanel({
         } catch {
           /* */
         }
+        surfaceNewAreaBroadcastAlerts(msgs);
       },
     });
     queueMicrotask(() => void load());
     return unsub;
-  }, [load, signedIn]);
+  }, [load, signedIn, surfaceNewAreaBroadcastAlerts]);
 
   const prevCoords = useRef<{ lat: number; lng: number } | null>(null);
   useEffect(() => {

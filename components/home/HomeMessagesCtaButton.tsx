@@ -99,13 +99,14 @@ export function HomeMessagesCtaButton({
 
   const check = useCallback(async () => {
     if (emergencyDisableLiveMapApis) return;
-    const serial = ++checkSerial.current;
-    const isLatest = () => serial === checkSerial.current;
 
     const visit = getMessagingLastVisitIso();
     const d = liveRef.current;
     const broadcasts = Array.isArray(d?.messages) ? (d!.messages as BroadcastRow[]) : [];
     if (!broadcasts.length && !signedIn) return;
+
+    const serial = ++checkSerial.current;
+    const isLatest = () => serial === checkSerial.current;
 
     let inbox: InboxRow[] = [];
     if (signedIn) {
