@@ -201,12 +201,9 @@ export function NavigationChartsClient() {
     // TODO: OpenCPN — document export path or platform URL scheme; no in-app OpenCPN runtime.
   }, []);
 
-  const openFishingAppAtMyLocation = useCallback(() => {
+  const onSetMyLocation = useCallback(() => {
     setLocError("");
     setShareStatus("");
-
-    // Open a tab synchronously so popup blockers don't reject the action.
-    const win = window.open(IBOATING_MARINE_CHARTS_APP, "_blank", "noopener,noreferrer");
 
     if (!("geolocation" in navigator)) {
       setLocError("Geolocation is not available in this browser.");
@@ -219,18 +216,7 @@ export function NavigationChartsClient() {
         const lng = pos.coords.longitude;
         const accuracyM = pos.coords.accuracy;
         setUserLocation({ lat, lng, accuracyM });
-        const zoom = accuracyM != null && Number.isFinite(accuracyM) ? (accuracyM < 80 ? 14 : accuracyM < 300 ? 13 : 12) : 13;
-        const url = iBoatingMarineChartsAppUrlForLatLng({ lat, lng, zoom });
-        if (win && !win.closed) {
-          try {
-            win.location.href = url;
-          } catch {
-            // If cross-origin location assignment fails for any reason, fall back to opening a second tab.
-            window.open(url, "_blank", "noopener,noreferrer");
-          }
-        } else {
-          window.open(url, "_blank", "noopener,noreferrer");
-        }
+        setShareStatus("Location set.");
       },
       (err) => {
         setLocError(err.message || "Could not get your location (permission denied or unavailable).");
@@ -504,13 +490,17 @@ export function NavigationChartsClient() {
             </a>
             . Their catalogue, pricing, and terms apply; not affiliated with SeaLink.
           </p>
+          <p className="mt-2 text-[11px] leading-relaxed text-zinc-600 dark:text-zinc-400">
+            Press <strong className="text-zinc-800 dark:text-zinc-200">Set my location</strong>, then tap{" "}
+            <strong className="text-zinc-800 dark:text-zinc-200">Open in app</strong>.
+          </p>
           <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
             <button
               type="button"
-              onClick={openFishingAppAtMyLocation}
+              onClick={onSetMyLocation}
               className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800 sm:w-auto"
             >
-              Open Fishing-App charts (at my location)
+              Set my location
             </button>
             <button
               type="button"
@@ -531,7 +521,7 @@ export function NavigationChartsClient() {
             ) : null}
             {userLocation ? (
               <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
-                Last fix:{" "}
+                Location:{" "}
                 <span className="font-mono">
                   {userLocation.lat.toFixed(5)}, {userLocation.lng.toFixed(5)}
                 </span>
@@ -631,16 +621,6 @@ export function NavigationChartsClient() {
         </section>
       ) : null}
 
-      <section className="rounded-2xl border border-zinc-200 bg-white/60 p-4 text-xs leading-relaxed text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-400">
-        <p className="font-semibold text-zinc-800 dark:text-zinc-200">Roadmap</p>
-        <ul className="mt-2 list-disc space-y-1 pl-5">
-          <li>KAP/BSB indexed line tables &amp; edge-case charts</li>
-          <li>GPS vessel positioning</li>
-          <li>Offline chart caching</li>
-          <li>Chart overlays &amp; route plotting</li>
-          <li>Weather / tide overlays</li>
-        </ul>
-      </section>
     </div>
   );
 }
