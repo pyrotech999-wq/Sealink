@@ -240,41 +240,51 @@ export function NavigationChartsClient() {
     return iBoatingHref;
   }, [iBoatingHref, userLocation]);
 
-  const onSendToApp = useCallback(async () => {
+  const onSendToApp = useCallback(() => {
     setLocError("");
-    setShareStatus("");
+    setShareStatus("Getting your location…");
 
-    const url = bestShareUrl;
-    const title = "SeaLink — Navigation Charts";
-    const text = "Open chart viewer at your location.";
+    // Open a tab synchronously so popup blockers don't reject the action.
+    // We'll redirect it once we have a GPS fix.
+    const win = window.open(IBOATING_MARINE_CHARTS_APP, "_blank", "noopener,noreferrer");
 
-    // Primary path: open the generated link immediately (no copy/paste).
-    // This gives iOS/Android the best chance to hand off to an installed app.
-    let opened = false;
-    try {
-      window.location.assign(url);
-      opened = true;
-    } catch {
-      // ignore
+    if (!("geolocation" in navigator)) {
+      setLocError("Geolocation is not available in this browser.");
+      setShareStatus("");
+      return;
     }
 
-    if (!opened) {
-      const win = window.open(url, "_blank", "noopener,noreferrer");
-      opened = Boolean(win);
-    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const accuracyM = pos.coords.accuracy;
+        setUserLocation({ lat, lng, accuracyM });
 
-    // Secondary: optionally offer the share sheet on platforms that support it.
-    // (Some users still want to send to another device/app.)
-    try {
-      if (navigator.share) {
-        await navigator.share({ title, text, url });
-      }
-    } catch {
-      // user cancelled / share failed; ignore
-    }
+        const zoom =
+          accuracyM != null && Number.isFinite(accuracyM) ? (accuracyM < 80 ? 14 : accuracyM < 300 ? 13 : 12) : 13;
+        const url = iBoatingMarineChartsAppUrlForLatLng({ lat, lng, zoom });
 
-    setShareStatus("Opening chart…");
-  }, [bestShareUrl]);
+        if (win && !win.closed) {
+          try {
+            win.location.href = url;
+          } catch {
+            window.open(url, "_blank", "noopener,noreferrer");
+          }
+        } else {
+          window.open(url, "_blank", "noopener,noreferrer");
+        }
+
+        setShareStatus("Opening chart…");
+      },
+      (err) => {
+        setLocError(err.message || "Could not get your location (permission denied or unavailable).");
+        setShareStatus("");
+        // Leave the viewer open at its default start if we already opened a tab.
+      },
+      { enableHighAccuracy: true, maximumAge: 15_000, timeout: 10_000 },
+    );
+  }, []);
 
   const phaseIndex = (p: LoadPhase) => PHASE_ORDER.indexOf(p as LoadPhaseStep);
 
