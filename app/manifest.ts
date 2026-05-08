@@ -1,14 +1,37 @@
 import type { MetadataRoute } from "next";
+import { headers } from "next/headers";
+import { resolvePublicAppOrigin } from "@/lib/public-app-url";
 
 /**
- * PWA manifest for “Add to Home screen”.
- *
- * Use same-origin relative `icons[].src` paths so Android/Chrome always resolve icons correctly
- * (absolute URLs from NEXT_PUBLIC_APP_URL can mismatch www / apex and yield a blank shortcut icon).
- * Include both `any` and `maskable` for adaptive icons on Android.
+ * Resolve the same origin the user used to load the site (handles www vs apex, correct scheme).
+ * Some Android Chrome builds fail to load manifest icons when `src` is path-only (`/pwa-192.png`),
+ * which shows a white shortcut tile — full URLs fix that.
  */
-export default function manifest(): MetadataRoute.Manifest {
+async function manifestIconOrigin(): Promise<string> {
+  try {
+    const h = await headers();
+    const hostRaw = h.get("x-forwarded-host") ?? h.get("host");
+    if (hostRaw) {
+      const host = hostRaw.split(",")[0].trim();
+      const protoRaw = h.get("x-forwarded-proto");
+      const proto =
+        protoRaw?.split(",")[0].trim() ||
+        (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");
+      return `${proto}://${host}`.replace(/\/+$/, "");
+    }
+  } catch {
+    /* e.g. static analysis */
+  }
+  return resolvePublicAppOrigin().replace(/\/+$/, "");
+}
+
+export const dynamic = "force-dynamic";
+
+export default async function manifest(): Promise<MetadataRoute.Manifest> {
+  const base = await manifestIconOrigin();
+
   return {
+    id: `${base}/`,
     name: "SeaLink",
     short_name: "SeaLink",
     description: "Map, weather & sea, and anchor alerts.",
@@ -20,25 +43,25 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: "#000000",
     icons: [
       {
-        src: "/pwa-192.png",
+        src: `${base}/pwa-192.png`,
         sizes: "192x192",
         type: "image/png",
         purpose: "any",
       },
       {
-        src: "/pwa-192.png",
+        src: `${base}/pwa-192.png`,
         sizes: "192x192",
         type: "image/png",
         purpose: "maskable",
       },
       {
-        src: "/pwa-512.png",
+        src: `${base}/pwa-512.png`,
         sizes: "512x512",
         type: "image/png",
         purpose: "any",
       },
       {
-        src: "/pwa-512.png",
+        src: `${base}/pwa-512.png`,
         sizes: "512x512",
         type: "image/png",
         purpose: "maskable",
