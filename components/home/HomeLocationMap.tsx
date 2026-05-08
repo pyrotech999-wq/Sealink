@@ -78,6 +78,9 @@ const EMERGENCY_REENABLE_NEARBY_PRESENCE = true;
 /** Statute miles → metres (for ~5 mi “nearby” ring). */
 const NEARBY_RING_METRES = 5 * 1609.344;
 
+/** How often the anchor geofence is evaluated and remote monitor fixes are polled (ms). Uses the same {@link pos} as the map. */
+const ANCHOR_POSITION_CHECK_INTERVAL_MS = 30_000;
+
 /** Fixed anchor point for geofence (orange ⚓ — drawn under your moving boat pin). */
 function buildAnchorGeofenceCenterIcon(): L.DivIcon {
   return L.divIcon({
@@ -272,6 +275,11 @@ export default function HomeLocationMap({
   useEffect(() => {
     posRef.current = pos;
   }, [pos]);
+
+  const anchorMonitorRef = useRef(anchorMonitor);
+  useEffect(() => {
+    anchorMonitorRef.current = anchorMonitor;
+  }, [anchorMonitor]);
 
   const signedInRef = useRef(signedIn);
   signedInRef.current = signedIn;
