@@ -57,6 +57,8 @@ export function HomeMessagesCtaButton({
   const lastDmChimeAtMs = useRef(0);
   const liveRef = useRef<MapLiveResponse | null>(null);
   const checkRef = useRef<() => Promise<void>>(async () => {});
+  /** Ignore stale inbox/map-live combinations when overlapping `check()` runs resolve out of order. */
+  const checkSerial = useRef(0);
 
   useEffect(() => {
     const fn = (ev: Event) => {
@@ -70,23 +72,26 @@ export function HomeMessagesCtaButton({
   }, []);
 
   useEffect(() => {
-    if (!signedIn || !Number.isFinite(readLat) || !Number.isFinite(readLng)) {
+    if (!Number.isFinite(readLat) || !Number.isFinite(readLng)) {
       setBroadcastReplyUnreadIds([]);
       return;
     }
+    if (!signedIn) setBroadcastReplyUnreadIds([]);
 
     return subscribeMapLive({
       id: "HomeMessagesCtaButton:alerts",
       getCoords: () => ({ lat: readLat, lng: readLng }),
       onData: (d) => {
         liveRef.current = d;
-        const list = Array.isArray(d.replyAlerts) ? d.replyAlerts : [];
-        setBroadcastReplyUnreadIds(
-          list.map((a) => {
-            const o = a as { broadcastId?: unknown };
-            return typeof o.broadcastId === "string" ? o.broadcastId : "";
-          }).filter(Boolean),
-        );
+        if (signedIn) {
+          const list = Array.isArray(d.replyAlerts) ? d.replyAlerts : [];
+          setBroadcastReplyUnreadIds(
+            list.map((a) => {
+              const o = a as { broadcastId?: unknown };
+              return typeof o.broadcastId === "string" ? o.broadcastId : "";
+            }).filter(Boolean),
+          );
+        }
         queueMicrotask(() => void checkRef.current());
       },
     });
@@ -94,6 +99,9 @@ export function HomeMessagesCtaButton({
 
   const check = useCallback(async () => {
     if (emergencyDisableLiveMapApis) return;
+    const serial = ++checkSerial.current;
+    const isLatest = () => serial === checkSerial.current;
+
     const visit = getMessagingLastVisitIso();
     const d = liveRef.current;
     const broadcasts = Array.isArray(d?.messages) ? (d!.messages as BroadcastRow[]) : [];
@@ -102,7 +110,10 @@ export function HomeMessagesCtaButton({
     let inbox: InboxRow[] = [];
     if (signedIn) {
       try {
-        const r2 = await fetch("/api/vicinity-chat/inbox", { cache: "no-store" });
+        const r2 = await fetch("/api/vicinity-chat/inbox", {
+          credentials: "same-origin",
+          cache: "no-store",
+        });
         const d2 = (await r2.json()) as { threads?: InboxRow[] };
         inbox = Array.isArray(d2.threads) ? d2.threads : [];
       } catch {
@@ -110,13 +121,17 @@ export function HomeMessagesCtaButton({
       }
     }
 
+    if (!isLatest()) return;
+
     const newestB = broadcasts[0]?.createdAt;
     const newestI = inbox[0]?.lastAt;
     const baseline = maxIso(newestB, newestI) ?? new Date().toISOString();
 
     if (!visit) {
       setMessagingLastVisitIso(baseline);
+      if (!isLatest()) return;
       queueMicrotask(() => {
+        if (!isLatest()) return;
         setHasNew(false);
         setOpenPeerUid(null);
       });
@@ -148,6 +163,8 @@ export function HomeMessagesCtaButton({
     const newFromDm = newestIncomingDmAt > 0;
     const newFlag = newFromBroadcast || newFromDm;
 
+    if (!isLatest()) return;
+
     /* Home has no MapBroadcastPanel — play the same voice here for area + private new items (Messaging page still toasts from panel). */
     if (!getBroadcastAlertsSilenced() && getMessageAlertSoundOn()) {
       const brNeed = newFromBroadcast && newestIncomingBroadcastAt > lastBroadcastChimeAtMs.current;
@@ -164,6 +181,7 @@ export function HomeMessagesCtaButton({
     }
 
     queueMicrotask(() => {
+      if (!isLatest()) return;
       setHasNew(newFlag);
       setOpenPeerUid(newFromDm && newestIncomingDmPeer ? newestIncomingDmPeer : null);
     });
@@ -199,6 +217,12 @@ export function HomeMessagesCtaButton({
     };
   }, [check]);
 
+  useEffect(() => {
+    const onFocus = () => queueMicrotask(() => void checkRef.current());
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, []);
+
   /** Backup poll so the CTA updates even if a map-live delivery is missed (same cadence as other message polls). */
   useEffect(() => {
     if (emergencyDisableLiveMapApis || !signedIn) return;
@@ -215,7 +239,10 @@ export function HomeMessagesCtaButton({
         scheduleAfter(getMessagePollDelayMs());
       });
     };
-    scheduleAfter(getMessagePollDelayMs());
+    void checkRef.current().finally(() => {
+      if (cancelled) return;
+      scheduleAfter(getMessagePollDelayMs());
+    });
     const onVis = () => {
       if (tid != null) {
         window.clearTimeout(tid);
