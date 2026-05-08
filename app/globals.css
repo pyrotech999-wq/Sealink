@@ -62,6 +62,31 @@ body {
   animation: sealink-mob-flash 1s ease-in-out infinite;
 }
 
+/* Full-screen anchor geofence alarm — high-visibility police-style flash */
+@keyframes sealink-anchor-siren-bg {
+  0%,
+  100% {
+    background-color: rgb(185 28 28);
+  }
+  33% {
+    background-color: rgb(69 10 10);
+  }
+  66% {
+    background-color: rgb(220 38 38);
+  }
+}
+
+.sealink-anchor-siren-overlay {
+  animation: sealink-anchor-siren-bg 0.55s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sealink-anchor-siren-overlay {
+    animation: none;
+    background-color: rgb(185 28 28);
+  }
+}
+
 /* Message / thread panels: obvious, easy-to-grab scrollbars (Firefox + WebKit). */
 .sealink-thread-scroll {
   scrollbar-width: auto;

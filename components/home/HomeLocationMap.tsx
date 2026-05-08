@@ -56,6 +56,7 @@ import {
 } from "@/lib/gps-refinement";
 import { isLikelyIOS } from "@/lib/location-env";
 import { getNativeLocationBridge } from "@/lib/native-location-bridge";
+import { startAnchorAlarmSiren, stopAnchorAlarmSiren } from "@/lib/anchor-alarm-sound";
 import { getDeviceName, getOrCreateDeviceId } from "@/lib/device-id";
 import { clampGeoAccuracyM, humanGeolocationMessage } from "@/lib/geolocation-utils";
 import { manualRefreshNearbyPresence } from "@/lib/client/map-presence-client";
@@ -257,7 +258,6 @@ export default function HomeLocationMap({
     activeAnchorAlertRef.current = activeAnchorAlert;
   }, [activeAnchorAlert]);
   const [alarmBlocked, setAlarmBlocked] = useState(false);
-  const alarmTimer = useRef<number | null>(null);
   const deviceId = useMemo(() => (typeof window !== "undefined" ? getOrCreateDeviceId() : "server"), []);
   const localDeviceName = useMemo(() => (typeof window !== "undefined" ? getDeviceName() : ""), []);
   const [monitorDeviceLabel, setMonitorDeviceLabel] = useState<string>("");
@@ -717,7 +717,7 @@ export default function HomeLocationMap({
           renotify: true,
           requireInteraction: true,
           // Vibration works on some Android browsers.
-          vibrate: [250, 150, 250, 150, 400],
+          vibrate: [200, 100, 200, 100, 400, 120, 300, 120, 400],
         } as NotificationOptions & Record<string, unknown>;
         new Notification("SEALINK — ANCHOR ALERT", opts);
       }
@@ -804,49 +804,17 @@ export default function HomeLocationMap({
   }, [anchorCfg.armed, anchorCfg.monitorDeviceId, localDeviceName]);
 
   function stopAlarm() {
-    if (alarmTimer.current != null) window.clearInterval(alarmTimer.current);
-    alarmTimer.current = null;
-  }
-
-  async function beepOnce(): Promise<boolean> {
-    try {
-      const AudioCtx =
-        window.AudioContext ||
-        (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (!AudioCtx) return false;
-      const ctx = new AudioCtx();
-      if (ctx.state === "suspended") await ctx.resume();
-      const o = ctx.createOscillator();
-      const g = ctx.createGain();
-      o.type = "sine";
-      o.frequency.value = 880;
-      g.gain.value = 0.0001;
-      o.connect(g);
-      g.connect(ctx.destination);
-      o.start();
-      const now = ctx.currentTime;
-      g.gain.setValueAtTime(0.0001, now);
-      g.gain.exponentialRampToValueAtTime(0.25, now + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
-      o.stop(now + 0.38);
-      window.setTimeout(() => void ctx.close().catch(() => undefined), 600);
-      return true;
-    } catch {
-      return false;
-    }
+    stopAnchorAlarmSiren();
   }
 
   async function startAlarm(): Promise<void> {
     stopAlarm();
-    const ok = await beepOnce();
+    const ok = await startAnchorAlarmSiren();
     if (!ok) {
       setAlarmBlocked(true);
       return;
     }
     setAlarmBlocked(false);
-    alarmTimer.current = window.setInterval(() => void beepOnce(), 2500);
-    // Stop sound after 15 minutes even if not seen.
-    window.setTimeout(() => stopAlarm(), 15 * 60_000);
   }
 
   // In-app urgent alarm while alert is visible (until Seen).
@@ -1826,126 +1794,151 @@ export default function HomeLocationMap({
       ) : null}
 
       {activeAnchorAlert ? (
-        <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/50 px-4 py-8">
-          <div className="w-full max-w-md rounded-2xl border border-red-200 bg-white p-5 shadow-xl dark:border-red-900/50 dark:bg-zinc-950">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Anchor alert</h3>
-                <p className="mt-1 text-sm leading-5 text-zinc-700 dark:text-zinc-300">{activeAnchorAlert.message}</p>
-                <p className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-500">
-                  {new Date(activeAnchorAlert.createdAt).toLocaleString("en-GB")}
-                </p>
-                {alarmBlocked ? (
-                  <button
-                    type="button"
-                    onClick={() => void startAlarm()}
-                    className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-800 hover:bg-red-100 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-100 dark:hover:bg-red-950/50"
-                  >
-                    Enable alarm sound
-                  </button>
-                ) : null}
-              </div>
-              <div className="flex shrink-0 flex-col gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    // Reset: re-anchor to latest fix from the configured monitor device, without changing the monitor selection.
-                    stopAlarm();
-                    const seenId = activeAnchorAlert.id;
-                    void (async () => {
-                      if (!EMERGENCY_DISABLE_LIVE_MAP_APIS) {
-                        try {
-                          await fetch("/api/anchor/alerts", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ seenId }),
-                          });
-                        } catch {
-                          /* ignore */
+        <div
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="sealink-anchor-alarm-title"
+          aria-describedby="sealink-anchor-alarm-detail"
+          className="sealink-anchor-siren-overlay fixed inset-0 z-[1200] flex flex-col shadow-[inset_0_0_80px_rgba(0,0,0,0.35)]"
+        >
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4 pt-[max(1rem,env(safe-area-inset-top))] text-center">
+            <p
+              id="sealink-anchor-alarm-title"
+              className="text-4xl font-black uppercase leading-none tracking-tight text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)] sm:text-5xl"
+            >
+              Anchor alarm
+            </p>
+            <p className="mt-2 text-sm font-bold uppercase tracking-[0.2em] text-amber-200">Geofence breach — check the boat</p>
+            <p
+              id="sealink-anchor-alarm-detail"
+              className="mt-6 max-w-lg text-lg font-semibold leading-snug text-white sm:text-xl"
+            >
+              {activeAnchorAlert.message}
+            </p>
+            <p className="mt-4 text-xs font-medium text-white/80">
+              {new Date(activeAnchorAlert.createdAt).toLocaleString("en-GB")}
+            </p>
+            {alarmBlocked ? (
+              <button
+                type="button"
+                onClick={() => void startAlarm()}
+                className="mt-6 rounded-xl border-2 border-white/90 bg-black/25 px-5 py-3 text-sm font-bold text-white backdrop-blur-sm hover:bg-black/40"
+              >
+                Tap to enable siren sound
+              </button>
+            ) : null}
+          </div>
+          <div className="flex shrink-0 flex-col gap-3 border-t-2 border-white/25 bg-black/35 px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-md sm:flex-row sm:justify-center">
+            <button
+              type="button"
+              onClick={() => {
+                stopAlarm();
+                const seenId = activeAnchorAlert.id;
+                void (async () => {
+                  if (!EMERGENCY_DISABLE_LIVE_MAP_APIS) {
+                    try {
+                      await fetch("/api/anchor/alerts", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ seenId }),
+                      });
+                    } catch {
+                      /* ignore */
+                    }
+                  }
+
+                  if (!EMERGENCY_DISABLE_LIVE_MAP_APIS) {
+                    try {
+                      const serverMonitor = anchorMonitor?.monitorDeviceId;
+                      const effectiveMonitor = serverMonitor
+                        ? serverMonitor
+                        : anchorCfgRef.current.monitorDeviceId === "this"
+                          ? deviceId
+                          : anchorCfgRef.current.monitorDeviceId;
+                      let fix: { lat: number; lng: number } | null = null;
+                      if (effectiveMonitor === deviceId && pos) fix = { lat: pos.lat, lng: pos.lng };
+                      if (!fix) {
+                        const r = await fetch("/api/anchor/devices", { cache: "no-store" });
+                        const d = (await r.json()) as {
+                          devices?: { deviceId: string; lastLat: number | null; lastLng: number | null }[];
+                        };
+                        const row = d.devices?.find((x) => x.deviceId === effectiveMonitor);
+                        if (row && typeof row.lastLat === "number" && typeof row.lastLng === "number") {
+                          fix = { lat: row.lastLat, lng: row.lastLng };
                         }
                       }
-
-                      if (!EMERGENCY_DISABLE_LIVE_MAP_APIS) {
-                        try {
-                          const serverMonitor = anchorMonitor?.monitorDeviceId;
-                          const effectiveMonitor = serverMonitor
-                            ? serverMonitor
-                            : anchorCfgRef.current.monitorDeviceId === "this"
-                              ? deviceId
-                              : anchorCfgRef.current.monitorDeviceId;
-                          let fix: { lat: number; lng: number } | null = null;
-                          if (effectiveMonitor === deviceId && pos) fix = { lat: pos.lat, lng: pos.lng };
-                          if (!fix) {
-                            const r = await fetch("/api/anchor/devices", { cache: "no-store" });
-                            const d = (await r.json()) as { devices?: { deviceId: string; lastLat: number | null; lastLng: number | null }[] };
-                            const row = d.devices?.find((x) => x.deviceId === effectiveMonitor);
-                            if (row && typeof row.lastLat === "number" && typeof row.lastLng === "number") {
-                              fix = { lat: row.lastLat, lng: row.lastLng };
-                            }
-                          }
-                          if (fix) {
-                            const merged = { ...anchorCfgRef.current, lat: fix.lat, lng: fix.lng, lastAlertAt: null, lastBearingDeg: null };
-                            setAnchorCfg(merged);
-                            setAnchorAlertConfig(merged);
-                            await fetch("/api/anchor/geofence", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ lat: fix.lat, lng: fix.lng, lastAlertAt: null, lastBearingDeg: null }),
-                            });
-                          } else {
-                            await fetch("/api/anchor/geofence", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ lastAlertAt: null, lastBearingDeg: null }),
-                            });
-                          }
-                        } catch {
-                          /* ignore */
-                        }
-                      } else {
-                        const merged = { ...anchorCfgRef.current, lastAlertAt: null, lastBearingDeg: null };
+                      if (fix) {
+                        const merged = {
+                          ...anchorCfgRef.current,
+                          lat: fix.lat,
+                          lng: fix.lng,
+                          lastAlertAt: null,
+                          lastBearingDeg: null,
+                        };
                         setAnchorCfg(merged);
                         setAnchorAlertConfig(merged);
-                      }
-                      setActiveAnchorAlert(null);
-                    })();
-                  }}
-                  className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
-                >
-                  Reset anchor
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    stopAlarm();
-                    if (EMERGENCY_DISABLE_LIVE_MAP_APIS) {
-                      setActiveAnchorAlert(null);
-                      return;
-                    }
-                    const id = activeAnchorAlert.id;
-                    void (async () => {
-                      try {
-                        await fetch("/api/anchor/alerts", {
+                        await fetch("/api/anchor/geofence", {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ seenId: id }),
+                          body: JSON.stringify({
+                            lat: fix.lat,
+                            lng: fix.lng,
+                            lastAlertAt: null,
+                            lastBearingDeg: null,
+                          }),
                         });
-                      } catch {
-                        /* ignore */
+                      } else {
+                        await fetch("/api/anchor/geofence", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ lastAlertAt: null, lastBearingDeg: null }),
+                        });
                       }
-                      setActiveAnchorAlert(null);
-                    })();
-                  }}
-                  className="rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700"
-                >
-                  Seen
-                </button>
-              </div>
-            </div>
-            <p className="mt-3 text-xs leading-5 text-zinc-600 dark:text-zinc-400">
-              This alert will show on every device signed into your account until you press “Seen”.
-            </p>
+                    } catch {
+                      /* ignore */
+                    }
+                  } else {
+                    const merged = { ...anchorCfgRef.current, lastAlertAt: null, lastBearingDeg: null };
+                    setAnchorCfg(merged);
+                    setAnchorAlertConfig(merged);
+                  }
+                  setActiveAnchorAlert(null);
+                })();
+              }}
+              className="h-14 w-full rounded-xl bg-emerald-500 text-base font-bold text-white shadow-lg hover:bg-emerald-400 sm:max-w-xs"
+            >
+              Reset anchor here
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                stopAlarm();
+                if (EMERGENCY_DISABLE_LIVE_MAP_APIS) {
+                  setActiveAnchorAlert(null);
+                  return;
+                }
+                const id = activeAnchorAlert.id;
+                void (async () => {
+                  try {
+                    await fetch("/api/anchor/alerts", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ seenId: id }),
+                    });
+                  } catch {
+                    /* ignore */
+                  }
+                  setActiveAnchorAlert(null);
+                })();
+              }}
+              className="h-14 w-full rounded-xl border-2 border-white bg-white/95 text-base font-bold text-red-700 shadow-lg hover:bg-white sm:max-w-xs"
+            >
+              Mark seen (stop alarm)
+            </button>
           </div>
+          <p className="bg-black/40 px-4 py-2 text-center text-[11px] text-white/75">
+            Stays on all your signed-in devices until you mark seen. Siren stops when you dismiss.
+          </p>
         </div>
       ) : null}
 
