@@ -1,7 +1,10 @@
 type PollerOptions = {
-  /** Randomized between min/max after each successful/failed run. */
+  /** Delay range when the document is visible (foreground). */
   minIntervalMs: number;
   maxIntervalMs: number;
+  /** When the tab is hidden; defaults to {@link minIntervalMs}/{@link maxIntervalMs} if omitted. */
+  backgroundMinIntervalMs?: number;
+  backgroundMaxIntervalMs?: number;
   /** If false, the poller will not run and will clear cached results. */
   enabled: boolean;
 };
@@ -27,6 +30,21 @@ function isVisible(): boolean {
   return typeof document === "undefined" ? true : document.visibilityState === "visible";
 }
 
+function delayRange(opts: PollerOptions): { min: number; max: number } {
+  if (isVisible()) {
+    return { min: opts.minIntervalMs, max: opts.maxIntervalMs };
+  }
+  const min = opts.backgroundMinIntervalMs ?? opts.minIntervalMs;
+  const max = opts.backgroundMaxIntervalMs ?? opts.backgroundMinIntervalMs ?? opts.maxIntervalMs;
+  return { min, max: Math.max(min, max) };
+}
+
+/** Minimum time between runs for throttle (foreground vs background). */
+function minGapMs(opts: PollerOptions): number {
+  if (isVisible()) return opts.minIntervalMs;
+  return opts.backgroundMinIntervalMs ?? opts.minIntervalMs;
+}
+
 function scheduleNext(key: string) {
   const e = pollers.get(key);
   if (!e) return;
@@ -34,22 +52,22 @@ function scheduleNext(key: string) {
   e.timer = null;
   if (!e.opts.enabled) return;
   if (e.subscribers <= 0) return;
-  if (!isVisible()) return;
-  const delay = randInt(e.opts.minIntervalMs, e.opts.maxIntervalMs);
+  const { min, max } = delayRange(e.opts);
+  const delay = randInt(min, max);
   e.timer = window.setTimeout(() => void tick(key), delay);
 }
 
 async function tick(key: string) {
   const e = pollers.get(key);
   if (!e) return;
-  if (!e.opts.enabled || e.subscribers <= 0 || !isVisible()) {
+  if (!e.opts.enabled || e.subscribers <= 0) {
     scheduleNext(key);
     return;
   }
 
   const now = Date.now();
-  // Hard cap: never run more frequently than minIntervalMs even if multiple triggers occur.
-  if (e.lastRunAtMs && now - e.lastRunAtMs < e.opts.minIntervalMs) {
+  const gap = minGapMs(e.opts);
+  if (e.lastRunAtMs && now - e.lastRunAtMs < gap) {
     scheduleNext(key);
     return;
   }
@@ -80,10 +98,14 @@ function ensureVisibilityHook() {
   if (typeof document === "undefined") return;
   visHooked = true;
   const onVis = () => {
-    if (document.visibilityState !== "visible") return;
-    // When the tab becomes visible, kick all active pollers once and reschedule.
-    for (const key of pollers.keys()) {
-      void tick(key);
+    if (document.visibilityState === "visible") {
+      for (const key of pollers.keys()) {
+        void tick(key);
+      }
+    } else {
+      for (const key of pollers.keys()) {
+        scheduleNext(key);
+      }
     }
   };
   document.addEventListener("visibilitychange", onVis);
@@ -102,8 +124,7 @@ export function subscribeSharedPoller(
     existing.run = run;
     existing.opts = opts;
     scheduleNext(key);
-    // First subscriber on a visible tab should kick immediately.
-    if (existing.subscribers === 1 && opts.enabled && isVisible()) queueMicrotask(() => void tick(key));
+    if (existing.subscribers === 1 && opts.enabled) queueMicrotask(() => void tick(key));
   } else {
     pollers.set(key, {
       subscribers: 1,
@@ -113,7 +134,7 @@ export function subscribeSharedPoller(
       lastRunAtMs: 0,
       run,
     });
-    if (opts.enabled && isVisible()) queueMicrotask(() => void tick(key));
+    if (opts.enabled) queueMicrotask(() => void tick(key));
   }
 
   return () => {
@@ -132,4 +153,3 @@ export function subscribeSharedPoller(
 export function triggerSharedPollerNow(key: string) {
   queueMicrotask(() => void tick(key));
 }
-

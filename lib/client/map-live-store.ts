@@ -99,7 +99,13 @@ function ensurePoller() {
     async () => {
       await pollTick();
     },
-    { enabled: true, minIntervalMs: 30_000, maxIntervalMs: 60_000 },
+    {
+      enabled: true,
+      minIntervalMs: 15_000,
+      maxIntervalMs: 15_000,
+      backgroundMinIntervalMs: 60_000,
+      backgroundMaxIntervalMs: 60_000,
+    },
   );
 }
 
