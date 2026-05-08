@@ -856,10 +856,9 @@ export function MapBroadcastPanel({
           className={`sealink-thread-scroll min-h-[4.5rem] space-y-2 overflow-y-auto scroll-smooth p-2 pr-1.5 ${
             L ? "max-h-[min(55vh,28rem)] sm:max-h-[min(60vh,32rem)]" : "max-h-[11rem] sm:max-h-[12rem]"
           }`}
+          aria-busy={loading}
         >
-        {loading ? (
-          <p className={`px-2 py-3 text-indigo-700 dark:text-indigo-300 ${L ? "text-lg" : "text-xs"}`}>Loading…</p>
-        ) : visibleMessages.length === 0 ? (
+        {loading ? null : visibleMessages.length === 0 ? (
           <p className={`px-2 py-3 text-indigo-800/80 dark:text-indigo-200/80 ${L ? "text-lg" : "text-xs"}`}>
             {messages.length === 0
               ? "No broadcasts in this area yet."
