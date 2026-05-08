@@ -30,11 +30,6 @@ type Props = {
   fitBoundsNonce?: number;
   /** Temporary debug: red stroke around chartBounds. */
   showDebugBounds?: boolean;
-  /** Notify parent of current view (center/zoom). */
-  onViewChange?: (v: { lat: number; lng: number; zoom: number }) => void;
-  /** Optional initial view when no chartBounds. */
-  initialCenter?: L.LatLngExpression;
-  initialZoom?: number;
 };
 
 function useHtmlDarkClass(): boolean {
@@ -89,29 +84,6 @@ function MapResizeFix() {
       vv?.removeEventListener("resize", fix);
     };
   }, [map]);
-  return null;
-}
-
-function ViewChangeReporter({
-  onViewChange,
-}: {
-  onViewChange?: (v: { lat: number; lng: number; zoom: number }) => void;
-}) {
-  const map = useMap();
-  useEffect(() => {
-    if (!onViewChange) return;
-    const emit = () => {
-      const c = map.getCenter();
-      onViewChange({ lat: c.lat, lng: c.lng, zoom: map.getZoom() });
-    };
-    emit();
-    map.on("moveend", emit);
-    map.on("zoomend", emit);
-    return () => {
-      map.off("moveend", emit);
-      map.off("zoomend", emit);
-    };
-  }, [map, onViewChange]);
   return null;
 }
 
@@ -205,9 +177,6 @@ export default function NavigationChartsMap({
   showRasterOverlay,
   fitBoundsNonce = 0,
   showDebugBounds = true,
-  onViewChange,
-  initialCenter = DEFAULT_CENTER,
-  initialZoom = DEFAULT_ZOOM,
 }: Props) {
   const dark = useHtmlDarkClass();
   const placeholderUrl = useMemo(() => chartPlaceholderDataUrl(dark), [dark]);
@@ -259,8 +228,8 @@ export default function NavigationChartsMap({
         ) : null}
       </div>
       <MapContainer
-        center={initialCenter}
-        zoom={initialZoom}
+        center={DEFAULT_CENTER}
+        zoom={DEFAULT_ZOOM}
         className="h-full w-full bg-zinc-900"
         scrollWheelZoom
         attributionControl={false}
@@ -277,7 +246,6 @@ export default function NavigationChartsMap({
         ) : null}
         <MapResizeFix />
         <FitBoundsChart chartBounds={chartBounds} fitBoundsNonce={fitBoundsNonce} />
-        <ViewChangeReporter onViewChange={onViewChange} />
         <UserLocationLayer enabled={locEnabled} onStatus={setLocStatus} />
         {chartBounds && showDebugBounds ? (
           <Rectangle
