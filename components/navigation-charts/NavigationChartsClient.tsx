@@ -369,7 +369,7 @@ export function NavigationChartsClient() {
             >
               GPS Nautical Charts / i-Boating
             </a>{" "}
-            in a new tab — same family of viewer as{" "}
+            in a new tab.{" "}
             <a
               href="https://fishing-app.gpsnauticalcharts.com/i-boating-fishing-web-app/fishing-marine-charts-navigation.html"
               target="_blank"
@@ -378,7 +378,7 @@ export function NavigationChartsClient() {
             >
               fishing-app.gpsnauticalcharts.com
             </a>
-            . Their catalogue, pricing, and terms apply; not affiliated with SeaLink.
+            .
           </p>
           <p className="mt-2 text-[11px] leading-relaxed text-zinc-600 dark:text-zinc-400">
             Tap <strong className="text-zinc-800 dark:text-zinc-200">Open chart in app</strong>. We&apos;ll grab your GPS
