@@ -1,13 +1,19 @@
 import { NextResponse } from "next/server";
 import { requireAuthUser } from "@/lib/auth";
 import { addIfmFriend, listIfmFriends, removeIfmFriend } from "@/lib/ifm-friends-store";
+import { uidFromEmail } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
 export async function GET(): Promise<Response> {
   const user = await requireAuthUser();
   const friends = await listIfmFriends(user.uid);
-  return NextResponse.json({ friends });
+  return NextResponse.json({
+    friends: friends.map((f) => ({
+      ...f,
+      uid: f.kind === "email" ? uidFromEmail(f.value) : null,
+    })),
+  });
 }
 
 export async function POST(req: Request): Promise<Response> {

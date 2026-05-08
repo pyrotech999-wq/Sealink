@@ -113,6 +113,13 @@ type VicinityInboxRowApi = {
   lastIsMine: boolean;
 };
 
+type IfmFriendApiRow = {
+  kind: "email" | "phone";
+  value: string;
+  addedAt: string;
+  uid?: string | null;
+};
+
 export type BroadcastMsg = {
   id: string;
   authorUid: string;
@@ -168,6 +175,8 @@ export function MapBroadcastPanel({
   const [broadcastAllAreas, setBroadcastAllAreas] = useState(false);
   const [broadcastAudience, setBroadcastAudience] = useState<MapBroadcastAudience>("all_nearby");
   const [inboxRows, setInboxRows] = useState<VicinityInboxRowApi[]>([]);
+  const [ifmFriends, setIfmFriends] = useState<IfmFriendApiRow[]>([]);
+  const [startChatPeerUid, setStartChatPeerUid] = useState<string>("");
   const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null);
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(() =>
     typeof window !== "undefined" ? readHiddenBroadcastIds() : new Set(),
@@ -315,7 +324,7 @@ export function MapBroadcastPanel({
   const fetchInbox = useCallback(async () => {
     if (!signedIn) return;
     try {
-      const r = await fetch("/api/vicinity-chat/inbox");
+      const r = await fetch("/api/vicinity-chat/inbox", { credentials: "same-origin", cache: "no-store" });
       const d = (await r.json()) as { threads?: VicinityInboxRowApi[]; error?: string };
       if (!r.ok) return;
       const rows = Array.isArray(d.threads) ? d.threads : [];
@@ -340,12 +349,36 @@ export function MapBroadcastPanel({
     }
   }, [signedIn]);
 
+  const fetchIfmFriends = useCallback(async () => {
+    if (!signedIn) return;
+    try {
+      const r = await fetch("/api/ifm/friends", { credentials: "same-origin", cache: "no-store" });
+      const d = (await r.json()) as { friends?: IfmFriendApiRow[] };
+      if (!r.ok) return;
+      const rows = Array.isArray(d.friends) ? d.friends : [];
+      setIfmFriends(rows);
+      if (!startChatPeerUid) {
+        const firstUid = rows.find((f) => typeof f?.uid === "string" && f.uid.trim())?.uid?.trim() ?? "";
+        if (firstUid) setStartChatPeerUid(firstUid);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [signedIn, startChatPeerUid]);
+
   useEffect(() => {
     if (!signedIn) return;
     queueMicrotask(() => void fetchInbox());
     const id = window.setInterval(() => queueMicrotask(() => void fetchInbox()), 55_000);
     return () => window.clearInterval(id);
   }, [signedIn, fetchInbox]);
+
+  useEffect(() => {
+    if (!signedIn) return;
+    queueMicrotask(() => void fetchIfmFriends());
+    const id = window.setInterval(() => queueMicrotask(() => void fetchIfmFriends()), 5 * 60_000);
+    return () => window.clearInterval(id);
+  }, [signedIn, fetchIfmFriends]);
 
   useEffect(() => {
     const sync = () => setHiddenIds(readHiddenBroadcastIds());
@@ -549,6 +582,66 @@ export function MapBroadcastPanel({
       </div>
     );
   }, [signedIn, inboxRows, L, deletingThreadId]);
+
+  const startChatBlock = useMemo(() => {
+    if (!signedIn || !L) return null;
+    const friendOptions = ifmFriends
+      .map((f) => ({
+        uid: typeof f.uid === "string" ? f.uid.trim() : "",
+        label:
+          f.kind === "email"
+            ? f.value
+            : f.kind === "phone"
+              ? `${f.value} (phone)`
+              : f.value,
+        kind: f.kind,
+      }))
+      .filter((o) => o.kind === "email" && o.uid);
+
+    return (
+      <div className="mt-4 rounded-xl border border-emerald-200/60 bg-gradient-to-b from-white/95 to-emerald-50/30 p-4 shadow-sm dark:border-emerald-900/40 dark:from-zinc-950/90 dark:to-emerald-950/20">
+        <h4 className="text-xl font-semibold text-emerald-950 dark:text-emerald-100">Start a private message</h4>
+        <p className="mt-1 text-sm leading-snug text-emerald-900/80 dark:text-emerald-200/80">
+          Pick an IFM friend to open a 1:1 chat.
+        </p>
+        {friendOptions.length === 0 ? (
+          <p className="mt-3 rounded-lg border border-dashed border-emerald-200/70 bg-white/60 px-3 py-4 text-center text-emerald-800/70 dark:border-emerald-800/50 dark:bg-zinc-900/40 dark:text-emerald-200/70">
+            No email friends yet. Add them on the IFM page.
+          </p>
+        ) : (
+          <div className="mt-3 flex flex-wrap items-end gap-2">
+            <label className="min-w-[16rem] flex-1 text-sm font-semibold text-emerald-950 dark:text-emerald-100">
+              Friend
+              <select
+                value={startChatPeerUid}
+                onChange={(e) => setStartChatPeerUid(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-emerald-500 dark:border-emerald-900/60 dark:bg-zinc-950 dark:text-zinc-50"
+              >
+                {friendOptions.map((o) => (
+                  <option key={o.uid} value={o.uid}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              disabled={!startChatPeerUid}
+              onClick={() => {
+                const uid = startChatPeerUid.trim();
+                if (!uid) return;
+                setChatContext("Conversation");
+                setChatPeerUid(uid);
+              }}
+              className="h-10 rounded-lg bg-emerald-700 px-4 font-semibold text-white hover:bg-emerald-800 disabled:opacity-50 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+            >
+              Message
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }, [signedIn, L, ifmFriends, startChatPeerUid]);
 
   return (
     <section
@@ -777,6 +870,7 @@ export function MapBroadcastPanel({
       </div>
 
       {!L ? privateRepliesBlock : null}
+      {startChatBlock}
 
       {canSend && sendLat != null && sendLng != null ? (
         <form onSubmit={(e) => void onSend(e)} className="mt-3 space-y-2">
