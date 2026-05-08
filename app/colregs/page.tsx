@@ -49,41 +49,6 @@ export default function ColregsPage() {
         </p>
       </header>
 
-      <section className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 sm:p-6">
-        <h2 className="text-lg font-semibold tracking-tight text-zinc-50">
-          Key COLREGs Principles
-        </h2>
-        <ul className="mt-4 space-y-3 text-sm leading-7 text-zinc-300">
-          <li>
-            <strong className="text-zinc-100">Responsibility:</strong> Every vessel must use all available means (radar,
-            eyes, ears) to assess risk.
-          </li>
-          <li>
-            <strong className="text-zinc-100">Safe Speed (Rule 6):</strong> Vessels must proceed at a speed allowing
-            proper action to avoid collision, considering visibility, traffic, and manoeuvrability.
-          </li>
-          <li>
-            <strong className="text-zinc-100">Give-Way Vessel:</strong> Must take early and substantial action to keep
-            clear, avoiding crossing ahead if possible.
-          </li>
-          <li>
-            <strong className="text-zinc-100">Stand-On Vessel:</strong> Must maintain course and speed, but should take
-            action if the give-way vessel fails to act.
-          </li>
-          <li>
-            <strong className="text-zinc-100">Head-on:</strong> Both vessels alter course to starboard and pass
-            port-to-port.
-          </li>
-          <li>
-            <strong className="text-zinc-100">Crossing:</strong> Vessel with the other on its starboard side must give way.
-          </li>
-          <li>
-            <strong className="text-zinc-100">Overtaking:</strong> Any vessel overtaking another must keep out of the way
-            of the vessel being overtaken.
-          </li>
-        </ul>
-      </section>
-
       <section className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-5 sm:p-6">
         <h2 className="text-base font-semibold tracking-tight text-zinc-50">
           Full regulations (PDF)
