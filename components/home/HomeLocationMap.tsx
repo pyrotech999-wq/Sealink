@@ -481,6 +481,10 @@ export default function HomeLocationMap({
   ]);
 
   const [monitoredFix, setMonitoredFix] = useState<{ lat: number; lng: number; at: string } | null>(null);
+  const monitoredFixRef = useRef(monitoredFix);
+  useEffect(() => {
+    monitoredFixRef.current = monitoredFix;
+  }, [monitoredFix]);
 
   useEffect(() => {
     anchorCfgRef.current = anchorCfg;
@@ -544,7 +548,7 @@ export default function HomeLocationMap({
       }
     };
     void load();
-    const id = window.setInterval(() => void load(), 60_000);
+    const id = window.setInterval(() => void load(), ANCHOR_POSITION_CHECK_INTERVAL_MS);
     return () => {
       disposed = true;
       window.clearInterval(id);
@@ -606,145 +610,149 @@ export default function HomeLocationMap({
     };
   }, [sharing, anchorCfg.armed, anchorCfg.monitorDeviceId]);
 
-  // Anchor alert check (runs whenever position updates).
+  // Anchor geofence check: same `pos` as map/forecasts (via posRef); runs every ANCHOR_POSITION_CHECK_INTERVAL_MS on this device when it is the monitor.
   useEffect(() => {
-    if (!sharing || !pos) return;
-    const anchorCfg = anchorCfgRef.current;
-    if (!anchorCfg.armed || anchorCfg.lat == null || anchorCfg.lng == null) return;
-    // Enforce single-device monitoring: only the selected monitor device performs drift checks.
-    const serverMonitor = anchorMonitor?.monitorDeviceId;
-    const effectiveMonitor = serverMonitor ? serverMonitor : anchorCfg.monitorDeviceId === "this" ? deviceId : anchorCfg.monitorDeviceId;
+    if (!sharing) return;
+    const anchorCfgSnap = anchorCfgRef.current;
+    if (!anchorCfgSnap.armed || anchorCfgSnap.lat == null || anchorCfgSnap.lng == null) return;
+    const serverMonitor = anchorMonitorRef.current?.monitorDeviceId;
+    const effectiveMonitor = serverMonitor
+      ? serverMonitor
+      : anchorCfgSnap.monitorDeviceId === "this"
+        ? deviceId
+        : anchorCfgSnap.monitorDeviceId;
     if (effectiveMonitor && effectiveMonitor !== deviceId) return;
-    const src =
-      anchorCfg.monitorDeviceId && anchorCfg.monitorDeviceId !== "this" && monitoredFix
-        ? { lat: monitoredFix.lat, lng: monitoredFix.lng }
-        : { lat: pos.lat, lng: pos.lng };
-    const m = distanceMiles(src.lat, src.lng, anchorCfg.lat, anchorCfg.lng) * 1609.344;
-    const brng = bearingDeg(anchorCfg.lat, anchorCfg.lng, src.lat, src.lng);
-    const gpsBufferM =
-      anchorCfg.monitorDeviceId && anchorCfg.monitorDeviceId !== "this"
-        ? 12 // we don't have accuracy for remote fixes; be conservative
-        : Math.max(8, Math.round(pos.accuracyM || 0));
 
-    // Update last bearing so angle checks have a baseline even after reload.
+    const runCheck = () => {
+      const anchorCfg = anchorCfgRef.current;
+      if (!anchorCfg.armed || anchorCfg.lat == null || anchorCfg.lng == null) return;
+      const pos = posRef.current;
+      const monitoredFix = monitoredFixRef.current;
+      const src =
+        anchorCfg.monitorDeviceId && anchorCfg.monitorDeviceId !== "this" && monitoredFix
+          ? { lat: monitoredFix.lat, lng: monitoredFix.lng }
+          : pos
+            ? { lat: pos.lat, lng: pos.lng }
+            : null;
+      if (!src) return;
+
+      const m = distanceMiles(src.lat, src.lng, anchorCfg.lat, anchorCfg.lng) * 1609.344;
+      const brng = bearingDeg(anchorCfg.lat, anchorCfg.lng, src.lat, src.lng);
+      const gpsBufferM =
+        anchorCfg.monitorDeviceId && anchorCfg.monitorDeviceId !== "this"
+          ? 12 // we don't have accuracy for remote fixes; be conservative
+          : Math.max(8, Math.round(pos?.accuracyM || 0));
+
       if (anchorCfg.lastBearingDeg == null && Number.isFinite(brng)) {
-      const next = { ...anchorCfg, lastBearingDeg: brng };
+        const next = { ...anchorCfg, lastBearingDeg: brng };
+        queueMicrotask(() => setAnchorCfg(next));
+        setAnchorAlertConfig(next);
+        if (!EMERGENCY_DISABLE_LIVE_MAP_APIS) {
+          void fetch("/api/anchor/geofence", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ lastBearingDeg: brng }),
+            keepalive: true,
+          }).catch(() => undefined);
+        }
+        return;
+      }
+
+      const angleLimit = Math.max(0, Math.min(360, Math.round(anchorCfg.angleDeg ?? 360)));
+      const angleDelta =
+        anchorCfg.lastBearingDeg != null && angleLimit < 360 ? angleDiffDeg(brng, anchorCfg.lastBearingDeg) : 0;
+
+      const driftTriggered = m > anchorCfg.radiusM + gpsBufferM;
+
+      const meaningfulDistM = Math.max(12, Math.round(anchorCfg.radiusM * 0.6));
+      const angleTriggered =
+        angleLimit < 360 && m >= meaningfulDistM && Number.isFinite(brng) && angleDelta > angleLimit;
+
+      if (!driftTriggered && !angleTriggered && angleLimit < 360 && Number.isFinite(brng) && m <= anchorCfg.radiusM) {
+        const delta = anchorCfg.lastBearingDeg != null ? angleDiffDeg(brng, anchorCfg.lastBearingDeg) : 999;
+        if (delta < 3) return;
+        const next = { ...anchorCfg, lastBearingDeg: brng };
+        queueMicrotask(() => setAnchorCfg(next));
+        setAnchorAlertConfig(next);
+        return;
+      }
+
+      if (!driftTriggered && !angleTriggered) return;
+
+      const last = anchorCfg.lastAlertAt ? new Date(anchorCfg.lastAlertAt).getTime() : 0;
+      const now = Date.now();
+      if (now - last < 2 * 60_000) return;
+
+      const next = { ...anchorCfg, lastAlertAt: new Date(now).toISOString(), lastBearingDeg: brng };
       queueMicrotask(() => setAnchorCfg(next));
       setAnchorAlertConfig(next);
       if (!EMERGENCY_DISABLE_LIVE_MAP_APIS) {
         void fetch("/api/anchor/geofence", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ lastBearingDeg: brng }),
+          body: JSON.stringify({ lastAlertAt: new Date(now).toISOString(), lastBearingDeg: brng }),
           keepalive: true,
         }).catch(() => undefined);
       }
-      return;
-    }
 
-    const angleLimit = Math.max(0, Math.min(360, Math.round(anchorCfg.angleDeg ?? 360)));
-    const angleDelta =
-      anchorCfg.lastBearingDeg != null && angleLimit < 360 ? angleDiffDeg(brng, anchorCfg.lastBearingDeg) : 0;
+      const parts: string[] = [];
+      if (driftTriggered) parts.push(`drifted ~${Math.round(m)}m (limit ${anchorCfg.radiusM}m)`);
+      if (angleTriggered) parts.push(`bearing changed ~${Math.round(angleDelta)}° (limit ${angleLimit}°)`);
+      const msg = `Anchor alert: ${parts.join(" and ")}.`;
 
-    // Avoid false positives from GPS jitter by requiring the drift to exceed the radius + a buffer based on accuracy.
-    const driftTriggered = m > anchorCfg.radiusM + gpsBufferM;
-
-    // Bearing is very noisy when very close to the anchor point; only allow angle alerts once "meaningfully away".
-    const meaningfulDistM = Math.max(12, Math.round(anchorCfg.radiusM * 0.6));
-    const angleTriggered =
-      angleLimit < 360 && m >= meaningfulDistM && Number.isFinite(brng) && angleDelta > angleLimit;
-
-    // If we're safely inside the zone, keep updating lastBearingDeg to track natural jitter.
-    if (!driftTriggered && !angleTriggered && angleLimit < 360 && Number.isFinite(brng) && m <= anchorCfg.radiusM) {
-      // Only update if bearing actually changed enough to matter (avoid churn).
-      const delta = anchorCfg.lastBearingDeg != null ? angleDiffDeg(brng, anchorCfg.lastBearingDeg) : 999;
-      if (delta < 3) return;
-      const next = { ...anchorCfg, lastBearingDeg: brng };
-      queueMicrotask(() => setAnchorCfg(next));
-      setAnchorAlertConfig(next);
-      return;
-    }
-
-    if (!driftTriggered && !angleTriggered) return;
-
-    const last = anchorCfg.lastAlertAt ? new Date(anchorCfg.lastAlertAt).getTime() : 0;
-    const now = Date.now();
-    if (now - last < 2 * 60_000) return; // avoid spam
-
-    const next = { ...anchorCfg, lastAlertAt: new Date(now).toISOString(), lastBearingDeg: brng };
-    queueMicrotask(() => setAnchorCfg(next));
-    setAnchorAlertConfig(next);
-    if (!EMERGENCY_DISABLE_LIVE_MAP_APIS) {
-      void fetch("/api/anchor/geofence", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lastAlertAt: new Date(now).toISOString(), lastBearingDeg: brng }),
-        keepalive: true,
-      }).catch(() => undefined);
-    }
-
-    const parts: string[] = [];
-    if (driftTriggered) parts.push(`drifted ~${Math.round(m)}m (limit ${anchorCfg.radiusM}m)`);
-    if (angleTriggered) parts.push(`bearing changed ~${Math.round(angleDelta)}° (limit ${angleLimit}°)`);
-    const msg = `Anchor alert: ${parts.join(" and ")}.`;
-
-    // Prefer server inbox (syncs across devices), but fall back to local overlay if the request fails
-    // (e.g. signed out / network issues) so the user can always press “Seen”.
-    if (EMERGENCY_DISABLE_LIVE_MAP_APIS) {
-      if (!activeAnchorAlertRef.current) {
-        setActiveAnchorAlert({ id: `local-${now}`, message: msg, createdAt: new Date(now).toISOString() });
-      }
-    } else {
-      void (async () => {
-        try {
-          const r = await fetch("/api/anchor/alerts", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ message: msg, kind: "alert" }),
-            keepalive: true,
-          });
-          if (!r.ok) {
+      if (EMERGENCY_DISABLE_LIVE_MAP_APIS) {
+        if (!activeAnchorAlertRef.current) {
+          setActiveAnchorAlert({ id: `local-${now}`, message: msg, createdAt: new Date(now).toISOString() });
+        }
+      } else {
+        void (async () => {
+          try {
+            const r = await fetch("/api/anchor/alerts", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ message: msg, kind: "alert" }),
+              keepalive: true,
+            });
+            if (!r.ok) {
+              if (!activeAnchorAlertRef.current) {
+                setActiveAnchorAlert({ id: `local-${now}`, message: msg, createdAt: new Date(now).toISOString() });
+              }
+            }
+          } catch {
             if (!activeAnchorAlertRef.current) {
               setActiveAnchorAlert({ id: `local-${now}`, message: msg, createdAt: new Date(now).toISOString() });
             }
           }
-        } catch {
-          if (!activeAnchorAlertRef.current) {
-            setActiveAnchorAlert({ id: `local-${now}`, message: msg, createdAt: new Date(now).toISOString() });
-          }
-        }
-      })();
-    }
-
-    try {
-      if ("Notification" in window && Notification.permission === "granted") {
-        const opts = {
-          body: msg,
-          tag: "sealink-anchor-alert",
-          // Non-standard / partial support across browsers, but helps alerts stand out where available.
-          renotify: true,
-          requireInteraction: true,
-          // Vibration works on some Android browsers.
-          vibrate: [200, 100, 200, 100, 400, 120, 300, 120, 400],
-        } as NotificationOptions & Record<string, unknown>;
-        new Notification("SEALINK — ANCHOR ALERT", opts);
+        })();
       }
-    } catch {
-      /* ignore */
-    }
+
+      try {
+        if ("Notification" in window && Notification.permission === "granted") {
+          const opts = {
+            body: msg,
+            tag: "sealink-anchor-alert",
+            renotify: true,
+            requireInteraction: true,
+            vibrate: [200, 100, 200, 100, 400, 120, 300, 120, 400],
+          } as NotificationOptions & Record<string, unknown>;
+          new Notification("SEALINK — ANCHOR ALERT", opts);
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+
+    runCheck();
+    const id = window.setInterval(runCheck, ANCHOR_POSITION_CHECK_INTERVAL_MS);
+    return () => window.clearInterval(id);
   }, [
     sharing,
-    pos?.lat,
-    pos?.lng,
-    pos?.accuracyM,
-    monitoredFix?.lat,
-    monitoredFix?.lng,
     anchorCfg.armed,
     anchorCfg.lat,
     anchorCfg.lng,
-    anchorCfg.radiusM,
-    anchorCfg.angleDeg,
     anchorCfg.monitorDeviceId,
+    anchorMonitor?.monitorDeviceId,
+    deviceId,
   ]);
 
   // Anchor alert inbox poll (keeps alerts in sync across both devices).
