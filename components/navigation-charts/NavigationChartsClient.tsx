@@ -260,26 +260,34 @@ export function NavigationChartsClient() {
 
     const url = bestShareUrl;
     const title = "SeaLink — Navigation Charts";
-    const text = "Open this chart viewer link in your app/browser.";
+    const text = "Open chart viewer at your location.";
 
+    // Primary path: open the generated link immediately (no copy/paste).
+    // This gives iOS/Android the best chance to hand off to an installed app.
+    let opened = false;
+    try {
+      window.location.assign(url);
+      opened = true;
+    } catch {
+      // ignore
+    }
+
+    if (!opened) {
+      const win = window.open(url, "_blank", "noopener,noreferrer");
+      opened = Boolean(win);
+    }
+
+    // Secondary: optionally offer the share sheet on platforms that support it.
+    // (Some users still want to send to another device/app.)
     try {
       if (navigator.share) {
         await navigator.share({ title, text, url });
-        setShareStatus("Sent.");
-        return;
       }
-    } catch (err) {
-      // User cancelled share sheet, or share failed. Fall back to clipboard.
-      const msg = err instanceof Error ? err.message : String(err);
-      if (/abort|cancel/i.test(msg)) return;
+    } catch {
+      // user cancelled / share failed; ignore
     }
 
-    try {
-      await navigator.clipboard.writeText(url);
-      setShareStatus("Link copied — paste into your app.");
-    } catch {
-      setShareStatus("Could not open share sheet or copy link on this device.");
-    }
+    setShareStatus("Opening chart…");
   }, [bestShareUrl]);
 
   const phaseIndex = (p: LoadPhase) => PHASE_ORDER.indexOf(p as LoadPhaseStep);
@@ -509,7 +517,7 @@ export function NavigationChartsClient() {
               onClick={onSendToApp}
               className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 px-3 text-sm font-semibold text-emerald-950 shadow-sm hover:bg-emerald-100 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-100 dark:hover:bg-emerald-950/45 sm:w-auto"
             >
-              Send to app
+              Open in app
             </button>
             {locError ? (
               <p className="text-[11px] text-red-700 dark:text-red-300" role="status" aria-live="polite">
