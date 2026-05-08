@@ -739,7 +739,7 @@ export default function HelpPage() {
               <p>
                 <strong className="text-zinc-200">Area broadcasts &amp; vicinity / DM alerts:</strong> on the home map
                 broadcast panel, <strong className="text-zinc-200">Message alert sound</strong> (on by default) controls
-                the short chime when new nearby messages arrive. Use{" "}
+                the spoken “you have a message” style alert when new nearby messages or broadcasts arrive. Use{" "}
                 <strong className="text-zinc-200">Silence message alerts (no sound)</strong> in the bottom strip if you
                 need the app quiet in a meeting or overnight — you will still see in-app indicators where implemented, but
                 those <strong className="text-zinc-200">broadcast-related</strong> sounds are suppressed.

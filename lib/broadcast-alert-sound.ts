@@ -1,84 +1,40 @@
-/** Short two-tone chime for new area broadcasts (respects browser autoplay until user has interacted). */
+/**
+ * New message / broadcast alerts: plays bundled voice WAV (respects browser autoplay until user has interacted).
+ * `Silence message alerts` and `Message alert sound` prefs are enforced by callers before invoking these.
+ */
 
-let sharedCtx: AudioContext | null = null;
+export const NEW_MESSAGE_VOICE_PUBLIC_PATH = "/sounds/new-message-voice.wav";
 
-function getAudioContext(): AudioContext | null {
-  if (typeof window === "undefined") return null;
-  const AC =
-    window.AudioContext ||
-    (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-  if (!AC) return null;
-  if (!sharedCtx || sharedCtx.state === "closed") {
-    sharedCtx = new AC();
+let voiceAudio: HTMLAudioElement | null = null;
+
+function getVoiceAudio(): HTMLAudioElement {
+  if (!voiceAudio) {
+    voiceAudio = new Audio(NEW_MESSAGE_VOICE_PUBLIC_PATH);
+    voiceAudio.preload = "auto";
+    voiceAudio.volume = 0.95;
   }
-  return sharedCtx;
+  return voiceAudio;
 }
 
-export function playBroadcastAlertSound(): void {
-  const ctx = getAudioContext();
-  if (!ctx) return;
-
-  const run = () => {
-    const t0 = ctx.currentTime;
-    const tone = (freq: number, start: number, dur: number) => {
-      const o = ctx.createOscillator();
-      const g = ctx.createGain();
-      o.type = "sine";
-      o.frequency.setValueAtTime(freq, t0 + start);
-      g.gain.setValueAtTime(0.0001, t0 + start);
-      g.gain.exponentialRampToValueAtTime(0.1, t0 + start + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, t0 + start + dur);
-      o.connect(g);
-      g.connect(ctx.destination);
-      o.start(t0 + start);
-      o.stop(t0 + start + dur + 0.02);
-    };
-    tone(880, 0, 0.1);
-    tone(660, 0.12, 0.12);
-  };
-
-  void ctx.resume().then(run).catch(() => {
+function playNewMessageVoice(): void {
+  const a = getVoiceAudio();
+  try {
+    a.pause();
+    a.currentTime = 0;
+  } catch {
+    /* ignore */
+  }
+  void a.play().catch(() => {
     /* suspended until user gesture — ignore */
   });
 }
 
-/** Two short chimes (double ping) for new private vicinity / DM alerts on phone and desktop. */
+/** Area broadcast toast: voice clip “You have a message” style. */
+export function playBroadcastAlertSound(): void {
+  playNewMessageVoice();
+}
+
+/** New private vicinity / DM / reply alert: same voice clip as broadcasts. */
 export function playVicinityDmAlertSound(): void {
-  const ctx = getAudioContext();
-  if (!ctx) return;
-
-  const run = () => {
-    const t0 = ctx.currentTime;
-    const tone = (freq: number, start: number, dur: number) => {
-      const o = ctx.createOscillator();
-      const g = ctx.createGain();
-      o.type = "sine";
-      o.frequency.setValueAtTime(freq, t0 + start);
-      g.gain.setValueAtTime(0.0001, t0 + start);
-      g.gain.exponentialRampToValueAtTime(0.1, t0 + start + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, t0 + start + dur);
-      o.connect(g);
-      g.connect(ctx.destination);
-      o.start(t0 + start);
-      o.stop(t0 + start + dur + 0.02);
-    };
-    tone(880, 0, 0.1);
-    tone(660, 0.12, 0.12);
-  };
-
-  void ctx
-    .resume()
-    .then(() => {
-      run();
-      window.setTimeout(() => {
-        try {
-          run();
-        } catch {
-          /* */
-        }
-      }, 400);
-    })
-    .catch(() => {
-      /* suspended until user gesture — ignore */
-    });
+  playNewMessageVoice();
 }
