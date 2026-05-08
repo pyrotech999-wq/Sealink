@@ -26,6 +26,19 @@ function clamp(n: number, a: number, b: number): number {
   return Math.max(a, Math.min(b, n));
 }
 
+function ZoomWatcher({ onZoom }: { onZoom: (z: number) => void }) {
+  const map = useMap();
+  useEffect(() => {
+    const emit = () => onZoom(map.getZoom());
+    emit();
+    map.on("zoomend", emit);
+    return () => {
+      map.off("zoomend", emit);
+    };
+  }, [map, onZoom]);
+  return null;
+}
+
 function wavesColor(m: number): string {
   const t = clamp(m / 6, 0, 1);
   const stops = [
@@ -86,6 +99,7 @@ export function WeatherMap() {
   const [geoErr, setGeoErr] = useState<string | null>(null);
   const [data, setData] = useState<ApiOk | null>(null);
   const [loading, setLoading] = useState(false);
+  const [zoom, setZoom] = useState(DEFAULT_ZOOM);
   const [lastRefreshedAtMs, setLastRefreshedAtMs] = useState(0);
   const [cooldownUntilMs, setCooldownUntilMs] = useState(0);
   const nowMsRef = useRef(Date.now());
@@ -178,6 +192,22 @@ export function WeatherMap() {
   const points = data?.points ?? [];
   const center: [number, number] = pos ? [pos.lat, pos.lng] : [51.505, -0.09];
 
+  // Increase vector density as the user zooms in (more local detail).
+  // The API grid is fairly dense; thinning avoids clutter at low zoom.
+  const vectorStride = useMemo(() => {
+    if (zoom >= 12) return 1;
+    if (zoom >= 11) return 2;
+    if (zoom >= 10) return 3;
+    if (zoom >= 9) return 4;
+    if (zoom >= 8) return 6;
+    return 8;
+  }, [zoom]);
+
+  const vectorPoints = useMemo(() => {
+    if (vectorStride <= 1) return points;
+    return points.filter((_, i) => i % vectorStride === 0);
+  }, [points, vectorStride]);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -239,6 +269,7 @@ export function WeatherMap() {
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
+            <ZoomWatcher onZoom={setZoom} />
             {pos ? <MapRecenter lat={pos.lat} lng={pos.lng} /> : null}
             {pos ? (
               <Marker position={[pos.lat, pos.lng]}>
@@ -271,7 +302,7 @@ export function WeatherMap() {
               : null}
 
             {overlay === "wave_direction"
-              ? points.map((p, i) => {
+              ? vectorPoints.map((p, i) => {
                   const deg = p.waveDirDeg ?? null;
                   const h = p.waveHeightM ?? null;
                   // Open-Meteo marine can return direction-like values over land; only draw if waves are meaningful.
@@ -287,7 +318,7 @@ export function WeatherMap() {
               : null}
 
             {overlay === "wind"
-              ? points.map((p, i) => {
+              ? vectorPoints.map((p, i) => {
                   const ms = p.windSpeedMs ?? null;
                   const deg = p.windDirDeg ?? null;
                   if (ms == null || deg == null) return null;
@@ -303,7 +334,7 @@ export function WeatherMap() {
               : null}
 
             {overlay === "wind_direction"
-              ? points.map((p, i) => {
+              ? vectorPoints.map((p, i) => {
                   const deg = p.windDirDeg ?? null;
                   if (deg == null) return null;
                   return (
