@@ -120,6 +120,8 @@ type IfmFriendApiRow = {
   uid?: string | null;
 };
 
+type ProfileDisplay = { fullName: string | null; boatName: string | null };
+
 export type BroadcastMsg = {
   id: string;
   authorUid: string;
@@ -177,6 +179,7 @@ export function MapBroadcastPanel({
   const [inboxRows, setInboxRows] = useState<VicinityInboxRowApi[]>([]);
   const [ifmFriends, setIfmFriends] = useState<IfmFriendApiRow[]>([]);
   const [startChatPeerUid, setStartChatPeerUid] = useState<string>("");
+  const [profileByUid, setProfileByUid] = useState<Record<string, ProfileDisplay>>({});
   const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null);
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(() =>
     typeof window !== "undefined" ? readHiddenBroadcastIds() : new Set(),
@@ -381,6 +384,51 @@ export function MapBroadcastPanel({
   }, [signedIn, fetchIfmFriends]);
 
   useEffect(() => {
+    if (!signedIn || !L) return;
+    const uids = new Set<string>();
+    for (const row of inboxRows) {
+      const u = typeof row.peerUid === "string" ? row.peerUid.trim() : "";
+      if (u) uids.add(u);
+    }
+    for (const f of ifmFriends) {
+      const u = typeof f.uid === "string" ? f.uid.trim() : "";
+      if (u) uids.add(u);
+    }
+    const need = [...uids].filter((u) => !profileByUid[u]);
+    if (need.length === 0) return;
+
+    let cancelled = false;
+    const ac = new AbortController();
+
+    const run = async () => {
+      for (const uid of need) {
+        if (cancelled) return;
+        try {
+          const r = await fetch(`/api/profiles/display?uid=${encodeURIComponent(uid)}`, {
+            credentials: "same-origin",
+            cache: "no-store",
+            signal: ac.signal,
+          });
+          const d = (await r.json()) as { fullName?: string | null; boatName?: string | null };
+          if (!r.ok) continue;
+          const fullName = typeof d.fullName === "string" && d.fullName.trim() ? d.fullName.trim() : null;
+          const boatName = typeof d.boatName === "string" && d.boatName.trim() ? d.boatName.trim() : null;
+          if (cancelled) return;
+          setProfileByUid((prev) => (prev[uid] ? prev : { ...prev, [uid]: { fullName, boatName } }));
+        } catch {
+          /* ignore */
+        }
+      }
+    };
+    void run();
+
+    return () => {
+      cancelled = true;
+      ac.abort();
+    };
+  }, [signedIn, L, inboxRows, ifmFriends, profileByUid]);
+
+  useEffect(() => {
     const sync = () => setHiddenIds(readHiddenBroadcastIds());
     sync();
     window.addEventListener("storage", sync);
@@ -535,10 +583,15 @@ export function MapBroadcastPanel({
                       Conversation
                     </span>
                     <span
-                      className={`font-mono text-indigo-600/90 dark:text-indigo-300/90 ${L ? "text-sm" : "text-[10px]"}`}
+                      className={`text-indigo-600/90 dark:text-indigo-300/90 ${L ? "text-sm" : "text-[10px]"}`}
                       title={row.peerUid}
                     >
-                      {row.peerUid.length > 18 ? `${row.peerUid.slice(0, 18)}…` : row.peerUid}
+                      {(() => {
+                        const p = profileByUid[row.peerUid];
+                        const label = p?.fullName && p?.boatName ? `${p.fullName} · ${p.boatName}` : p?.fullName || p?.boatName || "";
+                        if (label) return label;
+                        return row.peerUid.length > 18 ? `${row.peerUid.slice(0, 18)}…` : row.peerUid;
+                      })()}
                     </span>
                   </div>
                   <span
@@ -581,19 +634,20 @@ export function MapBroadcastPanel({
         )}
       </div>
     );
-  }, [signedIn, inboxRows, L, deletingThreadId]);
+  }, [signedIn, inboxRows, L, deletingThreadId, profileByUid]);
 
   const startChatBlock = useMemo(() => {
     if (!signedIn || !L) return null;
     const friendOptions = ifmFriends
       .map((f) => ({
         uid: typeof f.uid === "string" ? f.uid.trim() : "",
-        label:
-          f.kind === "email"
-            ? f.value
-            : f.kind === "phone"
-              ? `${f.value} (phone)`
-              : f.value,
+        label: (() => {
+          const uid = typeof f.uid === "string" ? f.uid.trim() : "";
+          const p = uid ? profileByUid[uid] : undefined;
+          const nice = p?.fullName && p?.boatName ? `${p.fullName} · ${p.boatName}` : p?.fullName || p?.boatName || "";
+          if (nice) return nice;
+          return f.kind === "email" ? f.value : f.kind === "phone" ? `${f.value} (phone)` : f.value;
+        })(),
         kind: f.kind,
       }))
       .filter((o) => o.kind === "email" && o.uid);
