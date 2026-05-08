@@ -10,6 +10,7 @@ import { mapHrefPreferCoords } from "@/lib/map-links";
 import { MOB_CANCEL_BROADCAST_INTRO } from "@/lib/map-broadcast-constants";
 import type { MapBroadcastAudience } from "@/lib/map-broadcast-store";
 import { refreshMapLive, subscribeMapLive } from "@/lib/client/map-live-store";
+import { getMessagePollDelayMs } from "@/lib/message-poll-delays";
 import {
   BROADCAST_HIDDEN_EVENT,
   hideBroadcastId,
@@ -377,16 +378,70 @@ export function MapBroadcastPanel({
 
   useEffect(() => {
     if (!signedIn) return;
-    queueMicrotask(() => void fetchInbox());
-    const id = window.setInterval(() => queueMicrotask(() => void fetchInbox()), 55_000);
-    return () => window.clearInterval(id);
+    let cancelled = false;
+    let tid: number | null = null;
+    const scheduleAfter = (ms: number) => {
+      if (cancelled) return;
+      tid = window.setTimeout(loop, ms);
+    };
+    const loop = () => {
+      if (cancelled) return;
+      void fetchInbox().finally(() => {
+        if (cancelled) return;
+        scheduleAfter(getMessagePollDelayMs());
+      });
+    };
+    void fetchInbox().finally(() => {
+      if (cancelled) return;
+      scheduleAfter(getMessagePollDelayMs());
+    });
+    const onVis = () => {
+      if (tid != null) {
+        window.clearTimeout(tid);
+        tid = null;
+      }
+      if (!cancelled) void fetchInbox().finally(() => !cancelled && scheduleAfter(getMessagePollDelayMs()));
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      cancelled = true;
+      if (tid != null) window.clearTimeout(tid);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, [signedIn, fetchInbox]);
 
   useEffect(() => {
     if (!signedIn) return;
-    queueMicrotask(() => void fetchIfmFriends());
-    const id = window.setInterval(() => queueMicrotask(() => void fetchIfmFriends()), 5 * 60_000);
-    return () => window.clearInterval(id);
+    let cancelled = false;
+    let tid: number | null = null;
+    const scheduleAfter = (ms: number) => {
+      if (cancelled) return;
+      tid = window.setTimeout(loop, ms);
+    };
+    const loop = () => {
+      if (cancelled) return;
+      void fetchIfmFriends().finally(() => {
+        if (cancelled) return;
+        scheduleAfter(getMessagePollDelayMs());
+      });
+    };
+    void fetchIfmFriends().finally(() => {
+      if (cancelled) return;
+      scheduleAfter(getMessagePollDelayMs());
+    });
+    const onVis = () => {
+      if (tid != null) {
+        window.clearTimeout(tid);
+        tid = null;
+      }
+      if (!cancelled) void fetchIfmFriends().finally(() => !cancelled && scheduleAfter(getMessagePollDelayMs()));
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      cancelled = true;
+      if (tid != null) window.clearTimeout(tid);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, [signedIn, fetchIfmFriends]);
 
   useEffect(() => {

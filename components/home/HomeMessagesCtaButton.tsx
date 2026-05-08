@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getBroadcastAlertsSilenced, getMessageAlertSoundOn } from "@/lib/broadcast-alert-preferences";
-import { playVicinityDmAlertSound } from "@/lib/broadcast-alert-sound";
+import { playBroadcastAlertSound, playVicinityDmAlertSound } from "@/lib/broadcast-alert-sound";
 import { subscribeMapLive, type MapLiveResponse } from "@/lib/client/map-live-store";
 import {
   getMessagingLastVisitIso,
@@ -53,7 +53,9 @@ export function HomeMessagesCtaButton({
   /** Unread area-broadcast thread replies (same ids as the top “New message received” bar). */
   const [broadcastReplyUnreadIds, setBroadcastReplyUnreadIds] = useState<string[]>([]);
   const lastDmChimeAtMs = useRef(0);
+  const lastBroadcastChimeAtMs = useRef(0);
   const liveRef = useRef<MapLiveResponse | null>(null);
+  const checkRef = useRef<() => Promise<void>>(async () => {});
 
   useEffect(() => {
     const fn = (ev: Event) => {
@@ -83,6 +85,7 @@ export function HomeMessagesCtaButton({
             return typeof o.broadcastId === "string" ? o.broadcastId : "";
           }).filter(Boolean),
         );
+        queueMicrotask(() => void checkRef.current());
       },
     });
   }, [signedIn, readLat, readLng]);
@@ -119,14 +122,13 @@ export function HomeMessagesCtaButton({
     }
 
     const v = new Date(visit).getTime();
-    let newFromBroadcast = false;
+    let newestIncomingBroadcastAt = 0;
     for (const m of broadcasts) {
       if (m.isMine) continue;
-      if (new Date(m.createdAt).getTime() > v) {
-        newFromBroadcast = true;
-        break;
-      }
+      const t = new Date(m.createdAt).getTime();
+      if (t > v && t >= newestIncomingBroadcastAt) newestIncomingBroadcastAt = t;
     }
+    const newFromBroadcast = newestIncomingBroadcastAt > 0;
 
     let newestIncomingDmAt = 0;
     let newestIncomingDmPeer: string | null = null;
@@ -143,6 +145,20 @@ export function HomeMessagesCtaButton({
 
     const newFromDm = newestIncomingDmAt > 0;
     const newFlag = newFromBroadcast || newFromDm;
+
+    if (
+      newFromBroadcast &&
+      newestIncomingBroadcastAt > lastBroadcastChimeAtMs.current &&
+      !getBroadcastAlertsSilenced() &&
+      getMessageAlertSoundOn()
+    ) {
+      try {
+        playBroadcastAlertSound();
+      } catch {
+        /* */
+      }
+      lastBroadcastChimeAtMs.current = newestIncomingBroadcastAt;
+    }
 
     if (
       newFromDm &&
@@ -163,6 +179,10 @@ export function HomeMessagesCtaButton({
       setOpenPeerUid(newFromDm && newestIncomingDmPeer ? newestIncomingDmPeer : null);
     });
   }, [readLat, readLng, signedIn, emergencyDisableLiveMapApis]);
+
+  useEffect(() => {
+    checkRef.current = check;
+  }, [check]);
 
   useEffect(() => {
     if (emergencyDisableLiveMapApis) return;

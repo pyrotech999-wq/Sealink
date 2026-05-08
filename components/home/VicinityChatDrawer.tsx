@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { LinkifiedPlainText } from "@/components/LinkifiedPlainText";
 import { formatChatSenderLine } from "@/lib/format-chat-sender";
+import { getMessagePollDelayMs } from "@/lib/message-poll-delays";
 
 type Msg = {
   id: string;
@@ -169,9 +170,34 @@ export function VicinityChatDrawer({
       });
       return;
     }
+    let cancelled = false;
+    let tid: number | null = null;
+    const scheduleAfter = (ms: number) => {
+      if (cancelled) return;
+      tid = window.setTimeout(loop, ms);
+    };
+    const loop = () => {
+      if (cancelled) return;
+      void load({ silent: true }).finally(() => {
+        if (cancelled) return;
+        scheduleAfter(getMessagePollDelayMs());
+      });
+    };
     queueMicrotask(() => void load());
-    const id = window.setInterval(() => queueMicrotask(() => void load({ silent: true })), 14_000);
-    return () => window.clearInterval(id);
+    scheduleAfter(getMessagePollDelayMs());
+    const onVis = () => {
+      if (tid != null) {
+        window.clearTimeout(tid);
+        tid = null;
+      }
+      if (!cancelled) void load({ silent: true }).finally(() => !cancelled && scheduleAfter(getMessagePollDelayMs()));
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      cancelled = true;
+      if (tid != null) window.clearTimeout(tid);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, [open, peerUid, broadcastId, load]);
 
   useEffect(() => {
