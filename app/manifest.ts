@@ -3,6 +3,7 @@ import { resolvePublicAppOrigin } from "@/lib/public-app-url";
 
 export default function manifest(): MetadataRoute.Manifest {
   const origin = resolvePublicAppOrigin();
+  const v = "418800d";
   return {
     id: `${origin}/`,
     name: "SeaLink",
@@ -16,24 +17,24 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: "#000000",
     icons: [
       {
-        src: `${origin}/pwa-192.png`,
+        src: `${origin}/pwa-192.png?v=${v}`,
         sizes: "192x192",
         type: "image/png",
         purpose: "any",
       },
       {
-        src: `${origin}/pwa-512.png`,
+        src: `${origin}/pwa-512.png?v=${v}`,
         sizes: "512x512",
         type: "image/png",
         purpose: "any",
       },
       {
-        src: `${origin}/apple-touch-icon.png`,
+        src: `${origin}/apple-touch-icon.png?v=${v}`,
         sizes: "180x180",
         type: "image/png",
         purpose: "any",
       },
-      { src: `${origin}/icon.svg`, sizes: "any", type: "image/svg+xml", purpose: "any" },
+      { src: `${origin}/icon.svg?v=${v}`, sizes: "any", type: "image/svg+xml", purpose: "any" },
     ],
   };
 }

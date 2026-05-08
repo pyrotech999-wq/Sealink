@@ -41,12 +41,12 @@ export const metadata: Metadata = {
   applicationName: "SeaLink",
   icons: {
     icon: [
-      { url: "/favicon.png", sizes: "32x32", type: "image/png" },
-      { url: "/pwa-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/pwa-512.png", sizes: "512x512", type: "image/png" },
-      { url: "/icon.svg", type: "image/svg+xml", sizes: "any" },
+      { url: "/favicon.png?v=418800d", sizes: "32x32", type: "image/png" },
+      { url: "/pwa-192.png?v=418800d", sizes: "192x192", type: "image/png" },
+      { url: "/pwa-512.png?v=418800d", sizes: "512x512", type: "image/png" },
+      { url: "/icon.svg?v=418800d", type: "image/svg+xml", sizes: "any" },
     ],
-    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+    apple: [{ url: "/apple-touch-icon.png?v=418800d", sizes: "180x180", type: "image/png" }],
   },
   appleWebApp: {
     capable: true,
