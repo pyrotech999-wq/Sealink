@@ -312,14 +312,17 @@ export function NavigationChartsClient() {
         setShareStatus("Opening chart…");
       },
       (err) => {
-        setLocError(err.message || "Could not get your location (permission denied or unavailable).");
-        setShareStatus("");
+        // If GPS fails/denied, keep the tab open and fall back to the default viewer.
+        setLocError("");
+        setShareStatus("Unable to get your location — use the chart to locate yourself.");
         if (win && !win.closed) {
           try {
-            win.close();
+            win.location.href = IBOATING_MARINE_CHARTS_APP;
           } catch {
-            // ignore
+            window.open(IBOATING_MARINE_CHARTS_APP, "_blank", "noopener,noreferrer");
           }
+        } else {
+          window.open(IBOATING_MARINE_CHARTS_APP, "_blank", "noopener,noreferrer");
         }
       },
       { enableHighAccuracy: true, maximumAge: 15_000, timeout: 10_000 },
