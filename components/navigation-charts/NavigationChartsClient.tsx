@@ -70,6 +70,7 @@ export function NavigationChartsClient() {
   const [fitBoundsNonce, setFitBoundsNonce] = useState(0);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number; accuracyM?: number } | null>(null);
   const [locError, setLocError] = useState<string>("");
+  const [shareStatus, setShareStatus] = useState<string>("");
 
   const iBoatingHref = useMemo(
     () => iBoatingMarineChartsAppUrl(metadata?.bounds ?? null),
@@ -202,6 +203,7 @@ export function NavigationChartsClient() {
 
   const openFishingAppAtMyLocation = useCallback(() => {
     setLocError("");
+    setShareStatus("");
 
     // Open a tab synchronously so popup blockers don't reject the action.
     const win = window.open(IBOATING_MARINE_CHARTS_APP, "_blank", "noopener,noreferrer");
@@ -236,6 +238,49 @@ export function NavigationChartsClient() {
       { enableHighAccuracy: true, maximumAge: 15_000, timeout: 10_000 },
     );
   }, []);
+
+  const bestShareUrl = useMemo(() => {
+    if (userLocation) {
+      const zoom =
+        userLocation.accuracyM != null && Number.isFinite(userLocation.accuracyM)
+          ? userLocation.accuracyM < 80
+            ? 14
+            : userLocation.accuracyM < 300
+              ? 13
+              : 12
+          : 13;
+      return iBoatingMarineChartsAppUrlForLatLng({ lat: userLocation.lat, lng: userLocation.lng, zoom });
+    }
+    return iBoatingHref;
+  }, [iBoatingHref, userLocation]);
+
+  const onSendToApp = useCallback(async () => {
+    setLocError("");
+    setShareStatus("");
+
+    const url = bestShareUrl;
+    const title = "SeaLink — Navigation Charts";
+    const text = "Open this chart viewer link in your app/browser.";
+
+    try {
+      if (navigator.share) {
+        await navigator.share({ title, text, url });
+        setShareStatus("Sent.");
+        return;
+      }
+    } catch (err) {
+      // User cancelled share sheet, or share failed. Fall back to clipboard.
+      const msg = err instanceof Error ? err.message : String(err);
+      if (/abort|cancel/i.test(msg)) return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareStatus("Link copied — paste into your app.");
+    } catch {
+      setShareStatus("Could not open share sheet or copy link on this device.");
+    }
+  }, [bestShareUrl]);
 
   const phaseIndex = (p: LoadPhase) => PHASE_ORDER.indexOf(p as LoadPhaseStep);
 
@@ -459,9 +504,21 @@ export function NavigationChartsClient() {
             >
               Open Fishing-App charts (at my location)
             </button>
+            <button
+              type="button"
+              onClick={onSendToApp}
+              className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 px-3 text-sm font-semibold text-emerald-950 shadow-sm hover:bg-emerald-100 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-100 dark:hover:bg-emerald-950/45 sm:w-auto"
+            >
+              Send to app
+            </button>
             {locError ? (
               <p className="text-[11px] text-red-700 dark:text-red-300" role="status" aria-live="polite">
                 {locError}
+              </p>
+            ) : null}
+            {shareStatus ? (
+              <p className="text-[11px] text-zinc-600 dark:text-zinc-400" role="status" aria-live="polite">
+                {shareStatus}
               </p>
             ) : null}
             {userLocation ? (
