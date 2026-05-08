@@ -154,6 +154,7 @@ export function WeatherMap() {
         lat: String(pos.lat),
         lng: String(pos.lng),
         overlay,
+        z: String(zoom),
       });
       const r = await fetch(`/api/weather/map-grid?${qs.toString()}`, { cache: "no-store" });
       const j = (await r.json()) as ApiOk | { error?: string };
@@ -167,14 +168,14 @@ export function WeatherMap() {
       setLoading(false);
       setCooldownUntilMs(Date.now() + 1500);
     }
-  }, [pos?.lat, pos?.lng, overlay, canRefresh]);
+  }, [pos?.lat, pos?.lng, overlay, zoom, canRefresh]);
 
   // Fetch only on overlay change or meaningful location change (no render spam).
   useEffect(() => {
     if (!pos) return;
     void refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [overlay, pos?.lat, pos?.lng]);
+  }, [overlay, pos?.lat, pos?.lng, zoom]);
 
   const lastLabel = useMemo(() => {
     if (!lastRefreshedAtMs) return "";

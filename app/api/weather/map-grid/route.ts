@@ -38,16 +38,28 @@ function bucketCoord(n: number): number {
   return Math.round(n * 50) / 50;
 }
 
-function cacheKey(lat: number, lng: number, overlay: Overlay): string {
-  return `lat=${bucketCoord(lat).toFixed(2)}|lng=${bucketCoord(lng).toFixed(2)}|overlay=${overlay}`;
+function bucketZoom(z: number): number {
+  if (!Number.isFinite(z)) return 0;
+  if (z >= 13) return 13;
+  if (z >= 12) return 12;
+  if (z >= 11) return 11;
+  if (z >= 10) return 10;
+  return 9;
 }
 
-function buildGrid(lat: number, lng: number): { lat: number; lng: number }[] {
-  // Simple 5x5 grid around the user (~±0.04°).
-  const step = 0.02;
+function cacheKey(lat: number, lng: number, overlay: Overlay, zoom: number): string {
+  return `lat=${bucketCoord(lat).toFixed(2)}|lng=${bucketCoord(lng).toFixed(2)}|z=${bucketZoom(zoom)}|overlay=${overlay}`;
+}
+
+function buildGrid(lat: number, lng: number, zoom: number): { lat: number; lng: number }[] {
+  // Denser grid as the user zooms in so arrows stay informative locally.
+  // Keep the overall coverage similar (~±0.04°) while shrinking step size.
+  const z = bucketZoom(zoom);
+  const step = z >= 13 ? 0.0075 : z >= 12 ? 0.01 : z >= 11 ? 0.0125 : z >= 10 ? 0.015 : 0.02;
+  const half = z >= 12 ? 4 : z >= 10 ? 3 : 2; // 9x9, 7x7, 5x5
   const out: { lat: number; lng: number }[] = [];
-  for (let dy = -2; dy <= 2; dy++) {
-    for (let dx = -2; dx <= 2; dx++) {
+  for (let dy = -half; dy <= half; dy++) {
+    for (let dx = -half; dx <= half; dx++) {
       out.push({ lat: lat + dy * step, lng: lng + dx * step });
     }
   }
@@ -97,6 +109,7 @@ export async function GET(req: Request) {
   const lat = Number(url.searchParams.get("lat"));
   const lng = Number(url.searchParams.get("lng"));
   const overlay = (url.searchParams.get("overlay") || "waves") as Overlay;
+  const zoom = Number(url.searchParams.get("z") ?? "0");
 
   const coords = clampLatLng(lat, lng);
   if (!coords) return NextResponse.json({ error: "lat and lng required" }, { status: 400 });
@@ -104,7 +117,7 @@ export async function GET(req: Request) {
   const allowed: Overlay[] = ["waves", "wave_direction", "wind", "wind_direction", "rain", "pressure"];
   if (!allowed.includes(overlay)) return NextResponse.json({ error: "invalid overlay" }, { status: 400 });
 
-  const key = cacheKey(coords.lat, coords.lng, overlay);
+  const key = cacheKey(coords.lat, coords.lng, overlay, zoom);
   const hit = cache.get(key);
   if (hit && Date.now() - hit.storedAtMs < CACHE_TTL_MS) {
     console.info("WEATHER_MAP_CACHE_HIT", { key });
@@ -120,7 +133,7 @@ export async function GET(req: Request) {
 
   const p = (async () => {
     console.info("WEATHER_MAP_FETCH", { overlay });
-    const grid = buildGrid(bucketCoord(coords.lat), bucketCoord(coords.lng));
+    const grid = buildGrid(bucketCoord(coords.lat), bucketCoord(coords.lng), zoom);
     const nowMs = Date.now();
 
     const results = await Promise.all(
