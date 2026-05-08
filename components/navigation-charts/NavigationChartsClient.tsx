@@ -247,44 +247,6 @@ export function NavigationChartsClient() {
     setLocating(true);
     setShareStatus("Getting your location…");
 
-    // Open a blank tab synchronously (avoids popup blockers), but do NOT open the chart yet.
-    // We'll show a waiting message and only navigate once the GPS fix arrives.
-    const win = window.open("", "_blank", "noopener,noreferrer");
-    if (win && !win.closed) {
-      try {
-        win.document.open();
-        win.document.write(`<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>SeaLink — Finding chart…</title>
-    <style>
-      html,body{height:100%;margin:0;background:#0a0a0a;color:#e5e7eb;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-      .wrap{height:100%;display:flex;align-items:center;justify-content:center;padding:24px}
-      .card{max-width:520px;width:100%;border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:18px 18px 16px;background:rgba(255,255,255,.04)}
-      .h{font-weight:800;font-size:18px;margin:0 0 8px}
-      .p{margin:0;color:rgba(229,231,235,.8);font-size:13px;line-height:1.45}
-      .spinner{margin-top:14px;width:18px;height:18px;border-radius:999px;border:2px solid rgba(16,185,129,.25);border-top-color:rgba(16,185,129,.95);animation:spin 1s linear infinite}
-      @keyframes spin{to{transform:rotate(360deg)}}
-    </style>
-  </head>
-  <body>
-    <div class="wrap">
-      <div class="card">
-        <p class="h">Getting your location…</p>
-        <p class="p">Please allow location access. We’ll open the chart as soon as a GPS fix is found.</p>
-        <div class="spinner" aria-hidden="true"></div>
-      </div>
-    </div>
-  </body>
-</html>`);
-        win.document.close();
-      } catch {
-        // If we can't write to the tab for any reason, just continue with location lookup.
-      }
-    }
-
     if (!("geolocation" in navigator)) {
       setLocError("Geolocation is not available in this browser.");
       setShareStatus("");
@@ -302,33 +264,16 @@ export function NavigationChartsClient() {
         const zoom =
           accuracyM != null && Number.isFinite(accuracyM) ? (accuracyM < 80 ? 14 : accuracyM < 300 ? 13 : 12) : 13;
         const url = iBoatingMarineChartsAppUrlForLatLng({ lat, lng, zoom });
-
-        if (win && !win.closed) {
-          try {
-            win.location.href = url;
-          } catch {
-            window.open(url, "_blank", "noopener,noreferrer");
-          }
-        } else {
-          window.open(url, "_blank", "noopener,noreferrer");
-        }
+        window.open(url, "_blank", "noopener,noreferrer");
 
         setShareStatus("Opening chart…");
         setLocating(false);
       },
       (err) => {
-        // If GPS fails/denied, keep the tab open and fall back to the default viewer.
+        // If GPS fails/denied, fall back to the default viewer.
         setLocError("");
         setShareStatus("Unable to get your location — use the chart to locate yourself.");
-        if (win && !win.closed) {
-          try {
-            win.location.href = IBOATING_MARINE_CHARTS_APP;
-          } catch {
-            window.open(IBOATING_MARINE_CHARTS_APP, "_blank", "noopener,noreferrer");
-          }
-        } else {
-          window.open(IBOATING_MARINE_CHARTS_APP, "_blank", "noopener,noreferrer");
-        }
+        window.open(IBOATING_MARINE_CHARTS_APP, "_blank", "noopener,noreferrer");
         setLocating(false);
       },
       { enableHighAccuracy: true, maximumAge: 15_000, timeout: 30_000 },
