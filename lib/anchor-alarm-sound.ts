@@ -1,52 +1,25 @@
 /**
- * Loud police-style siren + vibration while an anchor geofence alert is active.
- * Uses Web Audio (sawtooth sweeps). Requires a resumed AudioContext — may stay silent until user gesture.
+ * Anchor geofence alert: plays bundled MP3, repeats every 5 minutes until dismissed,
+ * and stops automatically after 3 hours (alert UI may still be visible).
+ * First play may require a user gesture — same as other web audio.
  */
 
-let sirenCtx: AudioContext | null = null;
-let wailIntervalId: number | null = null;
-let vibrateIntervalId: number | null = null;
+export const ANCHOR_ALERT_AUDIO_PUBLIC_PATH = "/sounds/anchor-alert-dial-999.mp3";
+
+const REPEAT_INTERVAL_MS = 5 * 60 * 1000;
+const MAX_SOUND_DURATION_MS = 3 * 60 * 60 * 1000;
+
+let audioEl: HTMLAudioElement | null = null;
+let repeatIntervalId: number | null = null;
 let maxDurationTimeoutId: number | null = null;
-/** Alternate up-sweep / down-sweep each wail for a classic “woo-WOO” siren feel */
-let wailRising = true;
 
-const WAIL_INTERVAL_MS = 520;
-const MAX_DURATION_MS = 15 * 60_000;
-
-function getAudioContext(): AudioContext | null {
-  if (typeof window === "undefined") return null;
-  const AC =
-    window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-  if (!AC) return null;
-  if (!sirenCtx || sirenCtx.state === "closed") {
-    sirenCtx = new AC();
+function getAudio(): HTMLAudioElement {
+  if (!audioEl) {
+    audioEl = new Audio(ANCHOR_ALERT_AUDIO_PUBLIC_PATH);
+    audioEl.preload = "auto";
+    audioEl.volume = 1;
   }
-  return sirenCtx;
-}
-
-function scheduleWail(ctx: AudioContext): void {
-  const t0 = ctx.currentTime;
-  const dur = 0.46;
-  const lo = 560;
-  const hi = 1280;
-  const startF = wailRising ? lo : hi;
-  const endF = wailRising ? hi : lo;
-  wailRising = !wailRising;
-
-  const o = ctx.createOscillator();
-  o.type = "sawtooth";
-  const g = ctx.createGain();
-  o.frequency.setValueAtTime(startF, t0);
-  o.frequency.linearRampToValueAtTime(endF, t0 + dur);
-  g.gain.setValueAtTime(0.0001, t0);
-  g.gain.linearRampToValueAtTime(0.32, t0 + 0.02);
-  g.gain.linearRampToValueAtTime(0.08, t0 + dur * 0.55);
-  g.gain.linearRampToValueAtTime(0.0001, t0 + dur);
-
-  o.connect(g);
-  g.connect(ctx.destination);
-  o.start(t0);
-  o.stop(t0 + dur + 0.06);
+  return audioEl;
 }
 
 function pulseVibrate(): void {
@@ -59,14 +32,24 @@ function pulseVibrate(): void {
   }
 }
 
-function clearTimers(): void {
-  if (wailIntervalId != null) {
-    window.clearInterval(wailIntervalId);
-    wailIntervalId = null;
+function playClip(): void {
+  pulseVibrate();
+  const a = getAudio();
+  try {
+    a.pause();
+    a.currentTime = 0;
+  } catch {
+    /* ignore */
   }
-  if (vibrateIntervalId != null) {
-    window.clearInterval(vibrateIntervalId);
-    vibrateIntervalId = null;
+  void a.play().catch(() => {
+    /* e.g. interrupted — ignore */
+  });
+}
+
+function clearTimers(): void {
+  if (repeatIntervalId != null) {
+    window.clearInterval(repeatIntervalId);
+    repeatIntervalId = null;
   }
   if (maxDurationTimeoutId != null) {
     window.clearTimeout(maxDurationTimeoutId);
@@ -79,44 +62,46 @@ function clearTimers(): void {
   }
 }
 
-/** Stop siren, vibration, and timers (safe to call multiple times). */
+/** Stop playback, vibration, and timers (safe to call multiple times). */
 export function stopAnchorAlarmSiren(): void {
   clearTimers();
-  wailRising = true;
-  if (sirenCtx && sirenCtx.state !== "closed") {
-    void sirenCtx.suspend().catch(() => undefined);
+  if (audioEl) {
+    try {
+      audioEl.pause();
+      audioEl.currentTime = 0;
+    } catch {
+      /* ignore */
+    }
   }
 }
 
 /**
- * Start repeating siren + vibration. Returns true if audio context is available and resumed.
+ * Start anchor alarm sound: play once, then every 5 minutes; hard stop after 3 hours.
+ * Returns true if the first play started (not blocked by the browser).
  */
 export async function startAnchorAlarmSiren(): Promise<boolean> {
   stopAnchorAlarmSiren();
-  const ctx = getAudioContext();
-  if (!ctx) return false;
-
+  const a = getAudio();
+  pulseVibrate();
   try {
-    if (ctx.state === "suspended") await ctx.resume();
+    a.pause();
+    a.currentTime = 0;
+  } catch {
+    /* ignore */
+  }
+  try {
+    await a.play();
   } catch {
     return false;
   }
 
-  scheduleWail(ctx);
-  wailIntervalId = window.setInterval(() => {
-    try {
-      scheduleWail(ctx);
-    } catch {
-      /* ignore */
-    }
-  }, WAIL_INTERVAL_MS);
-
-  pulseVibrate();
-  vibrateIntervalId = window.setInterval(pulseVibrate, 1100);
+  repeatIntervalId = window.setInterval(() => {
+    playClip();
+  }, REPEAT_INTERVAL_MS);
 
   maxDurationTimeoutId = window.setTimeout(() => {
     stopAnchorAlarmSiren();
-  }, MAX_DURATION_MS);
+  }, MAX_SOUND_DURATION_MS);
 
   return true;
 }
