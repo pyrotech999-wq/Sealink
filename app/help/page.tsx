@@ -646,6 +646,12 @@ export default function HelpPage() {
                 GPS and which device(s) should show the alert pop-up; settings sync when you save in the anchor dialog.
               </p>
               <p>
+                <strong className="text-zinc-200">How often it checks:</strong> the geofence is evaluated about{" "}
+                <strong className="text-zinc-200">every 30 seconds</strong> on the monitoring device, using the same
+                stabilised position as your map pin and nearby features (not a second, hidden GPS track). If you monitor
+                another device on board, its position is refreshed on the same interval from the server.
+              </p>
+              <p>
                 Quality indicators reflect GPS stability — poor GPS causes false confidence.
               </p>
               <ul className="list-disc space-y-1 pl-5 text-zinc-400">
