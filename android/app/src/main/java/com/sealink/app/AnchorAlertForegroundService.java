@@ -176,7 +176,12 @@ public class AnchorAlertForegroundService extends Service {
         stopLocationUpdates();
         alarmController.stop();
         SharedPreferences sp = AnchorAlertPrefs.prefs(this);
-        sp.edit().putBoolean(AnchorAlertPrefs.KEY_ALARM_ACTIVE, false).putBoolean(AnchorAlertPrefs.KEY_DRIFT_ALARM_PENDING, false).apply();
+        sp.edit()
+            .putBoolean(AnchorAlertPrefs.KEY_ALARM_ACTIVE, false)
+            .putBoolean(AnchorAlertPrefs.KEY_DRIFT_ALARM_PENDING, false)
+            .putBoolean(AnchorAlertPrefs.KEY_NATIVE_ALARM_PLAYING, false)
+            .putBoolean(AnchorAlertPrefs.KEY_SUPPRESS_UNTIL_INSIDE, false)
+            .apply();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             stopForeground(STOP_FOREGROUND_REMOVE);
         } else {
