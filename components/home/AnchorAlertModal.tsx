@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ANCHOR_MAX_HORIZ_ACCURACY_M, type AnchorGpsQuality } from "@/lib/anchor-gps-stabilizer";
 import { GPS_REFINE_TARGET_ACCURACY_M } from "@/lib/gps-refinement";
 import { isLikelyAndroid, openAndroidLocationAppDetailsSettings } from "@/lib/location-env";
@@ -23,17 +23,24 @@ import {
   writeAnchorAndroidTestModeToStorage,
 } from "@/lib/capacitor-anchor-alert-android";
 
-async function registerSessionDevice(currentDeviceId: string): Promise<void> {
-  if (!currentDeviceId || currentDeviceId === "server") return;
+async function registerSessionDevice(
+  currentDeviceId: string,
+): Promise<{ ok: true } | { ok: false; error?: string; status?: number }> {
+  if (!currentDeviceId || currentDeviceId === "server") return { ok: true };
   try {
-    await fetch("/api/demo/register-device", {
+    const r = await fetch("/api/demo/register-device", {
       method: "POST",
       credentials: "same-origin",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({ deviceId: currentDeviceId, deviceName: getDeviceName() }),
     });
+    if (!r.ok) {
+      const j = (await r.json().catch(() => ({}))) as { error?: string };
+      return { ok: false, error: typeof j.error === "string" ? j.error : undefined, status: r.status };
+    }
+    return { ok: true };
   } catch {
-    /* ignore */
+    return { ok: false };
   }
 }
 
@@ -119,6 +126,9 @@ export function AnchorAlertModal({
   const [deviceLabel, setDeviceLabel] = useState(() => (typeof window !== "undefined" ? getDeviceName() : ""));
   const [devices, setDevices] = useState<{ deviceId: string; name: string; updatedAt: string; lastFixAt: string | null }[]>([]);
   const [devicesLoadError, setDevicesLoadError] = useState<string | null>(null);
+  /** Explains missing “other device” in lists (registration / second phone). */
+  const [devicesListHint, setDevicesListHint] = useState<string | null>(null);
+  const [devicesRefreshing, setDevicesRefreshing] = useState(false);
   const [monitorDeviceId, setMonitorDeviceId] = useState<string>(config.monitorDeviceId || "this");
   const [alertMode, setAlertMode] = useState<"this" | "other" | "both">("both");
   const [alertOtherId, setAlertOtherId] = useState<string>("");

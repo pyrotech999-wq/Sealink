@@ -67,9 +67,9 @@ async function listSupabase(uid: string): Promise<AccountDeviceRow[]> {
   return (data ?? []).map((r) => mapDbRow(r as Record<string, unknown>)).sort((a, b) => (a.activatedAt < b.activatedAt ? -1 : 1));
 }
 
-async function syncSupabaseDevices(uid: string, list: AccountDeviceRow[]): Promise<void> {
+/** Persists the full in-memory list without deleting the user’s rows first (avoids empty windows on failure; merges by PK). */
+async function upsertSupabaseAccountDevices(uid: string, list: AccountDeviceRow[]): Promise<void> {
   const sb = supabaseAdmin();
-  await sb.from("account_devices").delete().eq("user_uid", uid);
   if (!list.length) return;
   const rows = list.map((d) => ({
     user_uid: uid,
@@ -79,7 +79,7 @@ async function syncSupabaseDevices(uid: string, list: AccountDeviceRow[]): Promi
     last_seen_at: d.lastSeenAt,
     active: d.active,
   }));
-  const { error } = await sb.from("account_devices").insert(rows);
+  const { error } = await sb.from("account_devices").upsert(rows, { onConflict: "user_uid,device_id" });
   if (error) throw new Error(error.message);
 }
 
@@ -131,13 +131,28 @@ export async function registerAccountDevice(
       list.push({ deviceId: safeId, name: safeName, activatedAt: now, lastSeenAt: now, active: true });
     }
 
-    const activeCount = list.filter((d) => d.active).length;
+    /** Keep the device that is registering/signed-in active; drop oldest other sessions until we are at the cap. */
+    while (list.filter((d) => d.active).length > maxActive) {
+      const others = list
+        .filter((d) => d.active && d.deviceId !== safeId)
+        .sort((a, b) => {
+          const t = a.lastSeenAt.localeCompare(b.lastSeenAt);
+          return t !== 0 ? t : a.deviceId.localeCompare(b.deviceId);
+        });
+      if (others.length === 0) {
+        const cur = list.find((d) => d.deviceId === safeId);
+        if (cur) cur.active = false;
+        break;
+      }
+      const victimId = others[0]!.deviceId;
+      const vi = list.findIndex((d) => d.deviceId === victimId);
+      if (vi >= 0) list[vi]!.active = false;
+    }
 
-    if (activeCount > maxActive) {
-      const cur = list.find((d) => d.deviceId === safeId);
-      if (cur) cur.active = false;
+    const self = list.find((d) => d.deviceId === safeId);
+    if (!self?.active) {
       if (isSupabaseConfigured()) {
-        await syncSupabaseDevices(uid, list);
+        await upsertSupabaseAccountDevices(uid, list);
       } else {
         const store = canUseKv() ? await kvGetJson<StoreShape>(KV_KEY, {}) : readStore();
         store[uid] = list;
@@ -148,7 +163,7 @@ export async function registerAccountDevice(
     }
 
     if (isSupabaseConfigured()) {
-      await syncSupabaseDevices(uid, list);
+      await upsertSupabaseAccountDevices(uid, list);
     } else {
       const store = canUseKv() ? await kvGetJson<StoreShape>(KV_KEY, {}) : readStore();
       store[uid] = list;
@@ -173,7 +188,7 @@ export async function deactivateAccountDevice(uid: string, deviceId: string): Pr
     if (idx >= 0) list[idx]!.active = false;
 
     if (isSupabaseConfigured()) {
-      await syncSupabaseDevices(uid, list);
+      await upsertSupabaseAccountDevices(uid, list);
     } else {
       const store = canUseKv() ? await kvGetJson<StoreShape>(KV_KEY, {}) : readStore();
       store[uid] = list;
