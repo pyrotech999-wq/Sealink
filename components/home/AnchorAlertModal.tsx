@@ -6,6 +6,7 @@ import { ANCHOR_MAX_HORIZ_ACCURACY_M, type AnchorGpsQuality } from "@/lib/anchor
 import { GPS_REFINE_TARGET_ACCURACY_M } from "@/lib/gps-refinement";
 import { isLikelyAndroid, openAndroidLocationAppDetailsSettings } from "@/lib/location-env";
 import { getDeviceName, setDeviceName } from "@/lib/device-id";
+import { primeAnchorAlarmAudio } from "@/lib/anchor-alarm-sound";
 import {
   ANCHOR_RADIUS_METRES_OPTIONS,
   type AnchorRadiusM,
@@ -516,6 +517,8 @@ export function AnchorAlertModal({
               type="button"
               disabled={!canSet}
               onClick={() => {
+                // Prime the 999 alarm sound while we have a user gesture (helps avoid “Tap to play alarm sound” later).
+                void primeAnchorAlarmAudio();
                 const n = parseAnchorRadiusM(Number(radius));
                 const a = angleEnabled
                   ? Math.max(0, Math.min(359, Math.round(Number(angleDeg) || ANGLE_DEFAULT_ON)))
