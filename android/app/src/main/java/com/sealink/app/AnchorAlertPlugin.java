@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import androidx.activity.result.ActivityResultLauncher;
@@ -31,8 +32,29 @@ public class AnchorAlertPlugin extends Plugin {
     static final String ALIAS_BACKGROUND_LOCATION = "backgroundLocation";
 
     private BroadcastReceiver breachReceiver;
+    private BroadcastReceiver statusReceiver;
     private ActivityResultLauncher<String> postNotificationPermissionLauncher;
     private PluginCall pendingPostNotificationCall;
+
+    private static JSObject buildStatusJson(Context ctx) {
+        SharedPreferences sp = AnchorAlertPrefs.prefs(ctx);
+        JSObject o = new JSObject();
+        o.put("alarmActive", sp.getBoolean(AnchorAlertPrefs.KEY_ALARM_ACTIVE, false));
+        o.put("anchorLat", (double) sp.getFloat(AnchorAlertPrefs.KEY_ANCHOR_LAT, Float.NaN));
+        o.put("anchorLng", (double) sp.getFloat(AnchorAlertPrefs.KEY_ANCHOR_LNG, Float.NaN));
+        o.put("radiusMeters", (double) sp.getFloat(AnchorAlertPrefs.KEY_RADIUS_METERS, 0f));
+        o.put("testMode", sp.getBoolean(AnchorAlertPrefs.KEY_TEST_MODE, false));
+        o.put("lastDistanceMeters", (double) sp.getFloat(AnchorAlertPrefs.KEY_LAST_DISTANCE_METERS, Float.NaN));
+        o.put("driftAlarmPending", sp.getBoolean(AnchorAlertPrefs.KEY_DRIFT_ALARM_PENDING, false));
+        o.put("nativeAlarmPlaying", sp.getBoolean(AnchorAlertPrefs.KEY_NATIVE_ALARM_PLAYING, false));
+        o.put("suppressUntilInside", sp.getBoolean(AnchorAlertPrefs.KEY_SUPPRESS_UNTIL_INSIDE, false));
+        String msg = sp.getString(AnchorAlertPrefs.KEY_LAST_ALARM_MESSAGE, null);
+        if (msg != null) o.put("lastAlarmMessage", msg);
+        o.put("lastFixLat", (double) sp.getFloat(AnchorAlertPrefs.KEY_LAST_FIX_LAT, Float.NaN));
+        o.put("lastFixLng", (double) sp.getFloat(AnchorAlertPrefs.KEY_LAST_FIX_LNG, Float.NaN));
+        o.put("lastFixTimeMs", sp.getLong(AnchorAlertPrefs.KEY_LAST_FIX_TIME_MS, 0L));
+        return o;
+    }
 
     @Override
     public void load() {
@@ -45,26 +67,44 @@ public class AnchorAlertPlugin extends Plugin {
                     String msg = intent.getStringExtra("message");
                     JSObject data = new JSObject();
                     if (msg != null) data.put("message", msg);
+                    data.put("fromNative", true);
                     notifyListeners("nativeAnchorBreach", data, true);
                 }
             };
-        IntentFilter filter = new IntentFilter(AnchorAlertForegroundService.BROADCAST_BREACH);
+        IntentFilter breachFilter = new IntentFilter(AnchorAlertForegroundService.BROADCAST_BREACH);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            getContext().registerReceiver(breachReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+            getContext().registerReceiver(breachReceiver, breachFilter, Context.RECEIVER_NOT_EXPORTED);
         } else {
-            getContext().registerReceiver(breachReceiver, filter);
+            getContext().registerReceiver(breachReceiver, breachFilter);
+        }
+
+        statusReceiver =
+            new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    notifyListeners("nativeAnchorStatus", buildStatusJson(context), false);
+                }
+            };
+        IntentFilter statusFilter = new IntentFilter(AnchorAlertForegroundService.BROADCAST_STATUS);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            getContext().registerReceiver(statusReceiver, statusFilter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            getContext().registerReceiver(statusReceiver, statusFilter);
         }
     }
 
     @Override
     protected void handleOnDestroy() {
         try {
-            if (breachReceiver != null) {
-                getContext().unregisterReceiver(breachReceiver);
-            }
+            if (breachReceiver != null) getContext().unregisterReceiver(breachReceiver);
         } catch (Exception ignored) {
         }
         breachReceiver = null;
+        try {
+            if (statusReceiver != null) getContext().unregisterReceiver(statusReceiver);
+        } catch (Exception ignored) {
+        }
+        statusReceiver = null;
         super.handleOnDestroy();
     }
 
@@ -149,6 +189,8 @@ public class AnchorAlertPlugin extends Plugin {
         Double lng = call.getDouble("anchorLng");
         Double radius = call.getDouble("radiusM");
         Integer angle = call.getInt("angleDeg", 360);
+        boolean testMode = Boolean.TRUE.equals(call.getBoolean("testMode", false));
+
         if (lat == null || lng == null || radius == null || !Double.isFinite(lat) || !Double.isFinite(lng) || !Double.isFinite(radius)) {
             call.reject("anchorLat, anchorLng, and radiusM are required.");
             return;
@@ -175,8 +217,9 @@ public class AnchorAlertPlugin extends Plugin {
         i.setAction(AnchorAlertForegroundService.ACTION_START);
         i.putExtra(AnchorAlertForegroundService.EXTRA_ANCHOR_LAT, lat);
         i.putExtra(AnchorAlertForegroundService.EXTRA_ANCHOR_LNG, lng);
-        i.putExtra(AnchorAlertForegroundService.EXTRA_RADIUS_M, radius);
+        i.putExtra(AnchorAlertForegroundService.EXTRA_RADIUS_METERS, radius);
         i.putExtra(AnchorAlertForegroundService.EXTRA_ANGLE_DEG, angle != null ? angle : 360);
+        i.putExtra(AnchorAlertForegroundService.EXTRA_TEST_MODE, testMode);
         if (call.hasOption("lastBearingDeg")) {
             Double lb = call.getDouble("lastBearingDeg");
             if (lb != null && Double.isFinite(lb)) {
@@ -190,7 +233,33 @@ public class AnchorAlertPlugin extends Plugin {
 
     @PluginMethod
     public void stopMonitoring(PluginCall call) {
+        AnchorAlertForegroundService.clearDriftDismissFromUser(getContext());
         getContext().stopService(new Intent(getContext(), AnchorAlertForegroundService.class));
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void getNativeAnchorStatus(PluginCall call) {
+        call.resolve(buildStatusJson(getContext()));
+    }
+
+    @PluginMethod
+    public void clearNativeDriftAlarm(PluginCall call) {
+        AnchorAlertForegroundService.clearDriftDismissFromUser(getContext());
+        Intent i = new Intent(getContext(), AnchorAlertForegroundService.class);
+        i.setAction(AnchorAlertForegroundService.ACTION_CLEAR_DRIFT);
+        try {
+            getContext().startService(i);
+        } catch (Exception ignored) {
+        }
+        call.resolve(buildStatusJson(getContext()));
+    }
+
+    @PluginMethod
+    public void setTestMode(PluginCall call) {
+        boolean enabled = Boolean.TRUE.equals(call.getBoolean("enabled", false));
+        AnchorAlertPrefs.prefs(getContext()).edit().putBoolean(AnchorAlertPrefs.KEY_TEST_MODE, enabled).apply();
+        notifyListeners("nativeAnchorStatus", buildStatusJson(getContext()), false);
         call.resolve();
     }
 

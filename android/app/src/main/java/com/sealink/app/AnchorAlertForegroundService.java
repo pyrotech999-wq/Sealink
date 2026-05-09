@@ -257,6 +257,11 @@ public class AnchorAlertForegroundService extends Service {
         float aLng = sp.getFloat(AnchorAlertPrefs.KEY_ANCHOR_LNG, Float.NaN);
         if (!Float.isFinite(aLat) || !Float.isFinite(aLng)) return;
 
+        if (lastBearingRuntime == null && sp.contains(AnchorAlertPrefs.KEY_LAST_BEARING_DEG)) {
+            float lb = sp.getFloat(AnchorAlertPrefs.KEY_LAST_BEARING_DEG, Float.NaN);
+            if (Float.isFinite(lb)) lastBearingRuntime = (double) lb;
+        }
+
         boolean testMode = sp.getBoolean(AnchorAlertPrefs.KEY_TEST_MODE, false);
         double radiusConfigured = sp.getFloat(AnchorAlertPrefs.KEY_RADIUS_METERS, 20f);
         double effectiveRadiusM = testMode ? 5.0 : radiusConfigured;
