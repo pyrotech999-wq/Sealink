@@ -558,7 +558,7 @@ export function AnchorAlertModal({
                 <button
                   type="button"
                   disabled={androidAnchorPermissionBusy}
-                  onClick={() => void setAndroidAnchorPermissionGate(false)}
+                  onClick={() => setAndroidAnchorPermissionGate(false)}
                   className="h-9 rounded-lg border border-indigo-300 bg-white px-3 text-sm font-semibold text-indigo-900 hover:bg-indigo-100 disabled:opacity-50 dark:border-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-50 dark:hover:bg-indigo-900/80"
                 >
                   Back
