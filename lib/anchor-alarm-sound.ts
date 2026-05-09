@@ -46,6 +46,40 @@ function playClip(): void {
   });
 }
 
+/**
+ * Best-effort: unlock audio playback via a user gesture.
+ * Plays the 999 clip at near-zero volume and immediately pauses it so later alarm plays aren't blocked.
+ */
+export async function primeAnchorAlarmAudio(): Promise<boolean> {
+  const a = getAudio();
+  const prevVol = a.volume;
+  try {
+    a.volume = 0.0001;
+    try {
+      a.pause();
+      a.currentTime = 0;
+    } catch {
+      /* ignore */
+    }
+    await a.play();
+    try {
+      a.pause();
+      a.currentTime = 0;
+    } catch {
+      /* ignore */
+    }
+    return true;
+  } catch {
+    return false;
+  } finally {
+    try {
+      a.volume = prevVol || 1;
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
 function clearTimers(): void {
   if (repeatIntervalId != null) {
     window.clearInterval(repeatIntervalId);
