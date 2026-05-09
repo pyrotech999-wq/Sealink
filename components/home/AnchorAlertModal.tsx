@@ -196,7 +196,7 @@ export function AnchorAlertModal({
           );
         } else {
           setDevicesListHint(
-            "No other device is registered for this account yet. On your other phone or tablet, open SeaLink while signed in to the same account (any page). Turn on “Share my location on this map” on the map for a short time so it can register, then tap Refresh devices below.",
+            "No other device is registered for this account yet. On your other phone or tablet, open SeaLink while signed in to the same account (any page). Turn on “Share my location on this map” on the map for a short time so it can register, then tap Refresh devices at the top of this panel.",
           );
         }
       }
@@ -322,17 +322,35 @@ export function AnchorAlertModal({
   return (
     <div className="fixed inset-0 z-[1000] flex items-end justify-center bg-black/40 p-0 sm:items-center sm:px-4 sm:py-6">
       <div className="flex max-h-[min(92dvh,820px)] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-950 sm:rounded-2xl">
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-zinc-200 px-4 py-4 dark:border-zinc-800 sm:px-5">
-          <h3 id="anchor-alert-dialog-title" className="text-base font-semibold leading-snug text-zinc-900 dark:text-zinc-50">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800 sm:px-5">
+          <h3
+            id="anchor-alert-dialog-title"
+            className="min-w-0 flex-1 text-base font-semibold leading-snug text-zinc-900 dark:text-zinc-50"
+          >
             Anchor alert &amp; geofence
           </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="shrink-0 rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 text-xs font-semibold text-zinc-800 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-200 dark:hover:bg-zinc-800"
-          >
-            Close
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              disabled={devicesRefreshing || emergencyDisableLiveMapApis}
+              title={
+                emergencyDisableLiveMapApis
+                  ? "Device list refresh is unavailable in this mode."
+                  : "Reload the list of signed-in devices from the server."
+              }
+              onClick={() => void reloadAnchorDevices()}
+              className="rounded-lg border border-emerald-600 bg-emerald-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-emerald-500 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+            >
+              {devicesRefreshing ? "Refreshing…" : "Refresh devices"}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            >
+              Close
+            </button>
+          </div>
         </div>
 
         <div
@@ -507,16 +525,6 @@ export function AnchorAlertModal({
                 {devicesListHint}
               </p>
             ) : null}
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                disabled={devicesRefreshing || emergencyDisableLiveMapApis}
-                onClick={() => void reloadAnchorDevices()}
-                className="h-8 rounded-lg border border-emerald-400 bg-white px-2.5 text-[11px] font-semibold text-emerald-950 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-emerald-700 dark:bg-zinc-900 dark:text-emerald-50 dark:hover:bg-emerald-950/50"
-              >
-                {devicesRefreshing ? "Refreshing…" : "Refresh devices"}
-              </button>
-            </div>
 
             <label className="mt-3 block text-xs font-medium text-emerald-950 dark:text-emerald-100">
               1 — Device that <span className="font-semibold">monitors</span> (runs the geofence on its GPS)
@@ -654,8 +662,8 @@ export function AnchorAlertModal({
                   <p className="text-[11px] leading-snug text-emerald-900 dark:text-emerald-100/90">{rolesSaveHint}</p>
                 ) : null}
                 <p className="text-[10px] opacity-80">
-                  Each device must open SeaLink while signed in (any tab) so it appears in the lists. Use{" "}
-                  <strong className="font-semibold">Refresh devices</strong> above after the other device has loaded the app.
+                  Each device must open SeaLink while signed in (any tab) so it appears in the lists. After the other device
+                  has loaded the app, tap <strong className="font-semibold">Refresh devices</strong> at the top of this panel.
                 </p>
               </div>
             </div>
