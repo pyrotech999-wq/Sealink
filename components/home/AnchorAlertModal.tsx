@@ -169,30 +169,50 @@ export function AnchorAlertModal({
 
   const androidArmNeedsBackgroundFg = isCapacitorAndroidNative() && monitorDeviceId === "this";
 
+  const reloadAnchorDevices = useCallback(async () => {
+    if (emergencyDisableLiveMapApis) return;
+    setDevicesLoadError(null);
+    setDevicesListHint(null);
+    setDevicesRefreshing(true);
+    try {
+      const reg = await registerSessionDevice(deviceId);
+      const r = await fetch("/api/anchor/devices", { credentials: "same-origin", cache: "no-store" });
+      const d = (await r.json()) as {
+        devices?: { deviceId: string; name: string; updatedAt: string; lastFixAt: string | null }[];
+        error?: string;
+      };
+      if (!r.ok) {
+        setDevices([]);
+        setDevicesLoadError(d.error === "Sign-in required" ? "Sign-in required — refresh the page and try again." : "Could not load devices.");
+        return;
+      }
+      const list = Array.isArray(d.devices) ? d.devices : [];
+      setDevices(list);
+      const others = list.filter((x) => x.deviceId !== deviceId);
+      if (others.length === 0) {
+        if (!reg.ok && reg.error === "DEVICE_LIMIT") {
+          setDevicesListHint(
+            "This account already has two active devices registered elsewhere. We could not add this session — try again after using SeaLink on one of your other devices, or contact support if you need more than two.",
+          );
+        } else {
+          setDevicesListHint(
+            "No other device is registered for this account yet. On your other phone or tablet, open SeaLink while signed in to the same account (any page). Turn on “Share my location on this map” on the map for a short time so it can register, then tap Refresh devices below.",
+          );
+        }
+      }
+    } catch {
+      setDevices([]);
+      setDevicesLoadError("Network error loading devices.");
+    } finally {
+      setDevicesRefreshing(false);
+    }
+  }, [deviceId, emergencyDisableLiveMapApis]);
+
   useEffect(() => {
     if (!open) return;
     if (emergencyDisableLiveMapApis) return;
-    void (async () => {
-      setDevicesLoadError(null);
-      try {
-        await registerSessionDevice(deviceId);
-        const r = await fetch("/api/anchor/devices", { credentials: "same-origin", cache: "no-store" });
-        const d = (await r.json()) as {
-          devices?: { deviceId: string; name: string; updatedAt: string; lastFixAt: string | null }[];
-          error?: string;
-        };
-        if (!r.ok) {
-          setDevices([]);
-          setDevicesLoadError(d.error === "Sign-in required" ? "Sign-in required — refresh the page and try again." : "Could not load devices.");
-          return;
-        }
-        setDevices(Array.isArray(d.devices) ? d.devices : []);
-      } catch {
-        setDevices([]);
-        setDevicesLoadError("Network error loading devices.");
-      }
-    })();
-  }, [open, deviceId, emergencyDisableLiveMapApis]);
+    void reloadAnchorDevices();
+  }, [open, reloadAnchorDevices]);
 
   useEffect(() => {
     if (!open) return;
@@ -249,6 +269,7 @@ export function AnchorAlertModal({
       setAndroidAnchorPermissionError(null);
       setAndroidNativeDistanceM(null);
       setRolesSaveHint(null);
+      setDevicesListHint(null);
     });
   }, [open]);
 
@@ -481,6 +502,22 @@ export function AnchorAlertModal({
               They can be the same device, or one can monitor while the other only receives alerts.
             </p>
 
+            {devicesListHint ? (
+              <p className="mt-2 rounded-md border border-amber-200/90 bg-amber-50/95 px-2.5 py-2 text-[11px] leading-snug text-amber-950 dark:border-amber-800/60 dark:bg-amber-950/35 dark:text-amber-50">
+                {devicesListHint}
+              </p>
+            ) : null}
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={devicesRefreshing || emergencyDisableLiveMapApis}
+                onClick={() => void reloadAnchorDevices()}
+                className="h-8 rounded-lg border border-emerald-400 bg-white px-2.5 text-[11px] font-semibold text-emerald-950 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-emerald-700 dark:bg-zinc-900 dark:text-emerald-50 dark:hover:bg-emerald-950/50"
+              >
+                {devicesRefreshing ? "Refreshing…" : "Refresh devices"}
+              </button>
+            </div>
+
             <label className="mt-3 block text-xs font-medium text-emerald-950 dark:text-emerald-100">
               1 — Device that <span className="font-semibold">monitors</span> (runs the geofence on its GPS)
               <select
@@ -617,8 +654,8 @@ export function AnchorAlertModal({
                   <p className="text-[11px] leading-snug text-emerald-900 dark:text-emerald-100/90">{rolesSaveHint}</p>
                 ) : null}
                 <p className="text-[10px] opacity-80">
-                  Each device must open SeaLink while signed in (any tab) so it appears in the lists. Close and reopen this
-                  panel to refresh.
+                  Each device must open SeaLink while signed in (any tab) so it appears in the lists. Use{" "}
+                  <strong className="font-semibold">Refresh devices</strong> above after the other device has loaded the app.
                 </p>
               </div>
             </div>
