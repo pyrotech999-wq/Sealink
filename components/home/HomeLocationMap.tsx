@@ -267,6 +267,85 @@ export default function HomeLocationMap({
   useEffect(() => {
     activeAnchorAlertRef.current = activeAnchorAlert;
   }, [activeAnchorAlert]);
+
+  useEffect(() => {
+    if (!isCapacitorAndroidNative()) return;
+    let disposed = false;
+    let listener: { remove: () => Promise<void> } | undefined;
+    void SeaLinkAnchorAlert.addListener("nativeAnchorBreach", (e) => {
+      const msg = typeof e.message === "string" ? e.message : "Anchor alert";
+      const now = Date.now();
+      const cur = anchorCfgRef.current;
+      const next = { ...cur, lastAlertAt: new Date(now).toISOString() };
+      queueMicrotask(() => {
+        setAnchorCfg(next);
+        setAnchorAlertConfig(next);
+      });
+      if (!EMERGENCY_DISABLE_LIVE_MAP_APIS) {
+        void fetch("/api/anchor/geofence", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ lastAlertAt: next.lastAlertAt, lastBearingDeg: next.lastBearingDeg }),
+          keepalive: true,
+        }).catch(() => undefined);
+      }
+      queueMicrotask(() =>
+        setActiveAnchorAlert({
+          id: `native-${now}`,
+          message: msg,
+          createdAt: new Date(now).toISOString(),
+        }),
+      );
+    }).then((h) => {
+      if (disposed) void h.remove();
+      else listener = h;
+    });
+    return () => {
+      disposed = true;
+      void listener?.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isCapacitorAndroidNative()) return;
+    if (!anchorCfg.armed || anchorCfg.lat == null || anchorCfg.lng == null) {
+      void stopAndroidAnchorNativeMonitoringIfNeeded();
+      return;
+    }
+    const mid = anchorCfg.monitorDeviceId;
+    const monitorsThis = mid === "this" || mid === deviceId;
+    if (!monitorsThis) {
+      void stopAndroidAnchorNativeMonitoringIfNeeded();
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const st = await getAndroidAnchorMonitoringPermissionStatus();
+      if (cancelled) return;
+      if (!st.fineLocation || !st.postNotifications || !st.backgroundLocation) return;
+      await startAndroidAnchorForegroundMonitoring({
+        monitorDeviceId: mid,
+        deviceId,
+        lat: anchorCfg.lat,
+        lng: anchorCfg.lng,
+        radiusM: anchorCfg.radiusM,
+        angleDeg: anchorCfg.angleDeg,
+        lastBearingDeg: anchorCfg.lastBearingDeg,
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    anchorCfg.armed,
+    anchorCfg.lat,
+    anchorCfg.lng,
+    anchorCfg.radiusM,
+    anchorCfg.angleDeg,
+    anchorCfg.monitorDeviceId,
+    deviceId,
+  ]);
+
   const [alarmBlocked, setAlarmBlocked] = useState(false);
   const deviceId = useMemo(() => (typeof window !== "undefined" ? getOrCreateDeviceId() : "server"), []);
   const localDeviceName = useMemo(() => (typeof window !== "undefined" ? getDeviceName() : ""), []);

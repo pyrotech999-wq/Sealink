@@ -1,5 +1,4 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
-import type { PluginListenerHandle } from "@capacitor/core";
 
 export type AnchorMonitoringPermissionStatus = {
   fineLocation: boolean;
@@ -24,7 +23,7 @@ export type SeaLinkAnchorAlertPlugin = {
   addListener(
     eventName: "nativeAnchorBreach",
     listener: (info: NativeAnchorBreachPayload) => void,
-  ): Promise<PluginListenerHandle>;
+  ): Promise<{ remove: () => Promise<void> }>;
   removeAllListeners(): Promise<void>;
 };
 

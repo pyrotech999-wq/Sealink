@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { invalidateMeSubscriptionCache } from "@/lib/client/me-subscription";
 import { invalidateDemoMeCache } from "@/lib/client/demo-me";
+import { stopAndroidAnchorNativeMonitoringIfNeeded } from "@/lib/capacitor-anchor-alert-android";
 
 type Props = { signedIn: boolean; isAdmin?: boolean };
 
@@ -13,6 +14,7 @@ export function HomeHeader({ signedIn, isAdmin = false }: Props) {
   async function signOutDemo() {
     setBusy(true);
     try {
+      await stopAndroidAnchorNativeMonitoringIfNeeded();
       await fetch("/api/demo/sign-out", { method: "POST" });
       invalidateMeSubscriptionCache();
       invalidateDemoMeCache();
