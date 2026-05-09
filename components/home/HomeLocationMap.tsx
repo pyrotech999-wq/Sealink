@@ -61,6 +61,7 @@ import {
   getAndroidAnchorMonitoringPermissionStatus,
   isCapacitorAndroidNative,
   readAnchorAndroidTestModeFromStorage,
+  type NativeAnchorBreachPayload,
   SeaLinkAnchorAlert,
   startAndroidAnchorForegroundMonitoring,
   stopAndroidAnchorNativeMonitoringIfNeeded,
@@ -281,7 +282,7 @@ export default function HomeLocationMap({
     if (!isCapacitorAndroidNative()) return;
     let disposed = false;
     let listener: { remove: () => Promise<void> } | undefined;
-    void SeaLinkAnchorAlert.addListener("nativeAnchorBreach", (e) => {
+    void SeaLinkAnchorAlert.addListener("nativeAnchorBreach", (e: NativeAnchorBreachPayload) => {
       const msg = typeof e.message === "string" ? e.message : "Anchor alert";
       const now = Date.now();
       const cur = anchorCfgRef.current;

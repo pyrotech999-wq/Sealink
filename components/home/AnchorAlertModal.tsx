@@ -235,7 +235,9 @@ export function AnchorAlertModal({
       void (async () => {
         try {
           const s = await fetchNativeAnchorStatus();
-          if (Number.isFinite(s.lastDistanceMeters)) setAndroidNativeDistanceM(s.lastDistanceMeters);
+          if (typeof s.lastDistanceMeters === "number" && Number.isFinite(s.lastDistanceMeters)) {
+            setAndroidNativeDistanceM(s.lastDistanceMeters);
+          }
         } catch {
           /* ignore */
         }

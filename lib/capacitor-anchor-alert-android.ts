@@ -22,7 +22,7 @@ export type NativeAnchorStatus = {
   lastFixTimeMs: number;
 };
 
-type NativeAnchorBreachPayload = { message?: string; fromNative?: boolean };
+export type NativeAnchorBreachPayload = { message?: string; fromNative?: boolean };
 
 export type SeaLinkAnchorAlertPlugin = {
   requestPostNotifications(): Promise<{ status: string }>;
@@ -40,10 +40,7 @@ export type SeaLinkAnchorAlertPlugin = {
   getNativeAnchorStatus(): Promise<NativeAnchorStatus>;
   clearNativeDriftAlarm(): Promise<NativeAnchorStatus>;
   setTestMode(opts: { enabled: boolean }): Promise<void>;
-  addListener(
-    eventName: "nativeAnchorBreach" | "nativeAnchorStatus",
-    listener: (info: NativeAnchorBreachPayload | NativeAnchorStatus) => void,
-  ): Promise<{ remove: () => Promise<void> }>;
+  addListener(eventName: string, listener: (info: unknown) => void): Promise<{ remove: () => Promise<void> }>;
   removeAllListeners(): Promise<void>;
 };
 
