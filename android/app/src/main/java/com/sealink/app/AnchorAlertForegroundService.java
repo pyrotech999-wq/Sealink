@@ -75,7 +75,12 @@ public class AnchorAlertForegroundService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null && ACTION_STOP.equals(intent.getAction())) {
             stopLocationUpdates();
-            stopForeground(true);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_REMOVE);
+            } else {
+                //noinspection deprecation
+                stopForeground(true);
+            }
             stopSelf(startId);
             return START_NOT_STICKY;
         }
@@ -84,6 +89,8 @@ public class AnchorAlertForegroundService extends Service {
             stopSelf(startId);
             return START_NOT_STICKY;
         }
+
+        stopLocationUpdates();
 
         if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             Log.w(TAG, "start without ACCESS_FINE_LOCATION");
@@ -125,7 +132,12 @@ public class AnchorAlertForegroundService extends Service {
             fused.requestLocationUpdates(req, locationCallback, getMainLooper());
         } catch (SecurityException e) {
             Log.e(TAG, "requestLocationUpdates failed", e);
-            stopForeground(true);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_REMOVE);
+            } else {
+                //noinspection deprecation
+                stopForeground(true);
+            }
             stopSelf(startId);
         }
 
@@ -135,6 +147,12 @@ public class AnchorAlertForegroundService extends Service {
     @Override
     public void onDestroy() {
         stopLocationUpdates();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE);
+        } else {
+            //noinspection deprecation
+            stopForeground(true);
+        }
         super.onDestroy();
     }
 
@@ -173,7 +191,7 @@ public class AnchorAlertForegroundService extends Service {
         return new NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.anchor_alert_fg_notification_title))
             .setContentText(body)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(R.mipmap.ic_launcher)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(pi)
@@ -244,7 +262,7 @@ public class AnchorAlertForegroundService extends Service {
             new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle("SeaLink — anchor alert")
                 .setContentText(msg)
-                .setSmallIcon(android.R.drawable.ic_dialog_alert)
+                .setSmallIcon(R.mipmap.ic_launcher)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setAutoCancel(true)
                 .setOnlyAlertOnce(false)
