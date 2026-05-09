@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Capacitor } from "@capacitor/core";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ANCHOR_MAX_HORIZ_ACCURACY_M, type AnchorGpsQuality } from "@/lib/anchor-gps-stabilizer";
 import { GPS_REFINE_TARGET_ACCURACY_M } from "@/lib/gps-refinement";
@@ -12,6 +13,12 @@ import {
   type AnchorRadiusM,
   parseAnchorRadiusM,
 } from "@/lib/anchor-alert-storage";
+import {
+  isCapacitorAndroidNative,
+  requestAndroidAnchorMonitoringPermissions,
+  startAndroidAnchorForegroundMonitoring,
+  stopAndroidAnchorNativeMonitoringIfNeeded,
+} from "@/lib/capacitor-anchor-alert-android";
 
 async function registerSessionDevice(currentDeviceId: string): Promise<void> {
   if (!currentDeviceId || currentDeviceId === "server") return;
@@ -93,6 +100,10 @@ export function AnchorAlertModal({
   const [alertMode, setAlertMode] = useState<"this" | "other" | "both">("both");
   const [alertOtherId, setAlertOtherId] = useState<string>("");
   const [androidSettingsDidntOpen, setAndroidSettingsDidntOpen] = useState(false);
+  /** Android app only: in-app gate before system permission prompts for anchor background monitoring. */
+  const [androidAnchorPermissionGate, setAndroidAnchorPermissionGate] = useState(false);
+  const [androidAnchorPermissionBusy, setAndroidAnchorPermissionBusy] = useState(false);
+  const [androidAnchorPermissionError, setAndroidAnchorPermissionError] = useState<string | null>(null);
   const openRef = useRef(open);
   const androidSettingsTimerRef = useRef<number | null>(null);
   const androidNavCleanupRef = useRef<(() => void) | null>(null);
