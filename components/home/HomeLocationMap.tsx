@@ -83,6 +83,15 @@ const EMERGENCY_DISABLE_LIVE_MAP_APIS = true;
  */
 const EMERGENCY_REENABLE_MAP_LIVE_POLLING = true;
 
+/**
+ * When true with {@link EMERGENCY_DISABLE_LIVE_MAP_APIS}: anchor device list, registration, geofence sync, monitor
+ * config, alerts, and GPS reports to `/api/anchor/devices` still run so two-device anchor + Refresh devices work.
+ */
+const EMERGENCY_REENABLE_ANCHOR_LIVE_APIS = true;
+
+/** Skip anchor HTTP APIs only when the kill-switch is on and the anchor exception is off. */
+const ANCHOR_LIVE_APIS_BLOCKED = EMERGENCY_DISABLE_LIVE_MAP_APIS && !EMERGENCY_REENABLE_ANCHOR_LIVE_APIS;
+
 /** Safe-mode: nearby friends (≤ ~5 mi) on the Home map. */
 const EMERGENCY_REENABLE_NEARBY_PRESENCE = true;
 
@@ -292,7 +301,7 @@ export default function HomeLocationMap({
         setAnchorCfg(next);
         setAnchorAlertConfig(next);
       });
-      if (!EMERGENCY_DISABLE_LIVE_MAP_APIS) {
+      if (!ANCHOR_LIVE_APIS_BLOCKED) {
         void fetch("/api/anchor/geofence", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -516,7 +525,7 @@ export default function HomeLocationMap({
 
   // Report this device's last fix (for cross-device monitoring).
   useEffect(() => {
-    if (EMERGENCY_DISABLE_LIVE_MAP_APIS) return;
+    if (ANCHOR_LIVE_APIS_BLOCKED) return;
     if (!sharing || !pos) return;
     const now = Date.now();
     if (now - lastAnchorReportAt.current < 180_000) return; // 3 minutes
@@ -525,7 +534,8 @@ export default function HomeLocationMap({
     const payload = { deviceId, name, lat: pos.lat, lng: pos.lng };
     void fetch("/api/anchor/devices", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify(payload),
     });
   }, [sharing, pos?.lat, pos?.lng, deviceId]);
@@ -632,12 +642,12 @@ export default function HomeLocationMap({
 
   // Load server-backed geofence config so both devices can reset/sync.
   useEffect(() => {
-    if (EMERGENCY_DISABLE_LIVE_MAP_APIS) return;
+    if (ANCHOR_LIVE_APIS_BLOCKED) return;
     if (!sharing) return;
     let disposed = false;
     void (async () => {
       try {
-        const r = await fetch("/api/anchor/geofence", { cache: "no-store" });
+        const r = await fetch("/api/anchor/geofence", { credentials: "same-origin", cache: "no-store" });
         if (!r.ok) return;
         const d = (await r.json()) as { config?: typeof anchorCfg };
         const cfg = d.config;
@@ -663,7 +673,7 @@ export default function HomeLocationMap({
 
   // If monitoring another device, pull its latest fix periodically.
   useEffect(() => {
-    if (EMERGENCY_DISABLE_LIVE_MAP_APIS) {
+    if (ANCHOR_LIVE_APIS_BLOCKED) {
       queueMicrotask(() => setMonitoredFix(null));
       return;
     }
@@ -677,7 +687,7 @@ export default function HomeLocationMap({
     let disposed = false;
     const load = async () => {
       try {
-        const r = await fetch("/api/anchor/devices");
+        const r = await fetch("/api/anchor/devices", { credentials: "same-origin", cache: "no-store" });
         const d = (await r.json()) as { devices?: { deviceId: string; lastLat: number | null; lastLng: number | null; lastFixAt: string | null }[] };
         const row = d.devices?.find((x) => x.deviceId === effectiveMonitor);
         if (!row || row.lastLat == null || row.lastLng == null || !row.lastFixAt) return;
@@ -697,12 +707,12 @@ export default function HomeLocationMap({
 
   // Load server-backed monitor config (single monitor device + alert recipients).
   useEffect(() => {
-    if (EMERGENCY_DISABLE_LIVE_MAP_APIS) return;
+    if (ANCHOR_LIVE_APIS_BLOCKED) return;
     if (!sharing) return;
     let disposed = false;
     const load = async () => {
       try {
-        const r = await fetch("/api/anchor/monitor", { cache: "no-store" });
+        const r = await fetch("/api/anchor/monitor", { credentials: "same-origin", cache: "no-store" });
         if (!r.ok) return;
         const d = (await r.json()) as { config?: { monitorDeviceId: string | null; alertDeviceIds: string[] } };
         if (disposed) return;
@@ -795,7 +805,7 @@ export default function HomeLocationMap({
         const next = { ...anchorCfg, lastBearingDeg: brng };
         queueMicrotask(() => setAnchorCfg(next));
         setAnchorAlertConfig(next);
-        if (!EMERGENCY_DISABLE_LIVE_MAP_APIS) {
+        if (!ANCHOR_LIVE_APIS_BLOCKED) {
           void fetch("/api/anchor/geofence", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -832,7 +842,7 @@ export default function HomeLocationMap({
       const next = { ...anchorCfg, lastAlertAt: new Date(now).toISOString(), lastBearingDeg: brng };
       queueMicrotask(() => setAnchorCfg(next));
       setAnchorAlertConfig(next);
-      if (!EMERGENCY_DISABLE_LIVE_MAP_APIS) {
+      if (!ANCHOR_LIVE_APIS_BLOCKED) {
         void fetch("/api/anchor/geofence", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -846,7 +856,7 @@ export default function HomeLocationMap({
       if (angleTriggered) parts.push(`bearing changed ~${Math.round(angleDelta)}° (limit ${angleLimit}°)`);
       const msg = `Anchor alert: ${parts.join(" and ")}.`;
 
-      if (EMERGENCY_DISABLE_LIVE_MAP_APIS) {
+      if (ANCHOR_LIVE_APIS_BLOCKED) {
         if (!activeAnchorAlertRef.current) {
           setActiveAnchorAlert({ id: `local-${now}`, message: msg, createdAt: new Date(now).toISOString() });
         }
@@ -923,12 +933,12 @@ export default function HomeLocationMap({
 
   // Anchor alert inbox poll (keeps alerts in sync across both devices).
   useEffect(() => {
-    if (EMERGENCY_DISABLE_LIVE_MAP_APIS) return;
+    if (ANCHOR_LIVE_APIS_BLOCKED) return;
     if (!sharing) return;
     let disposed = false;
     const load = async () => {
       try {
-        const r = await fetch("/api/anchor/alerts", { cache: "no-store" });
+        const r = await fetch("/api/anchor/alerts", { credentials: "same-origin", cache: "no-store" });
         if (!r.ok) return;
         const d = (await r.json()) as { alerts?: { id: string; message: string; createdAt: string; kind?: string }[] };
         const list = Array.isArray(d.alerts) ? d.alerts : [];
@@ -951,7 +961,7 @@ export default function HomeLocationMap({
 
   // Display label for which device is being monitored.
   useEffect(() => {
-    if (EMERGENCY_DISABLE_LIVE_MAP_APIS) return;
+    if (ANCHOR_LIVE_APIS_BLOCKED) return;
     if (!anchorCfg.armed) {
       queueMicrotask(() => setMonitorDeviceLabel(""));
       return;
@@ -965,7 +975,7 @@ export default function HomeLocationMap({
     let disposed = false;
     const load = async () => {
       try {
-        const r = await fetch("/api/anchor/devices", { cache: "no-store" });
+        const r = await fetch("/api/anchor/devices", { credentials: "same-origin", cache: "no-store" });
         const d = (await r.json()) as {
           devices?: { deviceId: string; name: string; updatedAt: string; lastFixAt: string | null }[];
         };
@@ -2024,7 +2034,7 @@ export default function HomeLocationMap({
                 if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
                 const seenId = activeAnchorAlert.id;
                 void (async () => {
-                  if (!EMERGENCY_DISABLE_LIVE_MAP_APIS) {
+                  if (!ANCHOR_LIVE_APIS_BLOCKED) {
                     try {
                       await fetch("/api/anchor/alerts", {
                         method: "POST",
@@ -2036,7 +2046,7 @@ export default function HomeLocationMap({
                     }
                   }
 
-                  if (!EMERGENCY_DISABLE_LIVE_MAP_APIS) {
+                  if (!ANCHOR_LIVE_APIS_BLOCKED) {
                     try {
                       const serverMonitor = anchorMonitor?.monitorDeviceId;
                       const effectiveMonitor = serverMonitor
@@ -2047,7 +2057,7 @@ export default function HomeLocationMap({
                       let fix: { lat: number; lng: number } | null = null;
                       if (effectiveMonitor === deviceId && pos) fix = { lat: pos.lat, lng: pos.lng };
                       if (!fix) {
-                        const r = await fetch("/api/anchor/devices", { cache: "no-store" });
+                        const r = await fetch("/api/anchor/devices", { credentials: "same-origin", cache: "no-store" });
                         const d = (await r.json()) as {
                           devices?: { deviceId: string; lastLat: number | null; lastLng: number | null }[];
                         };
@@ -2103,7 +2113,7 @@ export default function HomeLocationMap({
               onClick={() => {
                 stopAlarm();
                 if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
-                if (EMERGENCY_DISABLE_LIVE_MAP_APIS) {
+                if (ANCHOR_LIVE_APIS_BLOCKED) {
                   setActiveAnchorAlert(null);
                   return;
                 }
@@ -2136,7 +2146,7 @@ export default function HomeLocationMap({
         <AnchorAlertModal
           open={anchorOpen}
           onClose={() => setAnchorOpen(false)}
-          emergencyDisableLiveMapApis={EMERGENCY_DISABLE_LIVE_MAP_APIS}
+          emergencyDisableLiveMapApis={ANCHOR_LIVE_APIS_BLOCKED}
           sharing={sharing}
           hasFix={Boolean(pos)}
           pos={pos ? { lat: pos.lat, lng: pos.lng } : null}
@@ -2164,7 +2174,7 @@ export default function HomeLocationMap({
             };
             setAnchorCfg(merged);
             setAnchorAlertConfig(merged);
-            if (!EMERGENCY_DISABLE_LIVE_MAP_APIS && sharing) {
+            if (!ANCHOR_LIVE_APIS_BLOCKED && sharing) {
               void fetch("/api/anchor/geofence", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
