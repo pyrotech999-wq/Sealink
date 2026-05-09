@@ -4,7 +4,7 @@
  * First play may require a user gesture — same as other web audio.
  */
 
-export const ANCHOR_ALERT_AUDIO_PUBLIC_PATH = "/sounds/anchor-alert-dial-999.mp3";
+export const ANCHOR_ALERT_AUDIO_PUBLIC_PATH = "/sounds/bbc_dial-999--_07045259.mp3";
 
 const REPEAT_INTERVAL_MS = 5 * 60 * 1000;
 const MAX_SOUND_DURATION_MS = 3 * 60 * 60 * 1000;
