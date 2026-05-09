@@ -74,6 +74,8 @@ type Props = {
     monitorDeviceId: string;
     lastBearingDeg?: number | null;
   }) => void;
+  /** After a successful POST to `/api/anchor/monitor`, mirrors server monitor + alert IDs into map state (avoids waiting for the poll). */
+  onMonitorRolesSaved?: (next: { monitorDeviceId: string | null; alertDeviceIds: string[] }) => void;
 };
 
 const ANGLE_OFF = 360;
@@ -108,6 +110,7 @@ export function AnchorAlertModal({
   config,
   monitor,
   onUpdate,
+  onMonitorRolesSaved,
 }: Props) {
   const [radius, setRadius] = useState<string>(String(config.radiusM));
   const [angleDeg, setAngleDeg] = useState<string>(String(config.angleDeg ?? ANGLE_OFF));
@@ -579,7 +582,15 @@ export function AnchorAlertModal({
                             setRolesSaveHint(err.error ?? "Could not save. Try again.");
                             return;
                           }
+                          onMonitorRolesSaved?.({
+                            monitorDeviceId: monitorResolved,
+                            alertDeviceIds: alertIds,
+                          });
                         }
+                        onUpdateRef.current({
+                          ...configRef.current,
+                          monitorDeviceId,
+                        });
                         setRolesSaveHint("Saved — monitor and alert devices are updated on your account.");
                       } catch {
                         setRolesSaveHint("Network error saving.");

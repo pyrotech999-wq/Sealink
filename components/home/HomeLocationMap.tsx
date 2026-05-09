@@ -2172,6 +2172,7 @@ export default function HomeLocationMap({
               }).catch(() => undefined);
             }
           }}
+          onMonitorRolesSaved={(cfg) => setAnchorMonitor(cfg)}
         />
       ) : null}
     </section>
