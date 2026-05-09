@@ -643,7 +643,10 @@ export default function HomeLocationMap({
           ? 12 // we don't have accuracy for remote fixes; be conservative
           : Math.max(8, Math.round(pos?.accuracyM || 0));
 
-      if (anchorCfg.lastBearingDeg == null && Number.isFinite(brng)) {
+      const angleLimit = Math.max(0, Math.min(360, Math.round(anchorCfg.angleDeg ?? 360)));
+
+      /* Bearing baseline only matters when angle-change alerts are enabled; drift uses distance only. */
+      if (anchorCfg.lastBearingDeg == null && Number.isFinite(brng) && angleLimit < 360) {
         const next = { ...anchorCfg, lastBearingDeg: brng };
         queueMicrotask(() => setAnchorCfg(next));
         setAnchorAlertConfig(next);
@@ -657,8 +660,6 @@ export default function HomeLocationMap({
         }
         return;
       }
-
-      const angleLimit = Math.max(0, Math.min(360, Math.round(anchorCfg.angleDeg ?? 360)));
       const angleDelta =
         anchorCfg.lastBearingDeg != null && angleLimit < 360 ? angleDiffDeg(brng, anchorCfg.lastBearingDeg) : 0;
 
@@ -713,10 +714,30 @@ export default function HomeLocationMap({
               body: JSON.stringify({ message: msg, kind: "alert" }),
               keepalive: true,
             });
-            if (!r.ok) {
-              if (!activeAnchorAlertRef.current) {
-                setActiveAnchorAlert({ id: `local-${now}`, message: msg, createdAt: new Date(now).toISOString() });
+            if (r.ok) {
+              try {
+                const data = (await r.json()) as {
+                  alert?: { id?: string; message?: string; createdAt?: string; created_at?: string };
+                };
+                const a = data?.alert;
+                const id = typeof a?.id === "string" ? a.id : "";
+                const text = typeof a?.message === "string" ? a.message : "";
+                const created =
+                  typeof a?.createdAt === "string"
+                    ? a.createdAt
+                    : typeof a?.created_at === "string"
+                      ? a.created_at
+                      : new Date(now).toISOString();
+                if (id && text && !activeAnchorAlertRef.current) {
+                  setActiveAnchorAlert({ id, message: text, createdAt: created });
+                }
+              } catch {
+                if (!activeAnchorAlertRef.current) {
+                  setActiveAnchorAlert({ id: `local-${now}`, message: msg, createdAt: new Date(now).toISOString() });
+                }
               }
+            } else if (!activeAnchorAlertRef.current) {
+              setActiveAnchorAlert({ id: `local-${now}`, message: msg, createdAt: new Date(now).toISOString() });
             }
           } catch {
             if (!activeAnchorAlertRef.current) {
@@ -774,13 +795,14 @@ export default function HomeLocationMap({
         /* ignore */
       }
     };
+    const pollMs = anchorCfg.armed ? 15_000 : 60_000;
     void load();
-    const id = window.setInterval(() => void load(), 60_000);
+    const id = window.setInterval(() => void load(), pollMs);
     return () => {
       disposed = true;
       window.clearInterval(id);
     };
-  }, [sharing, anchorMonitor?.alertDeviceIds, deviceId]);
+  }, [sharing, anchorMonitor?.alertDeviceIds, deviceId, anchorCfg.armed]);
 
   // Display label for which device is being monitored.
   useEffect(() => {
