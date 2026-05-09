@@ -32,7 +32,6 @@ public class AnchorAlertForegroundService extends Service {
 
     public static final String ACTION_START = "com.sealink.app.anchor.START";
     public static final String ACTION_STOP = "com.sealink.app.anchor.STOP";
-    public static final String ACTION_CLEAR_DRIFT = "com.sealink.app.anchor.CLEAR_DRIFT";
     public static final String BROADCAST_BREACH = "com.sealink.app.anchor.BREACH";
     public static final String BROADCAST_STATUS = "com.sealink.app.anchor.STATUS";
 
@@ -74,6 +73,13 @@ public class AnchorAlertForegroundService extends Service {
         tmp.stop();
         AnchorAlertForegroundService inst = runningInstance;
         if (inst != null) inst.alarmController.stop();
+        sendStatusBroadcastStatic(context);
+    }
+
+    public static void sendStatusBroadcastStatic(Context context) {
+        Intent i = new Intent(BROADCAST_STATUS);
+        i.setPackage(context.getPackageName());
+        context.sendBroadcast(i);
     }
 
     @Override
@@ -87,18 +93,6 @@ public class AnchorAlertForegroundService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent != null && ACTION_CLEAR_DRIFT.equals(intent.getAction())) {
-            alarmController.stop();
-            SharedPreferences sp = AnchorAlertPrefs.prefs(this);
-            sp.edit()
-                .putBoolean(AnchorAlertPrefs.KEY_DRIFT_ALARM_PENDING, false)
-                .putBoolean(AnchorAlertPrefs.KEY_SUPPRESS_UNTIL_INSIDE, true)
-                .putBoolean(AnchorAlertPrefs.KEY_NATIVE_ALARM_PLAYING, false)
-                .apply();
-            sendStatusBroadcast();
-            return START_STICKY;
-        }
-
         if (intent != null && ACTION_STOP.equals(intent.getAction())) {
             shutdownMonitoring();
             stopSelf(startId);

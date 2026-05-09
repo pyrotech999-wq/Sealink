@@ -369,7 +369,11 @@ export default function HomeLocationMap({
         const latch = Boolean(s.driftAlarmPending || s.nativeAlarmPlaying);
         nativeAudioLatchRef.current = latch;
         if (latch) stopAnchorAlarmSiren();
-        if (s.driftAlarmPending && typeof s.lastAlarmMessage === "string" && s.lastAlarmMessage.trim()) {
+        if (
+          s.driftAlarmPending &&
+          typeof s.lastAlarmMessage === "string" &&
+          s.lastAlarmMessage.trim()
+        ) {
           const cur = activeAnchorAlertRef.current;
           if (!cur || cur.id.startsWith("native-")) {
             setActiveAnchorAlert({

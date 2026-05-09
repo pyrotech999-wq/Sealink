@@ -8,23 +8,21 @@ export type AnchorMonitoringPermissionStatus = {
 
 export type NativeAnchorStatus = {
   alarmActive: boolean;
-  anchorLat: number;
-  anchorLng: number;
+  anchorLat?: number;
+  anchorLng?: number;
   radiusMeters: number;
   testMode: boolean;
-  lastDistanceMeters: number;
+  lastDistanceMeters?: number;
   driftAlarmPending: boolean;
   nativeAlarmPlaying: boolean;
   suppressUntilInside: boolean;
   lastAlarmMessage?: string;
-  lastFixLat: number;
-  lastFixLng: number;
+  lastFixLat?: number;
+  lastFixLng?: number;
   lastFixTimeMs: number;
 };
 
 type NativeAnchorBreachPayload = { message?: string; fromNative?: boolean };
-
-type NativeAnchorStatusPayload = NativeAnchorStatus;
 
 export type SeaLinkAnchorAlertPlugin = {
   requestPostNotifications(): Promise<{ status: string }>;
@@ -43,12 +41,8 @@ export type SeaLinkAnchorAlertPlugin = {
   clearNativeDriftAlarm(): Promise<NativeAnchorStatus>;
   setTestMode(opts: { enabled: boolean }): Promise<void>;
   addListener(
-    eventName: "nativeAnchorBreach",
-    listener: (info: NativeAnchorBreachPayload) => void,
-  ): Promise<{ remove: () => Promise<void> }>;
-  addListener(
-    eventName: "nativeAnchorStatus",
-    listener: (info: NativeAnchorStatusPayload) => void,
+    eventName: "nativeAnchorBreach" | "nativeAnchorStatus",
+    listener: (info: NativeAnchorBreachPayload | NativeAnchorStatus) => void,
   ): Promise<{ remove: () => Promise<void> }>;
   removeAllListeners(): Promise<void>;
 };

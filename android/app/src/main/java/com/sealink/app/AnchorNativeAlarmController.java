@@ -171,7 +171,11 @@ public final class AnchorNativeAlarmController {
             mediaPlayer.setAudioAttributes(attrs);
             mediaPlayer.setDataSource(appCtx, uri);
             mediaPlayer.setLooping(true);
-            mediaPlayer.setOnPreparedListener(MediaPlayer::start);
+            mediaPlayer.setVolume(1f, 1f);
+            mediaPlayer.setOnPreparedListener(mp -> {
+                mp.setVolume(1f, 1f);
+                mp.start();
+            });
             mediaPlayer.prepareAsync();
         } catch (IOException e) {
             Log.e("ANCHOR_NATIVE_ALARM_PLAYING", "MediaPlayer failed", e);

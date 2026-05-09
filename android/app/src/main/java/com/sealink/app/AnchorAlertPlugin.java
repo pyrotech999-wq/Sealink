@@ -40,20 +40,26 @@ public class AnchorAlertPlugin extends Plugin {
         SharedPreferences sp = AnchorAlertPrefs.prefs(ctx);
         JSObject o = new JSObject();
         o.put("alarmActive", sp.getBoolean(AnchorAlertPrefs.KEY_ALARM_ACTIVE, false));
-        o.put("anchorLat", (double) sp.getFloat(AnchorAlertPrefs.KEY_ANCHOR_LAT, Float.NaN));
-        o.put("anchorLng", (double) sp.getFloat(AnchorAlertPrefs.KEY_ANCHOR_LNG, Float.NaN));
+        putIfFinite(o, "anchorLat", sp, AnchorAlertPrefs.KEY_ANCHOR_LAT);
+        putIfFinite(o, "anchorLng", sp, AnchorAlertPrefs.KEY_ANCHOR_LNG);
         o.put("radiusMeters", (double) sp.getFloat(AnchorAlertPrefs.KEY_RADIUS_METERS, 0f));
         o.put("testMode", sp.getBoolean(AnchorAlertPrefs.KEY_TEST_MODE, false));
-        o.put("lastDistanceMeters", (double) sp.getFloat(AnchorAlertPrefs.KEY_LAST_DISTANCE_METERS, Float.NaN));
+        putIfFinite(o, "lastDistanceMeters", sp, AnchorAlertPrefs.KEY_LAST_DISTANCE_METERS);
         o.put("driftAlarmPending", sp.getBoolean(AnchorAlertPrefs.KEY_DRIFT_ALARM_PENDING, false));
         o.put("nativeAlarmPlaying", sp.getBoolean(AnchorAlertPrefs.KEY_NATIVE_ALARM_PLAYING, false));
         o.put("suppressUntilInside", sp.getBoolean(AnchorAlertPrefs.KEY_SUPPRESS_UNTIL_INSIDE, false));
         String msg = sp.getString(AnchorAlertPrefs.KEY_LAST_ALARM_MESSAGE, null);
         if (msg != null) o.put("lastAlarmMessage", msg);
-        o.put("lastFixLat", (double) sp.getFloat(AnchorAlertPrefs.KEY_LAST_FIX_LAT, Float.NaN));
-        o.put("lastFixLng", (double) sp.getFloat(AnchorAlertPrefs.KEY_LAST_FIX_LNG, Float.NaN));
+        putIfFinite(o, "lastFixLat", sp, AnchorAlertPrefs.KEY_LAST_FIX_LAT);
+        putIfFinite(o, "lastFixLng", sp, AnchorAlertPrefs.KEY_LAST_FIX_LNG);
         o.put("lastFixTimeMs", sp.getLong(AnchorAlertPrefs.KEY_LAST_FIX_TIME_MS, 0L));
         return o;
+    }
+
+    private static void putIfFinite(JSObject o, String key, SharedPreferences sp, String prefKey) {
+        if (!sp.contains(prefKey)) return;
+        float v = sp.getFloat(prefKey, Float.NaN);
+        if (Float.isFinite(v)) o.put(key, (double) v);
     }
 
     @Override
@@ -189,7 +195,8 @@ public class AnchorAlertPlugin extends Plugin {
         Double lng = call.getDouble("anchorLng");
         Double radius = call.getDouble("radiusM");
         Integer angle = call.getInt("angleDeg", 360);
-        boolean testMode = Boolean.TRUE.equals(call.getBoolean("testMode", false));
+        Boolean tm = call.getBoolean("testMode", false);
+        boolean testMode = Boolean.TRUE.equals(tm);
 
         if (lat == null || lng == null || radius == null || !Double.isFinite(lat) || !Double.isFinite(lng) || !Double.isFinite(radius)) {
             call.reject("anchorLat, anchorLng, and radiusM are required.");
@@ -246,12 +253,7 @@ public class AnchorAlertPlugin extends Plugin {
     @PluginMethod
     public void clearNativeDriftAlarm(PluginCall call) {
         AnchorAlertForegroundService.clearDriftDismissFromUser(getContext());
-        Intent i = new Intent(getContext(), AnchorAlertForegroundService.class);
-        i.setAction(AnchorAlertForegroundService.ACTION_CLEAR_DRIFT);
-        try {
-            getContext().startService(i);
-        } catch (Exception ignored) {
-        }
+        notifyListeners("nativeAnchorStatus", buildStatusJson(getContext()), false);
         call.resolve(buildStatusJson(getContext()));
     }
 
