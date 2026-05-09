@@ -13,10 +13,14 @@ import {
   parseAnchorRadiusM,
 } from "@/lib/anchor-alert-storage";
 import {
+  fetchNativeAnchorStatus,
   isCapacitorAndroidNative,
+  readAnchorAndroidTestModeFromStorage,
   requestAndroidAnchorMonitoringPermissions,
+  setNativeAnchorTestMode,
   startAndroidAnchorForegroundMonitoring,
   stopAndroidAnchorNativeMonitoringIfNeeded,
+  writeAnchorAndroidTestModeToStorage,
 } from "@/lib/capacitor-anchor-alert-android";
 
 async function registerSessionDevice(currentDeviceId: string): Promise<void> {
@@ -105,6 +109,10 @@ export function AnchorAlertModal({
   const [androidAnchorPermissionGate, setAndroidAnchorPermissionGate] = useState(false);
   const [androidAnchorPermissionBusy, setAndroidAnchorPermissionBusy] = useState(false);
   const [androidAnchorPermissionError, setAndroidAnchorPermissionError] = useState<string | null>(null);
+  const [androidNativeTestMode, setAndroidNativeTestMode] = useState(() =>
+    typeof window !== "undefined" ? readAnchorAndroidTestModeFromStorage() : false,
+  );
+  const [androidNativeDistanceM, setAndroidNativeDistanceM] = useState<number | null>(null);
   const openRef = useRef(open);
   const androidSettingsTimerRef = useRef<number | null>(null);
   const androidNavCleanupRef = useRef<(() => void) | null>(null);
@@ -192,6 +200,7 @@ export function AnchorAlertModal({
       setAndroidAnchorPermissionGate(false);
       setAndroidAnchorPermissionBusy(false);
       setAndroidAnchorPermissionError(null);
+      setAndroidNativeDistanceM(null);
     });
   }, [open]);
 
@@ -214,6 +223,26 @@ export function AnchorAlertModal({
     if (!open) return;
     queueMicrotask(() => setRadius(String(config.radiusM)));
   }, [open, config.radiusM]);
+
+  useEffect(() => {
+    if (!open) return;
+    queueMicrotask(() => setAndroidNativeTestMode(readAnchorAndroidTestModeFromStorage()));
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || !isCapacitorAndroidNative() || monitorDeviceId !== "this") return;
+    const id = window.setInterval(() => {
+      void (async () => {
+        try {
+          const s = await fetchNativeAnchorStatus();
+          if (Number.isFinite(s.lastDistanceMeters)) setAndroidNativeDistanceM(s.lastDistanceMeters);
+        } catch {
+          /* ignore */
+        }
+      })();
+    }, 2000);
+    return () => window.clearInterval(id);
+  }, [open, monitorDeviceId]);
 
   if (!open) return null;
 
@@ -248,6 +277,37 @@ export function AnchorAlertModal({
           <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
             {hint}
           </p>
+        ) : null}
+
+        {isCapacitorAndroidNative() && monitorDeviceId === "this" ? (
+          <div className="mt-3 rounded-lg border border-purple-200 bg-purple-50 px-3 py-2.5 text-xs leading-5 text-purple-950 dark:border-purple-900/50 dark:bg-purple-950/35 dark:text-purple-50">
+            <label className="flex cursor-pointer items-start gap-2">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 shrink-0 rounded border-purple-400 text-purple-700"
+                checked={androidNativeTestMode}
+                onChange={(e) => {
+                  const on = e.target.checked;
+                  setAndroidNativeTestMode(on);
+                  writeAnchorAndroidTestModeToStorage(on);
+                  void setNativeAnchorTestMode(on);
+                }}
+              />
+              <span>
+                <span className="font-semibold text-purple-900 dark:text-purple-100">Native test mode (Android)</span>
+                <span className="mt-1 block text-[11px] font-normal text-purple-900/85 dark:text-purple-100/85">
+                  Uses a <strong className="font-semibold">5 m</strong> radius on the device for drift checks and shows the
+                  latest native-computed distance to your anchor (logcat tags{" "}
+                  <span className="font-mono text-[10px]">ANCHOR_DISTANCE_METERS</span>, etc.).
+                </span>
+              </span>
+            </label>
+            {androidNativeTestMode && androidNativeDistanceM != null && Number.isFinite(androidNativeDistanceM) ? (
+              <p className="mt-2 rounded-md bg-white/80 px-2 py-1.5 font-mono text-[11px] text-purple-950 dark:bg-purple-900/40 dark:text-purple-100">
+                Latest native distance: {androidNativeDistanceM.toFixed(1)} m
+              </p>
+            ) : null}
+          </div>
         ) : null}
 
         {showIOSPreciseHint ? (
@@ -613,6 +673,7 @@ export function AnchorAlertModal({
                           radiusM: n,
                           angleDeg: a,
                           lastBearingDeg: config.lastBearingDeg,
+                          testMode: readAnchorAndroidTestModeFromStorage(),
                         });
                         setAndroidAnchorPermissionGate(false);
                         onClose();
@@ -678,6 +739,7 @@ export function AnchorAlertModal({
                   radiusM: n,
                   angleDeg: a,
                   lastBearingDeg: config.lastBearingDeg,
+                  testMode: readAnchorAndroidTestModeFromStorage(),
                 });
                 onClose();
               }}

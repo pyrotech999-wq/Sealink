@@ -56,8 +56,11 @@ import {
 } from "@/lib/gps-refinement";
 import { isLikelyIOS } from "@/lib/location-env";
 import {
+  clearNativeAndroidAnchorAlarm,
+  fetchNativeAnchorStatus,
   getAndroidAnchorMonitoringPermissionStatus,
   isCapacitorAndroidNative,
+  readAnchorAndroidTestModeFromStorage,
   SeaLinkAnchorAlert,
   startAndroidAnchorForegroundMonitoring,
   stopAndroidAnchorNativeMonitoringIfNeeded,
@@ -268,6 +271,9 @@ export default function HomeLocationMap({
     activeAnchorAlertRef.current = activeAnchorAlert;
   }, [activeAnchorAlert]);
 
+  /** When true, native Android MediaPlayer handles the siren — skip Web Audio. */
+  const nativeAudioLatchRef = useRef(false);
+
   const [alarmBlocked, setAlarmBlocked] = useState(false);
   const deviceId = useMemo(() => (typeof window !== "undefined" ? getOrCreateDeviceId() : "server"), []);
 
@@ -337,12 +343,59 @@ export default function HomeLocationMap({
         radiusM: anchorCfg.radiusM,
         angleDeg: anchorCfg.angleDeg,
         lastBearingDeg: anchorCfg.lastBearingDeg,
+        testMode: readAnchorAndroidTestModeFromStorage(),
       });
     })();
     return () => {
       cancelled = true;
     };
   }, [anchorCfg.armed, anchorCfg.lat, anchorCfg.lng, anchorCfg.radiusM, anchorCfg.angleDeg, anchorCfg.monitorDeviceId, deviceId]);
+
+  // Native Android: poll drift/alarm status so UI can open after a background breach; suppress Web Audio when native plays.
+  useEffect(() => {
+    if (!isCapacitorAndroidNative()) return;
+    if (!anchorCfg.armed) {
+      nativeAudioLatchRef.current = false;
+      return;
+    }
+    const mid = anchorCfg.monitorDeviceId;
+    if (!(mid === "this" || mid === deviceId)) return;
+
+    let disposed = false;
+    const tick = async () => {
+      try {
+        const s = await fetchNativeAnchorStatus();
+        if (disposed) return;
+        const latch = Boolean(s.driftAlarmPending || s.nativeAlarmPlaying);
+        nativeAudioLatchRef.current = latch;
+        if (latch) stopAnchorAlarmSiren();
+        if (s.driftAlarmPending && typeof s.lastAlarmMessage === "string" && s.lastAlarmMessage.trim()) {
+          const cur = activeAnchorAlertRef.current;
+          if (!cur || cur.id.startsWith("native-")) {
+            setActiveAnchorAlert({
+              id: `native-${s.lastFixTimeMs || Date.now()}`,
+              message: s.lastAlarmMessage,
+              createdAt: new Date().toISOString(),
+            });
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+    void tick();
+    const id = window.setInterval(() => void tick(), 2500);
+    const onVis = () => {
+      if (document.visibilityState === "visible") void tick();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      disposed = true;
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [anchorCfg.armed, anchorCfg.monitorDeviceId, deviceId]);
+
   const localDeviceName = useMemo(() => (typeof window !== "undefined" ? getDeviceName() : ""), []);
   const [monitorDeviceLabel, setMonitorDeviceLabel] = useState<string>("");
   const [anchorMonitor, setAnchorMonitor] = useState<{ monitorDeviceId: string | null; alertDeviceIds: string[] } | null>(null);
@@ -707,6 +760,11 @@ export default function HomeLocationMap({
     const runCheck = () => {
       const anchorCfg = anchorCfgRef.current;
       if (!anchorCfg.armed || anchorCfg.lat == null || anchorCfg.lng == null) return;
+      if (isCapacitorAndroidNative()) {
+        const mid = anchorCfg.monitorDeviceId;
+        const monitorsThis = mid === "this" || mid === deviceId;
+        if (monitorsThis) return;
+      }
       const pos = posRef.current;
       const monitoredFix = monitoredFixRef.current;
       const src =
@@ -928,6 +986,10 @@ export default function HomeLocationMap({
 
   async function startAlarm(): Promise<void> {
     stopAlarm();
+    if (nativeAudioLatchRef.current) {
+      setAlarmBlocked(false);
+      return;
+    }
     const ok = await startAnchorAlarmSiren();
     if (!ok) {
       setAlarmBlocked(true);
@@ -1953,6 +2015,7 @@ export default function HomeLocationMap({
               type="button"
               onClick={() => {
                 stopAlarm();
+                if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
                 const seenId = activeAnchorAlert.id;
                 void (async () => {
                   if (!EMERGENCY_DISABLE_LIVE_MAP_APIS) {
@@ -2033,6 +2096,7 @@ export default function HomeLocationMap({
               type="button"
               onClick={() => {
                 stopAlarm();
+                if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
                 if (EMERGENCY_DISABLE_LIVE_MAP_APIS) {
                   setActiveAnchorAlert(null);
                   return;
