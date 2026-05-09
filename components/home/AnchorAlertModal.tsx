@@ -55,6 +55,7 @@ type Props = {
     radiusM: AnchorRadiusM;
     angleDeg: number;
     monitorDeviceId: string;
+    lastBearingDeg?: number | null;
   };
   monitor: {
     monitorDeviceId: string | null;
@@ -67,6 +68,7 @@ type Props = {
     radiusM: AnchorRadiusM;
     angleDeg: number;
     monitorDeviceId: string;
+    lastBearingDeg?: number | null;
   }) => void;
 };
 

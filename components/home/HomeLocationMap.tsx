@@ -268,6 +268,9 @@ export default function HomeLocationMap({
     activeAnchorAlertRef.current = activeAnchorAlert;
   }, [activeAnchorAlert]);
 
+  const [alarmBlocked, setAlarmBlocked] = useState(false);
+  const deviceId = useMemo(() => (typeof window !== "undefined" ? getOrCreateDeviceId() : "server"), []);
+
   useEffect(() => {
     if (!isCapacitorAndroidNative()) return;
     let disposed = false;
@@ -308,7 +311,9 @@ export default function HomeLocationMap({
 
   useEffect(() => {
     if (!isCapacitorAndroidNative()) return;
-    if (!anchorCfg.armed || anchorCfg.lat == null || anchorCfg.lng == null) {
+    const lat = anchorCfg.lat;
+    const lng = anchorCfg.lng;
+    if (!anchorCfg.armed || lat == null || lng == null) {
       void stopAndroidAnchorNativeMonitoringIfNeeded();
       return;
     }
@@ -327,8 +332,8 @@ export default function HomeLocationMap({
       await startAndroidAnchorForegroundMonitoring({
         monitorDeviceId: mid,
         deviceId,
-        lat: anchorCfg.lat,
-        lng: anchorCfg.lng,
+        lat,
+        lng,
         radiusM: anchorCfg.radiusM,
         angleDeg: anchorCfg.angleDeg,
         lastBearingDeg: anchorCfg.lastBearingDeg,
@@ -337,18 +342,7 @@ export default function HomeLocationMap({
     return () => {
       cancelled = true;
     };
-  }, [
-    anchorCfg.armed,
-    anchorCfg.lat,
-    anchorCfg.lng,
-    anchorCfg.radiusM,
-    anchorCfg.angleDeg,
-    anchorCfg.monitorDeviceId,
-    deviceId,
-  ]);
-
-  const [alarmBlocked, setAlarmBlocked] = useState(false);
-  const deviceId = useMemo(() => (typeof window !== "undefined" ? getOrCreateDeviceId() : "server"), []);
+  }, [anchorCfg.armed, anchorCfg.lat, anchorCfg.lng, anchorCfg.radiusM, anchorCfg.angleDeg, anchorCfg.monitorDeviceId, deviceId]);
   const localDeviceName = useMemo(() => (typeof window !== "undefined" ? getDeviceName() : ""), []);
   const [monitorDeviceLabel, setMonitorDeviceLabel] = useState<string>("");
   const [anchorMonitor, setAnchorMonitor] = useState<{ monitorDeviceId: string | null; alertDeviceIds: string[] } | null>(null);
