@@ -79,6 +79,21 @@ type Props = {
 const ANGLE_OFF = 360;
 const ANGLE_DEFAULT_ON = 45;
 
+function buildAlertDeviceIds(
+  alertMode: "this" | "other" | "both",
+  alertOtherId: string,
+  thisDeviceId: string,
+): string[] {
+  const ids: string[] = [];
+  if (alertMode === "this" || alertMode === "both") ids.push(thisDeviceId);
+  if ((alertMode === "other" || alertMode === "both") && alertOtherId) ids.push(alertOtherId);
+  return ids;
+}
+
+function resolveMonitorDeviceIdForApi(monitorUiValue: string, thisDeviceId: string): string {
+  return monitorUiValue === "this" ? thisDeviceId : monitorUiValue;
+}
+
 export function AnchorAlertModal({
   open,
   onClose,
@@ -114,8 +129,14 @@ export function AnchorAlertModal({
   );
   const [androidNativeDistanceM, setAndroidNativeDistanceM] = useState<number | null>(null);
   const openRef = useRef(open);
+  const configRef = useRef(config);
+  configRef.current = config;
+  const onUpdateRef = useRef(onUpdate);
+  onUpdateRef.current = onUpdate;
   const androidSettingsTimerRef = useRef<number | null>(null);
   const androidNavCleanupRef = useRef<(() => void) | null>(null);
+  const [rolesSaveBusy, setRolesSaveBusy] = useState(false);
+  const [rolesSaveHint, setRolesSaveHint] = useState<string | null>(null);
 
   const acc = horizontalAccuracyM;
   const accuracyOkForArm =
@@ -183,6 +204,19 @@ export function AnchorAlertModal({
     });
   }, [open, monitor?.alertDeviceIds, deviceId]);
 
+  // Keep monitor dropdown aligned with server when you open the panel (two-device setups).
+  useEffect(() => {
+    if (!open || emergencyDisableLiveMapApis) return;
+    const mid = monitor?.monitorDeviceId;
+    if (mid == null) return;
+    const ui = mid === deviceId ? "this" : mid;
+    queueMicrotask(() => {
+      setMonitorDeviceId(ui);
+      const c = configRef.current;
+      if (c.monitorDeviceId !== ui) onUpdateRef.current({ ...c, monitorDeviceId: ui });
+    });
+  }, [open, monitor?.monitorDeviceId, deviceId, emergencyDisableLiveMapApis]);
+
   useEffect(() => {
     openRef.current = open;
   }, [open]);
@@ -201,6 +235,7 @@ export function AnchorAlertModal({
       setAndroidAnchorPermissionBusy(false);
       setAndroidAnchorPermissionError(null);
       setAndroidNativeDistanceM(null);
+      setRolesSaveHint(null);
     });
   }, [open]);
 
@@ -214,10 +249,12 @@ export function AnchorAlertModal({
     });
   }, [open, config.angleDeg]);
 
+  // Local config seed only when the account has no monitor row yet; otherwise server wins (see effect above).
   useEffect(() => {
     if (!open) return;
+    if (monitor?.monitorDeviceId != null) return;
     queueMicrotask(() => setMonitorDeviceId(config.monitorDeviceId || "this"));
-  }, [open, config.monitorDeviceId]);
+  }, [open, config.monitorDeviceId, monitor?.monitorDeviceId]);
 
   useEffect(() => {
     if (!open) return;
@@ -423,97 +460,146 @@ export function AnchorAlertModal({
             />
           </label>
 
-          <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-            Device to monitor
-            <select
-              value={monitorDeviceId}
-              onChange={(e) => {
-                const v = e.target.value;
-                const cur = monitor?.monitorDeviceId;
-                // Switching monitor halts monitoring on the other device — confirm.
-                if (cur && cur !== "this" && v !== cur) {
-                  const ok = window.confirm(
-                    "Monitoring is currently active on another device. Switching will halt monitoring on the other device. Continue?",
-                  );
-                  if (!ok) return;
-                }
-                setMonitorDeviceId(v);
-                onUpdate({ ...config, monitorDeviceId: v });
-              }}
-              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
-            >
-              <option value="this">This device (current browser)</option>
-              {devices.map((d) => (
-                <option key={d.deviceId} value={d.deviceId}>
-                  {d.name || d.deviceId.slice(0, 8)}{" "}
-                  {d.lastFixAt ? `· last fix ${new Date(d.lastFixAt).toLocaleString("en-GB")}` : ""}
-                </option>
-              ))}
-            </select>
-            <span className="mt-1 block text-[11px] text-zinc-500">
-              Leave a device on the boat with the app open to keep sending location. Select it here to monitor.
-            </span>
-          </label>
-
-          <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-300">
-            <p className="font-semibold text-zinc-900 dark:text-zinc-100">Alert delivery</p>
-            <p className="mt-1 text-[11px] opacity-80">
-              Choose which signed-in device(s) should show the alert pop-up. Only one device monitors movement.
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50/90 px-3 py-3 text-xs text-emerald-950 dark:border-emerald-900/45 dark:bg-emerald-950/25 dark:text-emerald-50">
+            <p className="font-semibold text-emerald-950 dark:text-emerald-100">Two signed-in devices</p>
+            <p className="mt-1 text-[11px] leading-snug opacity-90">
+              Pick <strong className="font-semibold">one</strong> device whose GPS is checked against the anchor, and
+              separately pick <strong className="font-semibold">which device(s)</strong> should get the full-screen alarm.
+              They can be the same device, or one can monitor while the other only receives alerts.
             </p>
-            <div className="mt-2 grid gap-2">
-              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                Send alerts to
-                <select
-                  value={alertMode}
-                  onChange={(e) => setAlertMode(e.target.value as "this" | "other" | "both")}
-                  className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
-                >
-                  <option value="this">This device</option>
-                  <option value="other">Other device</option>
-                  <option value="both">Both devices</option>
-                </select>
-              </label>
-              {alertMode !== "this" ? (
-                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                  Other device
-                  <select
-                    value={alertOtherId}
-                    onChange={(e) => setAlertOtherId(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
-                  >
-                    <option value="">Select…</option>
-                    {devices
-                      .filter((d) => d.deviceId !== deviceId)
-                      .map((d) => (
-                        <option key={`alert-${d.deviceId}`} value={d.deviceId}>
-                          {d.name || d.deviceId.slice(0, 8)}
-                        </option>
-                      ))}
-                  </select>
-                </label>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => {
-                  const ids: string[] = [];
-                  if (alertMode === "this" || alertMode === "both") ids.push(deviceId);
-                  if ((alertMode === "other" || alertMode === "both") && alertOtherId) ids.push(alertOtherId);
+
+            <label className="mt-3 block text-xs font-medium text-emerald-950 dark:text-emerald-100">
+              1 — Device that <span className="font-semibold">monitors</span> (runs the geofence on its GPS)
+              <select
+                value={monitorDeviceId}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  const nextResolved = resolveMonitorDeviceIdForApi(v, deviceId);
+                  const curResolved = monitor?.monitorDeviceId ?? null;
+                  if (curResolved != null && curResolved !== nextResolved) {
+                    const ok = window.confirm(
+                      "Changing the monitoring device updates your account. The previous monitor will stop evaluating this anchor until you switch back. Continue?",
+                    );
+                    if (!ok) return;
+                  }
+                  setMonitorDeviceId(v);
+                  onUpdate({ ...config, monitorDeviceId: v });
                   if (!emergencyDisableLiveMapApis) {
                     void fetch("/api/anchor/monitor", {
                       method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ alertDeviceIds: ids }),
-                    });
+                      credentials: "same-origin",
+                      headers: { "Content-Type": "application/json", Accept: "application/json" },
+                      body: JSON.stringify({ monitorDeviceId: nextResolved }),
+                    }).catch(() => undefined);
                   }
+                  setRolesSaveHint("Monitor device saved. Use step 2 + Save below for who gets the alarm.");
                 }}
-                className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                className="mt-1 w-full rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm text-emerald-950 dark:border-emerald-800 dark:bg-zinc-900 dark:text-emerald-50"
               >
-                Save alert delivery
-              </button>
-              <p className="text-[10px] opacity-75">
-                Note: Both devices must load SeaLink while signed in (any tab) so they appear here. Close and reopen this
-                panel to refresh the list.
+                <option value="this">This device (this browser / app)</option>
+                {devices.map((d) => (
+                  <option key={d.deviceId} value={d.deviceId}>
+                    {d.name || d.deviceId.slice(0, 8)}
+                    {d.lastFixAt ? ` · last fix ${new Date(d.lastFixAt).toLocaleString("en-GB")}` : ""}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-1 block text-[11px] font-normal text-emerald-900/85 dark:text-emerald-100/85">
+                That device should stay on SeaLink with location sharing so fixes keep updating. The other device can stay
+                signed in only to receive alerts if you prefer.
+              </span>
+            </label>
+
+            <div className="mt-3 border-t border-emerald-200/80 pt-3 dark:border-emerald-800/60">
+              <p className="text-xs font-medium text-emerald-950 dark:text-emerald-100">
+                2 — Who should get the <span className="font-semibold">alarm pop-up</span>?
               </p>
+              <div className="mt-2 grid gap-2">
+                <label className="block text-xs font-medium text-emerald-950 dark:text-emerald-100">
+                  Alert on
+                  <select
+                    value={alertMode}
+                    onChange={(e) => setAlertMode(e.target.value as "this" | "other" | "both")}
+                    className="mt-1 w-full rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm text-emerald-950 dark:border-emerald-800 dark:bg-zinc-900 dark:text-emerald-50"
+                  >
+                    <option value="this">This device only</option>
+                    <option value="other">The other device only</option>
+                    <option value="both">Both devices</option>
+                  </select>
+                </label>
+                {alertMode !== "this" ? (
+                  <label className="block text-xs font-medium text-emerald-950 dark:text-emerald-100">
+                    Other device (choose one)
+                    <select
+                      value={alertOtherId}
+                      onChange={(e) => setAlertOtherId(e.target.value)}
+                      className="mt-1 w-full rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm text-emerald-950 dark:border-emerald-800 dark:bg-zinc-900 dark:text-emerald-50"
+                    >
+                      <option value="">Select…</option>
+                      {devices
+                        .filter((d) => d.deviceId !== deviceId)
+                        .map((d) => (
+                          <option key={`alert-${d.deviceId}`} value={d.deviceId}>
+                            {d.name || d.deviceId.slice(0, 8)}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                ) : null}
+                <button
+                  type="button"
+                  disabled={rolesSaveBusy}
+                  onClick={() => {
+                    void (async () => {
+                      setRolesSaveHint(null);
+                      if ((alertMode === "other" || alertMode === "both") && !alertOtherId) {
+                        setRolesSaveHint("Choose the other device in the list above, or switch “Alert on” to this device only.");
+                        return;
+                      }
+                      const alertIds = buildAlertDeviceIds(alertMode, alertOtherId, deviceId);
+                      if (alertIds.length === 0) {
+                        setRolesSaveHint("No alert devices selected.");
+                        return;
+                      }
+                      const monitorResolved = resolveMonitorDeviceIdForApi(monitorDeviceId, deviceId);
+                      setRolesSaveBusy(true);
+                      try {
+                        if (!emergencyDisableLiveMapApis) {
+                          const r = await fetch("/api/anchor/monitor", {
+                            method: "POST",
+                            credentials: "same-origin",
+                            headers: { "Content-Type": "application/json", Accept: "application/json" },
+                            body: JSON.stringify({
+                              monitorDeviceId: monitorResolved,
+                              alertDeviceIds: alertIds,
+                            }),
+                          });
+                          if (!r.ok) {
+                            const err = (await r.json().catch(() => ({}))) as { error?: string };
+                            setRolesSaveHint(err.error ?? "Could not save. Try again.");
+                            return;
+                          }
+                        }
+                        setRolesSaveHint("Saved — monitor and alert devices are updated on your account.");
+                      } catch {
+                        setRolesSaveHint("Network error saving.");
+                      } finally {
+                        setRolesSaveBusy(false);
+                      }
+                    })();
+                  }}
+                  className="h-9 rounded-lg bg-emerald-700 px-3 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+                >
+                  {rolesSaveBusy ? "Saving…" : "Save monitor & alert devices"}
+                </button>
+                {rolesSaveHint ? (
+                  <p className="text-[11px] leading-snug text-emerald-900 dark:text-emerald-100/90">{rolesSaveHint}</p>
+                ) : null}
+                <p className="text-[10px] opacity-80">
+                  Each device must open SeaLink while signed in (any tab) so it appears in the lists. Close and reopen this
+                  panel to refresh.
+                </p>
+              </div>
             </div>
           </div>
 
@@ -647,15 +733,14 @@ export function AnchorAlertModal({
                         const a = angleEnabled
                           ? Math.max(0, Math.min(359, Math.round(Number(angleDeg) || ANGLE_DEFAULT_ON)))
                           : ANGLE_OFF;
-                        const chosenMonitor = monitorDeviceId === "this" ? deviceId : monitorDeviceId;
-                        const ids: string[] = [];
-                        if (alertMode === "this" || alertMode === "both") ids.push(deviceId);
-                        if ((alertMode === "other" || alertMode === "both") && alertOtherId) ids.push(alertOtherId);
+                        const monResolved = resolveMonitorDeviceIdForApi(monitorDeviceId, deviceId);
+                        const ids = buildAlertDeviceIds(alertMode, alertOtherId, deviceId);
                         if (!emergencyDisableLiveMapApis) {
                           void fetch("/api/anchor/monitor", {
                             method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ monitorDeviceId: chosenMonitor, alertDeviceIds: ids }),
+                            credentials: "same-origin",
+                            headers: { "Content-Type": "application/json", Accept: "application/json" },
+                            body: JSON.stringify({ monitorDeviceId: monResolved, alertDeviceIds: ids }),
                           });
                         }
                         onUpdate({
@@ -713,15 +798,14 @@ export function AnchorAlertModal({
                   ? Math.max(0, Math.min(359, Math.round(Number(angleDeg) || ANGLE_DEFAULT_ON)))
                   : ANGLE_OFF;
                 // Persist monitor + alert targets to server so it applies across both devices.
-                const chosenMonitor = monitorDeviceId === "this" ? deviceId : monitorDeviceId;
-                const ids: string[] = [];
-                if (alertMode === "this" || alertMode === "both") ids.push(deviceId);
-                if ((alertMode === "other" || alertMode === "both") && alertOtherId) ids.push(alertOtherId);
+                const monResolved = resolveMonitorDeviceIdForApi(monitorDeviceId, deviceId);
+                const ids = buildAlertDeviceIds(alertMode, alertOtherId, deviceId);
                 if (!emergencyDisableLiveMapApis) {
                   void fetch("/api/anchor/monitor", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ monitorDeviceId: chosenMonitor, alertDeviceIds: ids }),
+                    credentials: "same-origin",
+                    headers: { "Content-Type": "application/json", Accept: "application/json" },
+                    body: JSON.stringify({ monitorDeviceId: monResolved, alertDeviceIds: ids }),
                   });
                 }
                 onUpdate({
