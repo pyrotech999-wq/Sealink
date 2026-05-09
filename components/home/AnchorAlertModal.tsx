@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { Capacitor } from "@capacitor/core";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ANCHOR_MAX_HORIZ_ACCURACY_M, type AnchorGpsQuality } from "@/lib/anchor-gps-stabilizer";
 import { GPS_REFINE_TARGET_ACCURACY_M } from "@/lib/gps-refinement";
@@ -124,6 +123,8 @@ export function AnchorAlertModal({
     return null;
   }, [sharing, hasFix, acc]);
 
+  const androidArmNeedsBackgroundFg = isCapacitorAndroidNative() && monitorDeviceId === "this";
+
   useEffect(() => {
     if (!open) return;
     if (emergencyDisableLiveMapApis) return;
@@ -184,7 +185,12 @@ export function AnchorAlertModal({
     }
     androidNavCleanupRef.current?.();
     androidNavCleanupRef.current = null;
-    queueMicrotask(() => setAndroidSettingsDidntOpen(false));
+    queueMicrotask(() => {
+      setAndroidSettingsDidntOpen(false);
+      setAndroidAnchorPermissionGate(false);
+      setAndroidAnchorPermissionBusy(false);
+      setAndroidAnchorPermissionError(null);
+    });
   }, [open]);
 
   useEffect(() => {
