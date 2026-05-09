@@ -142,7 +142,7 @@ public class AnchorAlertForegroundService extends Service {
                 .putBoolean(AnchorAlertPrefs.KEY_NATIVE_ALARM_PLAYING, false)
                 .putBoolean(AnchorAlertPrefs.KEY_SUPPRESS_UNTIL_INSIDE, false);
         if (lastBearing != null) {
-            ed.putFloat(AnchorAlertPrefs.KEY_LAST_BEARING_DEG, lastBearing.floatValue());
+            ed.putFloat(AnchorAlertPrefs.KEY_LAST_BEARING_DEG, (float) lastBearing.doubleValue());
             lastBearingRuntime = lastBearing;
         } else {
             ed.remove(AnchorAlertPrefs.KEY_LAST_BEARING_DEG);

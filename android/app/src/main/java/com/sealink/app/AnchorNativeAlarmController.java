@@ -197,9 +197,8 @@ public final class AnchorNativeAlarmController {
         Intent open = new Intent(appCtx, MainActivity.class);
         open.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         open.putExtra("sealink_open_native_anchor_alarm", true);
-        int piFlags = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0);
-        PendingIntent fullScreen =
-            PendingIntent.getActivity(appCtx, 2, open, piFlags | (Build.VERSION.SDK_INT >= 34 ? PendingIntent.FLAG_IMMUTABLE : 0));
+        int piFlags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
+        PendingIntent fullScreen = PendingIntent.getActivity(appCtx, 2, open, piFlags);
         PendingIntent content = PendingIntent.getActivity(appCtx, 3, open, piFlags);
 
         NotificationCompat.Builder b =
