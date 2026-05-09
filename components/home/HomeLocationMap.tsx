@@ -2082,6 +2082,7 @@ export default function HomeLocationMap({
             radiusM: anchorCfg.radiusM,
             angleDeg: anchorCfg.angleDeg ?? 360,
             monitorDeviceId: anchorCfg.monitorDeviceId,
+            lastBearingDeg: anchorCfg.lastBearingDeg,
           }}
           onUpdate={(next) => {
             const anchorChanged = next.lat !== anchorCfg.lat || next.lng !== anchorCfg.lng;
