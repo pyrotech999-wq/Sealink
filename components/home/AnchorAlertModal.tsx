@@ -529,11 +529,118 @@ export function AnchorAlertModal({
             ) : null}
           </div>
 
+          {androidArmNeedsBackgroundFg && androidAnchorPermissionGate ? (
+            <div className="mt-4 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-3 text-xs leading-5 text-indigo-950 dark:border-indigo-900/50 dark:bg-indigo-950/35 dark:text-indigo-50">
+              <p className="font-semibold text-indigo-950 dark:text-indigo-100">Background anchor monitoring (Android app)</p>
+              <p className="mt-2 text-[11px] opacity-95">
+                When you arm while <strong className="font-semibold">this device</strong> is the monitor, SeaLink can start a{" "}
+                <strong className="font-semibold">foreground location service</strong> so drift checks continue if you leave
+                the app or turn the screen off. You will see a persistent notification:{" "}
+                <span className="font-medium">“SeaLink Anchor Alert is monitoring your anchor position.”</span>
+              </p>
+              <ul className="mt-2 list-disc space-y-1 pl-4 text-[11px] opacity-95">
+                <li>Location is evaluated on-device for the geofence; coordinates are not sent for ads or analytics.</li>
+                <li>
+                  Android will then ask for <strong className="font-semibold">notification</strong> access (to show that
+                  notice) and <strong className="font-semibold">all-the-time / background location</strong> — only for Anchor
+                  Alert, not for normal map sharing.
+                </li>
+                <li>You can revoke permissions or disarm any time; disarm or sign out stops the service.</li>
+              </ul>
+              {androidAnchorPermissionError ? (
+                <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
+                  {androidAnchorPermissionError}
+                </p>
+              ) : null}
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={androidAnchorPermissionBusy}
+                  onClick={() => void setAndroidAnchorPermissionGate(false)}
+                  className="h-9 rounded-lg border border-indigo-300 bg-white px-3 text-sm font-semibold text-indigo-900 hover:bg-indigo-100 disabled:opacity-50 dark:border-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-50 dark:hover:bg-indigo-900/80"
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  disabled={androidAnchorPermissionBusy || !canSet}
+                  onClick={() => {
+                    void (async () => {
+                      void primeAnchorAlarmAudio();
+                      setAndroidAnchorPermissionBusy(true);
+                      setAndroidAnchorPermissionError(null);
+                      try {
+                        const perm = await requestAndroidAnchorMonitoringPermissions();
+                        if (!perm.ok) {
+                          setAndroidAnchorPermissionError(
+                            perm.reason === "notifications"
+                              ? "Notification permission was denied. Allow notifications for SeaLink so the monitoring service can show its persistent status."
+                              : "Background (“all the time”) location was denied. Anchor drift checks in the background cannot run without it — you can try again or change this in Android settings.",
+                          );
+                          return;
+                        }
+                        const n = parseAnchorRadiusM(Number(radius));
+                        const a = angleEnabled
+                          ? Math.max(0, Math.min(359, Math.round(Number(angleDeg) || ANGLE_DEFAULT_ON)))
+                          : ANGLE_OFF;
+                        const chosenMonitor = monitorDeviceId === "this" ? deviceId : monitorDeviceId;
+                        const ids: string[] = [];
+                        if (alertMode === "this" || alertMode === "both") ids.push(deviceId);
+                        if ((alertMode === "other" || alertMode === "both") && alertOtherId) ids.push(alertOtherId);
+                        if (!emergencyDisableLiveMapApis) {
+                          void fetch("/api/anchor/monitor", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ monitorDeviceId: chosenMonitor, alertDeviceIds: ids }),
+                          });
+                        }
+                        onUpdate({
+                          ...config,
+                          lat: pos!.lat,
+                          lng: pos!.lng,
+                          radiusM: n,
+                          angleDeg: a,
+                          armed: true,
+                          monitorDeviceId,
+                        });
+                        await startAndroidAnchorForegroundMonitoring({
+                          monitorDeviceId,
+                          deviceId,
+                          lat: pos!.lat,
+                          lng: pos!.lng,
+                          radiusM: n,
+                          angleDeg: a,
+                          lastBearingDeg: config.lastBearingDeg,
+                        });
+                        setAndroidAnchorPermissionGate(false);
+                        onClose();
+                      } catch (e) {
+                        setAndroidAnchorPermissionError(
+                          e instanceof Error ? e.message : "Could not start Android anchor monitoring.",
+                        );
+                      } finally {
+                        setAndroidAnchorPermissionBusy(false);
+                      }
+                    })();
+                  }}
+                  className="h-9 rounded-lg bg-indigo-600 px-3 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {androidAnchorPermissionBusy ? "Working…" : "Continue to system permissions"}
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              disabled={!canSet}
+              disabled={!canSet || (androidArmNeedsBackgroundFg && androidAnchorPermissionGate)}
               onClick={() => {
+                if (androidArmNeedsBackgroundFg && !androidAnchorPermissionGate) {
+                  setAndroidAnchorPermissionError(null);
+                  setAndroidAnchorPermissionGate(true);
+                  return;
+                }
                 // Prime the 999 alarm sound while we have a user gesture (helps avoid “Tap to play alarm sound” later).
                 void primeAnchorAlarmAudio();
                 const n = parseAnchorRadiusM(Number(radius));
@@ -561,16 +668,28 @@ export function AnchorAlertModal({
                   armed: true,
                   monitorDeviceId,
                 });
+                void startAndroidAnchorForegroundMonitoring({
+                  monitorDeviceId,
+                  deviceId,
+                  lat: pos!.lat,
+                  lng: pos!.lng,
+                  radiusM: n,
+                  angleDeg: a,
+                  lastBearingDeg: config.lastBearingDeg,
+                });
                 onClose();
               }}
               className="h-9 rounded-lg bg-green-600 px-3 text-sm font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Arm geofence at current position
+              {androidArmNeedsBackgroundFg && !androidAnchorPermissionGate
+                ? "Review background monitoring…"
+                : "Arm geofence at current position"}
             </button>
             <button
               type="button"
               disabled={!config.armed}
               onClick={() => {
+                void stopAndroidAnchorNativeMonitoringIfNeeded();
                 onUpdate({ ...config, armed: false });
                 onClose();
               }}

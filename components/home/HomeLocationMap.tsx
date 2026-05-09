@@ -55,6 +55,13 @@ import {
   GPS_REFINE_WATCH_OPTIONS,
 } from "@/lib/gps-refinement";
 import { isLikelyIOS } from "@/lib/location-env";
+import {
+  getAndroidAnchorMonitoringPermissionStatus,
+  isCapacitorAndroidNative,
+  SeaLinkAnchorAlert,
+  startAndroidAnchorForegroundMonitoring,
+  stopAndroidAnchorNativeMonitoringIfNeeded,
+} from "@/lib/capacitor-anchor-alert-android";
 import { getNativeLocationBridge } from "@/lib/native-location-bridge";
 import { startAnchorAlarmSiren, stopAnchorAlarmSiren } from "@/lib/anchor-alarm-sound";
 import { getDeviceName, getOrCreateDeviceId } from "@/lib/device-id";
@@ -1582,6 +1589,7 @@ export default function HomeLocationMap({
                 type="button"
                 onClick={() => {
                   if (anchorCfg.armed) {
+                    void stopAndroidAnchorNativeMonitoringIfNeeded();
                     const merged = { ...anchorCfg, armed: false, lastAlertAt: null };
                     setAnchorCfg(merged);
                     setAnchorAlertConfig(merged);
