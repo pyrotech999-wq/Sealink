@@ -323,6 +323,7 @@ export default function HomeLocationMap({
       const st = await getAndroidAnchorMonitoringPermissionStatus();
       if (cancelled) return;
       if (!st.fineLocation || !st.postNotifications || !st.backgroundLocation) return;
+      if (cancelled) return;
       await startAndroidAnchorForegroundMonitoring({
         monitorDeviceId: mid,
         deviceId,

@@ -688,6 +688,16 @@ export default function HelpPage() {
                 app details for your browser or the SeaLink app. If nothing opens, use the path above — the same steps are
                 offered in the app when that button does not launch Settings.
               </p>
+              <p className="mt-3 rounded-lg border border-zinc-700/80 bg-zinc-950/60 px-3 py-2 text-xs leading-5 text-zinc-400">
+                <strong className="text-zinc-200">Google Play / Data safety disclosure (SeaLink Android app):</strong> When
+                you arm Anchor Alert with <strong className="text-zinc-300">this device</strong> as the monitor, SeaLink may
+                run a <strong className="text-zinc-300">foreground location service</strong> so anchor safety monitoring can
+                continue while the app is in the background. You will see a persistent notification:{" "}
+                <span className="italic text-zinc-300">“SeaLink Anchor Alert is monitoring your anchor position.”</span>{" "}
+                Background (“all the time”) location and notification permission are requested only in that Anchor Alert
+                flow — not for ordinary map sharing. Geofence checks run on the device; raw track is not sent for ads or
+                analytics. Disarm Anchor Alert or sign out stops the service.
+              </p>
             </Section>
 
             <Section id="sea-summary" title="Sea state summary on Home">
