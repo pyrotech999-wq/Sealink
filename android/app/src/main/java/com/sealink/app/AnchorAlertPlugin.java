@@ -7,6 +7,9 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.os.Build;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.PermissionState;
@@ -20,16 +23,16 @@ import com.getcapacitor.annotation.PermissionCallback;
 @CapacitorPlugin(
     name = "SeaLinkAnchorAlert",
     permissions = {
-        @Permission(strings = { Manifest.permission.POST_NOTIFICATIONS }, alias = AnchorAlertPlugin.ALIAS_POST_NOTIFICATIONS),
         @Permission(strings = { Manifest.permission.ACCESS_BACKGROUND_LOCATION }, alias = AnchorAlertPlugin.ALIAS_BACKGROUND_LOCATION),
     }
 )
 public class AnchorAlertPlugin extends Plugin {
 
-    static final String ALIAS_POST_NOTIFICATIONS = "postNotifications";
     static final String ALIAS_BACKGROUND_LOCATION = "backgroundLocation";
 
     private BroadcastReceiver breachReceiver;
+    private ActivityResultLauncher<String> postNotificationPermissionLauncher;
+    private PluginCall pendingPostNotificationCall;
 
     @Override
     public void load() {
@@ -65,6 +68,26 @@ public class AnchorAlertPlugin extends Plugin {
         super.handleOnDestroy();
     }
 
+    private void ensurePostNotificationLauncher() {
+        if (postNotificationPermissionLauncher != null) return;
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return;
+        AppCompatActivity act = getActivity();
+        if (act == null) return;
+        postNotificationPermissionLauncher =
+            act.registerForActivityResult(
+                new ActivityResultContracts.RequestPermission(),
+                granted -> {
+                    PluginCall pending = pendingPostNotificationCall;
+                    pendingPostNotificationCall = null;
+                    if (pending != null) {
+                        JSObject o = new JSObject();
+                        o.put("status", Boolean.TRUE.equals(granted) ? "granted" : "denied");
+                        pending.resolve(o);
+                    }
+                }
+            );
+    }
+
     @PluginMethod
     public void requestPostNotifications(PluginCall call) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
@@ -73,20 +96,23 @@ public class AnchorAlertPlugin extends Plugin {
             call.resolve(o);
             return;
         }
-        if (getPermissionState(ALIAS_POST_NOTIFICATIONS) == PermissionState.GRANTED) {
+        if (ContextCompat.checkSelfPermission(getContext(), Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
             JSObject o = new JSObject();
             o.put("status", "granted");
             call.resolve(o);
             return;
         }
-        requestPermissionForAlias(ALIAS_POST_NOTIFICATIONS, call, "onPostNotificationsResult");
-    }
-
-    @PermissionCallback
-    private void onPostNotificationsResult(PluginCall call) {
-        JSObject o = new JSObject();
-        o.put("status", getPermissionState(ALIAS_POST_NOTIFICATIONS) == PermissionState.GRANTED ? "granted" : "denied");
-        call.resolve(o);
+        ensurePostNotificationLauncher();
+        if (postNotificationPermissionLauncher == null) {
+            call.reject("Activity not ready for notification permission.");
+            return;
+        }
+        if (pendingPostNotificationCall != null) {
+            call.reject("Another permission request is in progress.");
+            return;
+        }
+        pendingPostNotificationCall = call;
+        postNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);
     }
 
     @PluginMethod
@@ -132,6 +158,12 @@ public class AnchorAlertPlugin extends Plugin {
             call.reject("ACCESS_FINE_LOCATION not granted.");
             return;
         }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(getContext(), Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                call.reject("POST_NOTIFICATIONS not granted.");
+                return;
+            }
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             if (getPermissionState(ALIAS_BACKGROUND_LOCATION) != PermissionState.GRANTED) {
                 call.reject("ACCESS_BACKGROUND_LOCATION not granted.");
@@ -158,13 +190,6 @@ public class AnchorAlertPlugin extends Plugin {
 
     @PluginMethod
     public void stopMonitoring(PluginCall call) {
-        Intent i = new Intent(getContext(), AnchorAlertForegroundService.class);
-        i.setAction(AnchorAlertForegroundService.ACTION_STOP);
-        try {
-            getContext().startService(i);
-        } catch (Exception e) {
-            // If startService fails, still try to stop via explicit stop
-        }
         getContext().stopService(new Intent(getContext(), AnchorAlertForegroundService.class));
         call.resolve();
     }
@@ -176,7 +201,7 @@ public class AnchorAlertPlugin extends Plugin {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             o.put(
                 "postNotifications",
-                getPermissionState(ALIAS_POST_NOTIFICATIONS) == PermissionState.GRANTED
+                ContextCompat.checkSelfPermission(getContext(), Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
             );
         } else {
             o.put("postNotifications", true);
