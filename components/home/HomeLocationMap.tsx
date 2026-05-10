@@ -1224,13 +1224,15 @@ export default function HomeLocationMap({
           } catch {
             /* ignore */
           }
+          bumpInterval();
           return;
         } finally {
           window.clearTimeout(pollFetchTimeout);
         }
 
+        const hadNetworkIssue = monitorCommandPollNetworkIssueRef.current;
         monitorCommandPollNetworkIssueRef.current = false;
-        bumpInterval();
+        if (hadNetworkIssue) bumpInterval();
 
         if (!hr.ok) {
           anchorCommandClientLog("boat_command_poll_http_error", { status: hr.status });
@@ -2753,6 +2755,27 @@ export default function HomeLocationMap({
                     <div>cmds: {monitorCmdPollDebug.lastCommandCount ?? "—"}</div>
                     <div>appliedId: {monitorCmdPollDebug.lastAppliedCommandId ?? "—"}</div>
                     <div className="break-words text-amber-200/90">err: {monitorCmdPollDebug.lastError ?? "—"}</div>
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      <button
+                        type="button"
+                        className="pointer-events-auto rounded bg-amber-600 px-2 py-1 text-[10px] font-bold text-black"
+                        onClick={() => monitorManualPollRef.current?.()}
+                      >
+                        Run monitor command poll now
+                      </button>
+                      <button
+                        type="button"
+                        className="pointer-events-auto rounded bg-sky-600 px-2 py-1 text-[10px] font-bold text-white"
+                        onClick={() => void runMonitorCommandsApiSelfTest()}
+                      >
+                        Test command API
+                      </button>
+                    </div>
+                    {monitorCmdApiSelfTest ? (
+                      <pre className="pointer-events-auto mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-all text-[9px] text-sky-100/95">
+                        {`URL: ${monitorCmdApiSelfTest.url}\nnavigator: ${monitorCmdApiSelfTest.onlineLabel}\nstatus: ${monitorCmdApiSelfTest.status ?? "—"}\nerrorName: ${monitorCmdApiSelfTest.errorName ?? "—"}\nerrorMessage: ${monitorCmdApiSelfTest.errorMessage ?? "—"}\nresponseText (trim):\n${monitorCmdApiSelfTest.responseText ? monitorCmdApiSelfTest.responseText.slice(0, 4000) : "—"}`}
+                      </pre>
+                    ) : null}
                     {anchorPollVerboseDebug ? (
                       <>
                         <p className="mt-1 text-[9px] text-amber-400/90">
@@ -2761,15 +2784,6 @@ export default function HomeLocationMap({
                         <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all text-[9px] text-amber-50/95">
                           {monitorCmdPollDebug.lastResponseBody ?? "—"}
                         </pre>
-                        <div className="mt-2 flex flex-wrap gap-1">
-                          <button
-                            type="button"
-                            className="pointer-events-auto rounded bg-amber-600 px-2 py-1 text-[10px] font-bold text-black"
-                            onClick={() => monitorManualPollRef.current?.()}
-                          >
-                            Run monitor command poll now
-                          </button>
-                        </div>
                       </>
                     ) : null}
                   </div>
