@@ -8,7 +8,8 @@ import { isLikelyAndroid, openAndroidLocationAppDetailsSettings } from "@/lib/lo
 import { getDeviceName, setDeviceName } from "@/lib/device-id";
 import { primeAnchorAlarmAudio } from "@/lib/anchor-alarm-sound";
 import {
-  ANCHOR_RADIUS_METRES_OPTIONS,
+  ANCHOR_RADIUS_ADMIN_TEST_M,
+  getAnchorRadiusOptionsForUi,
   type AnchorRadiusM,
   parseAnchorRadiusM,
 } from "@/lib/anchor-alert-storage";
@@ -83,6 +84,8 @@ type Props = {
   }) => void;
   /** After a successful POST to `/api/anchor/monitor`, mirrors server monitor + alert IDs into map state (avoids waiting for the poll). */
   onMonitorRolesSaved?: (next: { monitorDeviceId: string | null; alertDeviceIds: string[] }) => void;
+  /** Enables the 2 m admin-only test geofence in the radius list. */
+  isAdmin?: boolean;
 };
 
 const ANGLE_OFF = 360;
@@ -118,7 +121,9 @@ export function AnchorAlertModal({
   monitor,
   onUpdate,
   onMonitorRolesSaved,
+  isAdmin = false,
 }: Props) {
+  const anchorRadiusUiOptions = useMemo(() => getAnchorRadiusOptionsForUi(isAdmin), [isAdmin]);
   const [radius, setRadius] = useState<string>(String(config.radiusM));
   const [angleDeg, setAngleDeg] = useState<string>(String(config.angleDeg ?? ANGLE_OFF));
   /** When false, angle-change alerts are disabled (stored as 360°). */
