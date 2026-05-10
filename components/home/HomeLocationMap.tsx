@@ -327,6 +327,11 @@ export default function HomeLocationMap({
     lastError: string | null;
     lastAppliedCommandId: string | null;
     lastRawPreview: string | null;
+    lastActiveSessionId: string | null;
+    lastResponseBody: string | null;
+    lastReason: string | null;
+    lastHeaderSent: string | null;
+    lastJsonOk: boolean | null;
   }>({
     lastPollAt: null,
     lastHttpStatus: null,
@@ -337,7 +342,30 @@ export default function HomeLocationMap({
     lastError: null,
     lastAppliedCommandId: null,
     lastRawPreview: null,
+    lastActiveSessionId: null,
+    lastResponseBody: null,
+    lastReason: null,
+    lastHeaderSent: null,
+    lastJsonOk: null,
   });
+
+  const [anchorPollVerboseDebug, setAnchorPollVerboseDebug] = useState(false);
+  useEffect(() => {
+    const read = () => {
+      try {
+        setAnchorPollVerboseDebug(typeof window !== "undefined" && localStorage.getItem("sealink_anchor_poll_verbose") === "1");
+      } catch {
+        setAnchorPollVerboseDebug(false);
+      }
+    };
+    read();
+    if (typeof window === "undefined") return;
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "sealink_anchor_poll_verbose" || e.key === null) read();
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
   useEffect(() => {
     if (!sharing || !signedIn || ANCHOR_LIVE_APIS_BLOCKED) return;
@@ -876,13 +904,29 @@ export default function HomeLocationMap({
     };
   }, [sharing]);
 
-  const anchorSessionCommandApplyBusyRef = useRef(false);
+  /** Prevents overlapping polls; never leave true if heartbeat hangs (see timeout below). */
+  const monitorAnchorPollInFlightRef = useRef(false);
+  const monitorManualPollRef = useRef<(() => void) | null>(null);
 
   /** Monitoring handset: HTTP poll for remote commands (no Realtime). Uses `queued → received → applied`. */
   useEffect(() => {
     if (ANCHOR_LIVE_APIS_BLOCKED || !sharing || !deviceId || deviceId === "server") return;
     let disposed = false;
     const heartbeatKey = "sealink_anchor_cmd_boat_heartbeat";
+
+    const withTimeout = async <T,>(p: Promise<T>, ms: number, label: string): Promise<T | undefined> => {
+      try {
+        return await Promise.race([
+          p,
+          new Promise<undefined>((_, rej) => {
+            window.setTimeout(() => rej(new Error(`${label}_timeout_${ms}ms`)), ms);
+          }),
+        ]);
+      } catch (e) {
+        console.warn("[ANCHOR_MONITOR_CMD_CLIENT]", JSON.stringify({ phase: label, err: e instanceof Error ? e.message : String(e) }));
+        return undefined;
+      }
+    };
 
     const geoHeaders = (): HeadersInit => ({
       "Content-Type": "application/json",

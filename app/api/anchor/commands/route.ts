@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAuthUser, type AuthUser } from "@/lib/auth";
+import { anchorCommandsExposeServerErrors } from "@/lib/anchor-api-debug-server";
 import { anchorCommandServerLog } from "@/lib/anchor-command-server-log";
 import { ANCHOR_DEVICE_ID_HEADER } from "@/lib/anchor-device-id-header";
 import { getEffectiveMonitorDeviceIdForUid } from "@/lib/anchor-effective-monitor-server";
@@ -22,18 +23,63 @@ function parseType(t: unknown): AnchorSessionCommandType | null {
 
 const noStore = { "Cache-Control": "no-store" as const };
 
+function devErrorPayload(error: unknown, code: string): Record<string, unknown> {
+  const base: Record<string, unknown> = { ok: false as const, error: code };
+  if (!anchorCommandsExposeServerErrors()) return base;
+  const e = error instanceof Error ? error : new Error(String(error));
+  return { ...base, message: e.message, stack: e.stack };
+}
+
+function logAnchorCommandsGetError(args: {
+  req: Request;
+  role: string | null;
+  uid: string | null;
+  effectiveMonitorDeviceId?: string | null;
+  activeSessionId?: string | null;
+  error: unknown;
+}): void {
+  let urlParams: string | null = null;
+  try {
+    urlParams = new URL(args.req.url).search;
+  } catch {
+    urlParams = "(bad_url)";
+  }
+  const err = args.error;
+  console.error("[ANCHOR COMMANDS GET ERROR]", {
+    role: args.role,
+    uid: args.uid,
+    deviceId: args.req.headers.get(ANCHOR_DEVICE_ID_HEADER),
+    effectiveMonitorDeviceId: args.effectiveMonitorDeviceId ?? null,
+    activeSessionId: args.activeSessionId ?? null,
+    commandQueryParams: urlParams,
+    error: err,
+    stack: err instanceof Error ? err.stack : undefined,
+  });
+}
+
 /**
  * Monitor poll must never return HTTP 500: clients treat non-2xx as hard failures.
- * On any server/DB error, return 200 + `ok: true` + empty `commands` and `pollAccepted: false`.
+ * On any server/DB error, return 200 + `ok: true` + empty `commands`, `pollAccepted: false`, and `reason`.
  */
 async function getMonitorPollJson(uid: string, req: Request): Promise<Record<string, unknown>> {
   const headerDevice = (req.headers.get(ANCHOR_DEVICE_ID_HEADER) ?? "").trim();
+  let activeSessionFingerprint: string | null = null;
+  let effective: string | null = null;
+
   try {
-    const effective = await getEffectiveMonitorDeviceIdForUid(uid);
+    effective = await getEffectiveMonitorDeviceIdForUid(uid);
     let geoForLog: Awaited<ReturnType<typeof getAnchorGeofenceConfig>>;
     try {
       geoForLog = await getAnchorGeofenceConfig(uid);
-    } catch {
+    } catch (geoErr) {
+      logAnchorCommandsGetError({
+        req,
+        role: "monitor",
+        uid,
+        effectiveMonitorDeviceId: effective,
+        activeSessionId: null,
+        error: geoErr,
+      });
       geoForLog = {
         uid,
         armed: false,
@@ -49,7 +95,7 @@ async function getMonitorPollJson(uid: string, req: Request): Promise<Record<str
       };
     }
 
-    const activeSessionFingerprint = `${uid}|armed=${geoForLog.armed}|r=${geoForLog.radiusM}|mon_geo=${geoForLog.monitorDeviceId ?? "null"}|la=${geoForLog.lastAlertAt ?? "null"}`;
+    activeSessionFingerprint = `${uid}|armed=${geoForLog.armed}|r=${geoForLog.radiusM}|mon_geo=${geoForLog.monitorDeviceId ?? "null"}|la=${geoForLog.lastAlertAt ?? "null"}`;
     const pollAccepted = Boolean(effective && headerDevice && headerDevice === effective);
     const match = Boolean(effective && headerDevice && headerDevice === effective);
 
@@ -65,7 +111,25 @@ async function getMonitorPollJson(uid: string, req: Request): Promise<Record<str
       }),
     );
 
-    if (!pollAccepted) {
+    if (!headerDevice) {
+      return {
+        ok: true,
+        commands: [],
+        pollAccepted: false as const,
+        serverEffectiveMonitorDeviceId: effective ?? null,
+        reason: "missing_device_header",
+      };
+    }
+    if (!effective) {
+      return {
+        ok: true,
+        commands: [],
+        pollAccepted: false as const,
+        serverEffectiveMonitorDeviceId: null,
+        reason: "no_effective_monitor_configured",
+      };
+    }
+    if (headerDevice !== effective) {
       let mon: Awaited<ReturnType<typeof getAnchorMonitorConfig>>;
       try {
         mon = await getAnchorMonitorConfig(uid);
@@ -94,6 +158,7 @@ async function getMonitorPollJson(uid: string, req: Request): Promise<Record<str
         commands: [],
         pollAccepted: false as const,
         serverEffectiveMonitorDeviceId: effective ?? null,
+        reason: "header_device_not_effective_monitor",
       };
     }
 
@@ -101,19 +166,20 @@ async function getMonitorPollJson(uid: string, req: Request): Promise<Record<str
     try {
       commands = await listQueuedAnchorSessionCommands(uid);
     } catch (listErr) {
-      console.error("[ANCHOR COMMANDS GET ERROR]", {
+      logAnchorCommandsGetError({
+        req,
         role: "monitor",
         uid,
-        deviceId: req.headers.get(ANCHOR_DEVICE_ID_HEADER),
-        phase: "listQueued",
+        effectiveMonitorDeviceId: effective,
+        activeSessionId: activeSessionFingerprint,
         error: listErr,
-        stack: listErr instanceof Error ? listErr.stack : undefined,
       });
       return {
         ok: true,
         commands: [],
         pollAccepted: false as const,
         serverEffectiveMonitorDeviceId: effective ?? null,
+        reason: "list_queued_commands_failed",
         error: "Could not load command queue.",
         debugCode: "MONITOR_LIST_QUEUE_FAILED",
       };
@@ -143,20 +209,23 @@ async function getMonitorPollJson(uid: string, req: Request): Promise<Record<str
       commands,
       pollAccepted: true as const,
       serverEffectiveMonitorDeviceId: effective ?? null,
+      ...(commands.length === 0 ? { reason: "queue_empty" } : {}),
     };
   } catch (e) {
-    console.error("[ANCHOR COMMANDS GET ERROR]", {
+    logAnchorCommandsGetError({
+      req,
       role: "monitor",
       uid,
-      deviceId: req.headers.get(ANCHOR_DEVICE_ID_HEADER),
+      effectiveMonitorDeviceId: effective,
+      activeSessionId: activeSessionFingerprint,
       error: e,
-      stack: e instanceof Error ? e.stack : undefined,
     });
     return {
       ok: true,
       commands: [],
       pollAccepted: false as const,
       serverEffectiveMonitorDeviceId: null,
+      reason: "monitor_poll_exception",
       error: "Monitor poll failed safely.",
       debugCode: "MONITOR_POLL_EXCEPTION",
     };
@@ -173,7 +242,7 @@ export async function GET(req: Request): Promise<Response> {
     role = url.searchParams.get("role");
 
     const u: AuthUser | null = await requireAuthUser().catch(() => null);
-    if (!u?.uid) {
+    if (!u?.uid || typeof u.uid !== "string") {
       return NextResponse.json(
         { ok: false, error: "Sign-in required", code: "AUTH_REQUIRED" },
         { status: 401, headers: noStore },
@@ -183,11 +252,20 @@ export async function GET(req: Request): Promise<Response> {
 
     const id = url.searchParams.get("id");
     if (id?.trim()) {
-      const row = await getAnchorSessionCommand(u.uid, id.trim());
-      if (!row) {
-        return NextResponse.json({ ok: false, error: "Not found", code: "NOT_FOUND" }, { status: 404, headers: noStore });
+      try {
+        const row = await getAnchorSessionCommand(u.uid, id.trim());
+        if (!row) {
+          return NextResponse.json({ ok: false, error: "Not found", code: "NOT_FOUND" }, { status: 404, headers: noStore });
+        }
+        return NextResponse.json({ ok: true, command: row }, { headers: noStore });
+      } catch (error) {
+        logAnchorCommandsGetError({ req, role: "id", uid, error });
+        const status = anchorCommandsExposeServerErrors() ? 500 : 500;
+        return NextResponse.json(devErrorPayload(error, "anchor_commands_get_by_id_failed"), {
+          status,
+          headers: noStore,
+        });
       }
-      return NextResponse.json({ ok: true, command: row }, { headers: noStore });
     }
 
     if (role === "monitor") {
@@ -196,27 +274,35 @@ export async function GET(req: Request): Promise<Response> {
     }
 
     if (role === "diagnostics") {
-      const effective = await getEffectiveMonitorDeviceIdForUid(u.uid);
-      const [mon, geo, pending] = await Promise.all([
-        getAnchorMonitorConfig(u.uid),
-        getAnchorGeofenceConfig(u.uid),
-        listPendingAnchorSessionCommandsForUid(u.uid),
-      ]);
-      anchorCommandServerLog("diagnostics_snapshot", { uid: u.uid, pending: pending.length });
-      return NextResponse.json(
-        {
-          ok: true,
-          effectiveMonitorDeviceId: effective,
-          serverMonitorDeviceId: mon.monitorDeviceId,
-          geofenceMonitorDeviceId: geo.monitorDeviceId,
-          geofenceArmed: geo.armed,
-          pendingCommands: pending,
-          transport: "http_poll" as const,
-          note:
-            "Commands use HTTP polling on the boat (no Supabase Realtime channel). Background browser tabs may throttle timers; use visibility + shorter intervals while armed.",
-        },
-        { headers: noStore },
-      );
+      try {
+        const effective = await getEffectiveMonitorDeviceIdForUid(u.uid);
+        const [mon, geo, pending] = await Promise.all([
+          getAnchorMonitorConfig(u.uid),
+          getAnchorGeofenceConfig(u.uid),
+          listPendingAnchorSessionCommandsForUid(u.uid),
+        ]);
+        anchorCommandServerLog("diagnostics_snapshot", { uid: u.uid, pending: pending.length });
+        return NextResponse.json(
+          {
+            ok: true,
+            effectiveMonitorDeviceId: effective,
+            serverMonitorDeviceId: mon.monitorDeviceId,
+            geofenceMonitorDeviceId: geo.monitorDeviceId,
+            geofenceArmed: geo.armed,
+            pendingCommands: pending,
+            transport: "http_poll" as const,
+            note:
+              "Commands use HTTP polling on the boat (no Supabase Realtime channel). Background browser tabs may throttle timers; use visibility + shorter intervals while armed.",
+          },
+          { headers: noStore },
+        );
+      } catch (error) {
+        logAnchorCommandsGetError({ req, role: "diagnostics", uid, error });
+        return NextResponse.json(devErrorPayload(error, "anchor_commands_get_diagnostics_failed"), {
+          status: 500,
+          headers: noStore,
+        });
+      }
     }
 
     return NextResponse.json(
@@ -224,13 +310,7 @@ export async function GET(req: Request): Promise<Response> {
       { status: 400, headers: noStore },
     );
   } catch (error) {
-    console.error("[ANCHOR COMMANDS GET ERROR]", {
-      role,
-      uid,
-      deviceId: req.headers.get(ANCHOR_DEVICE_ID_HEADER),
-      error,
-      stack: error instanceof Error ? error.stack : undefined,
-    });
+    logAnchorCommandsGetError({ req, role, uid, error });
 
     if (role === "monitor") {
       return NextResponse.json(
@@ -239,6 +319,7 @@ export async function GET(req: Request): Promise<Response> {
           commands: [],
           pollAccepted: false,
           serverEffectiveMonitorDeviceId: null,
+          reason: "outer_get_exception",
           error: "Monitor poll failed safely.",
           debugCode: "MONITOR_POLL_OUTER_EXCEPTION",
         },
@@ -246,70 +327,80 @@ export async function GET(req: Request): Promise<Response> {
       );
     }
 
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "Something went wrong.",
-        code: "INTERNAL",
-        debugCode: "ANCHOR_COMMANDS_GET",
-      },
-      { status: 500, headers: noStore },
-    );
+    return NextResponse.json(devErrorPayload(error, "anchor_commands_get_failed"), { status: 500, headers: noStore });
   }
 }
 
 export async function POST(req: Request): Promise<Response> {
-  const u = await requireAuthUser().catch(() => null);
-  if (!u) return NextResponse.json({ error: "Sign-in required" }, { status: 401 });
-
-  let body: Record<string, unknown>;
+  let uid: string | null = null;
+  let role = "post_create";
   try {
-    body = (await req.json()) as Record<string, unknown>;
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-  }
-
-  const type = parseType(body.type);
-  if (!type) return NextResponse.json({ error: "Invalid type" }, { status: 400 });
-
-  const sourceDeviceId =
-    typeof body.sourceDeviceId === "string" && body.sourceDeviceId.trim()
-      ? body.sourceDeviceId.trim()
-      : req.headers.get(ANCHOR_DEVICE_ID_HEADER)?.trim() || "";
-  if (!sourceDeviceId) return NextResponse.json({ error: "sourceDeviceId required" }, { status: 400 });
-
-  const effective = await getEffectiveMonitorDeviceIdForUid(u.uid);
-  if (effective && sourceDeviceId === effective) {
-    return NextResponse.json(
-      { error: "Monitoring handset must apply commands locally, not enqueue them here." },
-      { status: 400 },
-    );
-  }
-
-  let meters: number | null = null;
-  if (type === "INCREASE_RADIUS") {
-    const m = body.meters;
-    if (typeof m !== "number" || !Number.isFinite(m) || m <= 0 || m > 500) {
-      return NextResponse.json({ error: "meters must be a number 1–500" }, { status: 400 });
+    const u = await requireAuthUser().catch(() => null);
+    if (!u?.uid) {
+      return NextResponse.json({ ok: false, error: "Sign-in required", code: "AUTH_REQUIRED" }, { status: 401 });
     }
-    meters = Math.round(m);
+    uid = u.uid;
+
+    let body: Record<string, unknown>;
+    try {
+      body = (await req.json()) as Record<string, unknown>;
+    } catch {
+      return NextResponse.json({ ok: false, error: "Invalid JSON", code: "BAD_JSON" }, { status: 400 });
+    }
+
+    const type = parseType(body.type);
+    if (!type) return NextResponse.json({ ok: false, error: "Invalid type", code: "BAD_TYPE" }, { status: 400 });
+
+    const sourceDeviceId =
+      typeof body.sourceDeviceId === "string" && body.sourceDeviceId.trim()
+        ? body.sourceDeviceId.trim()
+        : req.headers.get(ANCHOR_DEVICE_ID_HEADER)?.trim() || "";
+    if (!sourceDeviceId) {
+      return NextResponse.json({ ok: false, error: "sourceDeviceId required", code: "NO_SOURCE_DEVICE" }, { status: 400 });
+    }
+
+    const effective = await getEffectiveMonitorDeviceIdForUid(u.uid);
+    if (effective && sourceDeviceId === effective) {
+      return NextResponse.json(
+        { ok: false, error: "Monitoring handset must apply commands locally, not enqueue them here.", code: "MONITOR_CANNOT_ENQUEUE" },
+        { status: 400 },
+      );
+    }
+
+    let meters: number | null = null;
+    if (type === "INCREASE_RADIUS") {
+      const m = body.meters;
+      if (typeof m !== "number" || !Number.isFinite(m) || m <= 0 || m > 500) {
+        return NextResponse.json({ ok: false, error: "meters must be a number 1–500", code: "BAD_METERS" }, { status: 400 });
+      }
+      meters = Math.round(m);
+    }
+
+    const row = await createAnchorSessionCommand({
+      uid: u.uid,
+      type,
+      meters,
+      sourceDeviceId,
+    });
+
+    const eff = await getEffectiveMonitorDeviceIdForUid(u.uid);
+    anchorCommandServerLog("command_post_created", {
+      uid: u.uid,
+      id: row.id,
+      type,
+      sourceDeviceId,
+      effectiveMonitor: eff ?? null,
+    });
+
+    return NextResponse.json({ ok: true, command: row }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    console.error("[ANCHOR COMMANDS POST ERROR]", {
+      role,
+      uid,
+      deviceId: req.headers.get(ANCHOR_DEVICE_ID_HEADER),
+      error,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    return NextResponse.json(devErrorPayload(error, "anchor_commands_post_failed"), { status: 500, headers: noStore });
   }
-
-  const row = await createAnchorSessionCommand({
-    uid: u.uid,
-    type,
-    meters,
-    sourceDeviceId,
-  });
-
-  const eff = await getEffectiveMonitorDeviceIdForUid(u.uid);
-  anchorCommandServerLog("command_post_created", {
-    uid: u.uid,
-    id: row.id,
-    type,
-    sourceDeviceId,
-    effectiveMonitor: eff ?? null,
-  });
-
-  return NextResponse.json({ command: row }, { headers: { "Cache-Control": "no-store" } });
 }
