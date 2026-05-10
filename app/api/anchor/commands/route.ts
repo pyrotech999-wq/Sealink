@@ -236,10 +236,11 @@ export async function GET(req: Request): Promise<Response> {
     return NextResponse.json(
       {
         ok: false,
+        error: "Request failed.",
         errorMessage: "Request failed.",
         debugCode: "ANCHOR_COMMANDS_GET_FAIL",
       },
-      { status: 200, headers: { "Cache-Control": "no-store" } },
+      { status: 500, headers: { "Cache-Control": "no-store" } },
     );
   }
 }
