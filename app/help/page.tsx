@@ -32,6 +32,7 @@ const toc: { id: string; label: string }[] = [
   { id: "messages-page", label: "Messages page" },
   { id: "messages-broadcast-audience", label: "Messages — who sees broadcasts" },
   { id: "anchor", label: "Anchor watch" },
+  { id: "anchor-detailed-setup", label: "Anchor — detailed setup" },
   { id: "anchor-android-location", label: "Android location (anchor)" },
   { id: "sea-summary", label: "Sea state on Home" },
   { id: "mob", label: "Man overboard (MOB)" },
