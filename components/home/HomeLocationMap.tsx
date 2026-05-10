@@ -588,6 +588,11 @@ export default function HomeLocationMap({
       }),
     [deviceId, anchorMonitor?.monitorDeviceId, anchorCfg.monitorDeviceId],
   );
+  /** Same value the map UI uses; command poll tick must read this (not only anchorMonitorRef) to avoid stale ref skips. */
+  const breachEffectiveMonitorRef = useRef(breachEffectiveMonitor);
+  useEffect(() => {
+    breachEffectiveMonitorRef.current = breachEffectiveMonitor;
+  }, [breachEffectiveMonitor]);
   const breachIsMonitoringDevice = breachEffectiveMonitor === deviceId;
   const anchorCfgLoadedFromServerRef = useRef(false);
   const [shareNearby, setShareNearby] = useState(() =>
@@ -991,14 +996,27 @@ export default function HomeLocationMap({
       if (disposed || monitorAnchorPollInFlightRef.current) return;
       const snap = anchorCfgRef.current;
       if (!snap.armed) return;
-      const serverMonitor = anchorMonitorRef.current?.monitorDeviceId;
-      const eff = effectiveMonitorDeviceIdForHomeMap({
-        thisDeviceId: deviceId,
-        serverMonitorDeviceId: serverMonitor,
-        geofenceMonitorDeviceId: snap.monitorDeviceId,
-      });
+      const eff = breachEffectiveMonitorRef.current;
       if (eff !== deviceId) {
-        anchorCommandClientLog("boat_command_processor_skip", { reason: "not_effective_monitor", eff, deviceId });
+        anchorCommandClientLog("boat_command_processor_skip", {
+          reason: "not_effective_monitor",
+          eff,
+          deviceId,
+          refServerMon: anchorMonitorRef.current?.monitorDeviceId ?? null,
+        });
+        setMonitorCmdPollDebug((d) => ({
+          ...d,
+          lastPollAt: Date.now(),
+          lastError: `poll_skipped_tick_eff_ne_device (eff=${eff.slice(0, 12)}…)`,
+          lastClientEff: eff,
+          lastHeaderSent: deviceId,
+          lastHttpStatus: null,
+          lastPollAccepted: null,
+          lastServerEffective: null,
+          lastCommandCount: null,
+          lastJsonOk: null,
+          lastReason: "client_tick_not_monitor",
+        }));
         return;
       }
 
@@ -1378,6 +1396,7 @@ export default function HomeLocationMap({
     void tick();
     return () => {
       disposed = true;
+      monitorAnchorPollInFlightRef.current = false;
       monitorManualPollRef.current = null;
       window.clearInterval(iv);
       document.removeEventListener("visibilitychange", onVis);
