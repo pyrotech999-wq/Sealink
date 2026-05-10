@@ -89,11 +89,11 @@ export default function RootLayout({
           <BroadcastReplyAlertsHost />
           <MobSenderActiveBanner />
           <MobIncomingAlertHost />
-          <AnchorAlertsGlobalHost />
           <Suspense fallback={null}>
             <ProfileNameGate />
           </Suspense>
           {children}
+          <AnchorAlertsGlobalHost />
           <BroadcastAwayToasts />
           <BottomNav />
         </BroadcastToastProvider>

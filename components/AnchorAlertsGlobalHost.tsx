@@ -58,7 +58,10 @@ export function AnchorAlertsGlobalHost() {
           return;
         }
 
-        const mr = await fetch("/api/anchor/monitor", { credentials: "same-origin", cache: "no-store" });
+        const mr = await fetch("/api/anchor/monitor", {
+          credentials: "same-origin",
+          cache: "no-store",
+        });
         if (!mr.ok) return;
         const md = (await mr.json()) as { config?: { alertDeviceIds?: string[] } };
         const alertDeviceIds = Array.isArray(md?.config?.alertDeviceIds) ? md.config!.alertDeviceIds : [];
@@ -157,7 +160,7 @@ export function AnchorAlertsGlobalHost() {
       aria-modal="true"
       aria-labelledby="sealink-anchor-global-title"
       aria-describedby="sealink-anchor-global-detail"
-      className="sealink-anchor-siren-overlay fixed inset-0 z-[1200] flex flex-col shadow-[inset_0_0_80px_rgba(0,0,0,0.35)]"
+      className="sealink-anchor-siren-overlay fixed inset-0 z-[1210] flex flex-col shadow-[inset_0_0_80px_rgba(0,0,0,0.35)]"
     >
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4 pt-[max(1rem,env(safe-area-inset-top))] text-center">
         <p
