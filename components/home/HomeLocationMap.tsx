@@ -2082,30 +2082,25 @@ export default function HomeLocationMap({
                 Tap to play alarm sound
               </button>
             ) : null}
+            {anchorBreachResetError ? (
+              <p className="mt-4 max-w-md rounded-lg border border-amber-500/50 bg-amber-950/40 px-3 py-2 text-xs leading-snug text-amber-100">
+                {anchorBreachResetError}
+              </p>
+            ) : null}
           </div>
           <div className="flex shrink-0 flex-col gap-3 border-t-2 border-white/25 bg-black/35 px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-md sm:flex-row sm:justify-center">
             <button
               type="button"
+              disabled={anchorBreachResetBusyKind !== null}
               onClick={() => {
                 stopAlarm();
                 if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
                 const seenId = activeAnchorAlert.id;
                 void (async () => {
-                  if (!ANCHOR_LIVE_APIS_BLOCKED) {
-                    try {
-                      await fetch("/api/anchor/alerts", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ seenId }),
-                        credentials: "same-origin",
-                      });
-                    } catch {
-                      /* ignore */
-                    }
-                  }
-
-                  if (!ANCHOR_LIVE_APIS_BLOCKED) {
-                    try {
+                  setAnchorBreachResetError(null);
+                  setAnchorBreachResetBusyKind("monitor");
+                  try {
+                    if (ANCHOR_LIVE_APIS_BLOCKED) {
                       const effectiveMonitor = effectiveMonitorDeviceIdForHomeMap({
                         thisDeviceId: deviceId,
                         serverMonitorDeviceId: anchorMonitor?.monitorDeviceId,
@@ -2119,54 +2114,186 @@ export default function HomeLocationMap({
                         thisDeviceId: deviceId,
                         effectiveMonitorDeviceId: effectiveMonitor,
                         mapPosIfThisDeviceIsMonitor: mapPos,
+                        allowBrowserGpsFallback: true,
                       });
-                      if (fix) {
-                        const merged = {
-                          ...anchorCfgRef.current,
+                      if (!fix) {
+                        setAnchorBreachResetError("Could not resolve a position in offline mode.");
+                        return;
+                      }
+                      const merged = {
+                        ...anchorCfgRef.current,
+                        lat: fix.lat,
+                        lng: fix.lng,
+                        lastAlertAt: null,
+                        lastBearingDeg: null,
+                      };
+                      setAnchorCfg(merged);
+                      setAnchorAlertConfig(merged);
+                      clearPresentedAnchorAlertId();
+                      setActiveAnchorAlert(null);
+                      return;
+                    }
+
+                    const effectiveMonitor = effectiveMonitorDeviceIdForHomeMap({
+                      thisDeviceId: deviceId,
+                      serverMonitorDeviceId: anchorMonitor?.monitorDeviceId,
+                      geofenceMonitorDeviceId: anchorCfgRef.current.monitorDeviceId,
+                    });
+                    const mapPos =
+                      pos && Number.isFinite(pos.lat) && Number.isFinite(pos.lng)
+                        ? { lat: pos.lat, lng: pos.lng }
+                        : null;
+                    const fix = await resolveAnchorResetCentreCoordinates({
+                      thisDeviceId: deviceId,
+                      effectiveMonitorDeviceId: effectiveMonitor,
+                      mapPosIfThisDeviceIsMonitor: mapPos,
+                      allowBrowserGpsFallback: false,
+                    });
+                    if (!fix) {
+                      setAnchorBreachResetError(
+                        "No monitor GPS on the server yet. Try “This phone’s GPS”, wait for the boat phone to report a fix, or tap Mark seen.",
+                      );
+                      return;
+                    }
+
+                    try {
+                      await fetch("/api/anchor/alerts", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ seenId }),
+                        credentials: "same-origin",
+                      });
+                      const merged = {
+                        ...anchorCfgRef.current,
+                        lat: fix.lat,
+                        lng: fix.lng,
+                        lastAlertAt: null,
+                        lastBearingDeg: null,
+                      };
+                      setAnchorCfg(merged);
+                      setAnchorAlertConfig(merged);
+                      await fetch("/api/anchor/geofence", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        credentials: "same-origin",
+                        body: JSON.stringify({
                           lat: fix.lat,
                           lng: fix.lng,
                           lastAlertAt: null,
                           lastBearingDeg: null,
-                        };
-                        setAnchorCfg(merged);
-                        setAnchorAlertConfig(merged);
-                        await fetch("/api/anchor/geofence", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          credentials: "same-origin",
-                          body: JSON.stringify({
-                            lat: fix.lat,
-                            lng: fix.lng,
-                            lastAlertAt: null,
-                            lastBearingDeg: null,
-                          }),
-                        });
-                      } else {
-                        await fetch("/api/anchor/geofence", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          credentials: "same-origin",
-                          body: JSON.stringify({ lastAlertAt: null, lastBearingDeg: null }),
-                        });
-                      }
+                        }),
+                      });
                     } catch {
-                      /* ignore */
+                      setAnchorBreachResetError("Could not save. Check your connection and try again.");
+                      return;
                     }
-                  } else {
-                    const merged = { ...anchorCfgRef.current, lastAlertAt: null, lastBearingDeg: null };
-                    setAnchorCfg(merged);
-                    setAnchorAlertConfig(merged);
+                    clearPresentedAnchorAlertId();
+                    setActiveAnchorAlert(null);
+                  } finally {
+                    setAnchorBreachResetBusyKind(null);
                   }
-                  clearPresentedAnchorAlertId();
-                  setActiveAnchorAlert(null);
                 })();
               }}
-              className="h-14 w-full rounded-xl bg-emerald-500 text-base font-bold text-white shadow-lg hover:bg-emerald-400 sm:max-w-xs"
+              className="h-14 w-full rounded-xl bg-emerald-500 text-base font-bold text-white shadow-lg hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-xs"
             >
-              Reset at monitor position
+              {anchorBreachResetBusyKind === "monitor"
+                ? "Loading monitor position…"
+                : anchorBreachResetBusyKind === "this"
+                  ? "Please wait…"
+                  : "Reset at monitor position"}
             </button>
             <button
               type="button"
+              disabled={anchorBreachResetBusyKind !== null}
+              onClick={() => {
+                stopAlarm();
+                if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
+                const seenId = activeAnchorAlert.id;
+                void (async () => {
+                  setAnchorBreachResetError(null);
+                  setAnchorBreachResetBusyKind("this");
+                  try {
+                    if (ANCHOR_LIVE_APIS_BLOCKED) {
+                      const mapPos =
+                        pos && Number.isFinite(pos.lat) && Number.isFinite(pos.lng)
+                          ? { lat: pos.lat, lng: pos.lng }
+                          : null;
+                      const fix = await getGpsFixForAnchorReset(mapPos);
+                      if (!fix) {
+                        setAnchorBreachResetError("Could not read GPS in offline mode.");
+                        return;
+                      }
+                      const merged = {
+                        ...anchorCfgRef.current,
+                        lat: fix.lat,
+                        lng: fix.lng,
+                        lastAlertAt: null,
+                        lastBearingDeg: null,
+                      };
+                      setAnchorCfg(merged);
+                      setAnchorAlertConfig(merged);
+                      clearPresentedAnchorAlertId();
+                      setActiveAnchorAlert(null);
+                      return;
+                    }
+
+                    const mapPos =
+                      pos && Number.isFinite(pos.lat) && Number.isFinite(pos.lng)
+                        ? { lat: pos.lat, lng: pos.lng }
+                        : null;
+                    const fix = await getGpsFixForAnchorReset(mapPos);
+                    if (!fix) {
+                      setAnchorBreachResetError(
+                        "Could not read GPS on this phone (permission, timeout, or no signal). Allow location for SeaLink, try outdoors, or use Mark seen.",
+                      );
+                      return;
+                    }
+
+                    try {
+                      await fetch("/api/anchor/alerts", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ seenId }),
+                        credentials: "same-origin",
+                      });
+                      const merged = {
+                        ...anchorCfgRef.current,
+                        lat: fix.lat,
+                        lng: fix.lng,
+                        lastAlertAt: null,
+                        lastBearingDeg: null,
+                      };
+                      setAnchorCfg(merged);
+                      setAnchorAlertConfig(merged);
+                      await fetch("/api/anchor/geofence", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        credentials: "same-origin",
+                        body: JSON.stringify({
+                          lat: fix.lat,
+                          lng: fix.lng,
+                          lastAlertAt: null,
+                          lastBearingDeg: null,
+                        }),
+                      });
+                    } catch {
+                      setAnchorBreachResetError("Could not save. Check your connection and try again.");
+                      return;
+                    }
+                    clearPresentedAnchorAlertId();
+                    setActiveAnchorAlert(null);
+                  } finally {
+                    setAnchorBreachResetBusyKind(null);
+                  }
+                })();
+              }}
+              className="h-14 w-full rounded-xl border-2 border-emerald-300/90 bg-emerald-950/50 text-base font-bold text-emerald-50 shadow-lg hover:bg-emerald-900/60 disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-xs"
+            >
+              {anchorBreachResetBusyKind === "this" ? "Getting this phone’s GPS…" : "This phone’s GPS"}
+            </button>
+            <button
+              type="button"
+              disabled={anchorBreachResetBusyKind !== null}
               onClick={() => {
                 stopAlarm();
                 if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
@@ -2191,16 +2318,17 @@ export default function HomeLocationMap({
                   setActiveAnchorAlert(null);
                 })();
               }}
-              className="h-14 w-full rounded-xl border-2 border-white bg-white/95 text-base font-bold text-red-700 shadow-lg hover:bg-white sm:max-w-xs"
+              className="h-14 w-full rounded-xl border-2 border-white bg-white/95 text-base font-bold text-red-700 shadow-lg hover:bg-white disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-xs"
             >
               Mark seen (stop alarm)
             </button>
           </div>
           <p className="bg-black/40 px-4 py-2 text-center text-[11px] text-white/75">
             <strong className="text-white/85">Reset at monitor position</strong> keeps your radius (e.g. 10&nbsp;m) and
-            moves the orange ring to the <strong className="text-white/85">monitoring device’s</strong> current GPS (or
-            its last fix from the server). <strong className="text-white/85">Mark seen</strong> only clears the alarm
-            without moving the ring. Sound stops when you dismiss, or after 3 hours if left open.
+            moves the orange ring to the <strong className="text-white/85">monitoring device’s</strong> latest GPS (from
+            the server). <strong className="text-white/85">This phone’s GPS</strong> uses <em className="not-italic text-white/85">this</em>{" "}
+            handset instead. <strong className="text-white/85">Mark seen</strong> stops the alarm without moving the ring.
+            Sound stops when you dismiss, or after 3 hours if left open.
           </p>
         </div>
       ) : null}
