@@ -68,7 +68,10 @@ import {
 } from "@/lib/capacitor-anchor-alert-android";
 import { getNativeLocationBridge } from "@/lib/native-location-bridge";
 import { clearPresentedAnchorAlertId, shouldReceiveAnchorAlarmPopUp, writePresentedAnchorAlertId } from "@/lib/anchor-alarm-recipient";
-import { getGpsFixForAnchorReset } from "@/lib/anchor-reset-gps";
+import {
+  effectiveMonitorDeviceIdFromServer,
+  resolveAnchorResetCentreCoordinates,
+} from "@/lib/anchor-reset-centre-client";
 import { ANCHOR_LIVE_APIS_BLOCKED } from "@/lib/anchor-live-client-flags";
 import { startAnchorAlarmSiren, stopAnchorAlarmSiren } from "@/lib/anchor-alarm-sound";
 import { getDeviceName, getOrCreateDeviceId } from "@/lib/device-id";
@@ -2032,27 +2035,20 @@ export default function HomeLocationMap({
 
                   if (!ANCHOR_LIVE_APIS_BLOCKED) {
                     try {
-                      const serverMonitor = anchorMonitor?.monitorDeviceId;
-                      const effectiveMonitor = serverMonitor
-                        ? serverMonitor
-                        : anchorCfgRef.current.monitorDeviceId === "this"
-                          ? deviceId
-                          : anchorCfgRef.current.monitorDeviceId;
-                      const mapFix =
+                      const effectiveMonitor = effectiveMonitorDeviceIdFromServer({
+                        thisDeviceId: deviceId,
+                        serverMonitorDeviceId: anchorMonitor?.monitorDeviceId,
+                        geofenceMonitorDeviceId: anchorCfgRef.current.monitorDeviceId,
+                      });
+                      const mapPos =
                         pos && Number.isFinite(pos.lat) && Number.isFinite(pos.lng)
                           ? { lat: pos.lat, lng: pos.lng }
                           : null;
-                      let fix = await getGpsFixForAnchorReset(mapFix);
-                      if (!fix) {
-                        const r = await fetch("/api/anchor/devices", { credentials: "same-origin", cache: "no-store" });
-                        const d = (await r.json()) as {
-                          devices?: { deviceId: string; lastLat: number | null; lastLng: number | null }[];
-                        };
-                        const row = d.devices?.find((x) => x.deviceId === effectiveMonitor);
-                        if (row && typeof row.lastLat === "number" && typeof row.lastLng === "number") {
-                          fix = { lat: row.lastLat, lng: row.lastLng };
-                        }
-                      }
+                      const fix = await resolveAnchorResetCentreCoordinates({
+                        thisDeviceId: deviceId,
+                        effectiveMonitorDeviceId: effectiveMonitor,
+                        mapPosIfThisDeviceIsMonitor: mapPos,
+                      });
                       if (fix) {
                         const merged = {
                           ...anchorCfgRef.current,
@@ -2096,7 +2092,7 @@ export default function HomeLocationMap({
               }}
               className="h-14 w-full rounded-xl bg-emerald-500 text-base font-bold text-white shadow-lg hover:bg-emerald-400 sm:max-w-xs"
             >
-              Reset anchor at this device
+              Reset at monitor position
             </button>
             <button
               type="button"
@@ -2130,9 +2126,10 @@ export default function HomeLocationMap({
             </button>
           </div>
           <p className="bg-black/40 px-4 py-2 text-center text-[11px] text-white/75">
-            <strong className="text-white/85">Reset anchor at this device</strong> moves the orange ring to this phone’s
-            GPS when possible (otherwise the monitor’s last fix). <strong className="text-white/85">Mark seen</strong> only
-            clears the alarm without moving the anchor. Sound stops when you dismiss, or after 3 hours if left open.
+            <strong className="text-white/85">Reset at monitor position</strong> keeps your radius (e.g. 10&nbsp;m) and
+            moves the orange ring to the <strong className="text-white/85">monitoring device’s</strong> current GPS (or
+            its last fix from the server). <strong className="text-white/85">Mark seen</strong> only clears the alarm
+            without moving the ring. Sound stops when you dismiss, or after 3 hours if left open.
           </p>
         </div>
       ) : null}
