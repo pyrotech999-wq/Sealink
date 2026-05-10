@@ -218,22 +218,47 @@ const MONITOR_POLL_LIST_MS = 2000;
  * `user_uid`, `status` in (`queued`,`received`), `order created_at`, `LIMIT 10`, narrow `select`.
  * Fail-fast {@link MONITOR_POLL_LIST_MS} (returns `{ timedOut: true }` — route maps to `query_timeout`).
  */
+export type MonitorPollListLookupError = {
+  message: string;
+  code?: string;
+  details?: string;
+  hint?: string;
+};
+
 export async function listQueuedCommandsForMonitorPoll(uid: string): Promise<{
   rows: AnchorSessionCommandRow[];
   timedOut: boolean;
+  lookupError?: MonitorPollListLookupError | null;
 }> {
+  const queryShape = {
+    table: "anchor_session_commands",
+    sqlShape:
+      "SELECT * FROM anchor_session_commands WHERE user_uid = $1 AND status IN ('queued','received') ORDER BY created_at ASC LIMIT 10",
+    params: { user_uid: uid, status_in: ["queued", "received"] as const, limit: 10 },
+  };
+
   if (!isSupabaseConfigured()) {
-    const rows = readRaw()
-      .filter((r) => r.userUid === uid && (r.status === "queued" || r.status === "received"))
-      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-      .slice(0, 10);
-    return { rows, timedOut: false };
+    try {
+      const rows = readRaw()
+        .filter((r) => r.userUid === uid && (r.status === "queued" || r.status === "received"))
+        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+        .slice(0, 10);
+      return { rows, timedOut: false };
+    } catch (e) {
+      const err = e instanceof Error ? e : new Error(String(e));
+      return {
+        rows: [],
+        timedOut: false,
+        lookupError: { message: err.message, details: "json_file_read_failed" },
+      };
+    }
   }
 
   const sb = supabaseAdmin();
+  /** `select('*')` matches the enqueue path and avoids subtle column / projection mismatches with PostgREST. */
   const q = sb
     .from("anchor_session_commands")
-    .select("id, user_uid, command_type, meters, status, source_device_id, error_message, created_at, applied_at")
+    .select("*")
     .eq("user_uid", uid)
     .in("status", ["queued", "received"])
     .order("created_at", { ascending: true })
@@ -246,9 +271,18 @@ export async function listQueuedCommandsForMonitorPoll(uid: string): Promise<{
       new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error("MONITOR_POLL_LIST_TIMEOUT")), MONITOR_POLL_LIST_MS);
       }),
-    ])) as { data: unknown[] | null; error: { message: string } | null };
+    ])) as { data: unknown[] | null; error: { message: string; code?: string; details?: string; hint?: string } | null };
 
-    if (res.error) throw new Error(res.error.message);
+    if (res.error) {
+      const le: MonitorPollListLookupError = {
+        message: res.error.message,
+        code: res.error.code,
+        details: res.error.details,
+        hint: res.error.hint,
+      };
+      return { rows: [], timedOut: false, lookupError: le };
+    }
+
     const rows = (res.data ?? [])
       .map((x) => mapRowDb(uid, x as Record<string, unknown>))
       .filter((x): x is AnchorSessionCommandRow => x != null);
@@ -258,10 +292,16 @@ export async function listQueuedCommandsForMonitorPoll(uid: string): Promise<{
       console.warn("[anchor_session_commands] listQueuedCommandsForMonitorPoll timeout", {
         uid,
         ms: Date.now() - started,
+        query: queryShape,
       });
       return { rows: [], timedOut: true };
     }
-    throw e;
+    const err = e instanceof Error ? e : new Error(String(e));
+    return {
+      rows: [],
+      timedOut: false,
+      lookupError: { message: err.message, details: err.stack },
+    };
   }
 }
 
