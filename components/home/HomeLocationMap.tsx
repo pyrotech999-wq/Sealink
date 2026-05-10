@@ -82,7 +82,6 @@ import { clearPresentedAnchorAlertId, shouldReceiveAnchorAlarmPopUp, writePresen
 import {
   createAnchorResetNetworkAbort,
   effectiveMonitorDeviceIdForHomeMap,
-  effectiveMonitorDeviceIdFromServer,
   isAnchorResetAbortError,
   resolveAnchorResetCentreCoordinates,
 } from "@/lib/anchor-reset-centre-client";
@@ -296,7 +295,9 @@ export default function HomeLocationMap({
     activeAnchorAlertRef.current = activeAnchorAlert;
   }, [activeAnchorAlert]);
 
-  const [anchorBreachResetBusyKind, setAnchorBreachResetBusyKind] = useState<null | "monitor" | "this">(null);
+  const [anchorBreachResetBusyKind, setAnchorBreachResetBusyKind] = useState<
+    null | "monitor" | "this" | "remote_reset" | "remote_increase" | "remote_silence"
+  >(null);
   const [anchorBreachResetError, setAnchorBreachResetError] = useState<string | null>(null);
   useEffect(() => {
     setAnchorBreachResetError(null);
@@ -822,6 +823,150 @@ export default function HomeLocationMap({
       window.clearInterval(id);
     };
   }, [sharing]);
+
+  const anchorSessionCommandApplyBusyRef = useRef(false);
+
+  /** Monitoring handset: pull queued remote commands and apply them locally (source of truth). */
+  useEffect(() => {
+    if (ANCHOR_LIVE_APIS_BLOCKED || !sharing || !deviceId || deviceId === "server") return;
+    let disposed = false;
+
+    const tick = async () => {
+      if (disposed || anchorSessionCommandApplyBusyRef.current) return;
+      const snap = anchorCfgRef.current;
+      if (!snap.armed) return;
+      const serverMonitor = anchorMonitorRef.current?.monitorDeviceId;
+      const eff = effectiveMonitorDeviceIdForHomeMap({
+        thisDeviceId: deviceId,
+        serverMonitorDeviceId: serverMonitor,
+        geofenceMonitorDeviceId: snap.monitorDeviceId,
+      });
+      if (eff !== deviceId) return;
+
+      anchorSessionCommandApplyBusyRef.current = true;
+      try {
+        const hr = await fetch("/api/anchor/commands?role=monitor", {
+          credentials: "same-origin",
+          cache: "no-store",
+          headers: { [ANCHOR_DEVICE_ID_HEADER]: deviceId },
+        });
+        if (!hr.ok) {
+          anchorCommandClientLog("monitor_poll_http_error", { status: hr.status });
+          return;
+        }
+        const hd = (await hr.json()) as { commands?: AnchorSessionCommandApi[] };
+        const list = Array.isArray(hd.commands) ? hd.commands : [];
+        if (list.length === 0) return;
+
+        for (const cmd of list) {
+          if (disposed) return;
+          anchorCommandClientLog("boat_apply_start", { id: cmd.id, type: cmd.type });
+          try {
+            if (cmd.type === "RESET_ANCHOR") {
+              const pos = posRef.current;
+              const mapPos =
+                pos && Number.isFinite(pos.lat) && Number.isFinite(pos.lng) ? { lat: pos.lat, lng: pos.lng } : null;
+              const fix = await resolveAnchorResetCentreCoordinates({
+                thisDeviceId: deviceId,
+                effectiveMonitorDeviceId: eff,
+                mapPosIfThisDeviceIsMonitor: mapPos,
+                allowBrowserGpsFallback: true,
+              });
+              if (!fix) throw new Error("no_boat_gps_for_reset");
+              const gr = await fetch("/api/anchor/geofence", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "same-origin",
+                body: JSON.stringify({
+                  lat: fix.lat,
+                  lng: fix.lng,
+                  lastAlertAt: null,
+                  lastBearingDeg: null,
+                  remoteAlarmSilencedUntilReset: false,
+                }),
+              });
+              if (!gr.ok) throw new Error(`geofence_http_${gr.status}`);
+              const gj = (await gr.json()) as { config?: typeof snap };
+              await fetch("/api/anchor/alerts", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "same-origin",
+                body: JSON.stringify({ markAllSeen: true }),
+              }).catch(() => undefined);
+              if (gj.config) {
+                setAnchorCfg(gj.config);
+                setAnchorAlertConfig(gj.config);
+              }
+            } else if (cmd.type === "INCREASE_RADIUS") {
+              const add = typeof cmd.meters === "number" && Number.isFinite(cmd.meters) ? cmd.meters : 10;
+              const curR = anchorCfgRef.current.radiusM;
+              const nextR = anchorRadiusAfterAddingMeters(curR, add, { fromTrustedStore: true });
+              const gr = await fetch("/api/anchor/geofence", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "same-origin",
+                body: JSON.stringify({ radiusM: nextR }),
+              });
+              if (!gr.ok) throw new Error(`geofence_http_${gr.status}`);
+              const gj = (await gr.json()) as { config?: typeof snap };
+              if (gj.config) {
+                setAnchorCfg(gj.config);
+                setAnchorAlertConfig(gj.config);
+              }
+            } else if (cmd.type === "SILENCE_UNTIL_RESET") {
+              const gr = await fetch("/api/anchor/geofence", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "same-origin",
+                body: JSON.stringify({ remoteAlarmSilencedUntilReset: true }),
+              });
+              if (!gr.ok) throw new Error(`geofence_http_${gr.status}`);
+              const ar = await fetch("/api/anchor/alerts", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "same-origin",
+                body: JSON.stringify({ markAllSeen: true }),
+              });
+              if (!ar.ok) throw new Error(`alerts_http_${ar.status}`);
+              const gj = (await gr.json()) as { config?: typeof snap };
+              if (gj.config) {
+                setAnchorCfg(gj.config);
+                setAnchorAlertConfig(gj.config);
+              }
+            }
+            const patched = await patchAnchorSessionCommandStatus({
+              id: cmd.id,
+              monitorDeviceId: deviceId,
+              status: "applied",
+            });
+            if (!patched.ok) {
+              anchorCommandClientLog("boat_apply_patch_applied_failed", { id: cmd.id, status: patched.status });
+            } else {
+              anchorCommandClientLog("boat_apply_done", { id: cmd.id, type: cmd.type });
+            }
+          } catch (e) {
+            const msg = e instanceof Error ? e.message.slice(0, 400) : "apply_error";
+            anchorCommandClientLog("boat_apply_failed", { id: cmd.id, type: cmd.type, msg });
+            await patchAnchorSessionCommandStatus({
+              id: cmd.id,
+              monitorDeviceId: deviceId,
+              status: "failed",
+              errorMessage: msg,
+            });
+          }
+        }
+      } finally {
+        anchorSessionCommandApplyBusyRef.current = false;
+      }
+    };
+
+    void tick();
+    const id = window.setInterval(() => void tick(), 5000);
+    return () => {
+      disposed = true;
+      window.clearInterval(id);
+    };
+  }, [sharing, deviceId]);
 
   // Best-effort: keep screen awake on the "boat device" when anchor monitoring is armed.
   useEffect(() => {
