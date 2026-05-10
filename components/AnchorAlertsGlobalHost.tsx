@@ -21,12 +21,7 @@ import { getOrCreateDeviceId } from "@/lib/device-id";
 import { isBareMetaDataDeletionPage } from "@/lib/messaging-chrome-paths";
 import { type LatLng as AnchorResetLatLng } from "@/lib/anchor-reset-gps";
 import { anchorRadiusAfterAddingMeters } from "@/lib/anchor-alert-storage";
-import {
-  ANCHOR_DEVICE_ID_HEADER,
-  type AnchorRemoteCommandPostDebug,
-  enqueueAndAwaitAnchorCommand,
-  postAnchorSessionCommand,
-} from "@/lib/anchor-commands-client";
+import { ANCHOR_DEVICE_ID_HEADER, enqueueAndAwaitAnchorCommand, postAnchorSessionCommand } from "@/lib/anchor-commands-client";
 
 const POLL_MS = 20_000;
 
@@ -54,9 +49,14 @@ export function AnchorAlertsGlobalHost() {
   const [resetError, setResetError] = useState<string | null>(null);
   const [remoteAnchorCmdDebug, setRemoteAnchorCmdDebug] = useState(false);
   const [remoteAnchorCmdDebugJson, setRemoteAnchorCmdDebugJson] = useState<string | null>(null);
-  /** Last remote anchor action POST + optional terminal status (always updated after Increase / Reset / Silence when not monitor). */
+  /** Last remote anchor action: POST fields + optional terminal poll status. */
   const [remoteAnchorActionDebug, setRemoteAnchorActionDebug] = useState<{
-    postDebug: AnchorRemoteCommandPostDebug;
+    postStatus: number;
+    postResponse: unknown;
+    commandId: string | null;
+    targetDeviceId: string | null;
+    sessionId: string | null;
+    status: string | null;
     terminalStatus?: string;
     error?: string;
   } | null>(null);
@@ -314,6 +314,7 @@ export function AnchorAlertsGlobalHost() {
             const seenId = alert.id;
             void (async () => {
               setResetError(null);
+              setRemoteAnchorActionDebug(null);
               setResetBusyKind("reset");
               const { signal, clear } = createAnchorResetNetworkAbort(120_000);
               try {
@@ -368,7 +369,7 @@ export function AnchorAlertsGlobalHost() {
                     onWaitingForBoat: () => setResetError("Waiting for boat device…"),
                   });
                   setRemoteAnchorActionDebug({
-                    postDebug: r.postDebug,
+                    ...r.postDebug,
                     terminalStatus: r.ok ? r.terminalStatus : undefined,
                     error: r.ok ? undefined : r.error,
                   });
@@ -416,6 +417,7 @@ export function AnchorAlertsGlobalHost() {
           onClick={() => {
             void (async () => {
               setResetError(null);
+              setRemoteAnchorActionDebug(null);
               setResetBusyKind("increase");
               const { signal, clear } = createAnchorResetNetworkAbort(120_000);
               try {
@@ -467,7 +469,7 @@ export function AnchorAlertsGlobalHost() {
                     onWaitingForBoat: () => setResetError("Waiting for boat device…"),
                   });
                   setRemoteAnchorActionDebug({
-                    postDebug: r.postDebug,
+                    ...r.postDebug,
                     terminalStatus: r.ok ? r.terminalStatus : undefined,
                     error: r.ok ? undefined : r.error,
                   });
@@ -519,6 +521,7 @@ export function AnchorAlertsGlobalHost() {
                 return;
               }
               setResetError(null);
+              setRemoteAnchorActionDebug(null);
               setResetBusyKind("silence");
               const { signal, clear } = createAnchorResetNetworkAbort(120_000);
               try {
@@ -573,7 +576,7 @@ export function AnchorAlertsGlobalHost() {
                     onWaitingForBoat: () => setResetError("Waiting for boat device…"),
                   });
                   setRemoteAnchorActionDebug({
-                    postDebug: r.postDebug,
+                    ...r.postDebug,
                     terminalStatus: r.ok ? r.terminalStatus : undefined,
                     error: r.ok ? undefined : r.error,
                   });

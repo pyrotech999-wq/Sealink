@@ -1,8 +1,9 @@
 /**
- * Client kill-switch for `/api/anchor/*` HTTP routes.
- * Keep in sync with `components/home/HomeLocationMap.tsx` map-presence emergency flags.
+ * Client kill-switch for `/api/anchor/*` HTTP routes (geofence, monitor, commands, alerts, devices).
+ *
+ * **Live / production:** leave `NEXT_PUBLIC_ANCHOR_LIVE_APIS_DISABLED` unset (anchor + remote commands work).
+ * Set `NEXT_PUBLIC_ANCHOR_LIVE_APIS_DISABLED=1` on Vercel (or `.env.local`) to disable all anchor client fetches
+ * without a code change — redeploy after toggling so the bundle picks up the new value.
  */
-const EMERGENCY_DISABLE_LIVE_MAP_APIS = true;
-const EMERGENCY_REENABLE_ANCHOR_LIVE_APIS = true;
-
-export const ANCHOR_LIVE_APIS_BLOCKED = EMERGENCY_DISABLE_LIVE_MAP_APIS && !EMERGENCY_REENABLE_ANCHOR_LIVE_APIS;
+export const ANCHOR_LIVE_APIS_BLOCKED =
+  typeof process !== "undefined" && process.env.NEXT_PUBLIC_ANCHOR_LIVE_APIS_DISABLED === "1";

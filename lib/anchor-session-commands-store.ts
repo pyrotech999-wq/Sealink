@@ -55,12 +55,18 @@ function readRaw(): AnchorSessionCommandRow[] {
     const raw = readFileSync(DATA_PATH, "utf-8");
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
-    return (parsed as Partial<AnchorSessionCommandRow>[]).map((r) => ({
-      ...(r as AnchorSessionCommandRow),
-      sessionId: r.sessionId != null && String(r.sessionId).trim() ? String(r.sessionId).trim().slice(0, 200) : null,
-      targetDeviceId:
-        r.targetDeviceId != null && String(r.targetDeviceId).trim() ? String(r.targetDeviceId).trim().slice(0, 100) : null,
-    }));
+    return (parsed as unknown[])
+      .filter((x): x is Record<string, unknown> => x != null && typeof x === "object" && !Array.isArray(x))
+      .map((r) => {
+        const base = r as unknown as AnchorSessionCommandRow;
+        const sidRaw = r["session_id"] ?? r["sessionId"];
+        const tidRaw = r["target_device_id"] ?? r["targetDeviceId"];
+        return {
+          ...base,
+          sessionId: sidRaw != null && String(sidRaw).trim() ? String(sidRaw).trim().slice(0, 200) : null,
+          targetDeviceId: tidRaw != null && String(tidRaw).trim() ? String(tidRaw).trim().slice(0, 100) : null,
+        };
+      });
   } catch {
     return [];
   }
