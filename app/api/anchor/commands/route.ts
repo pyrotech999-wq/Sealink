@@ -5,9 +5,12 @@ import { getEffectiveMonitorDeviceIdForUid } from "@/lib/anchor-effective-monito
 import {
   createAnchorSessionCommand,
   getAnchorSessionCommand,
+  listPendingAnchorSessionCommandsForUid,
   listQueuedAnchorSessionCommands,
   type AnchorSessionCommandType,
 } from "@/lib/anchor-session-commands-store";
+import { getAnchorGeofenceConfig } from "@/lib/anchor-geofence-store";
+import { getAnchorMonitorConfig } from "@/lib/anchor-monitor-store";
 
 export const runtime = "nodejs";
 
@@ -34,16 +37,56 @@ export async function GET(req: Request): Promise<Response> {
   if (url.searchParams.get("role") === "monitor") {
     const headerDevice = req.headers.get(DEVICE_HEADER)?.trim() || "";
     const effective = await getEffectiveMonitorDeviceIdForUid(u.uid);
-    if (!effective || headerDevice !== effective) {
-      anchorCommandServerLog("monitor_poll_denied", { uid: u.uid, headerDevice, effective });
-      return NextResponse.json({ commands: [] }, { headers: { "Cache-Control": "no-store" } });
+    const pollAccepted = Boolean(effective && headerDevice && headerDevice === effective);
+    if (!pollAccepted) {
+      const [mon, geo] = await Promise.all([getAnchorMonitorConfig(u.uid), getAnchorGeofenceConfig(u.uid)]);
+      anchorCommandServerLog("monitor_poll_denied", {
+        uid: u.uid,
+        headerDevice: headerDevice ? `${headerDevice.slice(0, 8)}…` : "",
+        effective: effective ?? null,
+        serverMonitor: mon.monitorDeviceId,
+        geofenceMonitor: geo.monitorDeviceId,
+      });
+      return NextResponse.json(
+        { commands: [], pollAccepted: false as const },
+        { headers: { "Cache-Control": "no-store" } },
+      );
     }
     const commands = await listQueuedAnchorSessionCommands(u.uid);
-    anchorCommandServerLog("monitor_poll", { uid: u.uid, count: commands.length });
-    return NextResponse.json({ commands }, { headers: { "Cache-Control": "no-store" } });
+    anchorCommandServerLog("monitor_poll_ok", { uid: u.uid, count: commands.length, ids: commands.map((c) => c.id) });
+    return NextResponse.json(
+      { commands, pollAccepted: true as const },
+      { headers: { "Cache-Control": "no-store" } },
+    );
   }
 
-  return NextResponse.json({ error: "Use ?role=monitor or ?id=" }, { status: 400, headers: { "Cache-Control": "no-store" } });
+  if (url.searchParams.get("role") === "diagnostics") {
+    const effective = await getEffectiveMonitorDeviceIdForUid(u.uid);
+    const [mon, geo, pending] = await Promise.all([
+      getAnchorMonitorConfig(u.uid),
+      getAnchorGeofenceConfig(u.uid),
+      listPendingAnchorSessionCommandsForUid(u.uid),
+    ]);
+    anchorCommandServerLog("diagnostics_snapshot", { uid: u.uid, pending: pending.length });
+    return NextResponse.json(
+      {
+        effectiveMonitorDeviceId: effective,
+        serverMonitorDeviceId: mon.monitorDeviceId,
+        geofenceMonitorDeviceId: geo.monitorDeviceId,
+        geofenceArmed: geo.armed,
+        pendingCommands: pending,
+        transport: "http_poll" as const,
+        note:
+          "Commands use HTTP polling on the boat (no Supabase Realtime channel). Background browser tabs may throttle timers; use visibility + shorter intervals while armed.",
+      },
+      { headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
+  return NextResponse.json(
+    { error: "Use ?role=monitor, ?role=diagnostics, or ?id=" },
+    { status: 400, headers: { "Cache-Control": "no-store" } },
+  );
 }
 
 export async function POST(req: Request): Promise<Response> {
@@ -88,6 +131,15 @@ export async function POST(req: Request): Promise<Response> {
     type,
     meters,
     sourceDeviceId,
+  });
+
+  const eff = await getEffectiveMonitorDeviceIdForUid(u.uid);
+  anchorCommandServerLog("command_post_created", {
+    uid: u.uid,
+    id: row.id,
+    type,
+    sourceDeviceId,
+    effectiveMonitor: eff ?? null,
   });
 
   return NextResponse.json({ command: row }, { headers: { "Cache-Control": "no-store" } });

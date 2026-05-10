@@ -1,6 +1,10 @@
 "use client";
 
+import { ANCHOR_COMMAND_STALE_BOAT_ERROR } from "@/lib/anchor-command-constants";
+
 export const ANCHOR_DEVICE_ID_HEADER = "x-sealink-device-id";
+
+export const ANCHOR_COMMAND_BOAT_OFFLINE_MSG = ANCHOR_COMMAND_STALE_BOAT_ERROR;
 
 export type AnchorSessionCommandApiStatus = "queued" | "received" | "applied" | "failed";
 
@@ -100,8 +104,8 @@ export async function pollAnchorSessionCommandUntilTerminal(args: {
   signal?: AbortSignal;
   onTick?: (c: AnchorSessionCommandApi, elapsedMs: number) => void;
 }): Promise<AnchorSessionCommandApi> {
-  const intervalMs = args.intervalMs ?? 2000;
-  const timeoutMs = args.timeoutMs ?? 120_000;
+  const intervalMs = args.intervalMs ?? 1500;
+  const timeoutMs = args.timeoutMs ?? 22_000;
   const start = Date.now();
   for (;;) {
     if (args.signal?.aborted) throw new DOMException("Aborted", "AbortError");
@@ -136,17 +140,20 @@ export async function enqueueAndAwaitAnchorCommand(args: {
       id: posted.command.id,
       signal: args.signal,
       onTick(c, elapsed) {
-        if (!warned && elapsed > 8000 && (c.status === "queued" || c.status === "received")) {
+        if (!warned && elapsed > 5000 && (c.status === "queued" || c.status === "received")) {
           warned = true;
           args.onWaitingForBoat?.();
         }
       },
     });
     if (last.status === "applied") return { ok: true };
-    if (last.status === "failed") return { ok: false, error: last.errorMessage?.trim() || "Command failed on the boat device." };
+    if (last.status === "failed") {
+      const msg = last.errorMessage?.trim() || "Command failed on the boat device.";
+      return { ok: false, error: msg };
+    }
     return {
       ok: false,
-      error: "Waiting for boat device — command is still queued. Keep SeaLink open on the monitoring handset with GPS.",
+      error: ANCHOR_COMMAND_STALE_BOAT_ERROR,
     };
   } catch (e) {
     if (typeof DOMException !== "undefined" && e instanceof DOMException && e.name === "AbortError") {

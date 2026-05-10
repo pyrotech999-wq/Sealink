@@ -57,6 +57,7 @@ import {
   ANCHOR_DEVICE_ID_HEADER,
   anchorCommandClientLog,
   enqueueAndAwaitAnchorCommand,
+  getAnchorSessionCommandById,
   patchAnchorSessionCommandStatus,
   type AnchorSessionCommandApi,
 } from "@/lib/anchor-commands-client";
@@ -836,10 +837,16 @@ export default function HomeLocationMap({
 
   const anchorSessionCommandApplyBusyRef = useRef(false);
 
-  /** Monitoring handset: pull queued remote commands and apply them locally (source of truth). */
+  /** Monitoring handset: HTTP poll for remote commands (no Realtime). Uses `queued → received → applied`. */
   useEffect(() => {
     if (ANCHOR_LIVE_APIS_BLOCKED || !sharing || !deviceId || deviceId === "server") return;
     let disposed = false;
+    const heartbeatKey = "sealink_anchor_cmd_boat_heartbeat";
+
+    const geoHeaders = (): HeadersInit => ({
+      "Content-Type": "application/json",
+      [ANCHOR_DEVICE_ID_HEADER]: deviceId,
+    });
 
     const tick = async () => {
       if (disposed || anchorSessionCommandApplyBusyRef.current) return;
@@ -851,27 +858,89 @@ export default function HomeLocationMap({
         serverMonitorDeviceId: serverMonitor,
         geofenceMonitorDeviceId: snap.monitorDeviceId,
       });
-      if (eff !== deviceId) return;
+      if (eff !== deviceId) {
+        anchorCommandClientLog("boat_command_processor_skip", { reason: "not_effective_monitor", eff, deviceId });
+        return;
+      }
 
       anchorSessionCommandApplyBusyRef.current = true;
       try {
+        anchorCommandClientLog("boat_command_poll_start", { deviceId: deviceId.slice(0, 12), visibility: document.visibilityState });
         const hr = await fetch("/api/anchor/commands?role=monitor", {
           credentials: "same-origin",
           cache: "no-store",
           headers: { [ANCHOR_DEVICE_ID_HEADER]: deviceId },
         });
         if (!hr.ok) {
-          anchorCommandClientLog("monitor_poll_http_error", { status: hr.status });
+          anchorCommandClientLog("boat_command_poll_http_error", { status: hr.status });
+          try {
+            localStorage.setItem(
+              heartbeatKey,
+              JSON.stringify({ at: Date.now(), pollOk: false, httpStatus: hr.status, pollAccepted: null }),
+            );
+          } catch {
+            /* ignore */
+          }
           return;
         }
-        const hd = (await hr.json()) as { commands?: AnchorSessionCommandApi[] };
+        const hd = (await hr.json()) as {
+          commands?: AnchorSessionCommandApi[];
+          pollAccepted?: boolean;
+        };
+        const pollAccepted = hd.pollAccepted === true;
         const list = Array.isArray(hd.commands) ? hd.commands : [];
+        try {
+          localStorage.setItem(
+            heartbeatKey,
+            JSON.stringify({
+              at: Date.now(),
+              pollOk: true,
+              pollAccepted,
+              commandCount: list.length,
+              visibility: document.visibilityState,
+            }),
+          );
+        } catch {
+          /* ignore */
+        }
+        if (!pollAccepted) {
+          anchorCommandClientLog("boat_command_poll_denied", {
+            deviceId: deviceId.slice(0, 12),
+            hint: "Server effective monitor id does not match this handset — open Anchor alarm and save monitor, or re-arm so geofence stores this device id.",
+          });
+          return;
+        }
         if (list.length === 0) return;
 
         for (const cmd of list) {
           if (disposed) return;
-          anchorCommandClientLog("boat_apply_start", { id: cmd.id, type: cmd.type });
+          const cmdStatus = cmd.status;
+          anchorCommandClientLog("boat_command_item", { id: cmd.id, type: cmd.type, status: cmdStatus });
+          if (cmdStatus === "applied") continue;
+
           try {
+            if (cmdStatus === "queued") {
+              const pr = await patchAnchorSessionCommandStatus({
+                id: cmd.id,
+                monitorDeviceId: deviceId,
+                status: "received",
+              });
+              if (!pr.ok) {
+                if (pr.status === 409) {
+                  const cur = await getAnchorSessionCommandById(cmd.id);
+                  anchorCommandClientLog("boat_receive_patch_409", { id: cmd.id, nowStatus: cur?.status });
+                  if (cur?.status === "applied") continue;
+                  if (cur?.status !== "received") throw new Error(pr.error ?? "receive_conflict");
+                } else {
+                  throw new Error(pr.error ?? `receive_http_${pr.status}`);
+                }
+              } else {
+                anchorCommandClientLog("boat_command_received", { id: cmd.id, type: cmd.type });
+              }
+            } else if (cmdStatus === "received") {
+              anchorCommandClientLog("boat_command_resume_received", { id: cmd.id, type: cmd.type });
+            }
+
             if (cmd.type === "RESET_ANCHOR") {
               const pos = posRef.current;
               const mapPos =
@@ -885,7 +954,7 @@ export default function HomeLocationMap({
               if (!fix) throw new Error("no_boat_gps_for_reset");
               const gr = await fetch("/api/anchor/geofence", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: geoHeaders(),
                 credentials: "same-origin",
                 body: JSON.stringify({
                   lat: fix.lat,
@@ -913,7 +982,7 @@ export default function HomeLocationMap({
               const nextR = anchorRadiusAfterAddingMeters(curR, add, { fromTrustedStore: true });
               const gr = await fetch("/api/anchor/geofence", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: geoHeaders(),
                 credentials: "same-origin",
                 body: JSON.stringify({ radiusM: nextR }),
               });
@@ -926,7 +995,7 @@ export default function HomeLocationMap({
             } else if (cmd.type === "SILENCE_UNTIL_RESET") {
               const gr = await fetch("/api/anchor/geofence", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: geoHeaders(),
                 credentials: "same-origin",
                 body: JSON.stringify({ remoteAlarmSilencedUntilReset: true }),
               });
@@ -944,19 +1013,21 @@ export default function HomeLocationMap({
                 setAnchorAlertConfig(gj.config);
               }
             }
+
+            anchorCommandClientLog("boat_command_apply_ok", { id: cmd.id, type: cmd.type });
             const patched = await patchAnchorSessionCommandStatus({
               id: cmd.id,
               monitorDeviceId: deviceId,
               status: "applied",
             });
             if (!patched.ok) {
-              anchorCommandClientLog("boat_apply_patch_applied_failed", { id: cmd.id, status: patched.status });
+              anchorCommandClientLog("boat_apply_patch_applied_failed", { id: cmd.id, status: patched.status, err: patched.error });
             } else {
-              anchorCommandClientLog("boat_apply_done", { id: cmd.id, type: cmd.type });
+              anchorCommandClientLog("boat_command_applied", { id: cmd.id, type: cmd.type });
             }
           } catch (e) {
             const msg = e instanceof Error ? e.message.slice(0, 400) : "apply_error";
-            anchorCommandClientLog("boat_apply_failed", { id: cmd.id, type: cmd.type, msg });
+            anchorCommandClientLog("boat_command_apply_error", { id: cmd.id, type: cmd.type, msg });
             await patchAnchorSessionCommandStatus({
               id: cmd.id,
               monitorDeviceId: deviceId,
@@ -970,11 +1041,25 @@ export default function HomeLocationMap({
       }
     };
 
+    const intervalMs = () => (document.visibilityState === "visible" ? 2000 : 8000);
+    let iv = window.setInterval(() => void tick(), intervalMs());
+    const bumpInterval = () => {
+      window.clearInterval(iv);
+      iv = window.setInterval(() => void tick(), intervalMs());
+    };
+    const onVis = () => {
+      bumpInterval();
+      void tick();
+    };
+    const onFocus = () => void tick();
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("focus", onFocus);
     void tick();
-    const id = window.setInterval(() => void tick(), 5000);
     return () => {
       disposed = true;
-      window.clearInterval(id);
+      window.clearInterval(iv);
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("focus", onFocus);
     };
   }, [sharing, deviceId]);
 
@@ -984,7 +1069,12 @@ export default function HomeLocationMap({
     if (!nav.wakeLock?.request) return;
     if (!sharing) return;
     if (!anchorCfg.armed) return;
-    if (anchorCfg.monitorDeviceId && anchorCfg.monitorDeviceId !== "this") return;
+    const effWake = effectiveMonitorDeviceIdForHomeMap({
+      thisDeviceId: deviceId,
+      serverMonitorDeviceId: anchorMonitor?.monitorDeviceId,
+      geofenceMonitorDeviceId: anchorCfg.monitorDeviceId,
+    });
+    if (effWake !== deviceId) return;
 
     let lock: { release: () => Promise<void> } | null = null;
     let disposed = false;
@@ -1007,7 +1097,7 @@ export default function HomeLocationMap({
       document.removeEventListener("visibilitychange", onVis);
       if (lock) void lock.release();
     };
-  }, [sharing, anchorCfg.armed, anchorCfg.monitorDeviceId]);
+  }, [sharing, anchorCfg.armed, anchorCfg.monitorDeviceId, anchorMonitor?.monitorDeviceId, deviceId]);
 
   // Anchor geofence check: same `pos` as map/forecasts (via posRef); runs every ANCHOR_POSITION_CHECK_INTERVAL_MS on this device when it is the monitor.
   useEffect(() => {
@@ -2728,7 +2818,10 @@ export default function HomeLocationMap({
             if (!ANCHOR_LIVE_APIS_BLOCKED && sharing) {
               void fetch("/api/anchor/geofence", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                  "Content-Type": "application/json",
+                  [ANCHOR_DEVICE_ID_HEADER]: deviceId,
+                },
                 body: JSON.stringify(merged),
               }).catch(() => undefined);
             }

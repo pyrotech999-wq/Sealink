@@ -2,8 +2,12 @@ import { NextResponse } from "next/server";
 import { requireAuthUser } from "@/lib/auth";
 import { getAnchorGeofenceConfig, setAnchorGeofenceConfig } from "@/lib/anchor-geofence-store";
 import { ANCHOR_RADIUS_ADMIN_TEST_M, parseAnchorRadiusM } from "@/lib/anchor-alert-storage";
+import { resolveThisMonitorDeviceIdForServerPersist } from "@/lib/anchor-monitor-device-resolve";
+import { anchorCommandServerLog } from "@/lib/anchor-command-server-log";
 
 export const runtime = "nodejs";
+
+const DEVICE_HEADER = "x-sealink-device-id";
 
 type Body = {
   armed?: unknown;
@@ -30,11 +34,25 @@ export async function POST(req: Request): Promise<Response> {
   const u = await requireAuthUser().catch(() => null);
   if (!u) return NextResponse.json({ error: "Sign-in required" }, { status: 401 });
 
+  const headerDevice = req.headers.get(DEVICE_HEADER)?.trim() || "";
+
   let body: Body;
   try {
     body = (await req.json()) as Body;
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  let resolvedMonitor: string | undefined;
+  if (typeof body.monitorDeviceId === "string") {
+    const raw = body.monitorDeviceId.trim() || "this";
+    resolvedMonitor = resolveThisMonitorDeviceIdForServerPersist(raw, headerDevice);
+    if (raw === "this" && resolvedMonitor && resolvedMonitor !== "this" && resolvedMonitor !== raw) {
+      anchorCommandServerLog("geofence_monitor_this_resolved", {
+        uid: u.uid,
+        resolvedTo: resolvedMonitor.slice(0, 12),
+      });
+    }
   }
 
   const patch = {
@@ -45,7 +63,7 @@ export async function POST(req: Request): Promise<Response> {
       ? { radiusM: parseAnchorRadiusM(body.radiusM, { isAdmin: u.isAdmin }) }
       : {}),
     ...(typeof body.angleDeg === "number" && Number.isFinite(body.angleDeg) ? { angleDeg: body.angleDeg } : {}),
-    ...(typeof body.monitorDeviceId === "string" ? { monitorDeviceId: body.monitorDeviceId.trim() || "this" } : {}),
+    ...(resolvedMonitor !== undefined ? { monitorDeviceId: resolvedMonitor } : {}),
     ...(typeof body.lastBearingDeg === "number" && Number.isFinite(body.lastBearingDeg) ? { lastBearingDeg: body.lastBearingDeg } : body.lastBearingDeg === null ? { lastBearingDeg: null } : {}),
     ...(typeof body.lastAlertAt === "string" ? { lastAlertAt: body.lastAlertAt } : body.lastAlertAt === null ? { lastAlertAt: null } : {}),
     ...(typeof body.remoteAlarmSilencedUntilReset === "boolean"

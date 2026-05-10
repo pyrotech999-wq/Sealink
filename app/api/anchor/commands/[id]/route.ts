@@ -45,8 +45,44 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const existing = await getAnchorSessionCommand(u.uid, id);
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  if (existing.status !== "queued" && status === "received") {
-    return NextResponse.json({ error: "Command is not queued" }, { status: 409 });
+  anchorCommandServerLog("command_patch_request", {
+    uid: u.uid,
+    id,
+    requestedStatus: status,
+    currentStatus: existing.status,
+    headerDevice,
+    effective,
+  });
+
+  if (status === "received") {
+    if (existing.status === "received") {
+      return NextResponse.json({ command: existing }, { headers: { "Cache-Control": "no-store" } });
+    }
+    if (existing.status !== "queued") {
+      anchorCommandServerLog("command_patch_reject_received", { uid: u.uid, id, currentStatus: existing.status });
+      return NextResponse.json({ error: "Command is not queued" }, { status: 409 });
+    }
+  }
+
+  if (status === "applied") {
+    if (existing.status === "applied") {
+      return NextResponse.json({ command: existing }, { headers: { "Cache-Control": "no-store" } });
+    }
+    if (existing.status !== "received") {
+      anchorCommandServerLog("command_patch_reject_applied", { uid: u.uid, id, currentStatus: existing.status });
+      return NextResponse.json({ error: "Command must be in received state before applied" }, { status: 409 });
+    }
+  }
+
+  if (status === "failed") {
+    if (existing.status === "applied" || existing.status === "failed") {
+      return NextResponse.json({ command: existing }, { headers: { "Cache-Control": "no-store" } });
+    }
+  }
+
+  if (status === "queued") {
+    anchorCommandServerLog("command_patch_reject_queued", { uid: u.uid, id });
+    return NextResponse.json({ error: "Cannot revert to queued" }, { status: 400 });
   }
 
   const err =

@@ -4,8 +4,19 @@ import { randomUUID } from "crypto";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { anchorCommandServerLog } from "@/lib/anchor-command-server-log";
+import {
+  ANCHOR_COMMAND_STALE_BOAT_ERROR,
+  ANCHOR_COMMAND_STALE_QUEUED_MS,
+  ANCHOR_COMMAND_STALE_RECEIVED_MS,
+} from "@/lib/anchor-command-constants";
 
 const DATA_PATH = path.join(process.cwd(), "data", "anchor-session-commands.json");
+
+export {
+  ANCHOR_COMMAND_STALE_BOAT_ERROR,
+  ANCHOR_COMMAND_STALE_QUEUED_MS,
+  ANCHOR_COMMAND_STALE_RECEIVED_MS,
+} from "@/lib/anchor-command-constants";
 
 export type AnchorSessionCommandStatus = "queued" | "received" | "applied" | "failed";
 
@@ -64,6 +75,73 @@ function mapRowDb(uid: string, r: Record<string, unknown>): AnchorSessionCommand
   };
 }
 
+/** Run inside store `enqueue` only. Marks stale queued/received rows as failed. */
+async function expireStaleAnchorSessionCommands(uid: string, nowMs: number): Promise<{ queued: number; received: number }> {
+  let nQueued = 0;
+  let nReceived = 0;
+  const nowIso = new Date(nowMs).toISOString();
+  const qCut = new Date(nowMs - ANCHOR_COMMAND_STALE_QUEUED_MS).toISOString();
+  const rCut = new Date(nowMs - ANCHOR_COMMAND_STALE_RECEIVED_MS).toISOString();
+
+  if (isSupabaseConfigured()) {
+    const sb = supabaseAdmin();
+    const { data: dq, error: eq } = await sb
+      .from("anchor_session_commands")
+      .update({
+        status: "failed",
+        error_message: ANCHOR_COMMAND_STALE_BOAT_ERROR,
+        applied_at: nowIso,
+      })
+      .eq("user_uid", uid)
+      .eq("status", "queued")
+      .lt("created_at", qCut)
+      .select("id");
+    if (eq) throw new Error(eq.message);
+    nQueued = Array.isArray(dq) ? dq.length : 0;
+
+    const { data: dr, error: er } = await sb
+      .from("anchor_session_commands")
+      .update({
+        status: "failed",
+        error_message: ANCHOR_COMMAND_STALE_BOAT_ERROR,
+        applied_at: nowIso,
+      })
+      .eq("user_uid", uid)
+      .eq("status", "received")
+      .lt("created_at", rCut)
+      .select("id");
+    if (er) throw new Error(er.message);
+    nReceived = Array.isArray(dr) ? dr.length : 0;
+  } else {
+    const list = readRaw();
+    let dirty = false;
+    for (const row of list) {
+      if (row.userUid !== uid) continue;
+      const created = new Date(row.createdAt).getTime();
+      if (!Number.isFinite(created)) continue;
+      if (row.status === "queued" && nowMs - created > ANCHOR_COMMAND_STALE_QUEUED_MS) {
+        row.status = "failed";
+        row.errorMessage = ANCHOR_COMMAND_STALE_BOAT_ERROR;
+        row.appliedAt = nowIso;
+        nQueued += 1;
+        dirty = true;
+      } else if (row.status === "received" && nowMs - created > ANCHOR_COMMAND_STALE_RECEIVED_MS) {
+        row.status = "failed";
+        row.errorMessage = ANCHOR_COMMAND_STALE_BOAT_ERROR;
+        row.appliedAt = nowIso;
+        nReceived += 1;
+        dirty = true;
+      }
+    }
+    if (dirty) writeRaw(list);
+  }
+
+  if (nQueued > 0 || nReceived > 0) {
+    anchorCommandServerLog("commands_expired_stale", { uid, nQueued, nReceived });
+  }
+  return { queued: nQueued, received: nReceived };
+}
+
 export async function createAnchorSessionCommand(args: {
   uid: string;
   type: AnchorSessionCommandType;
@@ -88,7 +166,7 @@ export async function createAnchorSessionCommand(args: {
       appliedAt: null,
     };
 
-    anchorCommandServerLog("created", {
+    anchorCommandServerLog("command_created", {
       uid: args.uid,
       id,
       type: args.type,
@@ -120,27 +198,55 @@ export async function createAnchorSessionCommand(args: {
   });
 }
 
+/** Commands the monitoring handset should act on (`queued` or stuck `received` for retry). */
 export async function listQueuedAnchorSessionCommands(uid: string): Promise<AnchorSessionCommandRow[]> {
   return enqueue(async () => {
+    await expireStaleAnchorSessionCommands(uid, Date.now());
+
     if (isSupabaseConfigured()) {
       const sb = supabaseAdmin();
       const { data, error } = await sb
         .from("anchor_session_commands")
         .select("*")
         .eq("user_uid", uid)
-        .eq("status", "queued")
+        .in("status", ["queued", "received"])
         .order("created_at", { ascending: true });
       if (error) throw new Error(error.message);
       return (data ?? []).map((x) => mapRowDb(uid, x as Record<string, unknown>));
     }
     return readRaw()
-      .filter((r) => r.userUid === uid && r.status === "queued")
+      .filter((r) => r.userUid === uid && (r.status === "queued" || r.status === "received"))
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  });
+}
+
+/** Non-terminal commands for diagnostics (same user). */
+export async function listPendingAnchorSessionCommandsForUid(uid: string): Promise<AnchorSessionCommandRow[]> {
+  return enqueue(async () => {
+    await expireStaleAnchorSessionCommands(uid, Date.now());
+    if (isSupabaseConfigured()) {
+      const sb = supabaseAdmin();
+      const { data, error } = await sb
+        .from("anchor_session_commands")
+        .select("*")
+        .eq("user_uid", uid)
+        .in("status", ["queued", "received"])
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (error) throw new Error(error.message);
+      return (data ?? []).map((x) => mapRowDb(uid, x as Record<string, unknown>));
+    }
+    return readRaw()
+      .filter((r) => r.userUid === uid && (r.status === "queued" || r.status === "received"))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 50);
   });
 }
 
 export async function getAnchorSessionCommand(uid: string, id: string): Promise<AnchorSessionCommandRow | null> {
   return enqueue(async () => {
+    await expireStaleAnchorSessionCommands(uid, Date.now());
+
     if (isSupabaseConfigured()) {
       const sb = supabaseAdmin();
       const { data, error } = await sb
@@ -165,7 +271,7 @@ export async function updateAnchorSessionCommandStatus(args: {
 }): Promise<AnchorSessionCommandRow | null> {
   return enqueue(async () => {
     const now = new Date().toISOString();
-    anchorCommandServerLog("status_update", {
+    anchorCommandServerLog("command_status_update", {
       uid: args.uid,
       id: args.id,
       status: args.status,
