@@ -283,9 +283,12 @@ export function AnchorAlertsGlobalHost() {
         <a
           href="/anchor-alarm"
           className="inline-flex h-14 w-full items-center justify-center rounded-xl border-2 border-white/80 bg-white/10 px-4 text-base font-bold text-white hover:bg-white/20 sm:max-w-xs"
-          onClick={() => {
+          onClick={(e) => {
             stopAnchorAlarmSiren();
             if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
+            if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+            e.preventDefault();
+            window.location.assign("/anchor-alarm");
           }}
         >
           Open map &amp; anchor
