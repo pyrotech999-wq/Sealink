@@ -2130,8 +2130,9 @@ export default function HomeLocationMap({
             </button>
           </div>
           <p className="bg-black/40 px-4 py-2 text-center text-[11px] text-white/75">
-            <strong className="text-white/85">Reset anchor at this device</strong> centres the geofence on this phone’s
-            GPS (then the monitor’s last fix if needed). Sound stops when you dismiss, or after 3 hours if left open.
+            <strong className="text-white/85">Reset anchor at this device</strong> moves the orange ring to this phone’s
+            GPS when possible (otherwise the monitor’s last fix). <strong className="text-white/85">Mark seen</strong> only
+            clears the alarm without moving the anchor. Sound stops when you dismiss, or after 3 hours if left open.
           </p>
         </div>
       ) : null}
