@@ -2486,6 +2486,156 @@ export default function HomeLocationMap({
             >
               {anchorBreachResetBusyKind === "this" ? "Getting this phone’s GPS…" : "This phone’s GPS"}
             </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  disabled={anchorBreachResetBusyKind !== null || ANCHOR_LIVE_APIS_BLOCKED}
+                  onClick={() => {
+                    stopAlarm();
+                    if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
+                    const seenId = activeAnchorAlert.id;
+                    void (async () => {
+                      setAnchorBreachResetError(null);
+                      setAnchorBreachResetBusyKind("remote_reset");
+                      const { signal, clear } = createAnchorResetNetworkAbort(120_000);
+                      try {
+                        const r = await enqueueAndAwaitAnchorCommand({
+                          type: "RESET_ANCHOR",
+                          sourceDeviceId: deviceId,
+                          signal,
+                          onWaitingForBoat: () => setAnchorBreachResetError("Waiting for boat device…"),
+                        });
+                        if (!r.ok) {
+                          setAnchorBreachResetError(r.error);
+                          return;
+                        }
+                        if (!ANCHOR_LIVE_APIS_BLOCKED) {
+                          try {
+                            await fetch("/api/anchor/alerts", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ seenId }),
+                              credentials: "same-origin",
+                              signal,
+                            });
+                          } catch {
+                            /* ignore */
+                          }
+                        }
+                        clearPresentedAnchorAlertId();
+                        setActiveAnchorAlert(null);
+                        setAnchorBreachResetError(null);
+                      } finally {
+                        clear();
+                        setAnchorBreachResetBusyKind(null);
+                      }
+                    })();
+                  }}
+                  className="h-14 w-full rounded-xl bg-emerald-500 text-base font-bold text-white shadow-lg hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-xs"
+                >
+                  {anchorBreachResetBusyKind === "remote_reset" ? "Sending to boat…" : "Reset anchor at boat GPS"}
+                </button>
+                <button
+                  type="button"
+                  disabled={anchorBreachResetBusyKind !== null || ANCHOR_LIVE_APIS_BLOCKED}
+                  onClick={() => {
+                    stopAlarm();
+                    if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
+                    const seenId = activeAnchorAlert.id;
+                    void (async () => {
+                      setAnchorBreachResetError(null);
+                      setAnchorBreachResetBusyKind("remote_increase");
+                      const { signal, clear } = createAnchorResetNetworkAbort(120_000);
+                      try {
+                        const r = await enqueueAndAwaitAnchorCommand({
+                          type: "INCREASE_RADIUS",
+                          meters: 10,
+                          sourceDeviceId: deviceId,
+                          signal,
+                          onWaitingForBoat: () => setAnchorBreachResetError("Waiting for boat device…"),
+                        });
+                        if (!r.ok) {
+                          setAnchorBreachResetError(r.error);
+                          return;
+                        }
+                        if (!ANCHOR_LIVE_APIS_BLOCKED) {
+                          try {
+                            await fetch("/api/anchor/alerts", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ seenId }),
+                              credentials: "same-origin",
+                              signal,
+                            });
+                          } catch {
+                            /* ignore */
+                          }
+                        }
+                        clearPresentedAnchorAlertId();
+                        setActiveAnchorAlert(null);
+                        setAnchorBreachResetError(null);
+                      } finally {
+                        clear();
+                        setAnchorBreachResetBusyKind(null);
+                      }
+                    })();
+                  }}
+                  className="h-12 w-full rounded-xl border border-sky-300/80 bg-sky-950/45 text-sm font-bold text-sky-50 hover:bg-sky-900/55 disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-xs"
+                >
+                  {anchorBreachResetBusyKind === "remote_increase" ? "Sending…" : "Increase geofence (+10 m)"}
+                </button>
+                <button
+                  type="button"
+                  disabled={anchorBreachResetBusyKind !== null || ANCHOR_LIVE_APIS_BLOCKED}
+                  onClick={() => {
+                    stopAlarm();
+                    if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
+                    const seenId = activeAnchorAlert.id;
+                    void (async () => {
+                      setAnchorBreachResetError(null);
+                      setAnchorBreachResetBusyKind("remote_silence");
+                      const { signal, clear } = createAnchorResetNetworkAbort(120_000);
+                      try {
+                        const r = await enqueueAndAwaitAnchorCommand({
+                          type: "SILENCE_UNTIL_RESET",
+                          sourceDeviceId: deviceId,
+                          signal,
+                          onWaitingForBoat: () => setAnchorBreachResetError("Waiting for boat device…"),
+                        });
+                        if (!r.ok) {
+                          setAnchorBreachResetError(r.error);
+                          return;
+                        }
+                        if (!ANCHOR_LIVE_APIS_BLOCKED) {
+                          try {
+                            await fetch("/api/anchor/alerts", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ seenId }),
+                              credentials: "same-origin",
+                              signal,
+                            });
+                          } catch {
+                            /* ignore */
+                          }
+                        }
+                        clearPresentedAnchorAlertId();
+                        setActiveAnchorAlert(null);
+                        setAnchorBreachResetError(null);
+                      } finally {
+                        clear();
+                        setAnchorBreachResetBusyKind(null);
+                      }
+                    })();
+                  }}
+                  className="h-12 w-full rounded-xl border border-zinc-400/90 bg-zinc-800/80 text-sm font-bold text-zinc-100 hover:bg-zinc-700/90 disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-xs"
+                >
+                  {anchorBreachResetBusyKind === "remote_silence" ? "Sending…" : "Silence until anchor reset"}
+                </button>
+              </>
+            )}
             <button
               type="button"
               disabled={anchorBreachResetBusyKind !== null}
@@ -2519,11 +2669,23 @@ export default function HomeLocationMap({
             </button>
           </div>
           <p className="bg-black/40 px-4 py-2 text-center text-[11px] text-white/75">
-            <strong className="text-white/85">Reset at monitor position</strong> keeps your radius (e.g. 10&nbsp;m) and
-            moves the orange ring to the <strong className="text-white/85">monitoring device’s</strong> latest GPS (from
-            the server). <strong className="text-white/85">This phone’s GPS</strong> uses <em className="not-italic text-white/85">this</em>{" "}
-            handset instead. <strong className="text-white/85">Mark seen</strong> stops the alarm without moving the ring.
-            Sound stops when you dismiss, or after 3 hours if left open.
+            {breachIsMonitoringDevice ? (
+              <>
+                <strong className="text-white/85">Reset at monitor position</strong> keeps your radius (e.g. 10&nbsp;m)
+                and moves the orange ring to the <strong className="text-white/85">monitoring device’s</strong> latest GPS
+                (from the server). <strong className="text-white/85">This phone’s GPS</strong> uses{" "}
+                <em className="not-italic text-white/85">this</em> handset instead.{" "}
+                <strong className="text-white/85">Mark seen</strong> stops the alarm without moving the ring. Sound stops
+                when you dismiss, or after 3 hours if left open.
+              </>
+            ) : (
+              <>
+                This handset is <strong className="text-white/85">not</strong> the monitoring device — actions are sent
+                as commands to the boat. <strong className="text-white/85">Reset</strong> uses only the boat GPS.{" "}
+                <strong className="text-white/85">Silence</strong> mutes remote alerts until the boat resets the anchor.{" "}
+                <strong className="text-white/85">Mark seen</strong> stops the alarm here without changing the geofence.
+              </>
+            )}
           </p>
         </div>
       ) : null}
