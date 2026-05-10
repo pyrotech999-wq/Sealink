@@ -808,14 +808,14 @@ export default function HelpPage() {
                 alert — that is done in your mail app or system settings, not inside SeaLink.
               </p>
               <p className="mt-3 text-zinc-400">
-                <strong className="text-zinc-200">Resetting the anchor from the receiving phone:</strong> when the alarm
-                appears on the device that only receives alerts (not the one monitoring GPS), use{" "}
-                <strong className="text-zinc-200">Reset anchor at this phone</strong> on the red screen to drop the orange
-                ring at <strong className="text-zinc-200">this handset’s current GPS</strong> and clear the alert for the
-                account. On the map page the same action is labelled{" "}
-                <strong className="text-zinc-200">Reset anchor at this device</strong>. If this phone has no fix yet,
-                SeaLink may fall back to the monitoring device’s last position from the server, or ask you to allow
-                location and try again.
+                <strong className="text-zinc-200">Resetting from the receiving phone:</strong> when the alarm appears on
+                the handset that only receives alerts, <strong className="text-zinc-200">Reset at monitor position</strong>{" "}
+                keeps the same geofence radius (for example 10&nbsp;m) but moves the orange ring to where the{" "}
+                <strong className="text-zinc-200">monitoring device’s boat GPS</strong> is <em>now</em> — using its latest
+                position from the server — then clears the alert. It does <strong className="text-zinc-200">not</strong>{" "}
+                use the receiving phone’s own GPS for the new centre. If SeaLink cannot see which device is the monitor, or
+                the monitor has not reported a fix recently, open SeaLink on the boat phone with sharing on, save monitor
+                settings if needed, then try again.
               </p>
             </Section>
 
