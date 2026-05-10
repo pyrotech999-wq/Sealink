@@ -27,7 +27,10 @@ export type AnchorRemoteCommandPostDebug = {
   postStatus: number;
   postResponse: unknown;
   commandId: string | null;
+  /** Server-resolved monitor handset (UUID). */
   targetDeviceId: string | null;
+  /** This phone — from command row / POST (UUID). */
+  sourceDeviceId: string | null;
   sessionId: string | null;
   status: string | null;
 };
@@ -42,13 +45,19 @@ function postDebugFromPosted(
     | { ok: false; httpStatus: number; rawJson: unknown; error: string },
 ): AnchorRemoteCommandPostDebug {
   if (!posted.ok) {
+    let cmdFromBody: AnchorSessionCommandApi | undefined;
+    const raw = posted.rawJson;
+    if (raw && typeof raw === "object" && "command" in raw) {
+      cmdFromBody = (raw as { command?: AnchorSessionCommandApi }).command;
+    }
     return {
       postStatus: posted.httpStatus,
       postResponse: posted.rawJson,
-      commandId: null,
-      targetDeviceId: null,
-      sessionId: null,
-      status: null,
+      commandId: cmdFromBody?.id ?? null,
+      targetDeviceId: cmdFromBody?.targetDeviceId ?? null,
+      sourceDeviceId: cmdFromBody?.sourceDeviceId ?? null,
+      sessionId: cmdFromBody?.sessionId ?? null,
+      status: cmdFromBody?.status ?? null,
     };
   }
   return {
@@ -56,6 +65,7 @@ function postDebugFromPosted(
     postResponse: posted.rawJson,
     commandId: posted.command.id,
     targetDeviceId: posted.command.targetDeviceId ?? null,
+    sourceDeviceId: posted.command.sourceDeviceId ?? null,
     sessionId: posted.command.sessionId ?? null,
     status: posted.command.status,
   };
@@ -187,6 +197,7 @@ export async function enqueueAndAwaitAnchorCommand(args: {
     postResponse: null,
     commandId: null,
     targetDeviceId: null,
+    sourceDeviceId: null,
     sessionId: null,
     status: null,
   };
