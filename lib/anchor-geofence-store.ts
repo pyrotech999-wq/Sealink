@@ -29,6 +29,7 @@ function defaults(uid: string): AnchorGeofenceConfigRow {
     monitorDeviceId: "this",
     lastBearingDeg: null,
     lastAlertAt: null,
+    remoteAlarmSilencedUntilReset: false,
     updatedAt: new Date().toISOString(),
   };
 }
@@ -66,6 +67,7 @@ function fromDb(uid: string, r: Record<string, unknown>): AnchorGeofenceConfigRo
         ? (r.last_bearing_deg as number)
         : null,
     lastAlertAt: r.last_alert_at != null ? String(r.last_alert_at) : null,
+    remoteAlarmSilencedUntilReset: r.remote_alarm_silenced_until_reset === true,
     updatedAt: r.updated_at != null ? String(r.updated_at) : new Date().toISOString(),
   };
 }
@@ -81,6 +83,7 @@ function toDb(uid: string, c: AnchorAlertConfig, updatedAt: string): Record<stri
     monitor_device_id: c.monitorDeviceId || "this",
     last_bearing_deg: c.lastBearingDeg,
     last_alert_at: c.lastAlertAt,
+    remote_alarm_silenced_until_reset: c.remoteAlarmSilencedUntilReset === true,
     updated_at: updatedAt,
   };
 }
@@ -118,6 +121,10 @@ export async function setAnchorGeofenceConfig(
           ? Math.max(0, Math.min(360, Math.round(patch.angleDeg)))
           : cur.angleDeg,
       monitorDeviceId: typeof patch.monitorDeviceId === "string" ? patch.monitorDeviceId : cur.monitorDeviceId,
+      remoteAlarmSilencedUntilReset:
+        typeof patch.remoteAlarmSilencedUntilReset === "boolean"
+          ? patch.remoteAlarmSilencedUntilReset
+          : (cur.remoteAlarmSilencedUntilReset ?? false),
       updatedAt,
     };
 

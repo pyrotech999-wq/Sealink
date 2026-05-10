@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { requireAuthUser } from "@/lib/auth";
 import { sendAnchorGeofenceAlertEmail } from "@/lib/anchor-alert-email";
-import { createAnchorAlert, listUnseenAnchorAlerts, markAnchorAlertSeen } from "@/lib/anchor-alerts-store";
+import {
+  createAnchorAlert,
+  listUnseenAnchorAlerts,
+  markAllUnseenAnchorAlertsForUser,
+  markAnchorAlertSeen,
+} from "@/lib/anchor-alerts-store";
 
 export async function GET(): Promise<Response> {
   const user = await requireAuthUser();
@@ -16,6 +21,11 @@ export async function POST(req: Request): Promise<Response> {
     body = (await req.json()) as unknown;
   } catch {
     body = null;
+  }
+
+  if (body && typeof body === "object" && "markAllSeen" in body && (body as { markAllSeen?: unknown }).markAllSeen === true) {
+    const n = await markAllUnseenAnchorAlertsForUser(user.uid);
+    return NextResponse.json({ ok: true as const, marked: n });
   }
 
   if (body && typeof body === "object" && "seenId" in body) {

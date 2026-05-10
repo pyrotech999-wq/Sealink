@@ -14,6 +14,7 @@ type Body = {
   monitorDeviceId?: unknown;
   lastBearingDeg?: unknown;
   lastAlertAt?: unknown;
+  remoteAlarmSilencedUntilReset?: unknown;
 };
 
 export async function GET(): Promise<Response> {
@@ -47,6 +48,9 @@ export async function POST(req: Request): Promise<Response> {
     ...(typeof body.monitorDeviceId === "string" ? { monitorDeviceId: body.monitorDeviceId.trim() || "this" } : {}),
     ...(typeof body.lastBearingDeg === "number" && Number.isFinite(body.lastBearingDeg) ? { lastBearingDeg: body.lastBearingDeg } : body.lastBearingDeg === null ? { lastBearingDeg: null } : {}),
     ...(typeof body.lastAlertAt === "string" ? { lastAlertAt: body.lastAlertAt } : body.lastAlertAt === null ? { lastAlertAt: null } : {}),
+    ...(typeof body.remoteAlarmSilencedUntilReset === "boolean"
+      ? { remoteAlarmSilencedUntilReset: body.remoteAlarmSilencedUntilReset }
+      : {}),
   };
 
   const next = await setAnchorGeofenceConfig(u.uid, patch, { isAdmin: u.isAdmin });

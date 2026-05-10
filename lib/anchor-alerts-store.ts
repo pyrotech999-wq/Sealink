@@ -148,6 +148,35 @@ export async function listUnseenAnchorAlerts(uid: string): Promise<AnchorAlertRo
   });
 }
 
+export async function markAllUnseenAnchorAlertsForUser(uid: string): Promise<number> {
+  return enqueue(async () => {
+    const now = new Date();
+    if (isSupabaseConfigured()) {
+      await pruneAnchorAlertsSupabase(now);
+      const sb = supabaseAdmin();
+      const { data, error } = await sb
+        .from("anchor_alerts")
+        .update({ seen_at: now.toISOString() })
+        .eq("user_uid", uid)
+        .is("seen_at", null)
+        .select("id");
+      if (error) throw new Error(error.message);
+      return Array.isArray(data) ? data.length : 0;
+    }
+
+    const list = prune(readRaw(), now);
+    let n = 0;
+    for (const row of list) {
+      if (row.uid === uid && !row.seenAt) {
+        row.seenAt = now.toISOString();
+        n += 1;
+      }
+    }
+    writeRaw(list);
+    return n;
+  });
+}
+
 export async function markAnchorAlertSeen(uid: string, id: string): Promise<boolean> {
   return enqueue(async () => {
     const now = new Date();

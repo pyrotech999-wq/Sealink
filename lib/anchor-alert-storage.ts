@@ -33,6 +33,11 @@ export type AnchorAlertConfig = {
   /** Bearing from anchor to last checked fix (for angle-change logic). */
   lastBearingDeg: number | null;
   lastAlertAt: string | null;
+  /**
+   * When true (server geofence row), non-monitor devices should not surface new drift anchor inbox pop-ups
+   * until the boat clears it (e.g. after RESET_ANCHOR).
+   */
+  remoteAlarmSilencedUntilReset?: boolean;
 };
 
 const KEY = "sealink_anchor_alert_v1";
@@ -46,6 +51,7 @@ const DEFAULTS: AnchorAlertConfig = {
   monitorDeviceId: "this",
   lastBearingDeg: null,
   lastAlertAt: null,
+  remoteAlarmSilencedUntilReset: false,
 };
 
 export function parseAnchorRadiusM(value: unknown, opts?: ParseAnchorRadiusOpts): AnchorRadiusM {
@@ -69,6 +75,20 @@ export function nextLargerStandardAnchorRadiusM(
   return null;
 }
 
+/** Add metres to current radius, then snap up to the smallest allowed option that is still ≥ min(200, cur+delta). */
+export function anchorRadiusAfterAddingMeters(
+  currentM: unknown,
+  addM: number,
+  opts?: { fromTrustedStore?: boolean },
+): AnchorRadiusM {
+  const cur = parseAnchorRadiusM(currentM, { fromTrustedStore: opts?.fromTrustedStore === true });
+  const target = Math.min(200, Math.round(Number(cur) + addM));
+  for (const o of ANCHOR_RADIUS_METRES_OPTIONS) {
+    if (o >= target) return o;
+  }
+  return ANCHOR_RADIUS_METRES_OPTIONS[ANCHOR_RADIUS_METRES_OPTIONS.length - 1]!;
+}
+
 export function getAnchorAlertConfig(opts?: GetAnchorAlertConfigOpts): AnchorAlertConfig {
   if (typeof window === "undefined") return DEFAULTS;
   try {
@@ -88,6 +108,8 @@ export function getAnchorAlertConfig(opts?: GetAnchorAlertConfigOpts): AnchorAle
       monitorDeviceId: typeof parsed.monitorDeviceId === "string" ? parsed.monitorDeviceId : "this",
       lastBearingDeg: typeof parsed.lastBearingDeg === "number" && Number.isFinite(parsed.lastBearingDeg) ? parsed.lastBearingDeg : null,
       lastAlertAt: typeof parsed.lastAlertAt === "string" ? parsed.lastAlertAt : null,
+      remoteAlarmSilencedUntilReset:
+        typeof parsed.remoteAlarmSilencedUntilReset === "boolean" ? parsed.remoteAlarmSilencedUntilReset : false,
     };
   } catch {
     return DEFAULTS;
