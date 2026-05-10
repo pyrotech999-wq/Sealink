@@ -654,6 +654,104 @@ export default function HelpPage() {
                 <strong className="text-zinc-200">Cross-device:</strong> signed-in users can choose which device monitors
                 GPS and which device(s) should show the alert pop-up; settings sync when you save in the anchor dialog.
               </p>
+
+              <h3
+                id="anchor-detailed-setup"
+                className="scroll-mt-24 pt-4 text-base font-semibold tracking-tight text-zinc-100"
+              >
+                Step-by-step: one device, or monitor on one phone and alert another
+              </h3>
+              <p className="text-zinc-400">
+                Open <strong className="text-zinc-200">Anchor alert &amp; geofence</strong> from the{" "}
+                <Link href="/anchor-alarm" className="font-medium text-emerald-400 hover:underline">
+                  Anchor alarm
+                </Link>{" "}
+                page (or from the map where your layout shows an Anchor control). Stay signed in. On the map, turn on{" "}
+                <strong className="text-zinc-200">Share my location on this map</strong> and wait until GPS is good enough
+                to arm — the dialog shows hints if sharing or accuracy is not ready yet.
+              </p>
+
+              <p className="mt-3 font-medium text-zinc-200">A — Same device monitors and gets the alarm</p>
+              <ol className="list-decimal space-y-2 pl-5 text-zinc-400">
+                <li>
+                  Optional: under <strong className="text-zinc-300">This device label</strong>, enter a short name (for
+                  example “Samsung phone”) and leave the field so it saves.
+                </li>
+                <li>
+                  In the green <strong className="text-zinc-300">Two signed-in devices</strong> card, under{" "}
+                  <strong className="text-zinc-300">1 — Device that monitors</strong>, leave{" "}
+                  <strong className="text-zinc-300">This device (this browser / app)</strong>.
+                </li>
+                <li>
+                  Under <strong className="text-zinc-300">2 — Who should get the alarm pop-up?</strong>, set{" "}
+                  <strong className="text-zinc-300">Alert on</strong> to <strong className="text-zinc-300">This device only</strong>.
+                </li>
+                <li>
+                  Tap <strong className="text-zinc-300">Save monitor &amp; alert devices</strong> and confirm the saved
+                  message appears.
+                </li>
+                <li>
+                  Choose <strong className="text-zinc-300">Geofence radius</strong> and, if you want, turn on{" "}
+                  <strong className="text-zinc-300">Alert on bearing change</strong> with a degree limit.
+                </li>
+                <li>
+                  Tap <strong className="text-zinc-300">Arm geofence at current position</strong>. On the{" "}
+                  <strong className="text-zinc-300">SeaLink Android app</strong>, if this device is the monitor, accept{" "}
+                  <strong className="text-zinc-300">notifications</strong> and{" "}
+                  <strong className="text-zinc-300">all-the-time / background location</strong> when asked — only for anchor
+                  monitoring, not for ordinary map use.
+                </li>
+                <li>
+                  In the <strong className="text-zinc-300">browser</strong>, keep the tab open while armed. In the{" "}
+                  <strong className="text-zinc-300">app</strong>, background monitoring can continue when this device is the
+                  monitor (see the Android section below).
+                </li>
+              </ol>
+
+              <p className="mt-4 font-medium text-zinc-200">B — One device monitors GPS; another only gets the alarm</p>
+              <p className="text-zinc-400">
+                Both units must use the <strong className="text-zinc-200">same SeaLink account</strong>. Each should open
+                SeaLink while signed in (any page). On each, turn on map location sharing briefly so the account can register
+                the device and receive fixes.
+              </p>
+              <ol className="list-decimal space-y-2 pl-5 text-zinc-400">
+                <li>
+                  On the device where you configure the anchor, open the dialog and tap{" "}
+                  <strong className="text-zinc-300">Refresh devices</strong> in the <strong className="text-zinc-300">header</strong>{" "}
+                  (next to Close). Repeat after the other phone has loaded the app if it does not appear in the lists yet.
+                </li>
+                <li>
+                  Under <strong className="text-zinc-300">1 — Device that monitors</strong>, pick either{" "}
+                  <strong className="text-zinc-300">This device</strong> or the other listed device — whichever GPS should be
+                  compared to the anchor. That device should stay on SeaLink with sharing on so positions keep updating.
+                </li>
+                <li>
+                  Under <strong className="text-zinc-300">2 — Who should get the alarm pop-up?</strong>, set{" "}
+                  <strong className="text-zinc-300">Alert on</strong> to <strong className="text-zinc-300">The other device only</strong>{" "}
+                  or <strong className="text-zinc-300">Both devices</strong>. If you choose other or both, pick the other unit
+                  in <strong className="text-zinc-300">Other device (choose one)</strong>.
+                </li>
+                <li>
+                  Tap <strong className="text-zinc-300">Save monitor &amp; alert devices</strong>. Changing the monitor away
+                  from an existing server choice may ask for confirmation first.
+                </li>
+                <li>
+                  Set radius (and optional bearing), then <strong className="text-zinc-300">Arm geofence at current position</strong>{" "}
+                  on the device you use to drop the anchor. The non-monitoring device does not need the Android background
+                  service unless <em>it</em> is the monitor.
+                </li>
+              </ol>
+              <p className="mt-3 rounded-lg border border-zinc-700/80 bg-zinc-950/60 px-3 py-2 text-xs leading-5 text-zinc-400">
+                <strong className="text-zinc-300">Quick roles:</strong> same phone for everything — monitor = This device,
+                alert = This device only. Phone monitors, tablet screams — monitor = This device, alert = The other device
+                only, other = tablet. Both hear it — monitor = whichever carries GPS, alert = Both devices, other = pick the
+                second device.
+              </p>
+              <p className="mt-2 text-xs text-zinc-500">
+                <strong className="text-zinc-400">Disarm:</strong> use <strong className="text-zinc-300">Disarm</strong> in
+                the anchor dialog, or the compact Anchor status on Home when your map shows it.
+              </p>
+
               <p>
                 <strong className="text-zinc-200">How often it checks:</strong> the geofence is evaluated about{" "}
                 <strong className="text-zinc-200">every 30 seconds</strong> on the monitoring device, using the same
