@@ -151,6 +151,10 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       errorMessage: err,
     });
 
+    if (!next) {
+      return NextResponse.json({ ok: false, error: "Update returned no row", code: "UPDATE_EMPTY" }, { status: 500, headers: noStore });
+    }
+
     anchorCommandServerLog("command_patched", { uid: u.uid, id, status, error: err });
 
     return NextResponse.json({ ok: true, command: next }, { headers: noStore });

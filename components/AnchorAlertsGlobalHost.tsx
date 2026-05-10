@@ -21,7 +21,7 @@ import { getOrCreateDeviceId } from "@/lib/device-id";
 import { isBareMetaDataDeletionPage } from "@/lib/messaging-chrome-paths";
 import { type LatLng as AnchorResetLatLng } from "@/lib/anchor-reset-gps";
 import { anchorRadiusAfterAddingMeters } from "@/lib/anchor-alert-storage";
-import { enqueueAndAwaitAnchorCommand } from "@/lib/anchor-commands-client";
+import { ANCHOR_DEVICE_ID_HEADER, enqueueAndAwaitAnchorCommand, postAnchorSessionCommand } from "@/lib/anchor-commands-client";
 
 const POLL_MS = 20_000;
 
@@ -47,6 +47,25 @@ export function AnchorAlertsGlobalHost() {
   const [alarmBlocked, setAlarmBlocked] = useState(false);
   const [resetBusyKind, setResetBusyKind] = useState<null | "reset" | "increase" | "silence">(null);
   const [resetError, setResetError] = useState<string | null>(null);
+  const [remoteAnchorCmdDebug, setRemoteAnchorCmdDebug] = useState(false);
+  const [remoteAnchorCmdDebugJson, setRemoteAnchorCmdDebugJson] = useState<string | null>(null);
+
+  useEffect(() => {
+    const read = () => {
+      try {
+        setRemoteAnchorCmdDebug(typeof window !== "undefined" && localStorage.getItem("sealink_remote_anchor_cmd_debug") === "1");
+      } catch {
+        setRemoteAnchorCmdDebug(false);
+      }
+    };
+    read();
+    if (typeof window === "undefined") return;
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "sealink_remote_anchor_cmd_debug" || e.key === null) read();
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
   const applyGeofenceResetAndDismiss = useCallback(
     async (fix: AnchorResetLatLng, seenId: string, opts?: { signal?: AbortSignal }): Promise<void> => {
@@ -362,6 +381,8 @@ export function AnchorAlertsGlobalHost() {
                 if (e instanceof Error && e.message === "save") return;
                 if (isAnchorResetAbortError(e)) {
                   setResetError("Request timed out. Check your connection, or open Anchor alarm on the map.");
+                } else {
+                  setResetError(e instanceof Error ? e.message : "Unexpected error.");
                 }
               } finally {
                 clear();
@@ -454,6 +475,8 @@ export function AnchorAlertsGlobalHost() {
               } catch (e) {
                 if (isAnchorResetAbortError(e)) {
                   setResetError("That took too long. Check connection, then try again.");
+                } else {
+                  setResetError(e instanceof Error ? e.message : "Unexpected error.");
                 }
               } finally {
                 clear();
@@ -555,6 +578,8 @@ export function AnchorAlertsGlobalHost() {
               } catch (e) {
                 if (isAnchorResetAbortError(e)) {
                   setResetError("That took too long. Check connection, then try again.");
+                } else {
+                  setResetError(e instanceof Error ? e.message : "Unexpected error.");
                 }
               } finally {
                 clear();
@@ -584,6 +609,56 @@ export function AnchorAlertsGlobalHost() {
         >
           Open map &amp; anchor
         </a>
+        {remoteAnchorCmdDebug && alert ? (
+          <div className="pointer-events-auto mx-auto max-w-lg rounded-lg border border-amber-400/60 bg-amber-950/50 px-3 py-2 text-left font-mono text-[10px] text-amber-100">
+            <div className="font-bold text-amber-200">Remote anchor command debug</div>
+            <p className="mt-1 text-[9px] opacity-90">
+              Enable: <code className="rounded bg-black/40 px-1">localStorage.setItem(&quot;sealink_remote_anchor_cmd_debug&quot;,&quot;1&quot;)</code> then reload.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1">
+              <button
+                type="button"
+                disabled={!deviceId || deviceId === "server" || resetBusyKind !== null}
+                className="rounded bg-amber-500 px-2 py-1 text-[10px] font-bold text-black disabled:opacity-50"
+                onClick={() => {
+                  void (async () => {
+                    setRemoteAnchorCmdDebugJson(null);
+                    const r = await fetch("/api/anchor/commands?role=monitor", {
+                      credentials: "same-origin",
+                      cache: "no-store",
+                      headers: { [ANCHOR_DEVICE_ID_HEADER]: deviceId },
+                    });
+                    const t = await r.text();
+                    setRemoteAnchorCmdDebugJson(JSON.stringify({ httpStatus: r.status, body: t.slice(0, 16_000) }, null, 2));
+                  })();
+                }}
+              >
+                GET monitor poll (this device as header — use on monitor phone)
+              </button>
+              <button
+                type="button"
+                disabled={!deviceId || deviceId === "server" || resetBusyKind !== null}
+                className="rounded bg-sky-500 px-2 py-1 text-[10px] font-bold text-black disabled:opacity-50"
+                onClick={() => {
+                  void (async () => {
+                    setRemoteAnchorCmdDebugJson(null);
+                    const posted = await postAnchorSessionCommand({
+                      type: "INCREASE_RADIUS",
+                      meters: 10,
+                      sourceDeviceId: deviceId,
+                    });
+                    setRemoteAnchorCmdDebugJson(JSON.stringify(posted, null, 2));
+                  })();
+                }}
+              >
+                Create test increase-radius command
+              </button>
+            </div>
+            {remoteAnchorCmdDebugJson ? (
+              <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-all text-[9px] text-amber-50">{remoteAnchorCmdDebugJson}</pre>
+            ) : null}
+          </div>
+        ) : null}
         <button
           type="button"
           disabled={resetBusyKind !== null}

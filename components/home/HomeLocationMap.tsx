@@ -914,17 +914,24 @@ export default function HomeLocationMap({
     let disposed = false;
     const heartbeatKey = "sealink_anchor_cmd_boat_heartbeat";
 
-    const withTimeout = async <T,>(p: Promise<T>, ms: number, label: string): Promise<T | undefined> => {
-      try {
-        return await Promise.race([
-          p,
-          new Promise<undefined>((_, rej) => {
-            window.setTimeout(() => rej(new Error(`${label}_timeout_${ms}ms`)), ms);
-          }),
-        ]);
-      } catch (e) {
-        console.warn("[ANCHOR_MONITOR_CMD_CLIENT]", JSON.stringify({ phase: label, err: e instanceof Error ? e.message : String(e) }));
-        return undefined;
+    const withTimeout = async (p: Promise<void>, ms: number, label: string): Promise<void> => {
+      let tid: ReturnType<typeof setTimeout> | undefined;
+      const timeoutDone = new Promise<"timeout">((resolve) => {
+        tid = window.setTimeout(() => resolve("timeout"), ms);
+      });
+      const pDone = p.then(
+        () => {
+          if (tid != null) window.clearTimeout(tid);
+          return "ok" as const;
+        },
+        (e: unknown) => {
+          if (tid != null) window.clearTimeout(tid);
+          throw e;
+        },
+      );
+      const out = await Promise.race([pDone, timeoutDone]);
+      if (out === "timeout") {
+        console.warn("[ANCHOR_MONITOR_CMD_CLIENT]", JSON.stringify({ phase: label, err: `timeout_after_${ms}ms` }));
       }
     };
 
@@ -975,7 +982,7 @@ export default function HomeLocationMap({
     };
 
     const tick = async () => {
-      if (disposed || anchorSessionCommandApplyBusyRef.current) return;
+      if (disposed || monitorAnchorPollInFlightRef.current) return;
       const snap = anchorCfgRef.current;
       if (!snap.armed) return;
       const serverMonitor = anchorMonitorRef.current?.monitorDeviceId;
@@ -989,9 +996,9 @@ export default function HomeLocationMap({
         return;
       }
 
-      anchorSessionCommandApplyBusyRef.current = true;
+      monitorAnchorPollInFlightRef.current = true;
       try {
-        await refreshMonitorRegistration();
+        await withTimeout(refreshMonitorRegistration(), 12_000, "heartbeat_anchor_monitor");
 
         const activeSessionId = `${anchorUserUidRef.current ?? "no-uid"}|armed:${snap.armed}|r${snap.radiusM}|la=${snap.lastAlertAt ?? "null"}|sil=${snap.remoteAlarmSilencedUntilReset === true}`;
         const monitoringActive = snap.armed && eff === deviceId;
@@ -1013,6 +1020,11 @@ export default function HomeLocationMap({
           lastError?: string | null;
           lastAppliedCommandId?: string | null;
           lastRawPreview?: string | null;
+          lastActiveSessionId?: string | null;
+          lastResponseBody?: string | null;
+          lastReason?: string | null;
+          lastHeaderSent?: string | null;
+          lastJsonOk?: boolean | null;
         }) => {
           setMonitorCmdPollDebug((d) => ({ ...d, ...patch }));
         };
@@ -1028,6 +1040,11 @@ export default function HomeLocationMap({
             lastCommandCount: null,
             lastError: `poll_http_${hr.status}`,
             lastRawPreview: null,
+            lastActiveSessionId: activeSessionId,
+            lastResponseBody: null,
+            lastReason: null,
+            lastHeaderSent: deviceId,
+            lastJsonOk: null,
           });
           console.warn(
             "[ANCHOR_MONITOR_CMD_CLIENT]",
@@ -1052,18 +1069,29 @@ export default function HomeLocationMap({
 
         const rawText = await hr.clone().text();
         let hd: {
+          ok?: boolean;
           commands?: AnchorSessionCommandApi[];
           pollAccepted?: boolean;
           serverEffectiveMonitorDeviceId?: string | null;
+          reason?: string;
         };
+        let jsonOk = false;
         try {
           hd = JSON.parse(rawText) as typeof hd;
+          jsonOk = true;
         } catch {
           hd = {};
         }
         const pollAccepted = hd.pollAccepted === true;
         const list = Array.isArray(hd.commands) ? hd.commands : [];
         const serverEff = hd.serverEffectiveMonitorDeviceId ?? null;
+        const reason = typeof hd.reason === "string" ? hd.reason : null;
+        let pollVerbose = false;
+        try {
+          pollVerbose = typeof window !== "undefined" && localStorage.getItem("sealink_anchor_poll_verbose") === "1";
+        } catch {
+          pollVerbose = false;
+        }
 
         console.warn(
           "[ANCHOR_MONITOR_CMD_CLIENT]",
@@ -1077,6 +1105,7 @@ export default function HomeLocationMap({
             serverEffectiveMonitorDeviceId: serverEff,
             clientEffectiveMonitorDeviceId: eff,
             commandList: list,
+            reason,
             rawPreview: rawText.slice(0, 2000),
           }),
         );
@@ -1088,8 +1117,13 @@ export default function HomeLocationMap({
           lastServerEffective: serverEff,
           lastClientEff: eff,
           lastCommandCount: list.length,
-          lastError: pollAccepted ? null : "poll_denied_server_mismatch",
+          lastError: pollAccepted ? null : reason ?? "poll_denied_or_not_accepted",
           lastRawPreview: rawText.slice(0, 400),
+          lastActiveSessionId: activeSessionId,
+          lastResponseBody: pollVerbose ? rawText.slice(0, 12_000) : rawText.slice(0, 800),
+          lastReason: reason,
+          lastHeaderSent: deviceId,
+          lastJsonOk: jsonOk,
         });
 
         try {
@@ -1109,6 +1143,7 @@ export default function HomeLocationMap({
         if (!pollAccepted) {
           anchorCommandClientLog("boat_command_poll_denied", {
             deviceId: deviceId.slice(0, 12),
+            reason: reason ?? undefined,
             hint: "Server effective monitor id does not match this handset — open Anchor alarm and save monitor, or re-arm so geofence stores this device id.",
           });
           return;
@@ -1306,8 +1341,12 @@ export default function HomeLocationMap({
           }
         }
       } finally {
-        anchorSessionCommandApplyBusyRef.current = false;
+        monitorAnchorPollInFlightRef.current = false;
       }
+    };
+
+    monitorManualPollRef.current = () => {
+      void tick();
     };
 
     const intervalMs = () => (document.visibilityState === "visible" ? 2500 : 7000);
@@ -1326,6 +1365,7 @@ export default function HomeLocationMap({
     void tick();
     return () => {
       disposed = true;
+      monitorManualPollRef.current = null;
       window.clearInterval(iv);
       document.removeEventListener("visibilitychange", onVis);
       window.removeEventListener("focus", onFocus);
@@ -2379,17 +2419,44 @@ export default function HomeLocationMap({
           <div className="overflow-hidden rounded-xl border border-zinc-200 shadow-sm dark:border-zinc-800">
             <div className="relative h-[min(55vh,420px)] w-full min-h-[280px] bg-zinc-100 dark:bg-zinc-900">
               {anchorCfg.armed && breachIsMonitoringDevice ? (
-                <div className="pointer-events-none absolute bottom-2 left-2 z-[900] max-w-[min(92vw,20rem)] text-left">
-                  <div className="pointer-events-auto max-h-48 overflow-y-auto rounded-md border border-amber-700/80 bg-black/80 px-2 py-1.5 font-mono text-[10px] leading-snug text-amber-100 shadow-lg backdrop-blur-sm">
+                <div className="pointer-events-none absolute bottom-2 left-2 z-[900] max-w-[min(96vw,28rem)] text-left">
+                  <div
+                    className={`pointer-events-auto overflow-y-auto rounded-md border border-amber-700/80 bg-black/80 px-2 py-1.5 font-mono text-[10px] leading-snug text-amber-100 shadow-lg backdrop-blur-sm ${anchorPollVerboseDebug ? "max-h-[min(70vh,28rem)]" : "max-h-48"}`}
+                  >
                     <div className="font-bold text-amber-300">Monitor command poll</div>
                     <div className="break-all">deviceId: {deviceId}</div>
+                    <div className="break-all">ANCHOR header sent: {monitorCmdPollDebug.lastHeaderSent ?? deviceId}</div>
                     <div className="break-all">effectiveMonitor (client): {breachEffectiveMonitor}</div>
                     <div className="break-all">effectiveMonitor (server poll): {monitorCmdPollDebug.lastServerEffective ?? "—"}</div>
+                    <div className="break-all">activeSessionId: {monitorCmdPollDebug.lastActiveSessionId ?? "—"}</div>
                     <div>lastPoll: {monitorCmdPollDebug.lastPollAt ? new Date(monitorCmdPollDebug.lastPollAt).toLocaleTimeString() : "—"}</div>
-                    <div>http: {monitorCmdPollDebug.lastHttpStatus ?? "—"} pollOk: {String(monitorCmdPollDebug.lastPollAccepted)}</div>
+                    <div>
+                      http: {monitorCmdPollDebug.lastHttpStatus ?? "—"} jsonOk: {String(monitorCmdPollDebug.lastJsonOk)} pollOk:{" "}
+                      {String(monitorCmdPollDebug.lastPollAccepted)}
+                    </div>
+                    <div>reason: {monitorCmdPollDebug.lastReason ?? "—"}</div>
                     <div>cmds: {monitorCmdPollDebug.lastCommandCount ?? "—"}</div>
                     <div>appliedId: {monitorCmdPollDebug.lastAppliedCommandId ?? "—"}</div>
                     <div className="break-words text-amber-200/90">err: {monitorCmdPollDebug.lastError ?? "—"}</div>
+                    {anchorPollVerboseDebug ? (
+                      <>
+                        <p className="mt-1 text-[9px] text-amber-400/90">
+                          Verbose on: localStorage &quot;sealink_anchor_poll_verbose&quot; = &quot;1&quot; (then reload). Off: remove key.
+                        </p>
+                        <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all text-[9px] text-amber-50/95">
+                          {monitorCmdPollDebug.lastResponseBody ?? "—"}
+                        </pre>
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          <button
+                            type="button"
+                            className="pointer-events-auto rounded bg-amber-600 px-2 py-1 text-[10px] font-bold text-black"
+                            onClick={() => monitorManualPollRef.current?.()}
+                          >
+                            Run monitor command poll now
+                          </button>
+                        </div>
+                      </>
+                    ) : null}
                   </div>
                 </div>
               ) : null}
