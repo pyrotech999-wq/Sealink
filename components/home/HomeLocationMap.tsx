@@ -69,7 +69,7 @@ import {
 import { getNativeLocationBridge } from "@/lib/native-location-bridge";
 import { clearPresentedAnchorAlertId, shouldReceiveAnchorAlarmPopUp, writePresentedAnchorAlertId } from "@/lib/anchor-alarm-recipient";
 import {
-  effectiveMonitorDeviceIdFromServer,
+  effectiveMonitorDeviceIdForHomeMap,
   resolveAnchorResetCentreCoordinates,
 } from "@/lib/anchor-reset-centre-client";
 import { ANCHOR_LIVE_APIS_BLOCKED } from "@/lib/anchor-live-client-flags";
@@ -2035,7 +2035,7 @@ export default function HomeLocationMap({
 
                   if (!ANCHOR_LIVE_APIS_BLOCKED) {
                     try {
-                      const effectiveMonitor = effectiveMonitorDeviceIdFromServer({
+                      const effectiveMonitor = effectiveMonitorDeviceIdForHomeMap({
                         thisDeviceId: deviceId,
                         serverMonitorDeviceId: anchorMonitor?.monitorDeviceId,
                         geofenceMonitorDeviceId: anchorCfgRef.current.monitorDeviceId,

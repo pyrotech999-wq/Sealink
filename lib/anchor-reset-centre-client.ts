@@ -62,14 +62,29 @@ export async function resolveAnchorResetCentreCoordinates(args: {
   return fix;
 }
 
-/** Resolve `monitorDeviceId` from server monitor row and geofence config (matches Home map logic). */
+/**
+ * Canonical monitoring handset id from `anchor_monitor_config` or a concrete id on the geofence row.
+ * Returns `null` when the geofence still has `"this"` but the server monitor row is unset (cannot know remotely).
+ */
 export function effectiveMonitorDeviceIdFromServer(args: {
+  serverMonitorDeviceId: string | null | undefined;
+  geofenceMonitorDeviceId: string | null | undefined;
+}): string | null {
+  const s = args.serverMonitorDeviceId;
+  if (s != null && String(s).trim() !== "") return String(s).trim();
+  const g = args.geofenceMonitorDeviceId ?? "this";
+  if (typeof g === "string" && g !== "this" && g.trim() !== "") return g.trim();
+  return null;
+}
+
+/** Same as server resolution, but `"this"` on geofence means this browser’s `deviceId` (Home map only). */
+export function effectiveMonitorDeviceIdForHomeMap(args: {
   thisDeviceId: string;
   serverMonitorDeviceId: string | null | undefined;
   geofenceMonitorDeviceId: string | null | undefined;
 }): string {
-  const { thisDeviceId, serverMonitorDeviceId, geofenceMonitorDeviceId } = args;
-  if (serverMonitorDeviceId != null && serverMonitorDeviceId !== "") return serverMonitorDeviceId;
-  const g = geofenceMonitorDeviceId ?? "this";
-  return g === "this" ? thisDeviceId : g;
+  const fromServer = effectiveMonitorDeviceIdFromServer(args);
+  if (fromServer != null) return fromServer;
+  const g = args.geofenceMonitorDeviceId ?? "this";
+  return g === "this" ? args.thisDeviceId : g;
 }
