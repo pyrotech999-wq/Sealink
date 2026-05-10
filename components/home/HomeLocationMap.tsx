@@ -101,6 +101,15 @@ const NEARBY_RING_METRES = 5 * 1609.344;
 /** How often the anchor geofence is evaluated and remote monitor fixes are polled (ms). Uses the same {@link pos} as the map. */
 const ANCHOR_POSITION_CHECK_INTERVAL_MS = 30_000;
 
+/**
+ * Whether this device should show the full-screen anchor alarm / notifications for a new breach.
+ * Matches inbox poll: empty `alertDeviceIds` from the server means all signed-in devices receive alerts.
+ */
+function shouldReceiveAnchorAlarmPopUp(alertDeviceIds: string[] | null | undefined, thisDeviceId: string): boolean {
+  if (!alertDeviceIds?.length) return true;
+  return alertDeviceIds.includes(thisDeviceId);
+}
+
 /** Fixed anchor point for geofence (orange ⚓ — drawn under your moving boat pin). */
 function buildAnchorGeofenceCenterIcon(): L.DivIcon {
   return L.divIcon({
@@ -312,13 +321,15 @@ export default function HomeLocationMap({
           keepalive: true,
         }).catch(() => undefined);
       }
-      queueMicrotask(() =>
-        setActiveAnchorAlert({
-          id: `native-${now}`,
-          message: msg,
-          createdAt: new Date(now).toISOString(),
-        }),
-      );
+      if (shouldReceiveAnchorAlarmPopUp(anchorMonitorRef.current?.alertDeviceIds, deviceId)) {
+        queueMicrotask(() =>
+          setActiveAnchorAlert({
+            id: `native-${now}`,
+            message: msg,
+            createdAt: new Date(now).toISOString(),
+          }),
+        );
+      }
     }).then((h) => {
       if (disposed) void h.remove();
       else listener = h;
@@ -388,6 +399,7 @@ export default function HomeLocationMap({
           typeof s.lastAlarmMessage === "string" &&
           s.lastAlarmMessage.trim()
         ) {
+          if (!shouldReceiveAnchorAlarmPopUp(anchorMonitorRef.current?.alertDeviceIds, deviceId)) return;
           const cur = activeAnchorAlertRef.current;
           if (!cur || cur.id.startsWith("native-")) {
             setActiveAnchorAlert({
