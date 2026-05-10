@@ -26,14 +26,17 @@ import {
 
 async function registerSessionDevice(
   currentDeviceId: string,
-): Promise<{ ok: true } | { ok: false; error?: string; status?: number }> {
+  explicitName?: string,
+): Promise<{ ok: true } | { ok: false; error?: string; status?: number; code?: "NAME_REQUIRED" }> {
   if (!currentDeviceId || currentDeviceId === "server") return { ok: true };
+  const deviceName = (explicitName ?? getDeviceName()).replace(/[\r\n]+/g, " ").trim().slice(0, 40);
+  if (!deviceName) return { ok: false, code: "NAME_REQUIRED" };
   try {
     const r = await fetch("/api/demo/register-device", {
       method: "POST",
       credentials: "same-origin",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ deviceId: currentDeviceId, deviceName: getDeviceName() }),
+      body: JSON.stringify({ deviceId: currentDeviceId, deviceName }),
     });
     if (!r.ok) {
       const j = (await r.json().catch(() => ({}))) as { error?: string };
@@ -159,18 +162,24 @@ export function AnchorAlertModal({
   const acc = horizontalAccuracyM;
   const accuracyOkForArm =
     acc == null || !Number.isFinite(acc) ? hasFix && pos != null : acc <= GPS_REFINE_TARGET_ACCURACY_M;
-  const canSet = sharing && hasFix && pos != null && accuracyOkForArm;
+  const effectiveDeviceName = useMemo(
+    () => deviceLabel.replace(/[\r\n]+/g, " ").trim().slice(0, 40),
+    [deviceLabel],
+  );
+  const deviceNameOk = effectiveDeviceName.length > 0;
+  const canSet = sharing && hasFix && pos != null && accuracyOkForArm && deviceNameOk;
   const hasAnchor = config.lat != null && config.lng != null;
   const showAndroidPreciseHint = isLikelyAndroid();
 
   const hint = useMemo(() => {
     if (!sharing) return "Turn on “Share my location on this map” first.";
+    if (!deviceNameOk) return "Enter a short name for this device below (e.g. Helm iPhone) so alerts and device lists show who is who.";
     if (!hasFix) return "Waiting for a GPS fix…";
     if (acc != null && Number.isFinite(acc) && acc > GPS_REFINE_TARGET_ACCURACY_M) {
       return `GPS accuracy is about ±${Math.round(acc)}m. Wait until it’s about ±${GPS_REFINE_TARGET_ACCURACY_M}m or better before arming (open sky, still water), or until the 30s lock phase ends and try again.`;
     }
     return null;
-  }, [sharing, hasFix, acc]);
+  }, [sharing, hasFix, acc, deviceNameOk]);
 
   const androidArmNeedsBackgroundFg = isCapacitorAndroidNative() && monitorDeviceId === "this";
 
@@ -180,7 +189,16 @@ export function AnchorAlertModal({
     setDevicesListHint(null);
     setDevicesRefreshing(true);
     try {
-      const reg = await registerSessionDevice(deviceId);
+      const nameForReg = deviceLabel.replace(/[\r\n]+/g, " ").trim().slice(0, 40);
+      if (!nameForReg) {
+        setDevicesLoadError("Enter a name for this device in the field below, then tap Refresh devices again.");
+        return;
+      }
+      const reg = await registerSessionDevice(deviceId, nameForReg);
+      if (!reg.ok && reg.code === "NAME_REQUIRED") {
+        setDevicesLoadError("Enter a name for this device in the field below, then tap Refresh devices again.");
+        return;
+      }
       const r = await fetch("/api/anchor/devices", { credentials: "same-origin", cache: "no-store" });
       const d = (await r.json()) as {
         devices?: { deviceId: string; name: string; updatedAt: string; lastFixAt: string | null }[];
@@ -211,7 +229,12 @@ export function AnchorAlertModal({
     } finally {
       setDevicesRefreshing(false);
     }
-  }, [deviceId, emergencyDisableLiveMapApis]);
+  }, [deviceId, deviceLabel, emergencyDisableLiveMapApis]);
+
+  useEffect(() => {
+    if (!open) return;
+    queueMicrotask(() => setDeviceLabel(getDeviceName()));
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
