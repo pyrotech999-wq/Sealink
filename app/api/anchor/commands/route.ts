@@ -150,7 +150,7 @@ export async function GET(req: Request): Promise<Response> {
       } catch (e) {
         console.error("[ANCHOR_MONITOR_POLL_SRV] listQueuedAnchorSessionCommands failed", e);
         return monitorPollEmptyOk({
-          pollAccepted: true,
+          pollAccepted: false,
           serverEffectiveMonitorDeviceId: effective,
           errorMessage: "Commands could not be loaded. Try again shortly.",
           debugCode: "ANCHOR_COMMANDS_LIST_FAIL",
