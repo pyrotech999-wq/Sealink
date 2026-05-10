@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAuthUser } from "@/lib/auth";
+import { sendAnchorGeofenceAlertEmail } from "@/lib/anchor-alert-email";
 import { createAnchorAlert, listUnseenAnchorAlerts, markAnchorAlertSeen } from "@/lib/anchor-alerts-store";
 
 export async function GET(): Promise<Response> {
@@ -30,6 +31,9 @@ export async function POST(req: Request): Promise<Response> {
   const kindRaw = body && typeof body === "object" && "kind" in body ? (body as { kind?: unknown }).kind : null;
   const kind = kindRaw === "warning" ? "warning" : "alert";
   const row = await createAnchorAlert(user.uid, msg, { kind });
+  if (kind === "alert") {
+    sendAnchorGeofenceAlertEmail(user.email, msg);
+  }
   return NextResponse.json({ ok: true, alert: row });
 }
 
