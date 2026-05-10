@@ -71,7 +71,7 @@ export async function POST(req: Request) {
   await upsertUser(email, hashPassword(password));
 
   if (deviceId) {
-    const reg = await registerAccountDevice(uid, deviceId, deviceName, 2);
+    const reg = await registerAccountDevice(uid, deviceId, deviceName.trim() || "This device", 2);
     if (!reg.ok) {
       return NextResponse.json(
         { ok: false, error: "You can only use SeaLink on 2 devices at once. Deactivate one to continue.", devices: reg.devices },

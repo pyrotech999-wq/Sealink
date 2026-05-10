@@ -68,7 +68,8 @@ export async function POST(req: Request) {
 
   const deviceId = typeof body.deviceId === "string" ? body.deviceId.trim() : "";
   if (!deviceId) return NextResponse.json({ error: "deviceId required" }, { status: 400 });
-  const name = typeof body.name === "string" ? body.name.trim().slice(0, 40) : "This device";
+  const rawName = typeof body.name === "string" ? body.name.trim().slice(0, 40) : "";
+  const name = rawName || "This device";
 
   const lat = typeof body.lat === "number" ? body.lat : Number(body.lat);
   const lng = typeof body.lng === "number" ? body.lng : Number(body.lng);

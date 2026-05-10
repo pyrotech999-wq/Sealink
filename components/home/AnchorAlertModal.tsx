@@ -562,7 +562,7 @@ export function AnchorAlertModal({
                 <option value="this">This device (this browser / app)</option>
                 {devices.map((d) => (
                   <option key={d.deviceId} value={d.deviceId}>
-                    {d.name || d.deviceId.slice(0, 8)}
+                    {(d.name || "This device").trim() || "This device"}
                     {d.lastFixAt ? ` · last fix ${new Date(d.lastFixAt).toLocaleString("en-GB")}` : ""}
                   </option>
                 ))}
@@ -603,7 +603,7 @@ export function AnchorAlertModal({
                         .filter((d) => d.deviceId !== deviceId)
                         .map((d) => (
                           <option key={`alert-${d.deviceId}`} value={d.deviceId}>
-                            {d.name || d.deviceId.slice(0, 8)}
+                            {(d.name || "This device").trim() || "This device"}
                           </option>
                         ))}
                     </select>

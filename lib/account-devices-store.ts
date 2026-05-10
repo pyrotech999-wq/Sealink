@@ -124,7 +124,7 @@ export async function registerAccountDevice(
     const idx = list.findIndex((d) => d.deviceId === safeId);
     if (idx >= 0) {
       const row = list[idx]!;
-      row.name = safeName || row.name;
+      row.name = normaliseName(safeName || row.name) || "This device";
       row.lastSeenAt = now;
       row.active = true;
     } else {
