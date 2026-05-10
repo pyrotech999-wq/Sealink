@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { startAnchorAlarmSiren, stopAnchorAlarmSiren } from "@/lib/anchor-alarm-sound";
 import {
   clearPresentedAnchorAlertId,
@@ -17,6 +17,7 @@ import {
 } from "@/lib/anchor-reset-centre-client";
 import { getOrCreateDeviceId } from "@/lib/device-id";
 import { isBareMetaDataDeletionPage } from "@/lib/messaging-chrome-paths";
+import { getGpsFixForAnchorReset, type LatLng as AnchorResetLatLng } from "@/lib/anchor-reset-gps";
 
 const POLL_MS = 20_000;
 
@@ -35,8 +36,37 @@ export function AnchorAlertsGlobalHost() {
   const [alert, setAlert] = useState<AlertRow | null>(null);
   const alertRef = useRef<AlertRow | null>(null);
   const [alarmBlocked, setAlarmBlocked] = useState(false);
-  const [resetBusy, setResetBusy] = useState(false);
+  const [resetBusyKind, setResetBusyKind] = useState<null | "monitor" | "this">(null);
   const [resetError, setResetError] = useState<string | null>(null);
+
+  const applyGeofenceResetAndDismiss = useCallback(async (fix: AnchorResetLatLng, seenId: string): Promise<void> => {
+    if (!ANCHOR_LIVE_APIS_BLOCKED) {
+      try {
+        await fetch("/api/anchor/alerts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ seenId }),
+          credentials: "same-origin",
+        });
+        await fetch("/api/anchor/geofence", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({
+            lat: fix.lat,
+            lng: fix.lng,
+            lastAlertAt: null,
+            lastBearingDeg: null,
+          }),
+        });
+      } catch {
+        setResetError("Could not save the new anchor. Check your connection and try again.");
+        throw new Error("save");
+      }
+    }
+    clearPresentedAnchorAlertId();
+    setAlert(null);
+  }, []);
 
   useEffect(() => {
     alertRef.current = alert;
@@ -206,14 +236,14 @@ export function AnchorAlertsGlobalHost() {
       <div className="flex shrink-0 flex-col gap-3 border-t-2 border-white/25 bg-black/35 px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-md sm:flex-row sm:justify-center">
         <button
           type="button"
-          disabled={resetBusy}
+          disabled={resetBusyKind !== null}
           onClick={() => {
             stopAnchorAlarmSiren();
             if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
             const seenId = alert.id;
             void (async () => {
               setResetError(null);
-              setResetBusy(true);
+              setResetBusyKind("monitor");
               try {
                 const [mr, gr] = await Promise.all([
                   fetch("/api/anchor/monitor", { credentials: "same-origin", cache: "no-store" }),
@@ -243,44 +273,55 @@ export function AnchorAlertsGlobalHost() {
                 });
                 if (!fix) {
                   setResetError(
-                    "No recent GPS for the monitoring device. Open SeaLink on that handset with location sharing until a fix appears, then try again.",
+                    "No recent GPS for the monitoring device. Use “This phone’s GPS” below, open Anchor alarm on the map, or tap Mark seen.",
                   );
                   return;
                 }
-                if (!ANCHOR_LIVE_APIS_BLOCKED) {
-                  try {
-                    await fetch("/api/anchor/alerts", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ seenId }),
-                      credentials: "same-origin",
-                    });
-                    await fetch("/api/anchor/geofence", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      credentials: "same-origin",
-                      body: JSON.stringify({
-                        lat: fix.lat,
-                        lng: fix.lng,
-                        lastAlertAt: null,
-                        lastBearingDeg: null,
-                      }),
-                    });
-                  } catch {
-                    setResetError("Could not save the new anchor. Check your connection and try again.");
-                    return;
-                  }
-                }
-                clearPresentedAnchorAlertId();
-                setAlert(null);
+                await applyGeofenceResetAndDismiss(fix, seenId);
+              } catch (e) {
+                if (e instanceof Error && e.message === "save") return;
               } finally {
-                setResetBusy(false);
+                setResetBusyKind(null);
               }
             })();
           }}
           className="h-14 w-full rounded-xl bg-emerald-500 text-base font-bold text-white shadow-lg hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-xs"
         >
-          {resetBusy ? "Loading monitor position…" : "Reset at monitor position"}
+          {resetBusyKind === "monitor"
+            ? "Loading monitor position…"
+            : resetBusyKind === "this"
+              ? "Please wait…"
+              : "Reset at monitor position"}
+        </button>
+        <button
+          type="button"
+          disabled={resetBusyKind !== null}
+          onClick={() => {
+            stopAnchorAlarmSiren();
+            if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
+            const seenId = alert.id;
+            void (async () => {
+              setResetError(null);
+              setResetBusyKind("this");
+              try {
+                const fix = await getGpsFixForAnchorReset(null);
+                if (!fix) {
+                  setResetError(
+                    "Could not read GPS on this phone (permission, timeout, or no signal). Allow location for SeaLink, try outdoors, or use Mark seen.",
+                  );
+                  return;
+                }
+                await applyGeofenceResetAndDismiss(fix, seenId);
+              } catch (e) {
+                if (e instanceof Error && e.message === "save") return;
+              } finally {
+                setResetBusyKind(null);
+              }
+            })();
+          }}
+          className="h-14 w-full rounded-xl rounded-xl border-2 border-emerald-300/90 bg-emerald-950/50 text-base font-bold text-emerald-50 shadow-lg hover:bg-emerald-900/60 disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-xs"
+        >
+          {resetBusyKind === "this" ? "Getting this phone’s GPS…" : "This phone’s GPS"}
         </button>
         <a
           href="/anchor-alarm"
