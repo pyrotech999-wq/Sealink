@@ -167,16 +167,21 @@ export async function markAllUnseenAnchorAlertsForUser(uid: string): Promise<num
   return enqueue(async () => {
     const now = new Date();
     if (isSupabaseConfigured()) {
-      await maybePruneAnchorAlertsSupabase(now);
+      /** Skip prune here — list/create paths handle retention; prune + huge `.select()` after update caused 504s. */
       const sb = supabaseAdmin();
-      const { data, error } = await sb
+      const { count: nBefore, error: cErr } = await sb
+        .from("anchor_alerts")
+        .select("id", { count: "exact", head: true })
+        .eq("user_uid", uid)
+        .is("seen_at", null);
+      if (cErr) throw new Error(cErr.message);
+      const { error: uErr } = await sb
         .from("anchor_alerts")
         .update({ seen_at: now.toISOString() })
         .eq("user_uid", uid)
-        .is("seen_at", null)
-        .select("id");
-      if (error) throw new Error(error.message);
-      return Array.isArray(data) ? data.length : 0;
+        .is("seen_at", null);
+      if (uErr) throw new Error(uErr.message);
+      return typeof nBefore === "number" ? nBefore : 0;
     }
 
     const list = prune(readRaw(), now);
@@ -196,7 +201,6 @@ export async function markAnchorAlertSeen(uid: string, id: string): Promise<bool
   return enqueue(async () => {
     const now = new Date();
     if (isSupabaseConfigured()) {
-      await maybePruneAnchorAlertsSupabase(now);
       const sb = supabaseAdmin();
       const { data, error } = await sb
         .from("anchor_alerts")
