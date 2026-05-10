@@ -66,6 +66,18 @@ async function pruneAnchorAlertsSupabase(now = new Date()): Promise<void> {
   await sb.from("anchor_alerts").delete().lt("expires_at", nowIso);
 }
 
+/** Full-table prune is expensive; running it on every poll blocked the alerts queue and caused 504s. */
+let lastAnchorAlertsPruneAtMs = 0;
+const ANCHOR_ALERTS_PRUNE_INTERVAL_MS = 5 * 60 * 1000;
+
+async function maybePruneAnchorAlertsSupabase(now: Date): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const t = now.getTime();
+  if (t - lastAnchorAlertsPruneAtMs < ANCHOR_ALERTS_PRUNE_INTERVAL_MS) return;
+  lastAnchorAlertsPruneAtMs = t;
+  await pruneAnchorAlertsSupabase(now);
+}
+
 function mapAlertRow(r: Record<string, unknown>): AnchorAlertRow {
   return {
     id: String(r.id ?? ""),
@@ -97,7 +109,7 @@ export async function createAnchorAlert(
     };
 
     if (isSupabaseConfigured()) {
-      await pruneAnchorAlertsSupabase(now);
+      await maybePruneAnchorAlertsSupabase(now);
       const sb = supabaseAdmin();
       const { error } = await sb.from("anchor_alerts").insert({
         id: row.id,
@@ -123,14 +135,15 @@ export async function listUnseenAnchorAlerts(uid: string): Promise<AnchorAlertRo
   return enqueue(async () => {
     const now = new Date();
     if (isSupabaseConfigured()) {
-      await pruneAnchorAlertsSupabase(now);
+      await maybePruneAnchorAlertsSupabase(now);
       const sb = supabaseAdmin();
       const { data, error } = await sb
         .from("anchor_alerts")
         .select("*")
         .eq("user_uid", uid)
         .is("seen_at", null)
-        .order("created_at", { ascending: true });
+        /** Newest first: inbox UIs take `[0]` only — oldest-first made new sessions replay the entire backlog one alert at a time. */
+        .order("created_at", { ascending: false });
       if (error) throw new Error(error.message);
       const nowMs = now.getTime();
       return (data ?? [])
@@ -144,7 +157,9 @@ export async function listUnseenAnchorAlerts(uid: string): Promise<AnchorAlertRo
 
     const list = prune(readRaw(), now);
     writeRaw(list);
-    return list.filter((r) => r.uid === uid && !r.seenAt).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    return list
+      .filter((r) => r.uid === uid && !r.seenAt)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   });
 }
 
@@ -152,7 +167,7 @@ export async function markAllUnseenAnchorAlertsForUser(uid: string): Promise<num
   return enqueue(async () => {
     const now = new Date();
     if (isSupabaseConfigured()) {
-      await pruneAnchorAlertsSupabase(now);
+      await maybePruneAnchorAlertsSupabase(now);
       const sb = supabaseAdmin();
       const { data, error } = await sb
         .from("anchor_alerts")
@@ -181,7 +196,7 @@ export async function markAnchorAlertSeen(uid: string, id: string): Promise<bool
   return enqueue(async () => {
     const now = new Date();
     if (isSupabaseConfigured()) {
-      await pruneAnchorAlertsSupabase(now);
+      await maybePruneAnchorAlertsSupabase(now);
       const sb = supabaseAdmin();
       const { data, error } = await sb
         .from("anchor_alerts")

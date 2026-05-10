@@ -8,6 +8,11 @@ import {
   markAnchorAlertSeen,
 } from "@/lib/anchor-alerts-store";
 
+export const runtime = "nodejs";
+export const maxDuration = 60;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET(): Promise<Response> {
   const user = await requireAuthUser();
   const alerts = await listUnseenAnchorAlerts(user.uid);
