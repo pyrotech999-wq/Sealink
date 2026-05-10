@@ -96,10 +96,13 @@ export async function upsertAnchorDevice(
         .eq("device_id", deviceId)
         .maybeSingle();
       const ex = existing ? mapAnchorDeviceRow(existing as Record<string, unknown>) : null;
+      const patchName =
+        typeof patch.name === "string" && patch.name.trim() ? patch.name.trim().slice(0, 40) : null;
+      const prevName = ex?.name?.trim() ? ex.name.trim().slice(0, 40) : null;
       const next: AnchorDeviceRow = {
         uid,
         deviceId,
-        name: typeof patch.name === "string" ? patch.name.slice(0, 40) : ex?.name ?? "This device",
+        name: patchName ?? prevName ?? "This device",
         updatedAt: now.toISOString(),
         lastLat: typeof patch.lastLat === "number" ? patch.lastLat : ex?.lastLat ?? null,
         lastLng: typeof patch.lastLng === "number" ? patch.lastLng : ex?.lastLng ?? null,
@@ -125,10 +128,14 @@ export async function upsertAnchorDevice(
     const raw = prune(full, now);
     if (raw.length !== full.length) writeRaw(raw);
     const idx = raw.findIndex((r) => r.uid === uid && r.deviceId === deviceId);
+    const patchName =
+      typeof patch.name === "string" && patch.name.trim() ? patch.name.trim().slice(0, 40) : null;
+    const prevRow = idx >= 0 ? raw[idx]! : null;
+    const prevName = prevRow?.name?.trim() ? prevRow.name.trim().slice(0, 40) : null;
     const next: AnchorDeviceRow = {
       uid,
       deviceId,
-      name: typeof patch.name === "string" ? patch.name.slice(0, 40) : idx >= 0 ? raw[idx]!.name : "This device",
+      name: patchName ?? prevName ?? "This device",
       updatedAt: now.toISOString(),
       lastLat: typeof patch.lastLat === "number" ? patch.lastLat : idx >= 0 ? raw[idx]!.lastLat : null,
       lastLng: typeof patch.lastLng === "number" ? patch.lastLng : idx >= 0 ? raw[idx]!.lastLng : null,

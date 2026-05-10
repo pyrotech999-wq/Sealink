@@ -128,7 +128,13 @@ export async function registerAccountDevice(
       row.lastSeenAt = now;
       row.active = true;
     } else {
-      list.push({ deviceId: safeId, name: safeName, activatedAt: now, lastSeenAt: now, active: true });
+      list.push({
+        deviceId: safeId,
+        name: safeName || "This device",
+        activatedAt: now,
+        lastSeenAt: now,
+        active: true,
+      });
     }
 
     /** Keep the device that is registering/signed-in active; drop oldest other sessions until we are at the cap. */

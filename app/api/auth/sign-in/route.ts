@@ -64,7 +64,7 @@ export async function POST(req: Request) {
 
   if (deviceId) {
     try {
-      const reg = await registerAccountDevice(uid, deviceId, deviceName, 2);
+      const reg = await registerAccountDevice(uid, deviceId, deviceName.trim() || "This device", 2);
       if (!reg.ok) {
         return NextResponse.json(
           {

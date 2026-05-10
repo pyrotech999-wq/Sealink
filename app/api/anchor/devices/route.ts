@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuthUser } from "@/lib/auth";
 import { listAccountDevices } from "@/lib/account-devices-store";
+import { normaliseAnchorDeviceRowsForUi } from "@/lib/anchor-device-display";
 import { listAnchorDevices, upsertAnchorDevice, type AnchorDeviceRow } from "@/lib/anchor-devices-store";
 
 export const runtime = "nodejs";
@@ -34,7 +35,7 @@ async function listAnchorDevicesForUi(uid: string): Promise<AnchorDeviceRow[]> {
     if (!map.has(r.deviceId)) map.set(r.deviceId, r);
   }
 
-  return [...map.values()].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  return normaliseAnchorDeviceRowsForUi([...map.values()]);
 }
 
 export async function GET() {
