@@ -1161,7 +1161,7 @@ export default function HomeLocationMap({
         }
 
         const rawText = await hr.clone().text();
-        let hd: {
+        let data: {
           ok?: boolean;
           commands?: AnchorSessionCommandApi[];
           pollAccepted?: boolean;
@@ -1171,22 +1171,76 @@ export default function HomeLocationMap({
         };
         let jsonOk = false;
         try {
-          hd = JSON.parse(rawText) as typeof hd;
+          data = JSON.parse(rawText) as typeof data;
           jsonOk = true;
         } catch {
-          hd = {};
+          data = {};
         }
-        const pollAccepted = hd.pollAccepted === true;
-        const list = Array.isArray(hd.commands) ? hd.commands : [];
-        const serverEff = hd.serverEffectiveMonitorDeviceId ?? null;
-        const reason = typeof hd.reason === "string" ? hd.reason : null;
-        const serverStack = typeof hd.stack === "string" && hd.stack.trim() ? hd.stack : null;
+
+        if (!jsonOk) {
+          anchorCommandClientLog("boat_command_poll_json_error", { previewLen: rawText.length });
+          updateDebug({
+            lastPollAt: Date.now(),
+            lastHttpStatus: hr.status,
+            lastPollAccepted: false,
+            lastServerEffective: null,
+            lastClientEff: eff,
+            lastCommandCount: null,
+            lastError: "json_parse_failed",
+            lastRawPreview: rawText.slice(0, 400),
+            lastActiveSessionId: activeSessionId,
+            lastResponseBody: rawText.slice(0, 800),
+            lastReason: "json_parse_failed",
+            lastHeaderSent: deviceId,
+            lastJsonOk: false,
+            lastServerExceptionStack: null,
+            lastClientPollExceptionStack: null,
+          });
+          try {
+            localStorage.setItem(
+              heartbeatKey,
+              JSON.stringify({ at: Date.now(), pollOk: false, httpStatus: hr.status, pollAccepted: null }),
+            );
+          } catch {
+            /* ignore */
+          }
+          return;
+        }
+
+        const pollAccepted = data.pollAccepted === true;
+        const serverEff = data.serverEffectiveMonitorDeviceId ?? null;
+        const serverReason = typeof data.reason === "string" ? data.reason : null;
+        const serverStack = typeof data.stack === "string" && data.stack.trim() ? data.stack : null;
         let pollVerbose = false;
         try {
           pollVerbose = typeof window !== "undefined" && localStorage.getItem("sealink_anchor_poll_verbose") === "1";
         } catch {
           pollVerbose = false;
         }
+
+        let commands: AnchorSessionCommandApi[] = [];
+        setMonitorCmdPollDebug((prev) => {
+          const c = Array.isArray(data?.commands) ? data.commands : [];
+          commands = c;
+          return {
+            ...prev,
+            lastPollAt: Date.now(),
+            lastHttpStatus: hr.status,
+            lastPollAccepted: true,
+            lastReason: c.length ? "commands_received" : "no_commands",
+            lastCommandCount: c.length,
+            lastJsonOk: true,
+            lastServerEffective: serverEff,
+            lastClientEff: eff,
+            lastError: null,
+            lastRawPreview: rawText.slice(0, 400),
+            lastActiveSessionId: activeSessionId,
+            lastResponseBody: pollVerbose ? rawText.slice(0, 12_000) : rawText.slice(0, 800),
+            lastHeaderSent: deviceId,
+            lastServerExceptionStack: serverStack,
+            lastClientPollExceptionStack: null,
+          };
+        });
 
         console.warn(
           "[ANCHOR_MONITOR_CMD_CLIENT]",
@@ -1199,29 +1253,11 @@ export default function HomeLocationMap({
             pollAccepted,
             serverEffectiveMonitorDeviceId: serverEff,
             clientEffectiveMonitorDeviceId: eff,
-            commandList: list,
-            reason,
+            commandList: commands,
+            reason: serverReason,
             rawPreview: rawText.slice(0, 2000),
           }),
         );
-
-        updateDebug({
-          lastPollAt: Date.now(),
-          lastHttpStatus: hr.status,
-          lastPollAccepted: pollAccepted,
-          lastServerEffective: serverEff,
-          lastClientEff: eff,
-          lastCommandCount: list.length,
-          lastError: pollAccepted ? null : reason ?? "poll_denied_or_not_accepted",
-          lastRawPreview: rawText.slice(0, 400),
-          lastActiveSessionId: activeSessionId,
-          lastResponseBody: pollVerbose ? rawText.slice(0, 12_000) : rawText.slice(0, 800),
-          lastReason: reason,
-          lastHeaderSent: deviceId,
-          lastJsonOk: jsonOk,
-          lastServerExceptionStack: serverStack,
-          lastClientPollExceptionStack: null,
-        });
 
         try {
           localStorage.setItem(
@@ -1230,221 +1266,231 @@ export default function HomeLocationMap({
               at: Date.now(),
               pollOk: true,
               pollAccepted,
-              commandCount: list.length,
+              commandCount: commands.length,
               visibility: document.visibilityState,
             }),
           );
         } catch {
           /* ignore */
         }
+
         if (!pollAccepted) {
           anchorCommandClientLog("boat_command_poll_denied", {
             deviceId: deviceId.slice(0, 12),
-            reason: reason ?? undefined,
+            reason: serverReason ?? undefined,
             hint: "Server effective monitor id does not match this handset — open Anchor alarm and save monitor, or re-arm so geofence stores this device id.",
           });
           return;
         }
-        if (list.length === 0) return;
 
-        for (const cmd of list) {
-          if (disposed) return;
-          if (!cmd || typeof cmd.id !== "string" || !cmd.id) {
-            console.error("[MONITOR COMMAND POLL] skip invalid row (missing id)", cmd);
-            continue;
-          }
-          const cmdType = cmd.type;
-          if (cmdType !== "RESET_ANCHOR" && cmdType !== "INCREASE_RADIUS" && cmdType !== "SILENCE_UNTIL_RESET") {
-            console.error("[MONITOR COMMAND POLL] skip unknown type", cmd);
-            continue;
-          }
+        if (commands.length === 0) return;
+
+        const applyMonitorCommand = async (cmd: AnchorSessionCommandApi): Promise<void> => {
+          console.log("[COMMAND APPLY START]", cmd);
+          let stateAfterFromGeofenceResponse: typeof snap | null = null;
+          console.warn(
+            "[ANCHOR_MONITOR_CMD_CLIENT]",
+            JSON.stringify({
+              phase: "before_command",
+              command: cmd,
+              anchorStateBefore: {
+                radiusM: anchorCfgRef.current.radiusM,
+                lat: anchorCfgRef.current.lat,
+                lng: anchorCfgRef.current.lng,
+                lastAlertAt: anchorCfgRef.current.lastAlertAt,
+                remoteSilenced: anchorCfgRef.current.remoteAlarmSilencedUntilReset === true,
+              },
+            }),
+          );
+
           const cmdStatus = cmd.status;
-          anchorCommandClientLog("boat_command_item", { id: cmd.id, type: cmd.type, status: cmdStatus });
-          if (cmdStatus === "applied") continue;
-
-          try {
-            console.log("[COMMAND APPLY START]", cmd);
-            let stateAfterFromGeofenceResponse: typeof snap | null = null;
-            console.warn(
-              "[ANCHOR_MONITOR_CMD_CLIENT]",
-              JSON.stringify({
-                phase: "before_command",
-                command: cmd,
-                anchorStateBefore: {
-                  radiusM: anchorCfgRef.current.radiusM,
-                  lat: anchorCfgRef.current.lat,
-                  lng: anchorCfgRef.current.lng,
-                  lastAlertAt: anchorCfgRef.current.lastAlertAt,
-                  remoteSilenced: anchorCfgRef.current.remoteAlarmSilencedUntilReset === true,
-                },
-              }),
-            );
-
-            if (cmdStatus === "queued") {
-              const pr = await patchAnchorSessionCommandStatus({
-                id: cmd.id,
-                monitorDeviceId: deviceId,
-                status: "received",
-              });
-              console.warn(
-                "[ANCHOR_MONITOR_CMD_CLIENT]",
-                JSON.stringify({
-                  phase: "patch_received_response",
-                  commandId: cmd.id,
-                  ok: pr.ok,
-                  httpStatus: pr.status,
-                  error: pr.error ?? null,
-                  returnedCommand: pr.command ?? null,
-                }),
-              );
-              if (!pr.ok) {
-                if (pr.status === 409) {
-                  const cur = await getAnchorSessionCommandById(cmd.id);
-                  anchorCommandClientLog("boat_receive_patch_409", { id: cmd.id, nowStatus: cur?.status });
-                  if (cur?.status === "applied") continue;
-                  if (cur?.status !== "received") throw new Error(pr.error ?? "receive_conflict");
-                } else {
-                  throw new Error(pr.error ?? `receive_http_${pr.status}`);
-                }
-              } else {
-                anchorCommandClientLog("boat_command_received", { id: cmd.id, type: cmd.type });
-              }
-            } else if (cmdStatus === "received") {
-              anchorCommandClientLog("boat_command_resume_received", { id: cmd.id, type: cmd.type });
-            }
-
-            if (cmd.type === "RESET_ANCHOR") {
-              const pos = posRef.current;
-              const mapPos =
-                pos && Number.isFinite(pos.lat) && Number.isFinite(pos.lng) ? { lat: pos.lat, lng: pos.lng } : null;
-              const fix = await resolveAnchorResetCentreCoordinates({
-                thisDeviceId: deviceId,
-                effectiveMonitorDeviceId: eff,
-                mapPosIfThisDeviceIsMonitor: mapPos,
-                allowBrowserGpsFallback: true,
-              });
-              if (!fix) throw new Error("no_boat_gps_for_reset");
-              const gr = await fetch("/api/anchor/geofence", {
-                method: "POST",
-                headers: geoHeaders(),
-                credentials: "same-origin",
-                body: JSON.stringify({
-                  lat: fix.lat,
-                  lng: fix.lng,
-                  lastAlertAt: null,
-                  lastBearingDeg: null,
-                  remoteAlarmSilencedUntilReset: false,
-                }),
-              });
-              if (!gr.ok) throw new Error(`geofence_http_${gr.status}`);
-              const gj = (await gr.json()) as { config?: typeof snap };
-              await fetch("/api/anchor/alerts", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                credentials: "same-origin",
-                body: JSON.stringify({ markAllSeen: true }),
-              }).catch(() => undefined);
-              if (gj.config) {
-                stateAfterFromGeofenceResponse = gj.config;
-                setAnchorCfg(gj.config);
-                setAnchorAlertConfig(gj.config);
-              }
-            } else if (cmd.type === "INCREASE_RADIUS") {
-              const add = typeof cmd.meters === "number" && Number.isFinite(cmd.meters) ? cmd.meters : 10;
-              const curR = anchorCfgRef.current.radiusM;
-              const nextR = anchorRadiusAfterAddingMeters(curR, add, { fromTrustedStore: true });
-              const gr = await fetch("/api/anchor/geofence", {
-                method: "POST",
-                headers: geoHeaders(),
-                credentials: "same-origin",
-                body: JSON.stringify({ radiusM: nextR }),
-              });
-              if (!gr.ok) throw new Error(`geofence_http_${gr.status}`);
-              const gj = (await gr.json()) as { config?: typeof snap };
-              if (gj.config) {
-                stateAfterFromGeofenceResponse = gj.config;
-                setAnchorCfg(gj.config);
-                setAnchorAlertConfig(gj.config);
-              }
-            } else if (cmd.type === "SILENCE_UNTIL_RESET") {
-              const gr = await fetch("/api/anchor/geofence", {
-                method: "POST",
-                headers: geoHeaders(),
-                credentials: "same-origin",
-                body: JSON.stringify({ remoteAlarmSilencedUntilReset: true }),
-              });
-              if (!gr.ok) throw new Error(`geofence_http_${gr.status}`);
-              const ar = await fetch("/api/anchor/alerts", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                credentials: "same-origin",
-                body: JSON.stringify({ markAllSeen: true }),
-              });
-              if (!ar.ok) throw new Error(`alerts_http_${ar.status}`);
-              const gj = (await gr.json()) as { config?: typeof snap };
-              if (gj.config) {
-                stateAfterFromGeofenceResponse = gj.config;
-                setAnchorCfg(gj.config);
-                setAnchorAlertConfig(gj.config);
-              }
-              stopAnchorAlarmSiren();
-              clearPresentedAnchorAlertId();
-              queueMicrotask(() => setActiveAnchorAlert(null));
-            } else {
-              throw new Error(`unknown_command_type:${String((cmd as { type?: unknown }).type)}`);
-            }
-
-            const afterSnap = stateAfterFromGeofenceResponse ?? anchorCfgRef.current;
-            console.warn(
-              "[ANCHOR_MONITOR_CMD_CLIENT]",
-              JSON.stringify({
-                phase: "after_apply_local",
-                commandId: cmd.id,
-                type: cmd.type,
-                anchorStateAfterSource: stateAfterFromGeofenceResponse ? "geofence_json" : "anchorCfgRef_fallback",
-                anchorStateAfter: {
-                  radiusM: afterSnap.radiusM,
-                  lat: afterSnap.lat,
-                  lng: afterSnap.lng,
-                  lastAlertAt: afterSnap.lastAlertAt,
-                  remoteSilenced: afterSnap.remoteAlarmSilencedUntilReset === true,
-                },
-              }),
-            );
-
-            anchorCommandClientLog("boat_command_apply_ok", { id: cmd.id, type: cmd.type });
-            const patched = await patchAnchorSessionCommandStatus({
+          if (cmdStatus === "queued") {
+            const pr = await patchAnchorSessionCommandStatus({
               id: cmd.id,
               monitorDeviceId: deviceId,
-              status: "applied",
+              status: "received",
             });
             console.warn(
               "[ANCHOR_MONITOR_CMD_CLIENT]",
               JSON.stringify({
-                phase: "patch_applied_response",
+                phase: "patch_received_response",
                 commandId: cmd.id,
-                ok: patched.ok,
-                httpStatus: patched.status,
-                error: patched.error ?? null,
-                returnedCommand: patched.command ?? null,
+                ok: pr.ok,
+                httpStatus: pr.status,
+                error: pr.error ?? null,
+                returnedCommand: pr.command ?? null,
               }),
             );
-            if (!patched.ok) {
-              anchorCommandClientLog("boat_apply_patch_applied_failed", { id: cmd.id, status: patched.status, err: patched.error });
-              updateDebug({ lastError: patched.error ?? `applied_patch_${patched.status}` });
+            if (!pr.ok) {
+              if (pr.status === 409) {
+                const cur = await getAnchorSessionCommandById(cmd.id);
+                anchorCommandClientLog("boat_receive_patch_409", { id: cmd.id, nowStatus: cur?.status });
+                if (cur?.status === "applied") return;
+                if (cur?.status !== "received") throw new Error(pr.error ?? "receive_conflict");
+              } else {
+                throw new Error(pr.error ?? `receive_http_${pr.status}`);
+              }
             } else {
-              anchorCommandClientLog("boat_command_applied", { id: cmd.id, type: cmd.type });
-              updateDebug({ lastAppliedCommandId: cmd.id, lastError: null });
-              console.log("[COMMAND APPLY SUCCESS]", cmd.id);
+              anchorCommandClientLog("boat_command_received", { id: cmd.id, type: cmd.type });
             }
-          } catch (e) {
-            const msg = e instanceof Error ? e.message.slice(0, 400) : "apply_error";
-            anchorCommandClientLog("boat_command_apply_error", { id: cmd.id, type: cmd.type, msg });
-            console.error("[COMMAND APPLY ERROR]", e);
-            console.warn("[ANCHOR_MONITOR_CMD_CLIENT]", JSON.stringify({ phase: "command_apply_caught", commandId: cmd.id, msg }));
+          } else if (cmdStatus === "received") {
+            anchorCommandClientLog("boat_command_resume_received", { id: cmd.id, type: cmd.type });
+          }
+
+          if (cmd.type === "RESET_ANCHOR") {
+            const pos = posRef.current;
+            const mapPos =
+              pos && Number.isFinite(pos.lat) && Number.isFinite(pos.lng) ? { lat: pos.lat, lng: pos.lng } : null;
+            const fix = await resolveAnchorResetCentreCoordinates({
+              thisDeviceId: deviceId,
+              effectiveMonitorDeviceId: eff,
+              mapPosIfThisDeviceIsMonitor: mapPos,
+              allowBrowserGpsFallback: true,
+            });
+            if (!fix) throw new Error("no_boat_gps_for_reset");
+            const gr = await fetch("/api/anchor/geofence", {
+              method: "POST",
+              headers: geoHeaders(),
+              credentials: "same-origin",
+              body: JSON.stringify({
+                lat: fix.lat,
+                lng: fix.lng,
+                lastAlertAt: null,
+                lastBearingDeg: null,
+                remoteAlarmSilencedUntilReset: false,
+              }),
+            });
+            if (!gr.ok) throw new Error(`geofence_http_${gr.status}`);
+            const gj = (await gr.json()) as { config?: typeof snap };
+            await fetch("/api/anchor/alerts", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "same-origin",
+              body: JSON.stringify({ markAllSeen: true }),
+            }).catch(() => undefined);
+            if (gj.config) {
+              stateAfterFromGeofenceResponse = gj.config;
+              setAnchorCfg(gj.config);
+              setAnchorAlertConfig(gj.config);
+            }
+          } else if (cmd.type === "INCREASE_RADIUS") {
+            const add = typeof cmd.meters === "number" && Number.isFinite(cmd.meters) ? cmd.meters : 10;
+            const curR = anchorCfgRef.current.radiusM;
+            const nextR = anchorRadiusAfterAddingMeters(curR, add, { fromTrustedStore: true });
+            const gr = await fetch("/api/anchor/geofence", {
+              method: "POST",
+              headers: geoHeaders(),
+              credentials: "same-origin",
+              body: JSON.stringify({ radiusM: nextR }),
+            });
+            if (!gr.ok) throw new Error(`geofence_http_${gr.status}`);
+            const gj = (await gr.json()) as { config?: typeof snap };
+            if (gj.config) {
+              stateAfterFromGeofenceResponse = gj.config;
+              setAnchorCfg(gj.config);
+              setAnchorAlertConfig(gj.config);
+            }
+          } else if (cmd.type === "SILENCE_UNTIL_RESET") {
+            const gr = await fetch("/api/anchor/geofence", {
+              method: "POST",
+              headers: geoHeaders(),
+              credentials: "same-origin",
+              body: JSON.stringify({ remoteAlarmSilencedUntilReset: true }),
+            });
+            if (!gr.ok) throw new Error(`geofence_http_${gr.status}`);
+            const ar = await fetch("/api/anchor/alerts", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "same-origin",
+              body: JSON.stringify({ markAllSeen: true }),
+            });
+            if (!ar.ok) throw new Error(`alerts_http_${ar.status}`);
+            const gj = (await gr.json()) as { config?: typeof snap };
+            if (gj.config) {
+              stateAfterFromGeofenceResponse = gj.config;
+              setAnchorCfg(gj.config);
+              setAnchorAlertConfig(gj.config);
+            }
+            stopAnchorAlarmSiren();
+            clearPresentedAnchorAlertId();
+            queueMicrotask(() => setActiveAnchorAlert(null));
+          } else {
+            throw new Error(`unknown_command_type:${String((cmd as { type?: unknown }).type)}`);
+          }
+
+          const afterSnap = stateAfterFromGeofenceResponse ?? anchorCfgRef.current;
+          console.warn(
+            "[ANCHOR_MONITOR_CMD_CLIENT]",
+            JSON.stringify({
+              phase: "after_apply_local",
+              commandId: cmd.id,
+              type: cmd.type,
+              anchorStateAfterSource: stateAfterFromGeofenceResponse ? "geofence_json" : "anchorCfgRef_fallback",
+              anchorStateAfter: {
+                radiusM: afterSnap.radiusM,
+                lat: afterSnap.lat,
+                lng: afterSnap.lng,
+                lastAlertAt: afterSnap.lastAlertAt,
+                remoteSilenced: afterSnap.remoteAlarmSilencedUntilReset === true,
+              },
+            }),
+          );
+
+          anchorCommandClientLog("boat_command_apply_ok", { id: cmd.id, type: cmd.type });
+          const patched = await patchAnchorSessionCommandStatus({
+            id: cmd.id,
+            monitorDeviceId: deviceId,
+            status: "applied",
+          });
+          console.warn(
+            "[ANCHOR_MONITOR_CMD_CLIENT]",
+            JSON.stringify({
+              phase: "patch_applied_response",
+              commandId: cmd.id,
+              ok: patched.ok,
+              httpStatus: patched.status,
+              error: patched.error ?? null,
+              returnedCommand: patched.command ?? null,
+            }),
+          );
+          if (!patched.ok) {
+            anchorCommandClientLog("boat_apply_patch_applied_failed", { id: cmd.id, status: patched.status, err: patched.error });
+            updateDebug({ lastError: patched.error ?? `applied_patch_${patched.status}` });
+          } else {
+            anchorCommandClientLog("boat_command_applied", { id: cmd.id, type: cmd.type });
+            updateDebug({ lastAppliedCommandId: cmd.id, lastError: null });
+            console.log("[COMMAND APPLY SUCCESS]", cmd.id);
+          }
+        };
+
+        for (const command of commands) {
+          if (disposed) return;
+          if (!command || typeof command.id !== "string" || !command.id) {
+            console.error("[MONITOR COMMAND POLL] skip invalid row (missing id)", command);
+            continue;
+          }
+          const cmdType = command.type;
+          if (cmdType !== "RESET_ANCHOR" && cmdType !== "INCREASE_RADIUS" && cmdType !== "SILENCE_UNTIL_RESET") {
+            console.error("[MONITOR COMMAND POLL] skip unknown type", command);
+            continue;
+          }
+          anchorCommandClientLog("boat_command_item", { id: command.id, type: command.type, status: command.status });
+          if (command.status === "applied") continue;
+
+          try {
+            await applyMonitorCommand(command);
+          } catch (err) {
+            console.error("[ANCHOR COMMAND APPLY FAILED]", command, err);
+            const msg = err instanceof Error ? err.message.slice(0, 400) : "apply_error";
+            anchorCommandClientLog("boat_command_apply_error", { id: command.id, type: command.type, msg });
+            console.error("[COMMAND APPLY ERROR]", err);
+            console.warn(
+              "[ANCHOR_MONITOR_CMD_CLIENT]",
+              JSON.stringify({ phase: "command_apply_caught", commandId: command.id, msg }),
+            );
             updateDebug({ lastError: msg });
             await patchAnchorSessionCommandStatus({
-              id: cmd.id,
+              id: command.id,
               monitorDeviceId: deviceId,
               status: "failed",
               errorMessage: msg,
@@ -1457,8 +1503,9 @@ export default function HomeLocationMap({
         setMonitorCmdPollDebug((d) => ({
           ...d,
           lastPollAt: Date.now(),
+          lastPollAccepted: false,
           lastError: err.message,
-          lastReason: err.message,
+          lastReason: "monitor_poll_client_exception",
           lastClientPollExceptionStack: err.stack ?? null,
         }));
       } finally {
