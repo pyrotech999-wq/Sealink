@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAuthUser } from "@/lib/auth";
+import { anchorDeviceDisplayNameMap, formatMonitorSwitchEndpointLabel } from "@/lib/anchor-devices-for-ui";
 import { getAnchorMonitorConfig, setAnchorMonitorConfig } from "@/lib/anchor-monitor-store";
 import { createAnchorAlert } from "@/lib/anchor-alerts-store";
 
@@ -57,9 +58,10 @@ export async function POST(req: Request): Promise<Response> {
 
   // If monitor device changed, create a warning which persists for 48 hours.
   if (monitorDeviceId !== undefined && monitorDeviceId !== cur.monitorDeviceId) {
-    const from = cur.monitorDeviceId ? cur.monitorDeviceId.slice(0, 8) : "none";
-    const to = monitorDeviceId ? monitorDeviceId.slice(0, 8) : "none";
-    const msg = `Anchor monitoring switched from ${from} to ${to}. Monitoring on the previous device will stop.`;
+    const nameMap = await anchorDeviceDisplayNameMap(u.uid);
+    const from = formatMonitorSwitchEndpointLabel(nameMap, cur.monitorDeviceId);
+    const to = formatMonitorSwitchEndpointLabel(nameMap, monitorDeviceId);
+    const msg = `Anchor monitoring switched from “${from}” to “${to}”. Monitoring on the previous device will stop.`;
     try {
       await createAnchorAlert(u.uid, msg, { kind: "warning", ttlMs: 48 * 60 * 60 * 1000 });
     } catch (e) {

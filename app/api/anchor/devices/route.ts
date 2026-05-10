@@ -1,42 +1,9 @@
 import { NextResponse } from "next/server";
 import { requireAuthUser } from "@/lib/auth";
-import { listAccountDevices } from "@/lib/account-devices-store";
-import { normaliseAnchorDeviceRowsForUi } from "@/lib/anchor-device-display";
-import { listAnchorDevices, upsertAnchorDevice, type AnchorDeviceRow } from "@/lib/anchor-devices-store";
+import { listAnchorDevicesForUi } from "@/lib/anchor-devices-for-ui";
+import { upsertAnchorDevice } from "@/lib/anchor-devices-store";
 
 export const runtime = "nodejs";
-
-/**
- * Devices for anchor UI: active account_devices (max 2) are the source of truth; anchor store adds last GPS.
- * Anchor-only rows are included if present (e.g. legacy data).
- */
-async function listAnchorDevicesForUi(uid: string): Promise<AnchorDeviceRow[]> {
-  const [fromAnchor, accountDevs] = await Promise.all([listAnchorDevices(uid), listAccountDevices(uid)]);
-  const anchorById = new Map(fromAnchor.map((r) => [r.deviceId, r]));
-  const map = new Map<string, AnchorDeviceRow>();
-
-  for (const a of accountDevs) {
-    if (!a.active) continue;
-    const gps = anchorById.get(a.deviceId);
-    const name =
-      (gps?.name?.trim() || a.name?.trim() || "This device").slice(0, 40) || "This device";
-    map.set(a.deviceId, {
-      uid,
-      deviceId: a.deviceId,
-      name,
-      updatedAt: gps?.updatedAt ?? a.lastSeenAt,
-      lastLat: gps?.lastLat ?? null,
-      lastLng: gps?.lastLng ?? null,
-      lastFixAt: gps?.lastFixAt ?? null,
-    });
-  }
-
-  for (const r of fromAnchor) {
-    if (!map.has(r.deviceId)) map.set(r.deviceId, r);
-  }
-
-  return normaliseAnchorDeviceRowsForUi([...map.values()]);
-}
 
 export async function GET() {
   const u = await requireAuthUser().catch(() => null);
@@ -69,7 +36,13 @@ export async function POST(req: Request) {
   const deviceId = typeof body.deviceId === "string" ? body.deviceId.trim() : "";
   if (!deviceId) return NextResponse.json({ error: "deviceId required" }, { status: 400 });
   const rawName = typeof body.name === "string" ? body.name.trim().slice(0, 40) : "";
-  const name = rawName || "This device";
+  if (!rawName) {
+    return NextResponse.json(
+      { error: "name required — set a short label for this device (e.g. Helm phone)." },
+      { status: 400 },
+    );
+  }
+  const name = rawName;
 
   const lat = typeof body.lat === "number" ? body.lat : Number(body.lat);
   const lng = typeof body.lng === "number" ? body.lng : Number(body.lng);
