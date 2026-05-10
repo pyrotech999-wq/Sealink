@@ -915,21 +915,27 @@ export default function HomeLocationMap({
     const heartbeatKey = "sealink_anchor_cmd_boat_heartbeat";
 
     const withTimeout = async (p: Promise<void>, ms: number, label: string): Promise<void> => {
-      let tid: ReturnType<typeof setTimeout> | undefined;
+      let tid: number | undefined;
       const timeoutDone = new Promise<"timeout">((resolve) => {
         tid = window.setTimeout(() => resolve("timeout"), ms);
       });
       const pDone = p.then(
         () => {
           if (tid != null) window.clearTimeout(tid);
+          tid = undefined;
           return "ok" as const;
         },
         (e: unknown) => {
           if (tid != null) window.clearTimeout(tid);
+          tid = undefined;
           throw e;
         },
       );
       const out = await Promise.race([pDone, timeoutDone]);
+      if (tid != null) {
+        window.clearTimeout(tid);
+        tid = undefined;
+      }
       if (out === "timeout") {
         console.warn("[ANCHOR_MONITOR_CMD_CLIENT]", JSON.stringify({ phase: label, err: `timeout_after_${ms}ms` }));
       }
@@ -998,7 +1004,14 @@ export default function HomeLocationMap({
 
       monitorAnchorPollInFlightRef.current = true;
       try {
-        await withTimeout(refreshMonitorRegistration(), 12_000, "heartbeat_anchor_monitor");
+        try {
+          await withTimeout(refreshMonitorRegistration(), 12_000, "heartbeat_anchor_monitor");
+        } catch (e) {
+          console.warn(
+            "[ANCHOR_MONITOR_CMD_CLIENT]",
+            JSON.stringify({ phase: "heartbeat_anchor_monitor_throw", err: e instanceof Error ? e.message : String(e) }),
+          );
+        }
 
         const activeSessionId = `${anchorUserUidRef.current ?? "no-uid"}|armed:${snap.armed}|r${snap.radiusM}|la=${snap.lastAlertAt ?? "null"}|sil=${snap.remoteAlarmSilencedUntilReset === true}`;
         const monitoringActive = snap.armed && eff === deviceId;

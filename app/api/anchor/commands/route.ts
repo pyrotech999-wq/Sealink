@@ -333,7 +333,6 @@ export async function GET(req: Request): Promise<Response> {
 
 export async function POST(req: Request): Promise<Response> {
   let uid: string | null = null;
-  let role = "post_create";
   try {
     const u = await requireAuthUser().catch(() => null);
     if (!u?.uid) {
@@ -395,7 +394,7 @@ export async function POST(req: Request): Promise<Response> {
     return NextResponse.json({ ok: true, command: row }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("[ANCHOR COMMANDS POST ERROR]", {
-      role,
+      role: "post_create",
       uid,
       deviceId: req.headers.get(ANCHOR_DEVICE_ID_HEADER),
       error,
