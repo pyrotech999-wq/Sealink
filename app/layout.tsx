@@ -13,6 +13,7 @@ import { BroadcastReplyAlertsHost } from "@/components/BroadcastReplyAlertsHost"
 import { TopNav } from "@/components/TopNav";
 import { MobSenderActiveBanner } from "@/components/MobSenderActiveBanner";
 import { MobIncomingAlertHost } from "@/components/MobIncomingAlertHost";
+import { AnchorAlertsGlobalHost } from "@/components/AnchorAlertsGlobalHost";
 import { ProfileNameGate } from "@/components/ProfileNameGate";
 import { resolvePublicAppOrigin } from "@/lib/public-app-url";
 import "./globals.css";
@@ -88,6 +89,7 @@ export default function RootLayout({
           <BroadcastReplyAlertsHost />
           <MobSenderActiveBanner />
           <MobIncomingAlertHost />
+          <AnchorAlertsGlobalHost />
           <Suspense fallback={null}>
             <ProfileNameGate />
           </Suspense>

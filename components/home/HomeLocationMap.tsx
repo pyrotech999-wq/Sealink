@@ -67,6 +67,8 @@ import {
   stopAndroidAnchorNativeMonitoringIfNeeded,
 } from "@/lib/capacitor-anchor-alert-android";
 import { getNativeLocationBridge } from "@/lib/native-location-bridge";
+import { clearPresentedAnchorAlertId, shouldReceiveAnchorAlarmPopUp, writePresentedAnchorAlertId } from "@/lib/anchor-alarm-recipient";
+import { ANCHOR_LIVE_APIS_BLOCKED } from "@/lib/anchor-live-client-flags";
 import { startAnchorAlarmSiren, stopAnchorAlarmSiren } from "@/lib/anchor-alarm-sound";
 import { getDeviceName, getOrCreateDeviceId } from "@/lib/device-id";
 import { clampGeoAccuracyM, humanGeolocationMessage } from "@/lib/geolocation-utils";
@@ -83,15 +85,6 @@ const EMERGENCY_DISABLE_LIVE_MAP_APIS = true;
  */
 const EMERGENCY_REENABLE_MAP_LIVE_POLLING = true;
 
-/**
- * When true with {@link EMERGENCY_DISABLE_LIVE_MAP_APIS}: anchor device list, registration, geofence sync, monitor
- * config, alerts, and GPS reports to `/api/anchor/devices` still run so two-device anchor + Refresh devices work.
- */
-const EMERGENCY_REENABLE_ANCHOR_LIVE_APIS = true;
-
-/** Skip anchor HTTP APIs only when the kill-switch is on and the anchor exception is off. */
-const ANCHOR_LIVE_APIS_BLOCKED = EMERGENCY_DISABLE_LIVE_MAP_APIS && !EMERGENCY_REENABLE_ANCHOR_LIVE_APIS;
-
 /** Safe-mode: nearby friends (≤ ~5 mi) on the Home map. */
 const EMERGENCY_REENABLE_NEARBY_PRESENCE = true;
 
@@ -100,15 +93,6 @@ const NEARBY_RING_METRES = 5 * 1609.344;
 
 /** How often the anchor geofence is evaluated and remote monitor fixes are polled (ms). Uses the same {@link pos} as the map. */
 const ANCHOR_POSITION_CHECK_INTERVAL_MS = 30_000;
-
-/**
- * Whether this device should show the full-screen anchor alarm / notifications for a new breach.
- * Matches inbox poll: empty `alertDeviceIds` from the server means all signed-in devices receive alerts.
- */
-function shouldReceiveAnchorAlarmPopUp(alertDeviceIds: string[] | null | undefined, thisDeviceId: string): boolean {
-  if (!alertDeviceIds?.length) return true;
-  return alertDeviceIds.includes(thisDeviceId);
-}
 
 /** Fixed anchor point for geofence (orange ⚓ — drawn under your moving boat pin). */
 function buildAnchorGeofenceCenterIcon(): L.DivIcon {
@@ -292,6 +276,12 @@ export default function HomeLocationMap({
   useEffect(() => {
     activeAnchorAlertRef.current = activeAnchorAlert;
   }, [activeAnchorAlert]);
+
+  useEffect(() => {
+    const id = activeAnchorAlert?.id;
+    if (!id || id.startsWith("local-") || id.startsWith("native-")) return;
+    writePresentedAnchorAlertId(id);
+  }, [activeAnchorAlert?.id]);
 
   /** When true, native Android MediaPlayer handles the siren — skip Web Audio. */
   const nativeAudioLatchRef = useRef(false);
@@ -949,33 +939,6 @@ export default function HomeLocationMap({
     anchorMonitor?.monitorDeviceId,
     deviceId,
   ]);
-
-  // Anchor alert inbox poll (keeps alerts in sync across both devices).
-  useEffect(() => {
-    if (ANCHOR_LIVE_APIS_BLOCKED) return;
-    if (!sharing) return;
-    let disposed = false;
-    const load = async () => {
-      try {
-        const r = await fetch("/api/anchor/alerts", { credentials: "same-origin", cache: "no-store" });
-        if (!r.ok) return;
-        const d = (await r.json()) as { alerts?: { id: string; message: string; createdAt: string; kind?: string }[] };
-        const list = Array.isArray(d.alerts) ? d.alerts : [];
-        if (disposed) return;
-        if (!shouldReceiveAnchorAlarmPopUp(anchorMonitor?.alertDeviceIds, deviceId)) return;
-        if (!activeAnchorAlertRef.current && list.length) setActiveAnchorAlert(list[0]!);
-      } catch {
-        /* ignore */
-      }
-    };
-    const pollMs = anchorCfg.armed ? 15_000 : 60_000;
-    void load();
-    const id = window.setInterval(() => void load(), pollMs);
-    return () => {
-      disposed = true;
-      window.clearInterval(id);
-    };
-  }, [sharing, anchorMonitor?.alertDeviceIds, deviceId, anchorCfg.armed]);
 
   // Display label for which device is being monitored.
   useEffect(() => {
@@ -2119,6 +2082,7 @@ export default function HomeLocationMap({
                     setAnchorCfg(merged);
                     setAnchorAlertConfig(merged);
                   }
+                  clearPresentedAnchorAlertId();
                   setActiveAnchorAlert(null);
                 })();
               }}
