@@ -874,6 +874,7 @@ export default function HomeLocationMap({
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ message: msg, kind: "alert" }),
+              credentials: "same-origin",
               keepalive: true,
             });
             const popHere = shouldReceiveAnchorAlarmPopUp(anchorMonitorRef.current?.alertDeviceIds, deviceId);
@@ -2114,6 +2115,7 @@ export default function HomeLocationMap({
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ seenId: id }),
+                      credentials: "same-origin",
                     });
                   } catch {
                     /* ignore */
@@ -2128,7 +2130,8 @@ export default function HomeLocationMap({
             </button>
           </div>
           <p className="bg-black/40 px-4 py-2 text-center text-[11px] text-white/75">
-            Stays on all your signed-in devices until you mark seen. Sound stops when you dismiss, or after 3 hours if left open.
+            <strong className="text-white/85">Reset anchor at this device</strong> centres the geofence on this phone’s
+            GPS (then the monitor’s last fix if needed). Sound stops when you dismiss, or after 3 hours if left open.
           </p>
         </div>
       ) : null}

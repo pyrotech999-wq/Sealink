@@ -807,6 +807,16 @@ export default function HelpPage() {
                 sender address</strong> as the alert (the “From” line on the email) rings or shows a banner like a message
                 alert — that is done in your mail app or system settings, not inside SeaLink.
               </p>
+              <p className="mt-3 text-zinc-400">
+                <strong className="text-zinc-200">Resetting the anchor from the receiving phone:</strong> when the alarm
+                appears on the device that only receives alerts (not the one monitoring GPS), use{" "}
+                <strong className="text-zinc-200">Reset anchor at this phone</strong> on the red screen to drop the orange
+                ring at <strong className="text-zinc-200">this handset’s current GPS</strong> and clear the alert for the
+                account. On the map page the same action is labelled{" "}
+                <strong className="text-zinc-200">Reset anchor at this device</strong>. If this phone has no fix yet,
+                SeaLink may fall back to the monitoring device’s last position from the server, or ask you to allow
+                location and try again.
+              </p>
             </Section>
 
             <Section id="anchor-android-location" title="Android: location for anchor watch">

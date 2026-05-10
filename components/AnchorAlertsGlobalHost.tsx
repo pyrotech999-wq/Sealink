@@ -12,6 +12,7 @@ import {
 } from "@/lib/anchor-alarm-recipient";
 import { ANCHOR_LIVE_APIS_BLOCKED } from "@/lib/anchor-live-client-flags";
 import { clearNativeAndroidAnchorAlarm, isCapacitorAndroidNative } from "@/lib/capacitor-anchor-alert-android";
+import { getGpsFixForAnchorReset } from "@/lib/anchor-reset-gps";
 import { getOrCreateDeviceId } from "@/lib/device-id";
 import { isBareMetaDataDeletionPage } from "@/lib/messaging-chrome-paths";
 
@@ -28,10 +29,16 @@ export function AnchorAlertsGlobalHost() {
   const [alert, setAlert] = useState<AlertRow | null>(null);
   const alertRef = useRef<AlertRow | null>(null);
   const [alarmBlocked, setAlarmBlocked] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
 
   useEffect(() => {
     alertRef.current = alert;
   }, [alert]);
+
+  useEffect(() => {
+    setResetError(null);
+  }, [alert?.id]);
 
   useEffect(() => {
     if (ANCHOR_LIVE_APIS_BLOCKED) return;
@@ -183,8 +190,66 @@ export function AnchorAlertsGlobalHost() {
             Tap to play alarm sound
           </button>
         ) : null}
+        {resetError ? (
+          <p className="mt-4 max-w-md rounded-lg border border-amber-500/50 bg-amber-950/40 px-3 py-2 text-xs leading-snug text-amber-100">
+            {resetError}
+          </p>
+        ) : null}
       </div>
       <div className="flex shrink-0 flex-col gap-3 border-t-2 border-white/25 bg-black/35 px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-md sm:flex-row sm:justify-center">
+        <button
+          type="button"
+          disabled={resetBusy}
+          onClick={() => {
+            stopAnchorAlarmSiren();
+            if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
+            const seenId = alert.id;
+            void (async () => {
+              setResetError(null);
+              setResetBusy(true);
+              try {
+                const fix = await getGpsFixForAnchorReset(null);
+                if (!fix) {
+                  setResetError(
+                    "Could not read a GPS fix on this phone. Allow location for SeaLink, wait for a fix outdoors, or reset from the map on the Anchor alarm page.",
+                  );
+                  return;
+                }
+                if (!ANCHOR_LIVE_APIS_BLOCKED) {
+                  try {
+                    await fetch("/api/anchor/alerts", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ seenId }),
+                      credentials: "same-origin",
+                    });
+                    await fetch("/api/anchor/geofence", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      credentials: "same-origin",
+                      body: JSON.stringify({
+                        lat: fix.lat,
+                        lng: fix.lng,
+                        lastAlertAt: null,
+                        lastBearingDeg: null,
+                      }),
+                    });
+                  } catch {
+                    setResetError("Could not save the new anchor. Check your connection and try again.");
+                    return;
+                  }
+                }
+                clearPresentedAnchorAlertId();
+                setAlert(null);
+              } finally {
+                setResetBusy(false);
+              }
+            })();
+          }}
+          className="h-14 w-full rounded-xl bg-emerald-500 text-base font-bold text-white shadow-lg hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-xs"
+        >
+          {resetBusy ? "Getting GPS…" : "Reset anchor at this phone"}
+        </button>
         <Link
           href="/anchor-alarm"
           className="inline-flex h-14 w-full items-center justify-center rounded-xl border-2 border-white/80 bg-white/10 px-4 text-base font-bold text-white hover:bg-white/20 sm:max-w-xs"
@@ -221,6 +286,10 @@ export function AnchorAlertsGlobalHost() {
       </div>
       <p className="bg-black/40 px-4 py-2 text-center text-[11px] text-white/75">
         Leave SeaLink signed in on this device (even in the background) so it can pick up alerts from your monitoring phone.
+        <span className="mt-1 block opacity-90">
+          <strong className="text-white/90">Reset anchor at this phone</strong> moves the orange geofence centre to this
+          handset’s GPS and clears the alert (same account as the monitor).
+        </span>
       </p>
     </div>
   );
