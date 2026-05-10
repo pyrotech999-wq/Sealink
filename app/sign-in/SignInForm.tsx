@@ -10,6 +10,7 @@ import { safeInternalPathFromNextParam } from "@/lib/safe-internal-next-path";
 import { useRouter } from "next/navigation";
 import { invalidateMeSubscriptionCache } from "@/lib/client/me-subscription";
 import { invalidateDemoMeCache } from "@/lib/client/demo-me";
+import { bindSessionProfileEmailFromServer } from "@/lib/session-profile-client";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -126,6 +127,7 @@ async function startDemoSession(
       } catch {
         /* */
       }
+      bindSessionProfileEmailFromServer(email);
       invalidateMeSubscriptionCache();
       invalidateDemoMeCache();
       window.location.assign(postSignInRedirectTarget());

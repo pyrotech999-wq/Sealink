@@ -8,6 +8,7 @@ import { CapacitorAppShell } from "@/components/CapacitorAppShell";
 import { AppLoadSplash } from "@/components/AppLoadSplash";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import { SessionDeviceRegistrar } from "@/components/SessionDeviceRegistrar";
+import { SessionProfileEmailSync } from "@/components/SessionProfileEmailSync";
 import { BroadcastReplyAlertsHost } from "@/components/BroadcastReplyAlertsHost";
 import { TopNav } from "@/components/TopNav";
 import { MobSenderActiveBanner } from "@/components/MobSenderActiveBanner";
@@ -82,6 +83,7 @@ export default function RootLayout({
           <AppLoadSplash />
           <ServiceWorkerRegister />
           <SessionDeviceRegistrar />
+          <SessionProfileEmailSync />
           <TopNav />
           <BroadcastReplyAlertsHost />
           <MobSenderActiveBanner />

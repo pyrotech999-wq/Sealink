@@ -5,6 +5,7 @@ import { useState } from "react";
 import { invalidateMeSubscriptionCache } from "@/lib/client/me-subscription";
 import { invalidateDemoMeCache } from "@/lib/client/demo-me";
 import { stopAndroidAnchorNativeMonitoringIfNeeded } from "@/lib/capacitor-anchor-alert-android";
+import { clearPerUserClientStorage, clearSessionProfileEmailBinding } from "@/lib/session-profile-client";
 
 type Props = { signedIn: boolean; isAdmin?: boolean };
 
@@ -16,6 +17,8 @@ export function HomeHeader({ signedIn, isAdmin = false }: Props) {
     try {
       await stopAndroidAnchorNativeMonitoringIfNeeded();
       await fetch("/api/demo/sign-out", { method: "POST" });
+      clearSessionProfileEmailBinding();
+      clearPerUserClientStorage();
       invalidateMeSubscriptionCache();
       invalidateDemoMeCache();
       window.location.assign("/");
