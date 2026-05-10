@@ -20,6 +20,7 @@ import {
 import { getOrCreateDeviceId } from "@/lib/device-id";
 import { isBareMetaDataDeletionPage } from "@/lib/messaging-chrome-paths";
 import { getGpsFixForAnchorReset, type LatLng as AnchorResetLatLng } from "@/lib/anchor-reset-gps";
+import { nextLargerStandardAnchorRadiusM } from "@/lib/anchor-alert-storage";
 
 const POLL_MS = 20_000;
 
@@ -38,7 +39,7 @@ export function AnchorAlertsGlobalHost() {
   const [alert, setAlert] = useState<AlertRow | null>(null);
   const alertRef = useRef<AlertRow | null>(null);
   const [alarmBlocked, setAlarmBlocked] = useState(false);
-  const [resetBusyKind, setResetBusyKind] = useState<null | "monitor" | "this">(null);
+  const [resetBusyKind, setResetBusyKind] = useState<null | "monitor" | "this" | "radius" | "mute">(null);
   const [resetError, setResetError] = useState<string | null>(null);
 
   const applyGeofenceResetAndDismiss = useCallback(
@@ -255,27 +256,46 @@ export function AnchorAlertsGlobalHost() {
               setResetBusyKind("monitor");
               const { signal, clear } = createAnchorResetNetworkAbort();
               try {
-                const [mr, gr] = await Promise.all([
-                  fetch("/api/anchor/monitor", {
-                    credentials: "same-origin",
-                    cache: "no-store",
-                    signal,
-                  }),
-                  fetch("/api/anchor/geofence", {
-                    credentials: "same-origin",
-                    cache: "no-store",
-                    signal,
-                  }),
-                ]);
-                if (!mr.ok || !gr.ok) {
-                  setResetError("Could not load anchor settings. Check your connection and try again.");
+                const mr = await fetch("/api/anchor/monitor", {
+                  credentials: "same-origin",
+                  cache: "no-store",
+                  signal,
+                });
+                const gr = await fetch("/api/anchor/geofence", {
+                  credentials: "same-origin",
+                  cache: "no-store",
+                  signal,
+                });
+                let mj: { config?: { monitorDeviceId?: string | null } } | null = null;
+                let gj: { config?: { monitorDeviceId?: string } } | null = null;
+                if (mr.ok) {
+                  mj = (await mr.json()) as { config?: { monitorDeviceId?: string | null } };
+                }
+                if (gr.ok) {
+                  gj = (await gr.json()) as { config?: { monitorDeviceId?: string } };
+                }
+                if (!mr.ok && !gr.ok) {
+                  const hint =
+                    mr.status === 401 || gr.status === 401
+                      ? "Try opening SeaLink in the browser again and signing in."
+                      : "Check Wi‑Fi or mobile data, then retry.";
+                  setResetError(
+                    `Could not load anchor settings (monitor ${mr.status}, geofence ${gr.status}). ${hint} You can still try “Allow wider swing” or “Mute alerts here”.`,
+                  );
                   return;
                 }
-                const mj = (await mr.json()) as { config?: { monitorDeviceId?: string | null } };
-                const gj = (await gr.json()) as { config?: { monitorDeviceId?: string } };
+                if (!mr.ok) {
+                  setResetError(
+                    `Monitor list failed (${mr.status}). ${gr.ok ? "Continuing with geofence data only." : ""}`.trim(),
+                  );
+                } else if (!gr.ok) {
+                  setResetError(
+                    `Geofence row failed (${gr.status}). ${mr.ok ? "Continuing with saved monitor id only." : ""}`.trim(),
+                  );
+                }
                 const effective = effectiveMonitorDeviceIdFromServer({
-                  serverMonitorDeviceId: mj.config?.monitorDeviceId,
-                  geofenceMonitorDeviceId: gj.config?.monitorDeviceId,
+                  serverMonitorDeviceId: mj?.config?.monitorDeviceId,
+                  geofenceMonitorDeviceId: gj?.config?.monitorDeviceId,
                 });
                 if (!effective) {
                   setResetError(
@@ -314,7 +334,7 @@ export function AnchorAlertsGlobalHost() {
         >
           {resetBusyKind === "monitor"
             ? "Loading monitor position…"
-            : resetBusyKind === "this"
+            : resetBusyKind != null
               ? "Please wait…"
               : "Reset at monitor position"}
         </button>

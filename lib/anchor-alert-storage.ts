@@ -57,6 +57,18 @@ export function parseAnchorRadiusM(value: unknown, opts?: ParseAnchorRadiusOpts)
   return DEFAULTS.radiusM;
 }
 
+/** Next larger step in {@link ANCHOR_RADIUS_METRES_OPTIONS}, or `null` if already at the maximum (200 m). */
+export function nextLargerStandardAnchorRadiusM(
+  currentM: unknown,
+  opts?: { fromTrustedStore?: boolean },
+): number | null {
+  const cur = parseAnchorRadiusM(currentM, { fromTrustedStore: opts?.fromTrustedStore === true });
+  for (const o of ANCHOR_RADIUS_METRES_OPTIONS) {
+    if (o > cur) return o;
+  }
+  return null;
+}
+
 export function getAnchorAlertConfig(opts?: GetAnchorAlertConfigOpts): AnchorAlertConfig {
   if (typeof window === "undefined") return DEFAULTS;
   try {
