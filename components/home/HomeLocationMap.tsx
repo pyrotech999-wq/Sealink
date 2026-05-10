@@ -2357,6 +2357,7 @@ export default function HomeLocationMap({
                           lng: fix.lng,
                           lastAlertAt: null,
                           lastBearingDeg: null,
+                          remoteAlarmSilencedUntilReset: false,
                         }),
                       });
                     } catch (e) {
@@ -2461,6 +2462,7 @@ export default function HomeLocationMap({
                           lng: fix.lng,
                           lastAlertAt: null,
                           lastBearingDeg: null,
+                          remoteAlarmSilencedUntilReset: false,
                         }),
                       });
                     } catch (e) {

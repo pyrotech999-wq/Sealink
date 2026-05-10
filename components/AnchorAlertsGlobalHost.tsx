@@ -27,6 +27,11 @@ const POLL_MS = 20_000;
 
 type AlertRow = { id: string; message: string; createdAt: string };
 
+type AnchorGeofencePollConfig = {
+  monitorDeviceId?: string;
+  remoteAlarmSilencedUntilReset?: boolean;
+};
+
 /**
  * Polls anchor inbox on every signed-in route so the **receiving** phone gets alarms without staying on the map.
  * De-duplicates with {@link HomeLocationMap} via `sessionStorage` so the same server alert does not open twice.
@@ -65,6 +70,7 @@ export function AnchorAlertsGlobalHost() {
               lng: fix.lng,
               lastAlertAt: null,
               lastBearingDeg: null,
+              remoteAlarmSilencedUntilReset: false,
             }),
           });
         } catch (e) {
@@ -117,10 +123,10 @@ export function AnchorAlertsGlobalHost() {
         ]);
         if (!mr.ok) return;
         const md = (await mr.json()) as { config?: { alertDeviceIds?: string[]; monitorDeviceId?: string | null } };
-        let gcfg: { monitorDeviceId?: string; remoteAlarmSilencedUntilReset?: boolean } | null = null;
+        let gcfg: AnchorGeofencePollConfig | null = null;
         if (gr.ok) {
           try {
-            const gd = (await gr.json()) as { config?: typeof gcfg };
+            const gd = (await gr.json()) as { config?: AnchorGeofencePollConfig };
             gcfg = gd.config && typeof gd.config === "object" ? gd.config : null;
           } catch {
             gcfg = null;
@@ -278,34 +284,24 @@ export function AnchorAlertsGlobalHost() {
             const seenId = alert.id;
             void (async () => {
               setResetError(null);
-              setResetBusyKind("monitor");
-              const { signal, clear } = createAnchorResetNetworkAbort();
+              setResetBusyKind("reset");
+              const { signal, clear } = createAnchorResetNetworkAbort(120_000);
               try {
-                const mr = await fetch("/api/anchor/monitor", {
-                  credentials: "same-origin",
-                  cache: "no-store",
-                  signal,
-                });
-                const gr = await fetch("/api/anchor/geofence", {
-                  credentials: "same-origin",
-                  cache: "no-store",
-                  signal,
-                });
+                const [mr, gr] = await Promise.all([
+                  fetch("/api/anchor/monitor", { credentials: "same-origin", cache: "no-store", signal }),
+                  fetch("/api/anchor/geofence", { credentials: "same-origin", cache: "no-store", signal }),
+                ]);
                 let mj: { config?: { monitorDeviceId?: string | null } } | null = null;
                 let gj: { config?: { monitorDeviceId?: string } } | null = null;
-                if (mr.ok) {
-                  mj = (await mr.json()) as { config?: { monitorDeviceId?: string | null } };
-                }
-                if (gr.ok) {
-                  gj = (await gr.json()) as { config?: { monitorDeviceId?: string } };
-                }
+                if (mr.ok) mj = (await mr.json()) as { config?: { monitorDeviceId?: string | null } };
+                if (gr.ok) gj = (await gr.json()) as { config?: { monitorDeviceId?: string } };
                 if (!mr.ok && !gr.ok) {
                   const hint =
                     mr.status === 401 || gr.status === 401
                       ? "Try opening SeaLink in the browser again and signing in."
                       : "Check Wi‑Fi or mobile data, then retry.";
                   setResetError(
-                    `Could not load anchor settings (monitor ${mr.status}, geofence ${gr.status}). ${hint} You can still try “Allow wider swing” or “Mute alerts here”.`,
+                    `Could not load anchor settings (monitor ${mr.status}, geofence ${gr.status}). ${hint} You can still try “Increase geofence” or “Silence until anchor reset”.`,
                   );
                   return;
                 }
@@ -319,26 +315,53 @@ export function AnchorAlertsGlobalHost() {
                   );
                   return;
                 }
-                const fix = await resolveAnchorResetCentreCoordinates({
-                  thisDeviceId: deviceId,
-                  effectiveMonitorDeviceId: effective,
-                  mapPosIfThisDeviceIsMonitor: null,
-                  allowBrowserGpsFallback: false,
-                  signal,
-                });
-                if (!fix) {
-                  setResetError(
-                    "No recent GPS for the monitoring device. Use “This phone’s GPS” below, open Anchor alarm on the map, or tap Mark seen.",
-                  );
-                  return;
+                if (effective === deviceId) {
+                  const fix = await resolveAnchorResetCentreCoordinates({
+                    thisDeviceId: deviceId,
+                    effectiveMonitorDeviceId: effective,
+                    mapPosIfThisDeviceIsMonitor: null,
+                    allowBrowserGpsFallback: true,
+                    signal,
+                  });
+                  if (!fix) {
+                    setResetError(
+                      "No recent GPS for this monitoring handset. Open Anchor alarm on the map, wait for a fix, or tap Mark seen.",
+                    );
+                    return;
+                  }
+                  await applyGeofenceResetAndDismiss(fix, seenId, { signal });
+                } else {
+                  const r = await enqueueAndAwaitAnchorCommand({
+                    type: "RESET_ANCHOR",
+                    sourceDeviceId: deviceId,
+                    signal,
+                    onWaitingForBoat: () => setResetError("Waiting for boat device…"),
+                  });
+                  if (!r.ok) {
+                    setResetError(r.error);
+                    return;
+                  }
+                  if (!ANCHOR_LIVE_APIS_BLOCKED) {
+                    try {
+                      await fetch("/api/anchor/alerts", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ seenId }),
+                        credentials: "same-origin",
+                        signal,
+                      });
+                    } catch {
+                      /* ignore */
+                    }
+                  }
+                  clearPresentedAnchorAlertId();
+                  setAlert(null);
+                  setResetError(null);
                 }
-                await applyGeofenceResetAndDismiss(fix, seenId, { signal });
               } catch (e) {
                 if (e instanceof Error && e.message === "save") return;
                 if (isAnchorResetAbortError(e)) {
-                  setResetError(
-                    "Request timed out. Try “This phone’s GPS”, check your connection, or open Anchor alarm.",
-                  );
+                  setResetError("Request timed out. Check your connection, or open Anchor alarm on the map.");
                 }
               } finally {
                 clear();
@@ -348,48 +371,7 @@ export function AnchorAlertsGlobalHost() {
           }}
           className="h-14 w-full rounded-xl bg-emerald-500 text-base font-bold text-white shadow-lg hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-xs"
         >
-          {resetBusyKind === "monitor"
-            ? "Loading monitor position…"
-            : resetBusyKind != null
-              ? "Please wait…"
-              : "Reset at monitor position"}
-        </button>
-        <button
-          type="button"
-          disabled={resetBusyKind !== null}
-          onClick={() => {
-            stopAnchorAlarmSiren();
-            if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
-            const seenId = alert.id;
-            void (async () => {
-              setResetError(null);
-              setResetBusyKind("this");
-              const { signal, clear } = createAnchorResetNetworkAbort(45_000);
-              try {
-                const fix = await getGpsFixForAnchorReset(null);
-                if (!fix) {
-                  setResetError(
-                    "Could not read GPS on this phone (permission, timeout, or no signal). Allow location for SeaLink, try outdoors, or use Mark seen.",
-                  );
-                  return;
-                }
-                await applyGeofenceResetAndDismiss(fix, seenId, { signal });
-              } catch (e) {
-                if (e instanceof Error && e.message === "save") return;
-                if (isAnchorResetAbortError(e)) {
-                  setResetError(
-                    "Request timed out while saving. Check your connection, try again, or use Mark seen.",
-                  );
-                }
-              } finally {
-                clear();
-                setResetBusyKind(null);
-              }
-            })();
-          }}
-          className="h-14 w-full rounded-xl border-2 border-emerald-300/90 bg-emerald-950/50 text-base font-bold text-emerald-50 shadow-lg hover:bg-emerald-900/60 disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-xs"
-        >
-          {resetBusyKind === "this" ? "Getting this phone’s GPS…" : "This phone’s GPS"}
+          {resetBusyKind === "reset" ? "Working…" : resetBusyKind != null ? "Please wait…" : "Reset anchor at boat GPS"}
         </button>
         <button
           type="button"
@@ -397,43 +379,78 @@ export function AnchorAlertsGlobalHost() {
           onClick={() => {
             void (async () => {
               setResetError(null);
-              setResetBusyKind("radius");
-              const { signal, clear } = createAnchorResetNetworkAbort();
+              setResetBusyKind("increase");
+              const { signal, clear } = createAnchorResetNetworkAbort(120_000);
               try {
-                const gr = await fetch("/api/anchor/geofence", {
-                  credentials: "same-origin",
-                  cache: "no-store",
-                  signal,
+                const [mr, gr] = await Promise.all([
+                  fetch("/api/anchor/monitor", { credentials: "same-origin", cache: "no-store", signal }),
+                  fetch("/api/anchor/geofence", { credentials: "same-origin", cache: "no-store", signal }),
+                ]);
+                let mj: { config?: { monitorDeviceId?: string | null } } | null = null;
+                let gj: { config?: { monitorDeviceId?: string; radiusM?: unknown } } | null = null;
+                if (mr.ok) mj = (await mr.json()) as { config?: { monitorDeviceId?: string | null } };
+                if (gr.ok) gj = (await gr.json()) as { config?: { monitorDeviceId?: string; radiusM?: unknown } };
+                if (!mr.ok && !gr.ok) {
+                  setResetError(`Could not load settings (monitor ${mr.status}, geofence ${gr.status}).`);
+                  return;
+                }
+                const effective = effectiveMonitorDeviceIdFromServer({
+                  serverMonitorDeviceId: mj?.config?.monitorDeviceId,
+                  geofenceMonitorDeviceId: gj?.config?.monitorDeviceId,
                 });
-                if (!gr.ok) {
-                  setResetError(
-                    gr.status === 401
-                      ? "Sign-in required to change radius. Open SeaLink signed in, then try again."
-                      : `Could not read geofence (${gr.status}). Check connection.`,
-                  );
+                if (!effective) {
+                  setResetError("Monitoring device is not configured yet. Open Anchor alarm on the boat phone first.");
                   return;
                 }
-                const body = (await gr.json()) as { config?: { radiusM?: unknown } };
-                const curR = body.config?.radiusM;
-                const nextR = nextLargerStandardAnchorRadiusM(curR, { fromTrustedStore: true });
-                if (nextR == null) {
-                  setResetError("Already at the widest standard radius (200 m). Open Anchor alarm on the map for more options.");
-                  return;
+                if (effective === deviceId) {
+                  if (!gr.ok) {
+                    setResetError("Could not read geofence for radius.");
+                    return;
+                  }
+                  const curR = gj?.config?.radiusM;
+                  const nextR = anchorRadiusAfterAddingMeters(curR, 10, { fromTrustedStore: true });
+                  const pr = await fetch("/api/anchor/geofence", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "same-origin",
+                    signal,
+                    body: JSON.stringify({ radiusM: nextR }),
+                  });
+                  if (!pr.ok) {
+                    setResetError(`Could not save new radius (${pr.status}).`);
+                    return;
+                  }
+                  setResetError(`Done: allowed swing is now ${nextR} m (anchor centre unchanged). Tap Mark seen to stop this alarm.`);
+                } else {
+                  const r = await enqueueAndAwaitAnchorCommand({
+                    type: "INCREASE_RADIUS",
+                    meters: 10,
+                    sourceDeviceId: deviceId,
+                    signal,
+                    onWaitingForBoat: () => setResetError("Waiting for boat device…"),
+                  });
+                  if (!r.ok) {
+                    setResetError(r.error);
+                    return;
+                  }
+                  const seenId = alert.id;
+                  if (!ANCHOR_LIVE_APIS_BLOCKED) {
+                    try {
+                      await fetch("/api/anchor/alerts", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ seenId }),
+                        credentials: "same-origin",
+                        signal,
+                      });
+                    } catch {
+                      /* ignore */
+                    }
+                  }
+                  clearPresentedAnchorAlertId();
+                  setAlert(null);
+                  setResetError(null);
                 }
-                const pr = await fetch("/api/anchor/geofence", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  credentials: "same-origin",
-                  signal,
-                  body: JSON.stringify({ radiusM: nextR }),
-                });
-                if (!pr.ok) {
-                  setResetError(`Could not save new radius (${pr.status}). Try again from Anchor alarm on the map.`);
-                  return;
-                }
-                setResetError(
-                  `Done: allowed swing is now ${nextR} m (anchor centre unchanged). Mark seen still turns off this alarm sound.`,
-                );
               } catch (e) {
                 if (isAnchorResetAbortError(e)) {
                   setResetError("That took too long. Check connection, then try again.");
@@ -446,79 +463,95 @@ export function AnchorAlertsGlobalHost() {
           }}
           className="h-12 w-full rounded-xl border border-sky-300/80 bg-sky-950/45 text-sm font-bold text-sky-50 hover:bg-sky-900/55 disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-xs"
         >
-          {resetBusyKind === "radius" ? "Updating radius…" : "Allow wider swing"}
+          {resetBusyKind === "increase" ? "Working…" : "Increase geofence (+10 m)"}
         </button>
         <button
           type="button"
           disabled={resetBusyKind !== null || ANCHOR_LIVE_APIS_BLOCKED}
           onClick={() => {
-            if (
-              !window.confirm(
-                "Stop fullscreen anchor alarms on this phone only? The monitoring handset can still alarm. You can turn alerts back on later in Anchor alarm → Monitor & alert devices.",
-              )
-            ) {
-              return;
-            }
             void (async () => {
               if (!deviceId || deviceId === "server") {
                 setResetError("This page does not have a device id yet. Reload SeaLink, then try again.");
                 return;
               }
               setResetError(null);
-              setResetBusyKind("mute");
-              const { signal, clear } = createAnchorResetNetworkAbort();
+              setResetBusyKind("silence");
+              const { signal, clear } = createAnchorResetNetworkAbort(120_000);
               try {
-                const mr = await fetch("/api/anchor/monitor", {
-                  credentials: "same-origin",
-                  cache: "no-store",
-                  signal,
+                const [mr, gr] = await Promise.all([
+                  fetch("/api/anchor/monitor", { credentials: "same-origin", cache: "no-store", signal }),
+                  fetch("/api/anchor/geofence", { credentials: "same-origin", cache: "no-store", signal }),
+                ]);
+                let mj: { config?: { monitorDeviceId?: string | null } } | null = null;
+                let gj: { config?: { monitorDeviceId?: string } } | null = null;
+                if (mr.ok) mj = (await mr.json()) as { config?: { monitorDeviceId?: string | null } };
+                if (gr.ok) gj = (await gr.json()) as { config?: { monitorDeviceId?: string } };
+                if (!mr.ok && !gr.ok) {
+                  setResetError(`Could not load settings (monitor ${mr.status}, geofence ${gr.status}).`);
+                  return;
+                }
+                const effective = effectiveMonitorDeviceIdFromServer({
+                  serverMonitorDeviceId: mj?.config?.monitorDeviceId,
+                  geofenceMonitorDeviceId: gj?.config?.monitorDeviceId,
                 });
-                if (!mr.ok) {
-                  setResetError(
-                    mr.status === 401
-                      ? "Sign-in required. Open SeaLink signed in, then try again."
-                      : `Could not load who receives alerts (${mr.status}). Open Anchor alarm on the map to change alert devices.`,
-                  );
+                if (!effective) {
+                  setResetError("Monitoring device is not configured yet.");
                   return;
                 }
-                const mj = (await mr.json()) as { config?: { alertDeviceIds?: string[] } };
-                const dr = await fetch("/api/anchor/devices", {
-                  credentials: "same-origin",
-                  cache: "no-store",
-                  signal,
-                });
-                if (!dr.ok) {
-                  setResetError(`Could not list devices (${dr.status}). Try again or use Open map & anchor.`);
-                  return;
+                if (effective === deviceId) {
+                  const gr1 = await fetch("/api/anchor/geofence", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "same-origin",
+                    signal,
+                    body: JSON.stringify({ remoteAlarmSilencedUntilReset: true }),
+                  });
+                  if (!gr1.ok) {
+                    setResetError(`Could not save silence flag (${gr1.status}).`);
+                    return;
+                  }
+                  await fetch("/api/anchor/alerts", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "same-origin",
+                    signal,
+                    body: JSON.stringify({ markAllSeen: true }),
+                  }).catch(() => undefined);
+                  stopAnchorAlarmSiren();
+                  if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
+                  clearPresentedAnchorAlertId();
+                  setAlert(null);
+                } else {
+                  const r = await enqueueAndAwaitAnchorCommand({
+                    type: "SILENCE_UNTIL_RESET",
+                    sourceDeviceId: deviceId,
+                    signal,
+                    onWaitingForBoat: () => setResetError("Waiting for boat device…"),
+                  });
+                  if (!r.ok) {
+                    setResetError(r.error);
+                    return;
+                  }
+                  const seenId = alert.id;
+                  if (!ANCHOR_LIVE_APIS_BLOCKED) {
+                    try {
+                      await fetch("/api/anchor/alerts", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ seenId }),
+                        credentials: "same-origin",
+                        signal,
+                      });
+                    } catch {
+                      /* ignore */
+                    }
+                  }
+                  stopAnchorAlarmSiren();
+                  if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
+                  clearPresentedAnchorAlertId();
+                  setAlert(null);
+                  setResetError(null);
                 }
-                const d = (await dr.json()) as { devices?: { deviceId: string }[] };
-                const allIds = (Array.isArray(d.devices) ? d.devices : []).map((x) => x.deviceId).filter(Boolean);
-                const curIds = Array.isArray(mj.config?.alertDeviceIds) ? mj.config!.alertDeviceIds : [];
-                const nextIds =
-                  curIds.length > 0
-                    ? curIds.filter((id) => id !== deviceId)
-                    : allIds.filter((id) => id !== deviceId);
-                if (nextIds.length < 1) {
-                  setResetError(
-                    "Cannot mute this phone: it is the only handset on the alert list. Add another device under Anchor alarm first, or use Mark seen.",
-                  );
-                  return;
-                }
-                const save = await fetch("/api/anchor/monitor", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  credentials: "same-origin",
-                  signal,
-                  body: JSON.stringify({ alertDeviceIds: nextIds }),
-                });
-                if (!save.ok) {
-                  setResetError(`Could not save alert list (${save.status}). Try Anchor alarm on the map.`);
-                  return;
-                }
-                stopAnchorAlarmSiren();
-                if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
-                clearPresentedAnchorAlertId();
-                setAlert(null);
               } catch (e) {
                 if (isAnchorResetAbortError(e)) {
                   setResetError("That took too long. Check connection, then try again.");
@@ -531,7 +564,7 @@ export function AnchorAlertsGlobalHost() {
           }}
           className="h-12 w-full rounded-xl border border-zinc-400/90 bg-zinc-800/80 text-sm font-bold text-zinc-100 hover:bg-zinc-700/90 disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-xs"
         >
-          {resetBusyKind === "mute" ? "Updating…" : "Mute alerts on this phone"}
+          {resetBusyKind === "silence" ? "Working…" : "Silence until anchor reset"}
         </button>
         <a
           href="/anchor-alarm"
@@ -583,14 +616,13 @@ export function AnchorAlertsGlobalHost() {
       <p className="bg-black/40 px-4 py-2 text-center text-[11px] text-white/75">
         Leave SeaLink signed in on this device (even in the background) so it can pick up alerts from your monitoring phone.
         <span className="mt-1 block opacity-90">
-          <strong className="text-white/90">Reset at monitor position</strong> keeps the same radius and moves the orange
-          ring to the <strong className="text-white/90">monitoring device’s</strong> latest GPS (from the server), then
-          clears this alert. <strong className="text-white/90">This phone’s GPS</strong> does the same using{" "}
-          <em className="not-italic text-white/85">this</em> handset’s location if the boat phone has no server fix.{" "}
-          <strong className="text-white/90">Mark seen</strong> stops the alarm without moving the ring.{" "}
-          <strong className="text-white/90">Allow wider swing</strong> bumps the allowed radius on the server (centre
-          unchanged). <strong className="text-white/90">Mute alerts on this phone</strong> removes this handset from the
-          alert list so it won&apos;t get future fullscreen anchor alarms (change back in Anchor alarm).
+          <strong className="text-white/90">Reset anchor at boat GPS</strong> moves the ring to the monitoring handset’s
+          position (never this phone’s GPS when you are not the monitor). <strong className="text-white/90">Increase
+          geofence</strong> widens the allowed radius by 10&nbsp;m on the boat device.{" "}
+          <strong className="text-white/90">Silence until anchor reset</strong> stops this alarm and pauses new remote
+          breach pop-ups until the boat resets the anchor. If you are the monitor, changes apply immediately; otherwise
+          commands queue until the boat device is online. <strong className="text-white/90">Mark seen</strong> stops the
+          alarm here without moving the ring.
         </span>
       </p>
     </div>
