@@ -12,6 +12,7 @@ import {
   type AnchorSessionCommandRow,
   type AnchorSessionCommandType,
 } from "@/lib/anchor-session-commands-store";
+import { getAnchorGeofenceConfig } from "@/lib/anchor-geofence-store";
 import { getAnchorMonitorConfig } from "@/lib/anchor-monitor-store";
 
 export const runtime = "nodejs";
