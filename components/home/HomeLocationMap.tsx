@@ -2258,6 +2258,8 @@ export default function HomeLocationMap({
             ) : null}
           </div>
           <div className="flex shrink-0 flex-col gap-3 border-t-2 border-white/25 bg-black/35 px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-md sm:flex-row sm:justify-center">
+            {breachIsMonitoringDevice ? (
+              <>
             <button
               type="button"
               disabled={anchorBreachResetBusyKind !== null}
