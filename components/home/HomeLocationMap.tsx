@@ -1029,45 +1029,20 @@ export default function HomeLocationMap({
     }
   }, [deviceId]);
 
-  /** Monitoring handset: HTTP poll for remote commands (no Realtime). Uses `queued → received → applied`. */
+  /**
+   * Re-register this handset as monitor on the server (POST monitor + geofence touch).
+   * Runs on a **60s** loop only — separate from the fast `/api/anchor/commands` poll so command fetch is never
+   * blocked by heartbeat or GPS/breach work.
+   */
   useEffect(() => {
     if (ANCHOR_LIVE_APIS_BLOCKED || !signedIn || !deviceId || deviceId === "server") return;
     let disposed = false;
-    const heartbeatKey = "sealink_anchor_cmd_boat_heartbeat";
-
-    const withTimeout = async (p: Promise<void>, ms: number, label: string): Promise<void> => {
-      let tid: number | undefined;
-      const timeoutDone = new Promise<"timeout">((resolve) => {
-        tid = window.setTimeout(() => resolve("timeout"), ms);
-      });
-      const pDone = p.then(
-        () => {
-          if (tid != null) window.clearTimeout(tid);
-          tid = undefined;
-          return "ok" as const;
-        },
-        (e: unknown) => {
-          if (tid != null) window.clearTimeout(tid);
-          tid = undefined;
-          throw e;
-        },
-      );
-      const out = await Promise.race([pDone, timeoutDone]);
-      if (tid != null) {
-        window.clearTimeout(tid);
-        tid = undefined;
-      }
-      if (out === "timeout") {
-        console.warn("[ANCHOR_MONITOR_CMD_CLIENT]", JSON.stringify({ phase: label, err: `timeout_after_${ms}ms` }));
-      }
-    };
 
     const geoHeaders = (): HeadersInit => ({
       "Content-Type": "application/json",
       [ANCHOR_DEVICE_ID_HEADER]: deviceId,
     });
 
-    /** Re-register this handset as monitor on the server so `getEffectiveMonitorDeviceIdForUid` is not stale. */
     const refreshMonitorRegistration = async (): Promise<void> => {
       const ids = anchorMonitorRef.current?.alertDeviceIds;
       const monBody: Record<string, unknown> = { monitorDeviceId: deviceId };
@@ -1109,6 +1084,32 @@ export default function HomeLocationMap({
     };
 
     const tick = async () => {
+      if (disposed) return;
+      if (!anchorCfgRef.current.armed) return;
+      if (breachEffectiveMonitorRef.current !== deviceId) return;
+      await refreshMonitorRegistration();
+    };
+
+    void tick();
+    const id = window.setInterval(() => void tick(), 60_000);
+    return () => {
+      disposed = true;
+      window.clearInterval(id);
+    };
+  }, [deviceId, signedIn, anchorCfg.armed, anchorCfg.monitorDeviceId, anchorMonitor?.monitorDeviceId]);
+
+  /** Monitoring handset: lightweight GET `/api/anchor/commands` only (no GPS, breach, or heartbeat in this tick). */
+  useEffect(() => {
+    if (ANCHOR_LIVE_APIS_BLOCKED || !signedIn || !deviceId || deviceId === "server") return;
+    let disposed = false;
+    const heartbeatKey = "sealink_anchor_cmd_boat_heartbeat";
+
+    const geoHeaders = (): HeadersInit => ({
+      "Content-Type": "application/json",
+      [ANCHOR_DEVICE_ID_HEADER]: deviceId,
+    });
+
+    const tick = async () => {
       if (disposed || monitorAnchorPollInFlightRef.current) return;
       const snap = anchorCfgRef.current;
       if (!snap.armed) return;
@@ -1141,15 +1142,6 @@ export default function HomeLocationMap({
 
       monitorAnchorPollInFlightRef.current = true;
       try {
-        try {
-          await withTimeout(refreshMonitorRegistration(), 12_000, "heartbeat_anchor_monitor");
-        } catch (e) {
-          console.warn(
-            "[ANCHOR_MONITOR_CMD_CLIENT]",
-            JSON.stringify({ phase: "heartbeat_anchor_monitor_throw", err: e instanceof Error ? e.message : String(e) }),
-          );
-        }
-
         const activeSessionId = `${anchorUserUidRef.current ?? "no-uid"}|armed:${snap.armed}|r${snap.radiusM}|la=${snap.lastAlertAt ?? "null"}|sil=${snap.remoteAlarmSilencedUntilReset === true}`;
         const monitoringActive = snap.armed && eff === deviceId;
 
@@ -1631,7 +1623,7 @@ export default function HomeLocationMap({
 
     const intervalMs = () => {
       if (monitorCommandPollNetworkIssueRef.current) return 5000;
-      return document.visibilityState === "visible" ? 2500 : 7000;
+      return document.visibilityState === "visible" ? 4000 : 5000;
     };
     let iv = window.setInterval(() => void tick(), intervalMs());
     const bumpInterval = () => {

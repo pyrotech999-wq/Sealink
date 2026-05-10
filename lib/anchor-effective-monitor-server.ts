@@ -25,24 +25,35 @@ function defaultGeofenceRow(uid: string): AnchorGeofenceConfigRow {
 }
 
 /**
- * Effective monitoring handset id for this account (server monitor row wins, else geofence monitor id).
- * Uses `Promise.allSettled` so one store failing (e.g. transient Supabase error) does not kill the whole poll.
+ * Monitor + geofence rows in one parallel round-trip (no duplicate geofence read).
+ * Uses `Promise.allSettled` so one store failing does not kill the other.
  */
-export async function getEffectiveMonitorDeviceIdForUid(uid: string): Promise<string | null> {
+export async function getEffectiveMonitorAndGeofence(uid: string): Promise<{
+  effective: string | null;
+  geo: AnchorGeofenceConfigRow;
+}> {
   const [monRes, geoRes] = await Promise.allSettled([getAnchorMonitorConfig(uid), getAnchorGeofenceConfig(uid)]);
 
   if (monRes.status === "rejected") {
-    console.error("[getEffectiveMonitorDeviceIdForUid] getAnchorMonitorConfig failed", monRes.reason);
+    console.error("[getEffectiveMonitorAndGeofence] getAnchorMonitorConfig failed", monRes.reason);
   }
   if (geoRes.status === "rejected") {
-    console.error("[getEffectiveMonitorDeviceIdForUid] getAnchorGeofenceConfig failed", geoRes.reason);
+    console.error("[getEffectiveMonitorAndGeofence] getAnchorGeofenceConfig failed", geoRes.reason);
   }
 
   const monitor = monRes.status === "fulfilled" ? monRes.value : defaultMonitorRow(uid);
   const geo = geoRes.status === "fulfilled" ? geoRes.value : defaultGeofenceRow(uid);
-
-  return effectiveMonitorDeviceIdFromServer({
+  const effective = effectiveMonitorDeviceIdFromServer({
     serverMonitorDeviceId: monitor.monitorDeviceId,
     geofenceMonitorDeviceId: geo.monitorDeviceId,
   });
+  return { effective, geo };
+}
+
+/**
+ * Effective monitoring handset id for this account (server monitor row wins, else geofence monitor id).
+ */
+export async function getEffectiveMonitorDeviceIdForUid(uid: string): Promise<string | null> {
+  const { effective } = await getEffectiveMonitorAndGeofence(uid);
+  return effective;
 }

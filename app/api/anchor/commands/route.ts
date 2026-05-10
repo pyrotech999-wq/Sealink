@@ -3,7 +3,7 @@ import { requireAuthUser, type AuthUser } from "@/lib/auth";
 import { anchorCommandsExposeServerErrors } from "@/lib/anchor-api-debug-server";
 import { anchorCommandServerLog } from "@/lib/anchor-command-server-log";
 import { ANCHOR_DEVICE_ID_HEADER } from "@/lib/anchor-device-id-header";
-import { getEffectiveMonitorDeviceIdForUid } from "@/lib/anchor-effective-monitor-server";
+import { getEffectiveMonitorAndGeofence, getEffectiveMonitorDeviceIdForUid } from "@/lib/anchor-effective-monitor-server";
 import {
   createAnchorSessionCommand,
   getAnchorSessionCommand,
@@ -12,10 +12,11 @@ import {
   type AnchorSessionCommandRow,
   type AnchorSessionCommandType,
 } from "@/lib/anchor-session-commands-store";
-import { getAnchorGeofenceConfig } from "@/lib/anchor-geofence-store";
 import { getAnchorMonitorConfig } from "@/lib/anchor-monitor-store";
 
 export const runtime = "nodejs";
+/** Avoid platform 504 while Supabase is slow; monitor poll must stay lightweight but needs headroom. */
+export const maxDuration = 60;
 
 function parseType(t: unknown): AnchorSessionCommandType | null {
   if (t === "INCREASE_RADIUS" || t === "RESET_ANCHOR" || t === "SILENCE_UNTIL_RESET") return t;
@@ -82,33 +83,8 @@ async function getMonitorPollJson(uid: string, req: Request): Promise<Record<str
   let effective: string | null = null;
 
   try {
-    effective = await getEffectiveMonitorDeviceIdForUid(uid);
-    let geoForLog: Awaited<ReturnType<typeof getAnchorGeofenceConfig>>;
-    try {
-      geoForLog = await getAnchorGeofenceConfig(uid);
-    } catch (geoErr) {
-      logAnchorCommandsGetError({
-        req,
-        role: "monitor",
-        uid,
-        effectiveMonitorDeviceId: effective,
-        activeSessionId: null,
-        error: geoErr,
-      });
-      geoForLog = {
-        uid,
-        armed: false,
-        lat: null,
-        lng: null,
-        radiusM: 20,
-        angleDeg: 360,
-        monitorDeviceId: "this",
-        lastBearingDeg: null,
-        lastAlertAt: null,
-        remoteAlarmSilencedUntilReset: false,
-        updatedAt: new Date().toISOString(),
-      };
-    }
+    const { effective: effResolved, geo: geoForLog } = await getEffectiveMonitorAndGeofence(uid);
+    effective = effResolved;
 
     activeSessionFingerprint = `${uid}|armed=${geoForLog.armed}|r=${geoForLog.radiusM}|mon_geo=${geoForLog.monitorDeviceId ?? "null"}|la=${geoForLog.lastAlertAt ?? "null"}`;
     const pollAccepted = Boolean(effective && headerDevice && headerDevice === effective);
