@@ -67,6 +67,7 @@ export function AnchorAlertsGlobalHost() {
           if (alertRef.current) {
             stopAnchorAlarmSiren();
             setAlarmBlocked(false);
+            clearPresentedAnchorAlertId();
             setAlert(null);
           }
           return;
@@ -82,6 +83,7 @@ export function AnchorAlertsGlobalHost() {
           if (alertRef.current) {
             stopAnchorAlarmSiren();
             setAlarmBlocked(false);
+            clearPresentedAnchorAlertId();
             setAlert(null);
           }
           return;

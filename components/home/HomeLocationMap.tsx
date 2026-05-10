@@ -2096,6 +2096,7 @@ export default function HomeLocationMap({
                 stopAlarm();
                 if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
                 if (ANCHOR_LIVE_APIS_BLOCKED) {
+                  clearPresentedAnchorAlertId();
                   setActiveAnchorAlert(null);
                   return;
                 }
@@ -2110,6 +2111,7 @@ export default function HomeLocationMap({
                   } catch {
                     /* ignore */
                   }
+                  clearPresentedAnchorAlertId();
                   setActiveAnchorAlert(null);
                 })();
               }}
