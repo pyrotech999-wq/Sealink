@@ -302,6 +302,9 @@ export default function HomeLocationMap({
       const msg = typeof payload.message === "string" ? payload.message : "Anchor alert";
       const now = Date.now();
       const cur = anchorCfgRef.current;
+      const last = cur.lastAlertAt ? new Date(cur.lastAlertAt).getTime() : 0;
+      if (now - last < 2 * 60_000) return;
+
       const next = { ...cur, lastAlertAt: new Date(now).toISOString() };
       queueMicrotask(() => {
         setAnchorCfg(next);
@@ -311,19 +314,79 @@ export default function HomeLocationMap({
         void fetch("/api/anchor/geofence", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
           body: JSON.stringify({ lastAlertAt: next.lastAlertAt, lastBearingDeg: next.lastBearingDeg }),
           keepalive: true,
         }).catch(() => undefined);
       }
-      if (shouldReceiveAnchorAlarmPopUp(anchorMonitorRef.current?.alertDeviceIds, deviceId)) {
-        queueMicrotask(() =>
-          setActiveAnchorAlert({
-            id: `native-${now}`,
-            message: msg,
-            createdAt: new Date(now).toISOString(),
-          }),
-        );
+
+      const mayReceivePopUp = shouldReceiveAnchorAlarmPopUp(anchorMonitorRef.current?.alertDeviceIds, deviceId);
+      if (ANCHOR_LIVE_APIS_BLOCKED) {
+        if (mayReceivePopUp && !activeAnchorAlertRef.current) {
+          queueMicrotask(() =>
+            setActiveAnchorAlert({
+              id: `local-${now}`,
+              message: msg,
+              createdAt: new Date(now).toISOString(),
+            }),
+          );
+        }
+        return;
       }
+
+      void (async () => {
+        try {
+          const r = await fetch("/api/anchor/alerts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message: msg, kind: "alert" }),
+            credentials: "same-origin",
+            keepalive: true,
+          });
+          const popHere = shouldReceiveAnchorAlarmPopUp(anchorMonitorRef.current?.alertDeviceIds, deviceId);
+          if (r.ok) {
+            try {
+              const data = (await r.json()) as {
+                alert?: { id?: string; message?: string; createdAt?: string; created_at?: string };
+              };
+              const a = data?.alert;
+              const id = typeof a?.id === "string" ? a.id : "";
+              const text = typeof a?.message === "string" ? a.message : "";
+              const created =
+                typeof a?.createdAt === "string"
+                  ? a.createdAt
+                  : typeof a?.created_at === "string"
+                    ? a.created_at
+                    : new Date(now).toISOString();
+              if (popHere && id && text && !activeAnchorAlertRef.current) {
+                setActiveAnchorAlert({ id, message: text, createdAt: created });
+              }
+            } catch {
+              if (popHere && !activeAnchorAlertRef.current) {
+                setActiveAnchorAlert({
+                  id: `native-${now}`,
+                  message: msg,
+                  createdAt: new Date(now).toISOString(),
+                });
+              }
+            }
+          } else if (popHere && !activeAnchorAlertRef.current) {
+            setActiveAnchorAlert({
+              id: `native-${now}`,
+              message: msg,
+              createdAt: new Date(now).toISOString(),
+            });
+          }
+        } catch {
+          if (shouldReceiveAnchorAlarmPopUp(anchorMonitorRef.current?.alertDeviceIds, deviceId) && !activeAnchorAlertRef.current) {
+            setActiveAnchorAlert({
+              id: `native-${now}`,
+              message: msg,
+              createdAt: new Date(now).toISOString(),
+            });
+          }
+        }
+      })();
     }).then((h) => {
       if (disposed) void h.remove();
       else listener = h;
@@ -332,7 +395,7 @@ export default function HomeLocationMap({
       disposed = true;
       void listener?.remove();
     };
-  }, []);
+  }, [deviceId]);
 
   useEffect(() => {
     if (!isCapacitorAndroidNative()) return;

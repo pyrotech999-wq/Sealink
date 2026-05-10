@@ -104,7 +104,9 @@ export function AnchorAlertsGlobalHost() {
           return;
         }
 
-        if (readPresentedAnchorAlertId() === first.id && alertRef.current?.id !== first.id) {
+        const mapAnchorModalOpen =
+          typeof document !== "undefined" && document.getElementById("sealink-anchor-alarm-title") != null;
+        if (mapAnchorModalOpen && readPresentedAnchorAlertId() === first.id && alertRef.current?.id !== first.id) {
           return;
         }
         if (alertRef.current?.id === first.id) return;
