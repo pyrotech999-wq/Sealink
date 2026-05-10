@@ -219,12 +219,15 @@ function buildPinIcon(boat: string, avatarUrl: string, peekAvatar: boolean): L.D
 
 export default function HomeLocationMap({
   signedIn = false,
+  isAdmin = false,
   sharingUiMode = "home",
   anchorPlacement = "full",
   showHomeMapExtras = true,
   showNearbyFriends = true,
 }: {
   signedIn?: boolean;
+  /** When true, anchor dialog offers a 2 m admin-only test geofence. */
+  isAdmin?: boolean;
   /** `home`: map + link to settings. `settings`: options + share toggle only (no map). */
   sharingUiMode?: "home" | "settings";
   /** `full`: anchor controls + modal here. `compact`: pill only — open /anchor-alarm to arm or change settings. */
@@ -261,7 +264,7 @@ export default function HomeLocationMap({
   const [lifeSeasOpen, setLifeSeasOpen] = useState(false);
   const [anchorOpen, setAnchorOpen] = useState(false);
   const [anchorCfg, setAnchorCfg] = useState(() =>
-    typeof window !== "undefined" ? getAnchorAlertConfig() : getAnchorAlertConfig(),
+    typeof window !== "undefined" ? getAnchorAlertConfig({ isAdmin }) : getAnchorAlertConfig({ isAdmin }),
   );
   const [anchorLocQuality, setAnchorLocQuality] = useState<AnchorGpsQuality | null>(null);
   /** Reported horizontal accuracy from the last sensor sample (unclamped), for anchor arm gating. */

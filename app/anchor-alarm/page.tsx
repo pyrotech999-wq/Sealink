@@ -30,6 +30,7 @@ export default async function AnchorAlarmPage() {
 
         <HomeLocationMapLoader
           signedIn={signedIn}
+          isAdmin={authUser?.isAdmin ?? false}
           anchorPlacement="full"
           showHomeMapExtras={false}
           showNearbyFriends={false}

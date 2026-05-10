@@ -20,7 +20,7 @@ export default async function MapSharingSettingsPage() {
           or off. The live map is on the home page.
         </p>
 
-        <HomeLocationMapLoader signedIn={signedIn} sharingUiMode="settings" />
+        <HomeLocationMapLoader signedIn={signedIn} isAdmin={authUser?.isAdmin ?? false} sharingUiMode="settings" />
 
         <SeaLinkBrandFooter />
       </main>
