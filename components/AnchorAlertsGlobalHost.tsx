@@ -19,8 +19,9 @@ import {
 } from "@/lib/anchor-reset-centre-client";
 import { getOrCreateDeviceId } from "@/lib/device-id";
 import { isBareMetaDataDeletionPage } from "@/lib/messaging-chrome-paths";
-import { getGpsFixForAnchorReset, type LatLng as AnchorResetLatLng } from "@/lib/anchor-reset-gps";
-import { nextLargerStandardAnchorRadiusM } from "@/lib/anchor-alert-storage";
+import { type LatLng as AnchorResetLatLng } from "@/lib/anchor-reset-gps";
+import { anchorRadiusAfterAddingMeters } from "@/lib/anchor-alert-storage";
+import { enqueueAndAwaitAnchorCommand } from "@/lib/anchor-commands-client";
 
 const POLL_MS = 20_000;
 
@@ -39,7 +40,7 @@ export function AnchorAlertsGlobalHost() {
   const [alert, setAlert] = useState<AlertRow | null>(null);
   const alertRef = useRef<AlertRow | null>(null);
   const [alarmBlocked, setAlarmBlocked] = useState(false);
-  const [resetBusyKind, setResetBusyKind] = useState<null | "monitor" | "this" | "radius" | "mute">(null);
+  const [resetBusyKind, setResetBusyKind] = useState<null | "reset" | "increase" | "silence">(null);
   const [resetError, setResetError] = useState<string | null>(null);
 
   const applyGeofenceResetAndDismiss = useCallback(
