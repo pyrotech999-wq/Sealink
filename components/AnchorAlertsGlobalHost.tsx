@@ -284,15 +284,6 @@ export function AnchorAlertsGlobalHost() {
                   );
                   return;
                 }
-                if (!mr.ok) {
-                  setResetError(
-                    `Monitor list failed (${mr.status}). ${gr.ok ? "Continuing with geofence data only." : ""}`.trim(),
-                  );
-                } else if (!gr.ok) {
-                  setResetError(
-                    `Geofence row failed (${gr.status}). ${mr.ok ? "Continuing with saved monitor id only." : ""}`.trim(),
-                  );
-                }
                 const effective = effectiveMonitorDeviceIdFromServer({
                   serverMonitorDeviceId: mj?.config?.monitorDeviceId,
                   geofenceMonitorDeviceId: gj?.config?.monitorDeviceId,
@@ -375,6 +366,148 @@ export function AnchorAlertsGlobalHost() {
         >
           {resetBusyKind === "this" ? "Getting this phone’s GPS…" : "This phone’s GPS"}
         </button>
+        <button
+          type="button"
+          disabled={resetBusyKind !== null || ANCHOR_LIVE_APIS_BLOCKED}
+          onClick={() => {
+            void (async () => {
+              setResetError(null);
+              setResetBusyKind("radius");
+              const { signal, clear } = createAnchorResetNetworkAbort();
+              try {
+                const gr = await fetch("/api/anchor/geofence", {
+                  credentials: "same-origin",
+                  cache: "no-store",
+                  signal,
+                });
+                if (!gr.ok) {
+                  setResetError(
+                    gr.status === 401
+                      ? "Sign-in required to change radius. Open SeaLink signed in, then try again."
+                      : `Could not read geofence (${gr.status}). Check connection.`,
+                  );
+                  return;
+                }
+                const body = (await gr.json()) as { config?: { radiusM?: unknown } };
+                const curR = body.config?.radiusM;
+                const nextR = nextLargerStandardAnchorRadiusM(curR, { fromTrustedStore: true });
+                if (nextR == null) {
+                  setResetError("Already at the widest standard radius (200 m). Open Anchor alarm on the map for more options.");
+                  return;
+                }
+                const pr = await fetch("/api/anchor/geofence", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  credentials: "same-origin",
+                  signal,
+                  body: JSON.stringify({ radiusM: nextR }),
+                });
+                if (!pr.ok) {
+                  setResetError(`Could not save new radius (${pr.status}). Try again from Anchor alarm on the map.`);
+                  return;
+                }
+                setResetError(
+                  `Done: allowed swing is now ${nextR} m (anchor centre unchanged). Mark seen still turns off this alarm sound.`,
+                );
+              } catch (e) {
+                if (isAnchorResetAbortError(e)) {
+                  setResetError("That took too long. Check connection, then try again.");
+                }
+              } finally {
+                clear();
+                setResetBusyKind(null);
+              }
+            })();
+          }}
+          className="h-12 w-full rounded-xl border border-sky-300/80 bg-sky-950/45 text-sm font-bold text-sky-50 hover:bg-sky-900/55 disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-xs"
+        >
+          {resetBusyKind === "radius" ? "Updating radius…" : "Allow wider swing"}
+        </button>
+        <button
+          type="button"
+          disabled={resetBusyKind !== null || ANCHOR_LIVE_APIS_BLOCKED}
+          onClick={() => {
+            if (
+              !window.confirm(
+                "Stop fullscreen anchor alarms on this phone only? The monitoring handset can still alarm. You can turn alerts back on later in Anchor alarm → Monitor & alert devices.",
+              )
+            ) {
+              return;
+            }
+            void (async () => {
+              if (!deviceId || deviceId === "server") {
+                setResetError("This page does not have a device id yet. Reload SeaLink, then try again.");
+                return;
+              }
+              setResetError(null);
+              setResetBusyKind("mute");
+              const { signal, clear } = createAnchorResetNetworkAbort();
+              try {
+                const mr = await fetch("/api/anchor/monitor", {
+                  credentials: "same-origin",
+                  cache: "no-store",
+                  signal,
+                });
+                if (!mr.ok) {
+                  setResetError(
+                    mr.status === 401
+                      ? "Sign-in required. Open SeaLink signed in, then try again."
+                      : `Could not load who receives alerts (${mr.status}). Open Anchor alarm on the map to change alert devices.`,
+                  );
+                  return;
+                }
+                const mj = (await mr.json()) as { config?: { alertDeviceIds?: string[] } };
+                const dr = await fetch("/api/anchor/devices", {
+                  credentials: "same-origin",
+                  cache: "no-store",
+                  signal,
+                });
+                if (!dr.ok) {
+                  setResetError(`Could not list devices (${dr.status}). Try again or use Open map & anchor.`);
+                  return;
+                }
+                const d = (await dr.json()) as { devices?: { deviceId: string }[] };
+                const allIds = (Array.isArray(d.devices) ? d.devices : []).map((x) => x.deviceId).filter(Boolean);
+                const curIds = Array.isArray(mj.config?.alertDeviceIds) ? mj.config!.alertDeviceIds : [];
+                const nextIds =
+                  curIds.length > 0
+                    ? curIds.filter((id) => id !== deviceId)
+                    : allIds.filter((id) => id !== deviceId);
+                if (nextIds.length < 1) {
+                  setResetError(
+                    "Cannot mute this phone: it is the only handset on the alert list. Add another device under Anchor alarm first, or use Mark seen.",
+                  );
+                  return;
+                }
+                const save = await fetch("/api/anchor/monitor", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  credentials: "same-origin",
+                  signal,
+                  body: JSON.stringify({ alertDeviceIds: nextIds }),
+                });
+                if (!save.ok) {
+                  setResetError(`Could not save alert list (${save.status}). Try Anchor alarm on the map.`);
+                  return;
+                }
+                stopAnchorAlarmSiren();
+                if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
+                clearPresentedAnchorAlertId();
+                setAlert(null);
+              } catch (e) {
+                if (isAnchorResetAbortError(e)) {
+                  setResetError("That took too long. Check connection, then try again.");
+                }
+              } finally {
+                clear();
+                setResetBusyKind(null);
+              }
+            })();
+          }}
+          className="h-12 w-full rounded-xl border border-zinc-400/90 bg-zinc-800/80 text-sm font-bold text-zinc-100 hover:bg-zinc-700/90 disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-xs"
+        >
+          {resetBusyKind === "mute" ? "Updating…" : "Mute alerts on this phone"}
+        </button>
         <a
           href="/anchor-alarm"
           aria-disabled={resetBusyKind !== null}
@@ -429,7 +562,10 @@ export function AnchorAlertsGlobalHost() {
           ring to the <strong className="text-white/90">monitoring device’s</strong> latest GPS (from the server), then
           clears this alert. <strong className="text-white/90">This phone’s GPS</strong> does the same using{" "}
           <em className="not-italic text-white/85">this</em> handset’s location if the boat phone has no server fix.{" "}
-          <strong className="text-white/90">Mark seen</strong> stops the alarm without moving the ring.
+          <strong className="text-white/90">Mark seen</strong> stops the alarm without moving the ring.{" "}
+          <strong className="text-white/90">Allow wider swing</strong> bumps the allowed radius on the server (centre
+          unchanged). <strong className="text-white/90">Mute alerts on this phone</strong> removes this handset from the
+          alert list so it won&apos;t get future fullscreen anchor alarms (change back in Anchor alarm).
         </span>
       </p>
     </div>
