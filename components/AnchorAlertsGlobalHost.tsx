@@ -319,7 +319,7 @@ export function AnchorAlertsGlobalHost() {
               }
             })();
           }}
-          className="h-14 w-full rounded-xl rounded-xl border-2 border-emerald-300/90 bg-emerald-950/50 text-base font-bold text-emerald-50 shadow-lg hover:bg-emerald-900/60 disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-xs"
+          className="h-14 w-full rounded-xl border-2 border-emerald-300/90 bg-emerald-950/50 text-base font-bold text-emerald-50 shadow-lg hover:bg-emerald-900/60 disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-xs"
         >
           {resetBusyKind === "this" ? "Getting this phone’s GPS…" : "This phone’s GPS"}
         </button>
@@ -338,6 +338,7 @@ export function AnchorAlertsGlobalHost() {
         </a>
         <button
           type="button"
+          disabled={resetBusyKind !== null}
           onClick={() => {
             stopAnchorAlarmSiren();
             if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
@@ -359,7 +360,7 @@ export function AnchorAlertsGlobalHost() {
               setAlert(null);
             })();
           }}
-          className="h-14 w-full rounded-xl border-2 border-white bg-white/95 text-base font-bold text-red-700 shadow-lg hover:bg-white sm:max-w-xs"
+          className="h-14 w-full rounded-xl border-2 border-white bg-white/95 text-base font-bold text-red-700 shadow-lg hover:bg-white disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-xs"
         >
           Mark seen (stop alarm)
         </button>
@@ -369,7 +370,9 @@ export function AnchorAlertsGlobalHost() {
         <span className="mt-1 block opacity-90">
           <strong className="text-white/90">Reset at monitor position</strong> keeps the same radius and moves the orange
           ring to the <strong className="text-white/90">monitoring device’s</strong> latest GPS (from the server), then
-          clears this alert.
+          clears this alert. <strong className="text-white/90">This phone’s GPS</strong> does the same using{" "}
+          <em className="not-italic text-white/85">this</em> handset’s location if the boat phone has no server fix.{" "}
+          <strong className="text-white/90">Mark seen</strong> stops the alarm without moving the ring.
         </span>
       </p>
     </div>
