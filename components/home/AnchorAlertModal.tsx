@@ -681,19 +681,25 @@ export function AnchorAlertModal({
               onChange={(e) => {
                 const v = e.target.value;
                 setRadius(v);
-                onUpdate({ ...config, radiusM: parseAnchorRadiusM(Number(v)), monitorDeviceId });
+                onUpdate({ ...config, radiusM: parseAnchorRadiusM(Number(v), { isAdmin }), monitorDeviceId });
               }}
               className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
             >
-              {ANCHOR_RADIUS_METRES_OPTIONS.map((m) => (
+              {anchorRadiusUiOptions.map((m) => (
                 <option key={m} value={String(m)}>
-                  {m}m
+                  {m === ANCHOR_RADIUS_ADMIN_TEST_M ? "2m (admin test only)" : `${m}m`}
                 </option>
               ))}
             </select>
             <span className="mt-1 block text-[11px] text-zinc-500">
               Monitored position must stay inside this circle around the anchor (geofence), or an alert fires.
             </span>
+            {isAdmin ? (
+              <span className="mt-1 block text-[11px] text-amber-800 dark:text-amber-200/90">
+                Admin 2 m ring is for testing the alarm only — normal GPS noise is often larger than 2 m, so expect false
+                triggers unless conditions are ideal or you use Android native test mode.
+              </span>
+            ) : null}
           </label>
 
           <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900/50">
@@ -800,7 +806,7 @@ export function AnchorAlertModal({
                           );
                           return;
                         }
-                        const n = parseAnchorRadiusM(Number(radius));
+                        const n = parseAnchorRadiusM(Number(radius), { isAdmin });
                         const a = angleEnabled
                           ? Math.max(0, Math.min(359, Math.round(Number(angleDeg) || ANGLE_DEFAULT_ON)))
                           : ANGLE_OFF;
@@ -864,7 +870,7 @@ export function AnchorAlertModal({
                 }
                 // Prime the 999 alarm sound while we have a user gesture (helps avoid “Tap to play alarm sound” later).
                 void primeAnchorAlarmAudio();
-                const n = parseAnchorRadiusM(Number(radius));
+                const n = parseAnchorRadiusM(Number(radius), { isAdmin });
                 const a = angleEnabled
                   ? Math.max(0, Math.min(359, Math.round(Number(angleDeg) || ANGLE_DEFAULT_ON)))
                   : ANGLE_OFF;

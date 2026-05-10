@@ -2149,6 +2149,7 @@ export default function HomeLocationMap({
         <AnchorAlertModal
           open={anchorOpen}
           onClose={() => setAnchorOpen(false)}
+          isAdmin={isAdmin}
           emergencyDisableLiveMapApis={ANCHOR_LIVE_APIS_BLOCKED}
           sharing={sharing}
           hasFix={Boolean(pos)}
