@@ -52,24 +52,12 @@ export default function AnchorCommandDiagnosticsPage() {
         return;
       }
       const r = await fetch("/api/anchor/commands?role=diagnostics", { credentials: "same-origin", cache: "no-store" });
-      const raw = (await r.json()) as Record<string, unknown>;
       if (!r.ok) {
-        const msg =
-          typeof raw.error === "string"
-            ? raw.error
-            : typeof raw.errorMessage === "string"
-              ? raw.errorMessage
-              : `Diagnostics HTTP ${r.status}`;
-        setErr(msg);
+        setErr(`Diagnostics HTTP ${r.status}`);
         setData(null);
         return;
       }
-      if (!Array.isArray(raw.pendingCommands) || typeof raw.geofenceArmed !== "boolean") {
-        setErr("Invalid diagnostics response from server.");
-        setData(null);
-        return;
-      }
-      setData(raw as unknown as DiagnosticsPayload);
+      setData((await r.json()) as DiagnosticsPayload);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Load failed");
       setData(null);

@@ -61,26 +61,14 @@ function writeRaw(list: AnchorSessionCommandRow[]): void {
   writeFileSync(DATA_PATH, JSON.stringify(list, null, 2), "utf-8");
 }
 
-const COMMAND_TYPES: ReadonlySet<string> = new Set(["INCREASE_RADIUS", "RESET_ANCHOR", "SILENCE_UNTIL_RESET"]);
-const COMMAND_STATUSES: ReadonlySet<string> = new Set(["queued", "received", "applied", "failed"]);
-
-/** Parse a DB row; returns null if required fields are missing or invalid (never throw). */
-function parseAnchorSessionCommandRowFromDb(uid: string, r: Record<string, unknown>): AnchorSessionCommandRow | null {
-  const idRaw = r.id != null ? String(r.id).trim() : "";
-  if (!idRaw) return null;
-  const ct = r.command_type;
-  if (typeof ct !== "string" || !COMMAND_TYPES.has(ct)) return null;
-  const st = r.status;
-  if (typeof st !== "string" || !COMMAND_STATUSES.has(st)) return null;
-  const type = ct as AnchorSessionCommandType;
-  const status = st as AnchorSessionCommandStatus;
+function mapRowDb(uid: string, r: Record<string, unknown>): AnchorSessionCommandRow {
   return {
-    id: idRaw,
+    id: String(r.id),
     userUid: uid,
-    type,
+    type: r.command_type as AnchorSessionCommandType,
     meters: typeof r.meters === "number" && Number.isFinite(r.meters) ? Math.round(r.meters as number) : null,
-    status,
-    sourceDeviceId: typeof r.source_device_id === "string" ? r.source_device_id : String(r.source_device_id ?? ""),
+    status: r.status as AnchorSessionCommandStatus,
+    sourceDeviceId: String(r.source_device_id ?? ""),
     errorMessage: r.error_message != null ? String(r.error_message) : null,
     createdAt: String(r.created_at ?? new Date().toISOString()),
     appliedAt: r.applied_at != null ? String(r.applied_at) : null,
@@ -95,7 +83,6 @@ async function expireStaleAnchorSessionCommands(uid: string, nowMs: number): Pro
   const qCut = new Date(nowMs - ANCHOR_COMMAND_STALE_QUEUED_MS).toISOString();
   const rCut = new Date(nowMs - ANCHOR_COMMAND_STALE_RECEIVED_MS).toISOString();
 
-  try {
   if (isSupabaseConfigured()) {
     const sb = supabaseAdmin();
     const { data: dq, error: eq } = await sb
@@ -153,11 +140,6 @@ async function expireStaleAnchorSessionCommands(uid: string, nowMs: number): Pro
     anchorCommandServerLog("commands_expired_stale", { uid, nQueued, nReceived });
   }
   return { queued: nQueued, received: nReceived };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.error("[anchor_session_commands] expireStaleAnchorSessionCommands failed", { uid, msg });
-    return { queued: 0, received: 0 };
-  }
 }
 
 export async function createAnchorSessionCommand(args: {
@@ -230,9 +212,7 @@ export async function listQueuedAnchorSessionCommands(uid: string): Promise<Anch
         .in("status", ["queued", "received"])
         .order("created_at", { ascending: true });
       if (error) throw new Error(error.message);
-      return (data ?? [])
-        .map((x) => parseAnchorSessionCommandRowFromDb(uid, x as Record<string, unknown>))
-        .filter((row): row is AnchorSessionCommandRow => row != null);
+      return (data ?? []).map((x) => mapRowDb(uid, x as Record<string, unknown>));
     }
     return readRaw()
       .filter((r) => r.userUid === uid && (r.status === "queued" || r.status === "received"))
@@ -254,9 +234,7 @@ export async function listPendingAnchorSessionCommandsForUid(uid: string): Promi
         .order("created_at", { ascending: false })
         .limit(50);
       if (error) throw new Error(error.message);
-      return (data ?? [])
-        .map((x) => parseAnchorSessionCommandRowFromDb(uid, x as Record<string, unknown>))
-        .filter((row): row is AnchorSessionCommandRow => row != null);
+      return (data ?? []).map((x) => mapRowDb(uid, x as Record<string, unknown>));
     }
     return readRaw()
       .filter((r) => r.userUid === uid && (r.status === "queued" || r.status === "received"))
@@ -279,7 +257,7 @@ export async function getAnchorSessionCommand(uid: string, id: string): Promise<
         .maybeSingle();
       if (error) throw new Error(error.message);
       if (!data) return null;
-      return parseAnchorSessionCommandRowFromDb(uid, data as Record<string, unknown>);
+      return mapRowDb(uid, data as Record<string, unknown>);
     }
     return readRaw().find((r) => r.userUid === uid && r.id === id) ?? null;
   });
@@ -318,7 +296,7 @@ export async function updateAnchorSessionCommandStatus(args: {
         .maybeSingle();
       if (error) throw new Error(error.message);
       if (!data) return null;
-      return parseAnchorSessionCommandRowFromDb(args.uid, data as Record<string, unknown>);
+      return mapRowDb(args.uid, data as Record<string, unknown>);
     }
 
     const list = readRaw();
