@@ -226,7 +226,9 @@ export function SignInForm() {
             {deviceLimit.map((d) => (
               <div key={d.deviceId} className="flex items-center justify-between gap-3 rounded-md bg-white/60 px-2 py-1 dark:bg-zinc-950/30">
                 <div className="min-w-0">
-                  <p className="truncate text-xs font-semibold">{d.name || d.deviceId.slice(0, 8)}</p>
+                  <p className="truncate text-xs font-semibold">
+                    {(d.name || "This device").trim() || "This device"}
+                  </p>
                   <p className="truncate text-[11px] opacity-70">
                     last seen {new Date(d.lastSeenAt).toLocaleString("en-GB")}
                   </p>

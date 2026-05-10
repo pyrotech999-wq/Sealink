@@ -985,12 +985,12 @@ export default function HomeLocationMap({
         if (disposed) return;
         const row = d.devices?.find((x) => x.deviceId === anchorCfg.monitorDeviceId);
         if (row) {
-          setMonitorDeviceLabel(row.name?.trim() ? row.name.trim() : row.deviceId.slice(0, 8));
+          setMonitorDeviceLabel(row.name?.trim() ? row.name.trim() : "Other signed-in device");
         } else {
-          setMonitorDeviceLabel(anchorCfg.monitorDeviceId.slice(0, 8));
+          setMonitorDeviceLabel("Other signed-in device");
         }
       } catch {
-        if (!disposed) setMonitorDeviceLabel(anchorCfg.monitorDeviceId.slice(0, 8));
+        if (!disposed) setMonitorDeviceLabel("Other signed-in device");
       }
     };
     void load();
