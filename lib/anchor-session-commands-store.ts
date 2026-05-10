@@ -61,14 +61,20 @@ function writeRaw(list: AnchorSessionCommandRow[]): void {
   writeFileSync(DATA_PATH, JSON.stringify(list, null, 2), "utf-8");
 }
 
-function mapRowDb(uid: string, r: Record<string, unknown>): AnchorSessionCommandRow {
+function mapRowDb(uid: string, r: Record<string, unknown>): AnchorSessionCommandRow | null {
+  const id = r.id != null ? String(r.id).trim() : "";
+  if (!id) return null;
+  const ct = r.command_type;
+  if (ct !== "INCREASE_RADIUS" && ct !== "RESET_ANCHOR" && ct !== "SILENCE_UNTIL_RESET") return null;
+  const st = r.status;
+  if (st !== "queued" && st !== "received" && st !== "applied" && st !== "failed") return null;
   return {
-    id: String(r.id),
+    id,
     userUid: uid,
-    type: r.command_type as AnchorSessionCommandType,
+    type: ct as AnchorSessionCommandType,
     meters: typeof r.meters === "number" && Number.isFinite(r.meters) ? Math.round(r.meters as number) : null,
-    status: r.status as AnchorSessionCommandStatus,
-    sourceDeviceId: String(r.source_device_id ?? ""),
+    status: st as AnchorSessionCommandStatus,
+    sourceDeviceId: String(r.source_device_id ?? "").trim().slice(0, 80),
     errorMessage: r.error_message != null ? String(r.error_message) : null,
     createdAt: String(r.created_at ?? new Date().toISOString()),
     appliedAt: r.applied_at != null ? String(r.applied_at) : null,
@@ -212,7 +218,9 @@ export async function listQueuedAnchorSessionCommands(uid: string): Promise<Anch
         .in("status", ["queued", "received"])
         .order("created_at", { ascending: true });
       if (error) throw new Error(error.message);
-      return (data ?? []).map((x) => mapRowDb(uid, x as Record<string, unknown>));
+      return (data ?? [])
+        .map((x) => mapRowDb(uid, x as Record<string, unknown>))
+        .filter((x): x is AnchorSessionCommandRow => x != null);
     }
     return readRaw()
       .filter((r) => r.userUid === uid && (r.status === "queued" || r.status === "received"))
@@ -234,7 +242,9 @@ export async function listPendingAnchorSessionCommandsForUid(uid: string): Promi
         .order("created_at", { ascending: false })
         .limit(50);
       if (error) throw new Error(error.message);
-      return (data ?? []).map((x) => mapRowDb(uid, x as Record<string, unknown>));
+      return (data ?? [])
+        .map((x) => mapRowDb(uid, x as Record<string, unknown>))
+        .filter((x): x is AnchorSessionCommandRow => x != null);
     }
     return readRaw()
       .filter((r) => r.userUid === uid && (r.status === "queued" || r.status === "received"))
