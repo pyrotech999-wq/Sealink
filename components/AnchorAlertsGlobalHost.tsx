@@ -21,9 +21,43 @@ import { getOrCreateDeviceId } from "@/lib/device-id";
 import { isBareMetaDataDeletionPage } from "@/lib/messaging-chrome-paths";
 import { type LatLng as AnchorResetLatLng } from "@/lib/anchor-reset-gps";
 import { anchorRadiusAfterAddingMeters } from "@/lib/anchor-alert-storage";
-import { ANCHOR_DEVICE_ID_HEADER, enqueueAndAwaitAnchorCommand, postAnchorSessionCommand } from "@/lib/anchor-commands-client";
+import { ANCHOR_COMMAND_STALE_BOAT_ERROR } from "@/lib/anchor-command-constants";
+import {
+  ANCHOR_DEVICE_ID_HEADER,
+  type AnchorRemoteCommandPostDebug,
+  enqueueAndAwaitAnchorCommand,
+  postAnchorSessionCommand,
+} from "@/lib/anchor-commands-client";
 
 const POLL_MS = 20_000;
+
+async function fetchAnchorDeviceNameMap(): Promise<Map<string, string>> {
+  const m = new Map<string, string>();
+  try {
+    const r = await fetch("/api/anchor/devices", { credentials: "same-origin", cache: "no-store" });
+    if (!r.ok) return m;
+    const j = (await r.json()) as { devices?: { deviceId: string; name: string }[] };
+    for (const d of j.devices ?? []) {
+      const id = typeof d.deviceId === "string" ? d.deviceId.trim() : "";
+      if (!id) continue;
+      const nm = typeof d.name === "string" ? d.name.replace(/\r\n/g, " ").trim() : "";
+      m.set(id, nm || `Device ${id.slice(0, 8)}…`);
+    }
+  } catch {
+    /* ignore */
+  }
+  return m;
+}
+
+/** `sessionId` is `uid|lat|lng` — show coordinates, not the raw account prefix. */
+function summarizeSessionFingerprint(sessionId: string | null): string | null {
+  if (!sessionId?.trim()) return null;
+  const parts = sessionId.split("|");
+  if (parts.length >= 3) {
+    return `Armed anchor centre ≈ ${parts[1]}, ${parts[2]} (commands match this ring only)`;
+  }
+  return null;
+}
 
 type AlertRow = { id: string; message: string; createdAt: string };
 
@@ -49,17 +83,41 @@ export function AnchorAlertsGlobalHost() {
   const [resetError, setResetError] = useState<string | null>(null);
   const [remoteAnchorCmdDebug, setRemoteAnchorCmdDebug] = useState(false);
   const [remoteAnchorCmdDebugJson, setRemoteAnchorCmdDebugJson] = useState<string | null>(null);
-  /** Last remote anchor action: POST fields + optional terminal poll status. */
-  const [remoteAnchorActionDebug, setRemoteAnchorActionDebug] = useState<{
-    postStatus: number;
-    postResponse: unknown;
-    commandId: string | null;
-    targetDeviceId: string | null;
-    sessionId: string | null;
-    status: string | null;
-    terminalStatus?: string;
-    error?: string;
-  } | null>(null);
+  /** Last remote anchor action: POST fields + optional terminal poll status + resolved device labels. */
+  const [remoteAnchorActionDebug, setRemoteAnchorActionDebug] = useState<
+    | (AnchorRemoteCommandPostDebug & {
+        terminalStatus?: string;
+        error?: string;
+        targetDeviceName?: string;
+        sourceDeviceName?: string;
+        sessionSummary?: string;
+      })
+    | null
+  >(null);
+
+  const applyRemoteActionDebugWithNames = useCallback(
+    async (
+      post: AnchorRemoteCommandPostDebug,
+      outcome: { ok: true; terminalStatus: string } | { ok: false; error: string },
+    ) => {
+      const names = await fetchAnchorDeviceNameMap();
+      const sessionSummary = summarizeSessionFingerprint(post.sessionId);
+      const deviceLabel = (id: string | null | undefined) => {
+        if (!id?.trim()) return undefined;
+        const n = names.get(id.trim())?.trim();
+        return n && n.length > 0 ? n : `Not in device list (${id.trim().slice(0, 8)}…)`;
+      };
+      setRemoteAnchorActionDebug({
+        ...post,
+        terminalStatus: outcome.ok ? outcome.terminalStatus : undefined,
+        error: outcome.ok ? undefined : outcome.error,
+        ...(post.targetDeviceId ? { targetDeviceName: deviceLabel(post.targetDeviceId) } : {}),
+        ...(post.sourceDeviceId ? { sourceDeviceName: deviceLabel(post.sourceDeviceId) } : {}),
+        ...(sessionSummary ? { sessionSummary } : {}),
+      });
+    },
+    [],
+  );
 
   useEffect(() => {
     const read = () => {
@@ -368,11 +426,10 @@ export function AnchorAlertsGlobalHost() {
                     signal,
                     onWaitingForBoat: () => setResetError("Waiting for boat device…"),
                   });
-                  setRemoteAnchorActionDebug({
-                    ...r.postDebug,
-                    terminalStatus: r.ok ? r.terminalStatus : undefined,
-                    error: r.ok ? undefined : r.error,
-                  });
+                  await applyRemoteActionDebugWithNames(
+                    r.postDebug,
+                    r.ok ? { ok: true, terminalStatus: r.terminalStatus } : { ok: false, error: r.error },
+                  );
                   if (!r.ok) {
                     setResetError(r.error);
                     return;
@@ -468,11 +525,10 @@ export function AnchorAlertsGlobalHost() {
                     signal,
                     onWaitingForBoat: () => setResetError("Waiting for boat device…"),
                   });
-                  setRemoteAnchorActionDebug({
-                    ...r.postDebug,
-                    terminalStatus: r.ok ? r.terminalStatus : undefined,
-                    error: r.ok ? undefined : r.error,
-                  });
+                  await applyRemoteActionDebugWithNames(
+                    r.postDebug,
+                    r.ok ? { ok: true, terminalStatus: r.terminalStatus } : { ok: false, error: r.error },
+                  );
                   if (!r.ok) {
                     setResetError(r.error);
                     return;
