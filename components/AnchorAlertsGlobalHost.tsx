@@ -51,10 +51,9 @@ export function AnchorAlertsGlobalHost() {
     if (ANCHOR_LIVE_APIS_BLOCKED) return;
     if (typeof window === "undefined") return;
     if (isBareMetaDataDeletionPage(pathname)) return;
+    if (!deviceId || deviceId === "server") return;
 
     let disposed = false;
-    const deviceId = getOrCreateDeviceId();
-    if (!deviceId || deviceId === "server") return;
 
     const tick = async () => {
       if (disposed) return;
@@ -143,7 +142,7 @@ export function AnchorAlertsGlobalHost() {
       window.clearInterval(id);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [pathname]);
+  }, [pathname, deviceId]);
 
   async function startAlarm(): Promise<void> {
     stopAnchorAlarmSiren();
