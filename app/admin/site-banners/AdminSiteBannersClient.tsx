@@ -115,8 +115,8 @@ export function AdminSiteBannersClient() {
       <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
         Up to {max} rotating banners appear below the <strong className="text-zinc-800 dark:text-zinc-200">Man overboard</strong>{" "}
         button on Home, Anchor alarm, IFM, Messages, Weather, and Charts. Use direct image URLs (https). Images are scaled down
-        automatically; max height is {SITE_BANNER_MAX_HEIGHT_REM}rem (~1.5× the dock MOB button height of ~{SITE_BANNER_MOB_BUTTON_REM}
-        rem).
+        automatically; max height is {SITE_BANNER_MAX_HEIGHT_REM}rem (compact strip; dock MOB control is ~{SITE_BANNER_MOB_BUTTON_REM}
+        rem tall).
       </p>
 
       {err ? (
