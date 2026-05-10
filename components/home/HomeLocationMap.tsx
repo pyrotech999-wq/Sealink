@@ -340,6 +340,8 @@ export default function HomeLocationMap({
     anchorSessionUidPeeked: string | null;
     alertPipelineSessionNote: string | null;
     commandPollerSessionFingerprint: string | null;
+    lastServerExceptionStack: string | null;
+    lastClientPollExceptionStack: string | null;
   }>({
     lastPollAt: null,
     lastHttpStatus: null,
@@ -360,6 +362,8 @@ export default function HomeLocationMap({
     anchorSessionUidPeeked: null,
     alertPipelineSessionNote: null,
     commandPollerSessionFingerprint: null,
+    lastServerExceptionStack: null,
+    lastClientPollExceptionStack: null,
   });
 
   const [anchorPollVerboseDebug, setAnchorPollVerboseDebug] = useState(false);
@@ -1112,6 +1116,8 @@ export default function HomeLocationMap({
           lastReason?: string | null;
           lastHeaderSent?: string | null;
           lastJsonOk?: boolean | null;
+          lastServerExceptionStack?: string | null;
+          lastClientPollExceptionStack?: string | null;
         }) => {
           setMonitorCmdPollDebug((d) => ({ ...d, ...patch }));
         };
@@ -1161,6 +1167,7 @@ export default function HomeLocationMap({
           pollAccepted?: boolean;
           serverEffectiveMonitorDeviceId?: string | null;
           reason?: string;
+          stack?: string;
         };
         let jsonOk = false;
         try {
@@ -1173,6 +1180,7 @@ export default function HomeLocationMap({
         const list = Array.isArray(hd.commands) ? hd.commands : [];
         const serverEff = hd.serverEffectiveMonitorDeviceId ?? null;
         const reason = typeof hd.reason === "string" ? hd.reason : null;
+        const serverStack = typeof hd.stack === "string" && hd.stack.trim() ? hd.stack : null;
         let pollVerbose = false;
         try {
           pollVerbose = typeof window !== "undefined" && localStorage.getItem("sealink_anchor_poll_verbose") === "1";
@@ -1211,6 +1219,8 @@ export default function HomeLocationMap({
           lastReason: reason,
           lastHeaderSent: deviceId,
           lastJsonOk: jsonOk,
+          lastServerExceptionStack: serverStack,
+          lastClientPollExceptionStack: null,
         });
 
         try {
@@ -1239,11 +1249,21 @@ export default function HomeLocationMap({
 
         for (const cmd of list) {
           if (disposed) return;
+          if (!cmd || typeof cmd.id !== "string" || !cmd.id) {
+            console.error("[MONITOR COMMAND POLL] skip invalid row (missing id)", cmd);
+            continue;
+          }
+          const cmdType = cmd.type;
+          if (cmdType !== "RESET_ANCHOR" && cmdType !== "INCREASE_RADIUS" && cmdType !== "SILENCE_UNTIL_RESET") {
+            console.error("[MONITOR COMMAND POLL] skip unknown type", cmd);
+            continue;
+          }
           const cmdStatus = cmd.status;
           anchorCommandClientLog("boat_command_item", { id: cmd.id, type: cmd.type, status: cmdStatus });
           if (cmdStatus === "applied") continue;
 
           try {
+            console.log("[COMMAND APPLY START]", cmd);
             let stateAfterFromGeofenceResponse: typeof snap | null = null;
             console.warn(
               "[ANCHOR_MONITOR_CMD_CLIENT]",
@@ -1370,6 +1390,8 @@ export default function HomeLocationMap({
               stopAnchorAlarmSiren();
               clearPresentedAnchorAlertId();
               queueMicrotask(() => setActiveAnchorAlert(null));
+            } else {
+              throw new Error(`unknown_command_type:${String((cmd as { type?: unknown }).type)}`);
             }
 
             const afterSnap = stateAfterFromGeofenceResponse ?? anchorCfgRef.current;
@@ -1413,10 +1435,12 @@ export default function HomeLocationMap({
             } else {
               anchorCommandClientLog("boat_command_applied", { id: cmd.id, type: cmd.type });
               updateDebug({ lastAppliedCommandId: cmd.id, lastError: null });
+              console.log("[COMMAND APPLY SUCCESS]", cmd.id);
             }
           } catch (e) {
             const msg = e instanceof Error ? e.message.slice(0, 400) : "apply_error";
             anchorCommandClientLog("boat_command_apply_error", { id: cmd.id, type: cmd.type, msg });
+            console.error("[COMMAND APPLY ERROR]", e);
             console.warn("[ANCHOR_MONITOR_CMD_CLIENT]", JSON.stringify({ phase: "command_apply_caught", commandId: cmd.id, msg }));
             updateDebug({ lastError: msg });
             await patchAnchorSessionCommandStatus({
@@ -1427,6 +1451,16 @@ export default function HomeLocationMap({
             });
           }
         }
+      } catch (clientPollErr) {
+        const err = clientPollErr instanceof Error ? clientPollErr : new Error(String(clientPollErr));
+        console.error("[MONITOR POLL CLIENT EXCEPTION]", err);
+        setMonitorCmdPollDebug((d) => ({
+          ...d,
+          lastPollAt: Date.now(),
+          lastError: err.message,
+          lastReason: err.message,
+          lastClientPollExceptionStack: err.stack ?? null,
+        }));
       } finally {
         monitorAnchorPollInFlightRef.current = false;
       }
@@ -2537,6 +2571,16 @@ export default function HomeLocationMap({
                       {String(monitorCmdPollDebug.lastPollAccepted)}
                     </div>
                     <div>reason: {monitorCmdPollDebug.lastReason ?? "—"}</div>
+                    {monitorCmdPollDebug.lastServerExceptionStack ? (
+                      <pre className="mt-0.5 max-h-24 overflow-auto whitespace-pre-wrap break-all text-[8px] text-rose-200/95">
+                        server stack: {monitorCmdPollDebug.lastServerExceptionStack}
+                      </pre>
+                    ) : null}
+                    {monitorCmdPollDebug.lastClientPollExceptionStack ? (
+                      <pre className="mt-0.5 max-h-24 overflow-auto whitespace-pre-wrap break-all text-[8px] text-rose-200/95">
+                        client stack: {monitorCmdPollDebug.lastClientPollExceptionStack}
+                      </pre>
+                    ) : null}
                     <div>cmds: {monitorCmdPollDebug.lastCommandCount ?? "—"}</div>
                     <div>appliedId: {monitorCmdPollDebug.lastAppliedCommandId ?? "—"}</div>
                     <div className="break-words text-amber-200/90">err: {monitorCmdPollDebug.lastError ?? "—"}</div>

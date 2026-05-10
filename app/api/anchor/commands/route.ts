@@ -9,6 +9,7 @@ import {
   getAnchorSessionCommand,
   listPendingAnchorSessionCommandsForUid,
   listQueuedAnchorSessionCommands,
+  type AnchorSessionCommandRow,
   type AnchorSessionCommandType,
 } from "@/lib/anchor-session-commands-store";
 import { getAnchorGeofenceConfig } from "@/lib/anchor-geofence-store";
@@ -22,6 +23,20 @@ function parseType(t: unknown): AnchorSessionCommandType | null {
 }
 
 const noStore = { "Cache-Control": "no-store" as const };
+
+/** Plain JSON for `NextResponse.json` — avoids non-enumerable / odd Supabase row shapes breaking serialization. */
+function toMonitorPollCommandJson(c: AnchorSessionCommandRow): Record<string, unknown> {
+  return {
+    id: String(c.id),
+    type: c.type,
+    meters: c.meters == null ? null : Number(c.meters),
+    status: c.status,
+    sourceDeviceId: String(c.sourceDeviceId),
+    errorMessage: c.errorMessage == null ? null : String(c.errorMessage),
+    createdAt: String(c.createdAt),
+    appliedAt: c.appliedAt == null ? null : String(c.appliedAt),
+  };
+}
 
 function devErrorPayload(error: unknown, code: string): Record<string, unknown> {
   const base: Record<string, unknown> = { ok: false as const, error: code };
@@ -185,33 +200,41 @@ async function getMonitorPollJson(uid: string, req: Request): Promise<Record<str
       };
     }
 
-    anchorCommandServerLog("monitor_poll_ok", { uid, count: commands.length, ids: commands.map((c) => c.id) });
-    console.warn(
-      "[ANCHOR_MONITOR_POLL_SRV]",
-      JSON.stringify({
-        phase: "ok",
-        uid,
-        commandsQueuedFound: commands.length,
-        commandsReturned: commands.length,
-        serverEffectiveMonitorDeviceId: effective ?? null,
-        commands: commands.map((c) => ({
-          id: c.id,
-          type: c.type,
-          status: c.status,
-          meters: c.meters,
-          sourceDeviceId: c.sourceDeviceId,
-        })),
-      }),
-    );
+    const safeCommands = Array.isArray(commands) ? commands : [];
+    anchorCommandServerLog("monitor_poll_ok", { uid, count: safeCommands.length, ids: safeCommands.map((c) => c.id) });
+    try {
+      console.warn(
+        "[ANCHOR_MONITOR_POLL_SRV]",
+        JSON.stringify({
+          phase: "ok",
+          uid,
+          commandsQueuedFound: safeCommands.length,
+          commandsReturned: safeCommands.length,
+          serverEffectiveMonitorDeviceId: effective ?? null,
+          commands: safeCommands.map((c) => ({
+            id: c.id,
+            type: c.type,
+            status: c.status,
+            meters: c.meters,
+            sourceDeviceId: c.sourceDeviceId,
+          })),
+        }),
+      );
+    } catch (logErr) {
+      console.error("[ANCHOR_MONITOR_POLL_SRV] log stringify failed", logErr);
+    }
 
+    const commandPayload = safeCommands.map((c) => toMonitorPollCommandJson(c));
     return {
       ok: true,
-      commands,
+      commands: commandPayload,
       pollAccepted: true as const,
       serverEffectiveMonitorDeviceId: effective ?? null,
-      ...(commands.length === 0 ? { reason: "queue_empty" } : {}),
+      ...(safeCommands.length === 0 ? { reason: "queue_empty" } : {}),
     };
   } catch (e) {
+    const err = e instanceof Error ? e : new Error(String(e));
+    console.error("[MONITOR POLL EXCEPTION]", err);
     logAnchorCommandsGetError({
       req,
       role: "monitor",
@@ -224,9 +247,10 @@ async function getMonitorPollJson(uid: string, req: Request): Promise<Record<str
       ok: true,
       commands: [],
       pollAccepted: false as const,
-      serverEffectiveMonitorDeviceId: null,
-      reason: "monitor_poll_exception",
-      error: "Monitor poll failed safely.",
+      serverEffectiveMonitorDeviceId: effective ?? null,
+      reason: err.message,
+      stack: err.stack ?? null,
+      error: err.message,
       debugCode: "MONITOR_POLL_EXCEPTION",
     };
   }
@@ -313,14 +337,17 @@ export async function GET(req: Request): Promise<Response> {
     logAnchorCommandsGetError({ req, role, uid, error });
 
     if (role === "monitor") {
+      const outerErr = error instanceof Error ? error : new Error(String(error));
+      console.error("[MONITOR POLL OUTER EXCEPTION]", outerErr);
       return NextResponse.json(
         {
           ok: true,
           commands: [],
           pollAccepted: false,
           serverEffectiveMonitorDeviceId: null,
-          reason: "outer_get_exception",
-          error: "Monitor poll failed safely.",
+          reason: outerErr.message,
+          stack: outerErr.stack ?? null,
+          error: outerErr.message,
           debugCode: "MONITOR_POLL_OUTER_EXCEPTION",
         },
         { status: 200, headers: noStore },
