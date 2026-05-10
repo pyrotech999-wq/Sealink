@@ -24,10 +24,16 @@ type Body = {
 export async function GET(): Promise<Response> {
   const u = await requireAuthUser().catch(() => null);
   if (!u) return NextResponse.json({ error: "Sign-in required" }, { status: 401 });
-  const row = await getAnchorGeofenceConfig(u.uid);
-  const cfg =
-    !u.isAdmin && row.radiusM === ANCHOR_RADIUS_ADMIN_TEST_M ? { ...row, radiusM: 20 } : row;
-  return NextResponse.json({ ok: true as const, config: cfg }, { headers: { "Cache-Control": "no-store" } });
+  try {
+    const row = await getAnchorGeofenceConfig(u.uid);
+    const cfg =
+      !u.isAdmin && row.radiusM === ANCHOR_RADIUS_ADMIN_TEST_M ? { ...row, radiusM: 20 } : row;
+    return NextResponse.json({ ok: true as const, config: cfg }, { headers: { "Cache-Control": "no-store" } });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[api/anchor/geofence GET]", msg);
+    return NextResponse.json({ ok: false as const, error: msg }, { status: 500, headers: { "Cache-Control": "no-store" } });
+  }
 }
 
 export async function POST(req: Request): Promise<Response> {
@@ -71,7 +77,20 @@ export async function POST(req: Request): Promise<Response> {
       : {}),
   };
 
-  const next = await setAnchorGeofenceConfig(u.uid, patch, { isAdmin: u.isAdmin });
-  return NextResponse.json({ ok: true as const, config: next }, { headers: { "Cache-Control": "no-store" } });
+  try {
+    const next = await setAnchorGeofenceConfig(u.uid, patch, { isAdmin: u.isAdmin });
+    return NextResponse.json({ ok: true as const, config: next }, { headers: { "Cache-Control": "no-store" } });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[api/anchor/geofence POST]", msg);
+    const hint =
+      /remote_alarm_silenced_until_reset|anchor_geofence_config|column|relation/i.test(msg)
+        ? "Apply Supabase migration supabase/migrations/024_anchor_session_commands.sql (adds silence column + session commands table)."
+        : undefined;
+    return NextResponse.json(
+      { ok: false as const, error: msg, ...(hint ? { hint } : {}) },
+      { status: 500, headers: { "Cache-Control": "no-store" } },
+    );
+  }
 }
 
