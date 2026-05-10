@@ -16,12 +16,14 @@ const HomeLocationMap = dynamic(() => import("./HomeLocationMap"), {
 
 export function HomeLocationMapLoader({
   signedIn = false,
+  isAdmin = false,
   sharingUiMode = "home",
   anchorPlacement = "full",
   showHomeMapExtras = true,
   showNearbyFriends = true,
 }: {
   signedIn?: boolean;
+  isAdmin?: boolean;
   sharingUiMode?: "home" | "settings";
   /** `full`: anchor button + modal on this map. `compact`: status pill only (manage on /anchor-alarm). */
   anchorPlacement?: "full" | "compact";
@@ -33,6 +35,7 @@ export function HomeLocationMapLoader({
   return (
     <HomeLocationMap
       signedIn={signedIn}
+      isAdmin={isAdmin}
       sharingUiMode={sharingUiMode}
       anchorPlacement={anchorPlacement}
       showHomeMapExtras={showHomeMapExtras}

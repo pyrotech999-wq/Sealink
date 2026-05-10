@@ -21,7 +21,7 @@ export async function GET(): Promise<Response> {
   if (!u) return NextResponse.json({ error: "Sign-in required" }, { status: 401 });
   const row = await getAnchorGeofenceConfig(u.uid);
   const cfg =
-    !u.isAdmin && row.radiusM === ANCHOR_RADIUS_ADMIN_TEST_M ? { ...row, radiusM: 20 as const } : row;
+    !u.isAdmin && row.radiusM === ANCHOR_RADIUS_ADMIN_TEST_M ? { ...row, radiusM: 20 } : row;
   return NextResponse.json({ ok: true as const, config: cfg }, { headers: { "Cache-Control": "no-store" } });
 }
 
@@ -40,14 +40,16 @@ export async function POST(req: Request): Promise<Response> {
     ...(typeof body.armed === "boolean" ? { armed: body.armed } : {}),
     ...(typeof body.lat === "number" && Number.isFinite(body.lat) ? { lat: body.lat } : body.lat === null ? { lat: null } : {}),
     ...(typeof body.lng === "number" && Number.isFinite(body.lng) ? { lng: body.lng } : body.lng === null ? { lng: null } : {}),
-    ...(typeof body.radiusM === "number" && Number.isFinite(body.radiusM) ? { radiusM: parseAnchorRadiusM(body.radiusM) } : {}),
+    ...(typeof body.radiusM === "number" && Number.isFinite(body.radiusM)
+      ? { radiusM: parseAnchorRadiusM(body.radiusM, { isAdmin: u.isAdmin }) }
+      : {}),
     ...(typeof body.angleDeg === "number" && Number.isFinite(body.angleDeg) ? { angleDeg: body.angleDeg } : {}),
     ...(typeof body.monitorDeviceId === "string" ? { monitorDeviceId: body.monitorDeviceId.trim() || "this" } : {}),
     ...(typeof body.lastBearingDeg === "number" && Number.isFinite(body.lastBearingDeg) ? { lastBearingDeg: body.lastBearingDeg } : body.lastBearingDeg === null ? { lastBearingDeg: null } : {}),
     ...(typeof body.lastAlertAt === "string" ? { lastAlertAt: body.lastAlertAt } : body.lastAlertAt === null ? { lastAlertAt: null } : {}),
   };
 
-  const next = await setAnchorGeofenceConfig(u.uid, patch);
+  const next = await setAnchorGeofenceConfig(u.uid, patch, { isAdmin: u.isAdmin });
   return NextResponse.json({ ok: true as const, config: next }, { headers: { "Cache-Control": "no-store" } });
 }
 

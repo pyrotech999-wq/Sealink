@@ -46,7 +46,7 @@ export default async function Home() {
           <SeasTheDayButton />
         </div>
 
-        <HomeLocationMapLoader signedIn={signedIn} anchorPlacement="compact" />
+        <HomeLocationMapLoader signedIn={signedIn} isAdmin={authUser?.isAdmin ?? false} anchorPlacement="compact" />
 
         <HomeMainCtas signedIn={signedIn} />
 
