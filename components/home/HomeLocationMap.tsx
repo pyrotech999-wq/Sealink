@@ -509,6 +509,16 @@ export default function HomeLocationMap({
   const localDeviceName = useMemo(() => (typeof window !== "undefined" ? getDeviceName() : ""), []);
   const [monitorDeviceLabel, setMonitorDeviceLabel] = useState<string>("");
   const [anchorMonitor, setAnchorMonitor] = useState<{ monitorDeviceId: string | null; alertDeviceIds: string[] } | null>(null);
+  const breachEffectiveMonitor = useMemo(
+    () =>
+      effectiveMonitorDeviceIdForHomeMap({
+        thisDeviceId: deviceId,
+        serverMonitorDeviceId: anchorMonitor?.monitorDeviceId,
+        geofenceMonitorDeviceId: anchorCfg.monitorDeviceId,
+      }),
+    [deviceId, anchorMonitor?.monitorDeviceId, anchorCfg.monitorDeviceId],
+  );
+  const breachIsMonitoringDevice = breachEffectiveMonitor === deviceId;
   const anchorCfgLoadedFromServerRef = useRef(false);
   const [shareNearby, setShareNearby] = useState(() =>
     typeof window !== "undefined" ? getShareNearbyPeers() : false,
