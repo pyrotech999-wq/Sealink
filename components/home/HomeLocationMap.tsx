@@ -72,6 +72,7 @@ import {
   effectiveMonitorDeviceIdForHomeMap,
   resolveAnchorResetCentreCoordinates,
 } from "@/lib/anchor-reset-centre-client";
+import { getGpsFixForAnchorReset } from "@/lib/anchor-reset-gps";
 import { ANCHOR_LIVE_APIS_BLOCKED } from "@/lib/anchor-live-client-flags";
 import { startAnchorAlarmSiren, stopAnchorAlarmSiren } from "@/lib/anchor-alarm-sound";
 import { getDeviceName, getOrCreateDeviceId } from "@/lib/device-id";
@@ -280,6 +281,13 @@ export default function HomeLocationMap({
   useEffect(() => {
     activeAnchorAlertRef.current = activeAnchorAlert;
   }, [activeAnchorAlert]);
+
+  const [anchorBreachResetBusyKind, setAnchorBreachResetBusyKind] = useState<null | "monitor" | "this">(null);
+  const [anchorBreachResetError, setAnchorBreachResetError] = useState<string | null>(null);
+  useEffect(() => {
+    setAnchorBreachResetError(null);
+    setAnchorBreachResetBusyKind(null);
+  }, [activeAnchorAlert?.id]);
 
   useEffect(() => {
     const id = activeAnchorAlert?.id;
