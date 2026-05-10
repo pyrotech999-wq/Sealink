@@ -316,6 +316,46 @@ export default function HomeLocationMap({
 
   const [alarmBlocked, setAlarmBlocked] = useState(false);
   const deviceId = useMemo(() => (typeof window !== "undefined" ? getOrCreateDeviceId() : "server"), []);
+  const anchorUserUidRef = useRef<string | null>(null);
+  const [monitorCmdPollDebug, setMonitorCmdPollDebug] = useState<{
+    lastPollAt: number | null;
+    lastHttpStatus: number | null;
+    lastPollAccepted: boolean | null;
+    lastServerEffective: string | null;
+    lastClientEff: string | null;
+    lastCommandCount: number | null;
+    lastError: string | null;
+    lastAppliedCommandId: string | null;
+    lastRawPreview: string | null;
+  }>({
+    lastPollAt: null,
+    lastHttpStatus: null,
+    lastPollAccepted: null,
+    lastServerEffective: null,
+    lastClientEff: null,
+    lastCommandCount: null,
+    lastError: null,
+    lastAppliedCommandId: null,
+    lastRawPreview: null,
+  });
+
+  useEffect(() => {
+    if (!sharing || !signedIn || ANCHOR_LIVE_APIS_BLOCKED) return;
+    let disposed = false;
+    void (async () => {
+      try {
+        const r = await fetch("/api/demo/me", { credentials: "same-origin", cache: "no-store" });
+        if (!r.ok || disposed) return;
+        const j = (await r.json()) as { uid?: string };
+        if (typeof j.uid === "string" && j.uid) anchorUserUidRef.current = j.uid;
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      disposed = true;
+    };
+  }, [sharing, signedIn]);
 
   useEffect(() => {
     if (!isCapacitorAndroidNative()) return;
@@ -848,6 +888,47 @@ export default function HomeLocationMap({
       [ANCHOR_DEVICE_ID_HEADER]: deviceId,
     });
 
+    /** Re-register this handset as monitor on the server so `getEffectiveMonitorDeviceIdForUid` is not stale. */
+    const refreshMonitorRegistration = async (): Promise<void> => {
+      const ids = anchorMonitorRef.current?.alertDeviceIds;
+      const monBody: Record<string, unknown> = { monitorDeviceId: deviceId };
+      if (Array.isArray(ids) && ids.length > 0) monBody.alertDeviceIds = ids;
+      try {
+        const mr = await fetch("/api/anchor/monitor", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", [ANCHOR_DEVICE_ID_HEADER]: deviceId },
+          credentials: "same-origin",
+          body: JSON.stringify(monBody),
+        });
+        console.warn(
+          "[ANCHOR_MONITOR_CMD_CLIENT]",
+          JSON.stringify({ phase: "heartbeat_anchor_monitor_post", httpStatus: mr.status }),
+        );
+      } catch (e) {
+        console.warn(
+          "[ANCHOR_MONITOR_CMD_CLIENT]",
+          JSON.stringify({ phase: "heartbeat_anchor_monitor_error", err: e instanceof Error ? e.message : String(e) }),
+        );
+      }
+      try {
+        const gr = await fetch("/api/anchor/geofence", {
+          method: "POST",
+          headers: geoHeaders(),
+          credentials: "same-origin",
+          body: JSON.stringify({ monitorDeviceId: deviceId }),
+        });
+        console.warn(
+          "[ANCHOR_MONITOR_CMD_CLIENT]",
+          JSON.stringify({ phase: "heartbeat_geofence_monitor_post", httpStatus: gr.status }),
+        );
+      } catch (e) {
+        console.warn(
+          "[ANCHOR_MONITOR_CMD_CLIENT]",
+          JSON.stringify({ phase: "heartbeat_geofence_monitor_error", err: e instanceof Error ? e.message : String(e) }),
+        );
+      }
+    };
+
     const tick = async () => {
       if (disposed || anchorSessionCommandApplyBusyRef.current) return;
       const snap = anchorCfgRef.current;
@@ -865,14 +946,54 @@ export default function HomeLocationMap({
 
       anchorSessionCommandApplyBusyRef.current = true;
       try {
+        await refreshMonitorRegistration();
+
+        const activeSessionId = `${anchorUserUidRef.current ?? "no-uid"}|armed:${snap.armed}|r${snap.radiusM}|la=${snap.lastAlertAt ?? "null"}|sil=${snap.remoteAlarmSilencedUntilReset === true}`;
+        const monitoringActive = snap.armed && eff === deviceId;
+
         anchorCommandClientLog("boat_command_poll_start", { deviceId: deviceId.slice(0, 12), visibility: document.visibilityState });
         const hr = await fetch("/api/anchor/commands?role=monitor", {
           credentials: "same-origin",
           cache: "no-store",
           headers: { [ANCHOR_DEVICE_ID_HEADER]: deviceId },
         });
+
+        const updateDebug = (patch: {
+          lastPollAt?: number | null;
+          lastHttpStatus?: number | null;
+          lastPollAccepted?: boolean | null;
+          lastServerEffective?: string | null;
+          lastClientEff?: string | null;
+          lastCommandCount?: number | null;
+          lastError?: string | null;
+          lastAppliedCommandId?: string | null;
+          lastRawPreview?: string | null;
+        }) => {
+          setMonitorCmdPollDebug((d) => ({ ...d, ...patch }));
+        };
+
         if (!hr.ok) {
           anchorCommandClientLog("boat_command_poll_http_error", { status: hr.status });
+          updateDebug({
+            lastPollAt: Date.now(),
+            lastHttpStatus: hr.status,
+            lastPollAccepted: null,
+            lastServerEffective: null,
+            lastClientEff: eff,
+            lastCommandCount: null,
+            lastError: `poll_http_${hr.status}`,
+            lastRawPreview: null,
+          });
+          console.warn(
+            "[ANCHOR_MONITOR_CMD_CLIENT]",
+            JSON.stringify({
+              phase: "poll_http_error",
+              deviceId,
+              activeSessionId,
+              monitoringActive,
+              httpStatus: hr.status,
+            }),
+          );
           try {
             localStorage.setItem(
               heartbeatKey,
@@ -883,12 +1004,49 @@ export default function HomeLocationMap({
           }
           return;
         }
-        const hd = (await hr.json()) as {
+
+        const rawText = await hr.clone().text();
+        let hd: {
           commands?: AnchorSessionCommandApi[];
           pollAccepted?: boolean;
+          serverEffectiveMonitorDeviceId?: string | null;
         };
+        try {
+          hd = JSON.parse(rawText) as typeof hd;
+        } catch {
+          hd = {};
+        }
         const pollAccepted = hd.pollAccepted === true;
         const list = Array.isArray(hd.commands) ? hd.commands : [];
+        const serverEff = hd.serverEffectiveMonitorDeviceId ?? null;
+
+        console.warn(
+          "[ANCHOR_MONITOR_CMD_CLIENT]",
+          JSON.stringify({
+            phase: "poll_response",
+            deviceId,
+            activeSessionId,
+            monitoringActive,
+            httpStatus: hr.status,
+            pollAccepted,
+            serverEffectiveMonitorDeviceId: serverEff,
+            clientEffectiveMonitorDeviceId: eff,
+            commandList: list,
+            rawPreview: rawText.slice(0, 2000),
+          }),
+        );
+
+        updateDebug({
+          lastPollAt: Date.now(),
+          lastHttpStatus: hr.status,
+          lastPollAccepted: pollAccepted,
+          lastServerEffective: serverEff,
+          lastClientEff: eff,
+          lastCommandCount: list.length,
+          lastError: pollAccepted ? null : "poll_denied_server_mismatch",
+          lastRawPreview: rawText.slice(0, 400),
+        });
+
         try {
           localStorage.setItem(
             heartbeatKey,
