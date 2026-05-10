@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuthUser } from "@/lib/auth";
+import { getEffectiveMonitorAndGeofence } from "@/lib/anchor-effective-monitor-server";
+import { buildAnchorSessionFingerprint } from "@/lib/anchor-session-fingerprint";
 import { createAnchorSessionCommand } from "@/lib/anchor-session-commands-store";
 
 export const runtime = "nodejs";
@@ -18,11 +20,21 @@ export async function POST(): Promise<Response> {
   }
   try {
     const u = await requireAuthUser();
+    const { effective, geo } = await getEffectiveMonitorAndGeofence(u.uid);
+    const sessionId = buildAnchorSessionFingerprint(u.uid, geo);
+    if (!sessionId || !effective) {
+      return NextResponse.json(
+        { ok: false, error: "Arm anchor on map first (active session + monitor required).", code: "NO_ACTIVE_SESSION" },
+        { status: 400, headers: noStore },
+      );
+    }
     const row = await createAnchorSessionCommand({
       uid: u.uid,
       type: "INCREASE_RADIUS",
       meters: 10,
       sourceDeviceId: "debug_seed_sender_device",
+      sessionId,
+      targetDeviceId: effective,
     });
     return NextResponse.json(
       {

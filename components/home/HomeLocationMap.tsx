@@ -3271,7 +3271,7 @@ export default function HomeLocationMap({
                       try {
                         const r = await enqueueAndAwaitAnchorCommand({
                           type: "RESET_ANCHOR",
-                          sourceDeviceId: deviceId,
+                          callerDeviceId: deviceId,
                           signal,
                           onWaitingForBoat: () => setAnchorBreachResetError("Waiting for boat device…"),
                         });
@@ -3320,7 +3320,7 @@ export default function HomeLocationMap({
                         const r = await enqueueAndAwaitAnchorCommand({
                           type: "INCREASE_RADIUS",
                           meters: 10,
-                          sourceDeviceId: deviceId,
+                          callerDeviceId: deviceId,
                           signal,
                           onWaitingForBoat: () => setAnchorBreachResetError("Waiting for boat device…"),
                         });
@@ -3368,7 +3368,7 @@ export default function HomeLocationMap({
                       try {
                         const r = await enqueueAndAwaitAnchorCommand({
                           type: "SILENCE_UNTIL_RESET",
-                          sourceDeviceId: deviceId,
+                          callerDeviceId: deviceId,
                           signal,
                           onWaitingForBoat: () => setAnchorBreachResetError("Waiting for boat device…"),
                         });

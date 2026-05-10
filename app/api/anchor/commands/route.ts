@@ -4,6 +4,7 @@ import { anchorCommandsExposeServerErrors } from "@/lib/anchor-api-debug-server"
 import { anchorCommandServerLog } from "@/lib/anchor-command-server-log";
 import { ANCHOR_DEVICE_ID_HEADER } from "@/lib/anchor-device-id-header";
 import { getEffectiveMonitorAndGeofence, getEffectiveMonitorDeviceIdForUid } from "@/lib/anchor-effective-monitor-server";
+import { buildAnchorSessionFingerprint } from "@/lib/anchor-session-fingerprint";
 import {
   createAnchorSessionCommand,
   getAnchorSessionCommand,
@@ -35,6 +36,8 @@ function toMonitorPollCommandJson(c: AnchorSessionCommandRow): Record<string, un
     meters: c.meters == null ? null : Number(c.meters),
     status: c.status,
     sourceDeviceId: String(c.sourceDeviceId),
+    sessionId: c.sessionId == null ? null : String(c.sessionId),
+    targetDeviceId: c.targetDeviceId == null ? null : String(c.targetDeviceId),
     errorMessage: c.errorMessage == null ? null : String(c.errorMessage),
     createdAt: String(c.createdAt),
     appliedAt: c.appliedAt == null ? null : String(c.appliedAt),
@@ -131,8 +134,9 @@ async function getMonitorPollJson(uid: string, req: Request, reqStart: number): 
       };
     }
 
+    const sessionFp = buildAnchorSessionFingerprint(uid, geoForLog);
     const tDb = Date.now();
-    const { rows, timedOut, lookupError } = await listQueuedCommandsForMonitorPoll(uid);
+    const { rows, timedOut, lookupError } = await listQueuedCommandsForMonitorPoll(uid, sessionFp);
     console.warn("[ANCHOR_MONITOR_GET_TIMING]", "db_command_query_await_ms", Date.now() - tDb);
     timing(reqStart, "after_db_command_query");
 
@@ -371,18 +375,43 @@ export async function POST(req: Request): Promise<Response> {
     const type = parseType(body.type);
     if (!type) return NextResponse.json({ ok: false, error: "Invalid type", code: "BAD_TYPE" }, { status: 400 });
 
-    const sourceDeviceId =
-      typeof body.sourceDeviceId === "string" && body.sourceDeviceId.trim()
-        ? body.sourceDeviceId.trim()
-        : req.headers.get(ANCHOR_DEVICE_ID_HEADER)?.trim() || "";
-    if (!sourceDeviceId) {
-      return NextResponse.json({ ok: false, error: "sourceDeviceId required", code: "NO_SOURCE_DEVICE" }, { status: 400 });
+    if ("targetDeviceId" in body || "sessionId" in body) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Do not send targetDeviceId or sessionId — the server resolves those.",
+          code: "CLIENT_SESSION_FIELDS_FORBIDDEN",
+        },
+        { status: 400 },
+      );
     }
 
-    const effective = await getEffectiveMonitorDeviceIdForUid(u.uid);
-    if (effective && sourceDeviceId === effective) {
+    const sourceDeviceId = (req.headers.get(ANCHOR_DEVICE_ID_HEADER) ?? "").trim();
+    if (!sourceDeviceId) {
+      return NextResponse.json(
+        { ok: false, error: "Device header required (same as monitor poll).", code: "NO_SOURCE_DEVICE" },
+        { status: 400 },
+      );
+    }
+
+    const { effective, geo } = await getEffectiveMonitorAndGeofence(u.uid);
+    if (!effective) {
+      return NextResponse.json(
+        { ok: false, error: "No monitoring device configured for this account.", code: "NO_EFFECTIVE_MONITOR" },
+        { status: 400 },
+      );
+    }
+    if (sourceDeviceId === effective) {
       return NextResponse.json(
         { ok: false, error: "Monitoring handset must apply commands locally, not enqueue them here.", code: "MONITOR_CANNOT_ENQUEUE" },
+        { status: 400 },
+      );
+    }
+
+    const sessionId = buildAnchorSessionFingerprint(u.uid, geo);
+    if (!sessionId) {
+      return NextResponse.json(
+        { ok: false, error: "No armed anchor session (arm geofence on the monitoring flow first).", code: "NO_ACTIVE_SESSION" },
         { status: 400 },
       );
     }
@@ -401,18 +430,29 @@ export async function POST(req: Request): Promise<Response> {
       type,
       meters,
       sourceDeviceId,
+      sessionId,
+      targetDeviceId: effective,
     });
 
-    const eff = await getEffectiveMonitorDeviceIdForUid(u.uid);
     anchorCommandServerLog("command_post_created", {
       uid: u.uid,
       id: row.id,
       type,
       sourceDeviceId,
-      effectiveMonitor: eff ?? null,
+      effectiveMonitor: effective,
+      sessionId,
     });
 
-    return NextResponse.json({ ok: true, command: row }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json(
+      {
+        ok: true as const,
+        command: row,
+        sessionId: row.sessionId,
+        targetDeviceId: row.targetDeviceId,
+        status: row.status,
+      },
+      { headers: { "Cache-Control": "no-store" } },
+    );
   } catch (error) {
     console.error("[ANCHOR COMMANDS POST ERROR]", {
       role: "post_create",
