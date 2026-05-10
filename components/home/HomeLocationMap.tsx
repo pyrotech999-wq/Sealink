@@ -53,6 +53,7 @@ import {
   getAnchorAlertConfig,
   setAnchorAlertConfig,
 } from "@/lib/anchor-alert-storage";
+import { getDemoMe, peekDemoMeCached } from "@/lib/client/demo-me";
 import {
   ANCHOR_DEVICE_ID_HEADER,
   anchorCommandClientLog,
@@ -316,6 +317,8 @@ export default function HomeLocationMap({
 
   const [alarmBlocked, setAlarmBlocked] = useState(false);
   const deviceId = useMemo(() => (typeof window !== "undefined" ? getOrCreateDeviceId() : "server"), []);
+  /** Auth uid for this tab — same as server `user_uid` for anchor geofence/commands (from `/api/demo/me`). */
+  const [anchorAuthUid, setAnchorAuthUid] = useState<string | null>(null);
   const anchorUserUidRef = useRef<string | null>(null);
   const [monitorCmdPollDebug, setMonitorCmdPollDebug] = useState<{
     lastPollAt: number | null;
@@ -332,6 +335,11 @@ export default function HomeLocationMap({
     lastReason: string | null;
     lastHeaderSent: string | null;
     lastJsonOk: boolean | null;
+    localAnchorMonitoringEnabled: boolean | null;
+    anchorSessionUidState: string | null;
+    anchorSessionUidPeeked: string | null;
+    alertPipelineSessionNote: string | null;
+    commandPollerSessionFingerprint: string | null;
   }>({
     lastPollAt: null,
     lastHttpStatus: null,
@@ -347,6 +355,11 @@ export default function HomeLocationMap({
     lastReason: null,
     lastHeaderSent: null,
     lastJsonOk: null,
+    localAnchorMonitoringEnabled: null,
+    anchorSessionUidState: null,
+    anchorSessionUidPeeked: null,
+    alertPipelineSessionNote: null,
+    commandPollerSessionFingerprint: null,
   });
 
   const [anchorPollVerboseDebug, setAnchorPollVerboseDebug] = useState(false);
@@ -368,14 +381,28 @@ export default function HomeLocationMap({
   }, []);
 
   useEffect(() => {
-    if (!sharing || !signedIn || ANCHOR_LIVE_APIS_BLOCKED) return;
+    anchorUserUidRef.current = anchorAuthUid;
+  }, [anchorAuthUid]);
+
+  /** Anchor session uid = signed-in account uid (not gated on map sharing). Commands/geofence use the same uid server-side. */
+  useEffect(() => {
+    if (ANCHOR_LIVE_APIS_BLOCKED || !signedIn) return;
+    const peek = peekDemoMeCached();
+    const peekUid = typeof peek?.uid === "string" && peek.uid ? peek.uid : null;
+    if (peekUid) {
+      anchorUserUidRef.current = peekUid;
+      queueMicrotask(() => setAnchorAuthUid(peekUid));
+    }
     let disposed = false;
     void (async () => {
       try {
-        const r = await fetch("/api/demo/me", { credentials: "same-origin", cache: "no-store" });
-        if (!r.ok || disposed) return;
-        const j = (await r.json()) as { uid?: string };
-        if (typeof j.uid === "string" && j.uid) anchorUserUidRef.current = j.uid;
+        const j = await getDemoMe({ force: !peekUid });
+        if (disposed) return;
+        const uid = typeof j.uid === "string" && j.uid ? j.uid : null;
+        if (uid) {
+          anchorUserUidRef.current = uid;
+          setAnchorAuthUid(uid);
+        }
       } catch {
         /* ignore */
       }
@@ -383,7 +410,7 @@ export default function HomeLocationMap({
     return () => {
       disposed = true;
     };
-  }, [sharing, signedIn]);
+  }, [signedIn]);
 
   useEffect(() => {
     if (!isCapacitorAndroidNative()) return;
@@ -823,7 +850,7 @@ export default function HomeLocationMap({
   // Load server-backed geofence config so both devices can reset/sync.
   useEffect(() => {
     if (ANCHOR_LIVE_APIS_BLOCKED) return;
-    if (!sharing) return;
+    if (!signedIn) return;
     let disposed = false;
     void (async () => {
       try {
@@ -844,7 +871,7 @@ export default function HomeLocationMap({
     return () => {
       disposed = true;
     };
-  }, [sharing]);
+  }, [signedIn]);
 
   useEffect(() => {
     anchorGpsStabilizerRef.current = createAnchorGpsStabilizer();
@@ -857,7 +884,7 @@ export default function HomeLocationMap({
       queueMicrotask(() => setMonitoredFix(null));
       return;
     }
-    if (!sharing) return;
+    if (!signedIn) return;
     const serverMonitor = anchorMonitor?.monitorDeviceId;
     const effectiveMonitor = serverMonitor ? serverMonitor : anchorCfg.monitorDeviceId === "this" ? deviceId : anchorCfg.monitorDeviceId;
     if (!effectiveMonitor || effectiveMonitor === deviceId) {
@@ -883,12 +910,12 @@ export default function HomeLocationMap({
       disposed = true;
       window.clearInterval(id);
     };
-  }, [sharing, anchorCfg.monitorDeviceId, anchorMonitor?.monitorDeviceId, deviceId]);
+  }, [signedIn, anchorCfg.monitorDeviceId, anchorMonitor?.monitorDeviceId, deviceId]);
 
   // Load server-backed monitor config (single monitor device + alert recipients).
   useEffect(() => {
     if (ANCHOR_LIVE_APIS_BLOCKED) return;
-    if (!sharing) return;
+    if (!signedIn) return;
     let disposed = false;
     const load = async () => {
       try {
@@ -907,7 +934,7 @@ export default function HomeLocationMap({
       disposed = true;
       window.clearInterval(id);
     };
-  }, [sharing]);
+  }, [signedIn]);
 
   /** Prevents overlapping polls; never leave true if heartbeat hangs (see timeout below). */
   const monitorAnchorPollInFlightRef = useRef(false);
@@ -915,7 +942,7 @@ export default function HomeLocationMap({
 
   /** Monitoring handset: HTTP poll for remote commands (no Realtime). Uses `queued → received → applied`. */
   useEffect(() => {
-    if (ANCHOR_LIVE_APIS_BLOCKED || !sharing || !deviceId || deviceId === "server") return;
+    if (ANCHOR_LIVE_APIS_BLOCKED || !signedIn || !deviceId || deviceId === "server") return;
     let disposed = false;
     const heartbeatKey = "sealink_anchor_cmd_boat_heartbeat";
 
@@ -1402,13 +1429,13 @@ export default function HomeLocationMap({
       document.removeEventListener("visibilitychange", onVis);
       window.removeEventListener("focus", onFocus);
     };
-  }, [sharing, deviceId, signedIn, anchorCfg.armed, anchorCfg.monitorDeviceId, anchorMonitor?.monitorDeviceId]);
+  }, [deviceId, signedIn, anchorCfg.armed, anchorCfg.monitorDeviceId, anchorMonitor?.monitorDeviceId]);
 
   // Best-effort: keep screen awake on the "boat device" when anchor monitoring is armed.
   useEffect(() => {
     const nav = navigator as Navigator & { wakeLock?: { request: (t: "screen") => Promise<{ release: () => Promise<void> }> } };
     if (!nav.wakeLock?.request) return;
-    if (!sharing) return;
+    if (!signedIn) return;
     if (!anchorCfg.armed) return;
     const effWake = effectiveMonitorDeviceIdForHomeMap({
       thisDeviceId: deviceId,
@@ -1438,11 +1465,11 @@ export default function HomeLocationMap({
       document.removeEventListener("visibilitychange", onVis);
       if (lock) void lock.release();
     };
-  }, [sharing, anchorCfg.armed, anchorCfg.monitorDeviceId, anchorMonitor?.monitorDeviceId, deviceId]);
+  }, [signedIn, anchorCfg.armed, anchorCfg.monitorDeviceId, anchorMonitor?.monitorDeviceId, deviceId]);
 
   // Anchor geofence check: same `pos` as map/forecasts (via posRef); runs every ANCHOR_POSITION_CHECK_INTERVAL_MS on this device when it is the monitor.
   useEffect(() => {
-    if (!sharing) return;
+    if (!signedIn) return;
     const anchorCfgSnap = anchorCfgRef.current;
     if (!anchorCfgSnap.armed || anchorCfgSnap.lat == null || anchorCfgSnap.lng == null) return;
     const serverMonitor = anchorMonitorRef.current?.monitorDeviceId;
@@ -1609,7 +1636,7 @@ export default function HomeLocationMap({
     const id = window.setInterval(runCheck, ANCHOR_POSITION_CHECK_INTERVAL_MS);
     return () => window.clearInterval(id);
   }, [
-    sharing,
+    signedIn,
     anchorCfg.armed,
     anchorCfg.lat,
     anchorCfg.lng,

@@ -83,3 +83,10 @@ export function invalidateDemoMeCache() {
   clearSession();
 }
 
+/** Synchronous read of the last cached `/api/demo/me` payload (memory or sessionStorage). */
+export function peekDemoMeCached(): DemoMeResponse | null {
+  if (mem) return mem.value;
+  const fromSession = readSession();
+  return fromSession?.value ?? null;
+}
+
