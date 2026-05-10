@@ -1077,12 +1077,38 @@ export default function HomeLocationMap({
           if (cmdStatus === "applied") continue;
 
           try {
+            console.warn(
+              "[ANCHOR_MONITOR_CMD_CLIENT]",
+              JSON.stringify({
+                phase: "before_command",
+                command: cmd,
+                anchorStateBefore: {
+                  radiusM: anchorCfgRef.current.radiusM,
+                  lat: anchorCfgRef.current.lat,
+                  lng: anchorCfgRef.current.lng,
+                  lastAlertAt: anchorCfgRef.current.lastAlertAt,
+                  remoteSilenced: anchorCfgRef.current.remoteAlarmSilencedUntilReset === true,
+                },
+              }),
+            );
+
             if (cmdStatus === "queued") {
               const pr = await patchAnchorSessionCommandStatus({
                 id: cmd.id,
                 monitorDeviceId: deviceId,
                 status: "received",
               });
+              console.warn(
+                "[ANCHOR_MONITOR_CMD_CLIENT]",
+                JSON.stringify({
+                  phase: "patch_received_response",
+                  commandId: cmd.id,
+                  ok: pr.ok,
+                  httpStatus: pr.status,
+                  error: pr.error ?? null,
+                  returnedCommand: pr.command ?? null,
+                }),
+              );
               if (!pr.ok) {
                 if (pr.status === 409) {
                   const cur = await getAnchorSessionCommandById(cmd.id);
@@ -1170,7 +1196,26 @@ export default function HomeLocationMap({
                 setAnchorCfg(gj.config);
                 setAnchorAlertConfig(gj.config);
               }
+              stopAnchorAlarmSiren();
+              clearPresentedAnchorAlertId();
+              queueMicrotask(() => setActiveAnchorAlert(null));
             }
+
+            console.warn(
+              "[ANCHOR_MONITOR_CMD_CLIENT]",
+              JSON.stringify({
+                phase: "after_apply_local",
+                commandId: cmd.id,
+                type: cmd.type,
+                anchorStateAfter: {
+                  radiusM: anchorCfgRef.current.radiusM,
+                  lat: anchorCfgRef.current.lat,
+                  lng: anchorCfgRef.current.lng,
+                  lastAlertAt: anchorCfgRef.current.lastAlertAt,
+                  remoteSilenced: anchorCfgRef.current.remoteAlarmSilencedUntilReset === true,
+                },
+              }),
+            );
 
             anchorCommandClientLog("boat_command_apply_ok", { id: cmd.id, type: cmd.type });
             const patched = await patchAnchorSessionCommandStatus({
@@ -1178,14 +1223,29 @@ export default function HomeLocationMap({
               monitorDeviceId: deviceId,
               status: "applied",
             });
+            console.warn(
+              "[ANCHOR_MONITOR_CMD_CLIENT]",
+              JSON.stringify({
+                phase: "patch_applied_response",
+                commandId: cmd.id,
+                ok: patched.ok,
+                httpStatus: patched.status,
+                error: patched.error ?? null,
+                returnedCommand: patched.command ?? null,
+              }),
+            );
             if (!patched.ok) {
               anchorCommandClientLog("boat_apply_patch_applied_failed", { id: cmd.id, status: patched.status, err: patched.error });
+              updateDebug({ lastError: patched.error ?? `applied_patch_${patched.status}` });
             } else {
               anchorCommandClientLog("boat_command_applied", { id: cmd.id, type: cmd.type });
+              updateDebug({ lastAppliedCommandId: cmd.id, lastError: null });
             }
           } catch (e) {
             const msg = e instanceof Error ? e.message.slice(0, 400) : "apply_error";
             anchorCommandClientLog("boat_command_apply_error", { id: cmd.id, type: cmd.type, msg });
+            console.warn("[ANCHOR_MONITOR_CMD_CLIENT]", JSON.stringify({ phase: "command_apply_caught", commandId: cmd.id, msg }));
+            updateDebug({ lastError: msg });
             await patchAnchorSessionCommandStatus({
               id: cmd.id,
               monitorDeviceId: deviceId,
@@ -1199,7 +1259,7 @@ export default function HomeLocationMap({
       }
     };
 
-    const intervalMs = () => (document.visibilityState === "visible" ? 2000 : 8000);
+    const intervalMs = () => (document.visibilityState === "visible" ? 2500 : 7000);
     let iv = window.setInterval(() => void tick(), intervalMs());
     const bumpInterval = () => {
       window.clearInterval(iv);
@@ -1219,7 +1279,7 @@ export default function HomeLocationMap({
       document.removeEventListener("visibilitychange", onVis);
       window.removeEventListener("focus", onFocus);
     };
-  }, [sharing, deviceId]);
+  }, [sharing, deviceId, signedIn, anchorCfg.armed, anchorCfg.monitorDeviceId, anchorMonitor?.monitorDeviceId]);
 
   // Best-effort: keep screen awake on the "boat device" when anchor monitoring is armed.
   useEffect(() => {
@@ -2264,6 +2324,21 @@ export default function HomeLocationMap({
         <div className="flex min-w-0 flex-col gap-0">
           <div className="overflow-hidden rounded-xl border border-zinc-200 shadow-sm dark:border-zinc-800">
             <div className="relative h-[min(55vh,420px)] w-full min-h-[280px] bg-zinc-100 dark:bg-zinc-900">
+              {anchorCfg.armed && breachIsMonitoringDevice ? (
+                <div className="pointer-events-none absolute bottom-2 left-2 z-[900] max-w-[min(92vw,20rem)] text-left">
+                  <div className="pointer-events-auto max-h-48 overflow-y-auto rounded-md border border-amber-700/80 bg-black/80 px-2 py-1.5 font-mono text-[10px] leading-snug text-amber-100 shadow-lg backdrop-blur-sm">
+                    <div className="font-bold text-amber-300">Monitor command poll</div>
+                    <div>deviceId: {deviceId.slice(0, 14)}…</div>
+                    <div>clientEff: {breachEffectiveMonitor.slice(0, 14)}…</div>
+                    <div>serverEff: {monitorCmdPollDebug.lastServerEffective ?? "—"}</div>
+                    <div>lastPoll: {monitorCmdPollDebug.lastPollAt ? new Date(monitorCmdPollDebug.lastPollAt).toLocaleTimeString() : "—"}</div>
+                    <div>http: {monitorCmdPollDebug.lastHttpStatus ?? "—"} pollOk: {String(monitorCmdPollDebug.lastPollAccepted)}</div>
+                    <div>cmds: {monitorCmdPollDebug.lastCommandCount ?? "—"}</div>
+                    <div>appliedId: {monitorCmdPollDebug.lastAppliedCommandId ?? "—"}</div>
+                    <div className="break-words text-amber-200/90">err: {monitorCmdPollDebug.lastError ?? "—"}</div>
+                  </div>
+                </div>
+              ) : null}
               <MapContainer
                 center={center}
                 zoom={zoom}
