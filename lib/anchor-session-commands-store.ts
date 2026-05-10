@@ -89,6 +89,7 @@ async function expireStaleAnchorSessionCommands(uid: string, nowMs: number): Pro
   const qCut = new Date(nowMs - ANCHOR_COMMAND_STALE_QUEUED_MS).toISOString();
   const rCut = new Date(nowMs - ANCHOR_COMMAND_STALE_RECEIVED_MS).toISOString();
 
+  try {
   if (isSupabaseConfigured()) {
     const sb = supabaseAdmin();
     const { data: dq, error: eq } = await sb
@@ -146,6 +147,11 @@ async function expireStaleAnchorSessionCommands(uid: string, nowMs: number): Pro
     anchorCommandServerLog("commands_expired_stale", { uid, nQueued, nReceived });
   }
   return { queued: nQueued, received: nReceived };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[anchor_session_commands] expireStaleAnchorSessionCommands failed", { uid, msg });
+    return { queued: 0, received: 0 };
+  }
 }
 
 export async function createAnchorSessionCommand(args: {
