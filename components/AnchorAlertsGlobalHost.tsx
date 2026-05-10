@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { startAnchorAlarmSiren, stopAnchorAlarmSiren } from "@/lib/anchor-alarm-sound";
 import {
   clearPresentedAnchorAlertId,
@@ -29,6 +29,10 @@ type AlertRow = { id: string; message: string; createdAt: string };
  */
 export function AnchorAlertsGlobalHost() {
   const pathname = usePathname();
+  const deviceId = useMemo(
+    () => (typeof window !== "undefined" ? getOrCreateDeviceId() : ""),
+    [],
+  );
   const [alert, setAlert] = useState<AlertRow | null>(null);
   const alertRef = useRef<AlertRow | null>(null);
   const [alarmBlocked, setAlarmBlocked] = useState(false);
