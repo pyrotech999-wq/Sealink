@@ -28,3 +28,13 @@ export function setDeviceName(name: string): void {
   else localStorage.setItem(DEVICE_NAME_KEY, n);
 }
 
+/** Clears the per-browser device label (anchor / device lists); keeps {@link getOrCreateDeviceId} stable. */
+export function clearStoredDeviceName(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(DEVICE_NAME_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+

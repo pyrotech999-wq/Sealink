@@ -10,7 +10,8 @@ export type PersistedBroadcastAlert = {
   deleted: boolean;
 };
 
-const LS_KEY = "sealink_vicinity_alert_inbox_v2";
+export const BROADCAST_ALERT_INBOX_STORAGE_KEY = "sealink_vicinity_alert_inbox_v2";
+const LS_KEY = BROADCAST_ALERT_INBOX_STORAGE_KEY;
 export const BROADCAST_ALERT_TTL_MS = 24 * 60 * 60 * 1000;
 
 function isRecord(v: unknown): v is Record<string, unknown> {

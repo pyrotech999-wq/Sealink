@@ -129,6 +129,18 @@ export function setShareOnMap(on: boolean): void {
   else localStorage.removeItem(MAP_PROFILE.shareOnMap);
 }
 
+/** Remove all map pin / sharing preferences from this browser (e.g. after sign-out or switching accounts). */
+export function clearMapProfileLocalStorage(): void {
+  if (typeof window === "undefined") return;
+  try {
+    for (const k of Object.values(MAP_PROFILE)) {
+      window.localStorage.removeItem(k);
+    }
+  } catch {
+    /* quota / private mode */
+  }
+}
+
 export function escapeHtml(text: string): string {
   return text
     .replace(/&/g, "&amp;")

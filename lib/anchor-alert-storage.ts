@@ -91,3 +91,12 @@ export function setAnchorAlertConfig(next: AnchorAlertConfig): void {
   }
 }
 
+export function clearAnchorAlertLocalStorage(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(KEY);
+  } catch {
+    /* ignore */
+  }
+}
+

@@ -23,3 +23,12 @@ export function setMessagingLastVisitIso(iso: string): void {
 export function setMessagingLastVisitNow(): void {
   setMessagingLastVisitIso(new Date().toISOString());
 }
+
+export function clearMessagingLastVisitStorage(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(MESSAGING_LAST_VISIT_STORAGE_KEY);
+  } catch {
+    /* private mode */
+  }
+}
