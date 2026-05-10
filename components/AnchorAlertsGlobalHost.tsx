@@ -164,11 +164,7 @@ export function AnchorAlertsGlobalHost() {
           serverMonitorDeviceId: md?.config?.monitorDeviceId,
           geofenceMonitorDeviceId: gcfg?.monitorDeviceId,
         });
-        if (
-          gcfg?.remoteAlarmSilencedUntilReset === true &&
-          effective &&
-          (deviceId === effective || deviceId !== effective)
-        ) {
+        if (gcfg?.remoteAlarmSilencedUntilReset === true && effective) {
           if (disposed) return;
           if (alertRef.current) {
             stopAnchorAlarmSiren();

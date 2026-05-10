@@ -1078,6 +1078,7 @@ export default function HomeLocationMap({
           if (cmdStatus === "applied") continue;
 
           try {
+            let stateAfterFromGeofenceResponse: typeof snap | null = null;
             console.warn(
               "[ANCHOR_MONITOR_CMD_CLIENT]",
               JSON.stringify({
@@ -1158,6 +1159,7 @@ export default function HomeLocationMap({
                 body: JSON.stringify({ markAllSeen: true }),
               }).catch(() => undefined);
               if (gj.config) {
+                stateAfterFromGeofenceResponse = gj.config;
                 setAnchorCfg(gj.config);
                 setAnchorAlertConfig(gj.config);
               }
@@ -1174,6 +1176,7 @@ export default function HomeLocationMap({
               if (!gr.ok) throw new Error(`geofence_http_${gr.status}`);
               const gj = (await gr.json()) as { config?: typeof snap };
               if (gj.config) {
+                stateAfterFromGeofenceResponse = gj.config;
                 setAnchorCfg(gj.config);
                 setAnchorAlertConfig(gj.config);
               }
@@ -1194,6 +1197,7 @@ export default function HomeLocationMap({
               if (!ar.ok) throw new Error(`alerts_http_${ar.status}`);
               const gj = (await gr.json()) as { config?: typeof snap };
               if (gj.config) {
+                stateAfterFromGeofenceResponse = gj.config;
                 setAnchorCfg(gj.config);
                 setAnchorAlertConfig(gj.config);
               }
@@ -1202,18 +1206,20 @@ export default function HomeLocationMap({
               queueMicrotask(() => setActiveAnchorAlert(null));
             }
 
+            const afterSnap = stateAfterFromGeofenceResponse ?? anchorCfgRef.current;
             console.warn(
               "[ANCHOR_MONITOR_CMD_CLIENT]",
               JSON.stringify({
                 phase: "after_apply_local",
                 commandId: cmd.id,
                 type: cmd.type,
+                anchorStateAfterSource: stateAfterFromGeofenceResponse ? "geofence_json" : "anchorCfgRef_fallback",
                 anchorStateAfter: {
-                  radiusM: anchorCfgRef.current.radiusM,
-                  lat: anchorCfgRef.current.lat,
-                  lng: anchorCfgRef.current.lng,
-                  lastAlertAt: anchorCfgRef.current.lastAlertAt,
-                  remoteSilenced: anchorCfgRef.current.remoteAlarmSilencedUntilReset === true,
+                  radiusM: afterSnap.radiusM,
+                  lat: afterSnap.lat,
+                  lng: afterSnap.lng,
+                  lastAlertAt: afterSnap.lastAlertAt,
+                  remoteSilenced: afterSnap.remoteAlarmSilencedUntilReset === true,
                 },
               }),
             );
@@ -2332,9 +2338,9 @@ export default function HomeLocationMap({
                 <div className="pointer-events-none absolute bottom-2 left-2 z-[900] max-w-[min(92vw,20rem)] text-left">
                   <div className="pointer-events-auto max-h-48 overflow-y-auto rounded-md border border-amber-700/80 bg-black/80 px-2 py-1.5 font-mono text-[10px] leading-snug text-amber-100 shadow-lg backdrop-blur-sm">
                     <div className="font-bold text-amber-300">Monitor command poll</div>
-                    <div>deviceId: {deviceId.slice(0, 14)}…</div>
-                    <div>clientEff: {breachEffectiveMonitor.slice(0, 14)}…</div>
-                    <div>serverEff: {monitorCmdPollDebug.lastServerEffective ?? "—"}</div>
+                    <div className="break-all">deviceId: {deviceId}</div>
+                    <div className="break-all">effectiveMonitor (client): {breachEffectiveMonitor}</div>
+                    <div className="break-all">effectiveMonitor (server poll): {monitorCmdPollDebug.lastServerEffective ?? "—"}</div>
                     <div>lastPoll: {monitorCmdPollDebug.lastPollAt ? new Date(monitorCmdPollDebug.lastPollAt).toLocaleTimeString() : "—"}</div>
                     <div>http: {monitorCmdPollDebug.lastHttpStatus ?? "—"} pollOk: {String(monitorCmdPollDebug.lastPollAccepted)}</div>
                     <div>cmds: {monitorCmdPollDebug.lastCommandCount ?? "—"}</div>
