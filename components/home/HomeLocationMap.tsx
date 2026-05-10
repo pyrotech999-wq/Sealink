@@ -622,6 +622,32 @@ export default function HomeLocationMap({
   }, [breachEffectiveMonitor]);
   const breachIsMonitoringDevice = breachEffectiveMonitor === deviceId;
   const anchorCfgLoadedFromServerRef = useRef(false);
+
+  useEffect(() => {
+    const peek = peekDemoMeCached();
+    const peekUid = typeof peek?.uid === "string" && peek.uid ? peek.uid : null;
+    /* Same string shape as `activeSessionId` in the monitor command poll tick (uid + geofence snapshot). */
+    const fp = anchorAuthUid
+      ? `${anchorAuthUid}|armed:${anchorCfg.armed}|r${anchorCfg.radiusM}|la=${anchorCfg.lastAlertAt ?? "null"}|sil=${anchorCfg.remoteAlarmSilencedUntilReset === true}`
+      : null;
+    setMonitorCmdPollDebug((d) => ({
+      ...d,
+      localAnchorMonitoringEnabled: !!(signedIn && anchorCfg.armed && breachIsMonitoringDevice),
+      anchorSessionUidState: anchorAuthUid,
+      anchorSessionUidPeeked: peekUid,
+      alertPipelineSessionNote: "Alerts: POST /api/anchor/alerts uses auth cookie; server rows use this uid.",
+      commandPollerSessionFingerprint: fp,
+    }));
+  }, [
+    signedIn,
+    anchorAuthUid,
+    anchorCfg.armed,
+    anchorCfg.radiusM,
+    anchorCfg.monitorDeviceId,
+    anchorCfg.lastAlertAt,
+    anchorCfg.remoteAlarmSilencedUntilReset,
+    breachIsMonitoringDevice,
+  ]);
   const [shareNearby, setShareNearby] = useState(() =>
     typeof window !== "undefined" ? getShareNearbyPeers() : false,
   );
@@ -1031,9 +1057,12 @@ export default function HomeLocationMap({
           deviceId,
           refServerMon: anchorMonitorRef.current?.monitorDeviceId ?? null,
         });
+        const skipSnap = anchorCfgRef.current;
+        const skipFp = `${anchorUserUidRef.current ?? "no-uid"}|armed:${skipSnap.armed}|r${skipSnap.radiusM}|la=${skipSnap.lastAlertAt ?? "null"}|sil=${skipSnap.remoteAlarmSilencedUntilReset === true}`;
         setMonitorCmdPollDebug((d) => ({
           ...d,
           lastPollAt: Date.now(),
+          lastActiveSessionId: skipFp,
           lastError: `poll_skipped_tick_eff_ne_device (eff=${eff.slice(0, 12)}…)`,
           lastClientEff: eff,
           lastHeaderSent: deviceId,
@@ -2487,7 +2516,21 @@ export default function HomeLocationMap({
                     <div className="break-all">ANCHOR header sent: {monitorCmdPollDebug.lastHeaderSent ?? deviceId}</div>
                     <div className="break-all">effectiveMonitor (client): {breachEffectiveMonitor}</div>
                     <div className="break-all">effectiveMonitor (server poll): {monitorCmdPollDebug.lastServerEffective ?? "—"}</div>
-                    <div className="break-all">activeSessionId: {monitorCmdPollDebug.lastActiveSessionId ?? "—"}</div>
+                    <div>
+                      localAnchorMonitoringEnabled:{" "}
+                      {monitorCmdPollDebug.localAnchorMonitoringEnabled == null
+                        ? "—"
+                        : String(monitorCmdPollDebug.localAnchorMonitoringEnabled)}
+                    </div>
+                    <div className="break-all">anchorSessionUid (state): {monitorCmdPollDebug.anchorSessionUidState ?? "—"}</div>
+                    <div className="break-all">anchorSessionUid (peek /api/demo/me cache): {monitorCmdPollDebug.anchorSessionUidPeeked ?? "—"}</div>
+                    <div className="break-all text-[9px] opacity-90">
+                      {monitorCmdPollDebug.alertPipelineSessionNote ?? "—"}
+                    </div>
+                    <div className="break-all">
+                      commandPollerSessionFingerprint: {monitorCmdPollDebug.commandPollerSessionFingerprint ?? "—"}
+                    </div>
+                    <div className="break-all">activeSessionId (last poll tick): {monitorCmdPollDebug.lastActiveSessionId ?? "—"}</div>
                     <div>lastPoll: {monitorCmdPollDebug.lastPollAt ? new Date(monitorCmdPollDebug.lastPollAt).toLocaleTimeString() : "—"}</div>
                     <div>
                       http: {monitorCmdPollDebug.lastHttpStatus ?? "—"} jsonOk: {String(monitorCmdPollDebug.lastJsonOk)} pollOk:{" "}
