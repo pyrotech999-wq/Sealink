@@ -631,11 +631,10 @@ export function AnchorAlertsGlobalHost() {
                     signal,
                     onWaitingForBoat: () => setResetError("Waiting for boat device…"),
                   });
-                  setRemoteAnchorActionDebug({
-                    ...r.postDebug,
-                    terminalStatus: r.ok ? r.terminalStatus : undefined,
-                    error: r.ok ? undefined : r.error,
-                  });
+                  await applyRemoteActionDebugWithNames(
+                    r.postDebug,
+                    r.ok ? { ok: true, terminalStatus: r.terminalStatus } : { ok: false, error: r.error },
+                  );
                   if (!r.ok) {
                     setResetError(r.error);
                     return;
@@ -682,6 +681,12 @@ export function AnchorAlertsGlobalHost() {
             <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-[9px] text-cyan-50">
               {JSON.stringify(remoteAnchorActionDebug, null, 2)}
             </pre>
+            {remoteAnchorActionDebug?.error === ANCHOR_COMMAND_STALE_BOAT_ERROR ? (
+              <p className="mt-2 text-[9px] leading-snug text-cyan-100/95">
+                The monitoring phone must keep SeaLink open (foreground or a tab that is not sleeping) so it can poll
+                for commands every few seconds. Try again with the boat device on the map screen.
+              </p>
+            ) : null}
           </div>
         ) : null}
         <a
