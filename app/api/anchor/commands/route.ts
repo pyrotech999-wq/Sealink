@@ -215,11 +215,15 @@ export async function GET(req: Request): Promise<Response> {
       { status: 400, headers },
     );
   } catch (error) {
+    const errPayload =
+      error instanceof Error
+        ? { name: error.name, message: error.message, stack: error.stack }
+        : { value: String(error) };
     console.error("[ANCHOR COMMANDS GET ERROR]", {
       role,
       uid,
       deviceId: req.headers.get(ANCHOR_DEVICE_ID_HEADER),
-      error,
+      error: errPayload,
     });
     if (role === "monitor") {
       return monitorPollEmptyOk({
