@@ -55,7 +55,7 @@ function fromDb(uid: string, r: Record<string, unknown>): AnchorGeofenceConfigRo
     armed: r.armed === true,
     lat: typeof r.anchor_lat === "number" && Number.isFinite(r.anchor_lat) ? (r.anchor_lat as number) : null,
     lng: typeof r.anchor_lng === "number" && Number.isFinite(r.anchor_lng) ? (r.anchor_lng as number) : null,
-    radiusM: parseAnchorRadiusM(r.radius_m),
+    radiusM: parseAnchorRadiusM(r.radius_m, { fromTrustedStore: true }),
     angleDeg:
       typeof r.angle_deg === "number" && Number.isFinite(r.angle_deg)
         ? Math.max(0, Math.min(360, Math.round(r.angle_deg as number)))
@@ -103,6 +103,7 @@ export async function getAnchorGeofenceConfig(uid: string): Promise<AnchorGeofen
 export async function setAnchorGeofenceConfig(
   uid: string,
   patch: Partial<AnchorAlertConfig>,
+  opts?: { isAdmin?: boolean },
 ): Promise<AnchorGeofenceConfigRow> {
   return enqueue(async () => {
     const cur = await getAnchorGeofenceConfig(uid);
@@ -110,7 +111,8 @@ export async function setAnchorGeofenceConfig(
     const next: AnchorGeofenceConfigRow = {
       ...cur,
       ...patch,
-      radiusM: patch.radiusM != null ? parseAnchorRadiusM(patch.radiusM) : cur.radiusM,
+      radiusM:
+        patch.radiusM != null ? parseAnchorRadiusM(patch.radiusM, { isAdmin: opts?.isAdmin === true }) : cur.radiusM,
       angleDeg:
         patch.angleDeg != null && Number.isFinite(patch.angleDeg)
           ? Math.max(0, Math.min(360, Math.round(patch.angleDeg)))

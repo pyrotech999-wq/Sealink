@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuthUser } from "@/lib/auth";
 import { getAnchorGeofenceConfig, setAnchorGeofenceConfig } from "@/lib/anchor-geofence-store";
-import { parseAnchorRadiusM } from "@/lib/anchor-alert-storage";
+import { ANCHOR_RADIUS_ADMIN_TEST_M, parseAnchorRadiusM } from "@/lib/anchor-alert-storage";
 
 export const runtime = "nodejs";
 
@@ -19,7 +19,9 @@ type Body = {
 export async function GET(): Promise<Response> {
   const u = await requireAuthUser().catch(() => null);
   if (!u) return NextResponse.json({ error: "Sign-in required" }, { status: 401 });
-  const cfg = await getAnchorGeofenceConfig(u.uid);
+  const row = await getAnchorGeofenceConfig(u.uid);
+  const cfg =
+    !u.isAdmin && row.radiusM === ANCHOR_RADIUS_ADMIN_TEST_M ? { ...row, radiusM: 20 as const } : row;
   return NextResponse.json({ ok: true as const, config: cfg }, { headers: { "Cache-Control": "no-store" } });
 }
 
