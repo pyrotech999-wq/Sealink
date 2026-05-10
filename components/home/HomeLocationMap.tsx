@@ -1230,6 +1230,7 @@ export default function HomeLocationMap({
         }
 
         monitorCommandPollNetworkIssueRef.current = false;
+        bumpInterval();
 
         if (!hr.ok) {
           anchorCommandClientLog("boat_command_poll_http_error", { status: hr.status });
@@ -1626,7 +1627,10 @@ export default function HomeLocationMap({
       void tick();
     };
 
-    const intervalMs = () => (document.visibilityState === "visible" ? 2500 : 7000);
+    const intervalMs = () => {
+      if (monitorCommandPollNetworkIssueRef.current) return 5000;
+      return document.visibilityState === "visible" ? 2500 : 7000;
+    };
     let iv = window.setInterval(() => void tick(), intervalMs());
     const bumpInterval = () => {
       window.clearInterval(iv);
@@ -1636,9 +1640,17 @@ export default function HomeLocationMap({
       bumpInterval();
       void tick();
     };
-    const onFocus = () => void tick();
+    const onFocus = () => {
+      bumpInterval();
+      void tick();
+    };
+    const onOnline = () => {
+      bumpInterval();
+      void tick();
+    };
     document.addEventListener("visibilitychange", onVis);
     window.addEventListener("focus", onFocus);
+    window.addEventListener("online", onOnline);
     void tick();
     return () => {
       disposed = true;
@@ -1647,6 +1659,7 @@ export default function HomeLocationMap({
       window.clearInterval(iv);
       document.removeEventListener("visibilitychange", onVis);
       window.removeEventListener("focus", onFocus);
+      window.removeEventListener("online", onOnline);
     };
   }, [deviceId, signedIn, anchorCfg.armed, anchorCfg.monitorDeviceId, anchorMonitor?.monitorDeviceId]);
 
