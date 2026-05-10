@@ -870,9 +870,10 @@ export default function HomeLocationMap({
       if (driftTriggered) parts.push(`drifted ~${Math.round(m)}m (limit ${anchorCfg.radiusM}m)`);
       if (angleTriggered) parts.push(`bearing changed ~${Math.round(angleDelta)}° (limit ${angleLimit}°)`);
       const msg = `Anchor alert: ${parts.join(" and ")}.`;
+      const mayReceivePopUp = shouldReceiveAnchorAlarmPopUp(anchorMonitorRef.current?.alertDeviceIds, deviceId);
 
       if (ANCHOR_LIVE_APIS_BLOCKED) {
-        if (!activeAnchorAlertRef.current) {
+        if (mayReceivePopUp && !activeAnchorAlertRef.current) {
           setActiveAnchorAlert({ id: `local-${now}`, message: msg, createdAt: new Date(now).toISOString() });
         }
       } else {
@@ -884,6 +885,7 @@ export default function HomeLocationMap({
               body: JSON.stringify({ message: msg, kind: "alert" }),
               keepalive: true,
             });
+            const popHere = shouldReceiveAnchorAlarmPopUp(anchorMonitorRef.current?.alertDeviceIds, deviceId);
             if (r.ok) {
               try {
                 const data = (await r.json()) as {
@@ -898,38 +900,40 @@ export default function HomeLocationMap({
                     : typeof a?.created_at === "string"
                       ? a.created_at
                       : new Date(now).toISOString();
-                if (id && text && !activeAnchorAlertRef.current) {
+                if (popHere && id && text && !activeAnchorAlertRef.current) {
                   setActiveAnchorAlert({ id, message: text, createdAt: created });
                 }
               } catch {
-                if (!activeAnchorAlertRef.current) {
+                if (popHere && !activeAnchorAlertRef.current) {
                   setActiveAnchorAlert({ id: `local-${now}`, message: msg, createdAt: new Date(now).toISOString() });
                 }
               }
-            } else if (!activeAnchorAlertRef.current) {
+            } else if (popHere && !activeAnchorAlertRef.current) {
               setActiveAnchorAlert({ id: `local-${now}`, message: msg, createdAt: new Date(now).toISOString() });
             }
           } catch {
-            if (!activeAnchorAlertRef.current) {
+            if (shouldReceiveAnchorAlarmPopUp(anchorMonitorRef.current?.alertDeviceIds, deviceId) && !activeAnchorAlertRef.current) {
               setActiveAnchorAlert({ id: `local-${now}`, message: msg, createdAt: new Date(now).toISOString() });
             }
           }
         })();
       }
 
-      try {
-        if ("Notification" in window && Notification.permission === "granted") {
-          const opts = {
-            body: msg,
-            tag: "sealink-anchor-alert",
-            renotify: true,
-            requireInteraction: true,
-            vibrate: [200, 100, 200, 100, 400, 120, 300, 120, 400],
-          } as NotificationOptions & Record<string, unknown>;
-          new Notification("SEALINK — ANCHOR ALERT", opts);
+      if (mayReceivePopUp) {
+        try {
+          if ("Notification" in window && Notification.permission === "granted") {
+            const opts = {
+              body: msg,
+              tag: "sealink-anchor-alert",
+              renotify: true,
+              requireInteraction: true,
+              vibrate: [200, 100, 200, 100, 400, 120, 300, 120, 400],
+            } as NotificationOptions & Record<string, unknown>;
+            new Notification("SEALINK — ANCHOR ALERT", opts);
+          }
+        } catch {
+          /* ignore */
         }
-      } catch {
-        /* ignore */
       }
     };
 
@@ -958,8 +962,7 @@ export default function HomeLocationMap({
         const d = (await r.json()) as { alerts?: { id: string; message: string; createdAt: string; kind?: string }[] };
         const list = Array.isArray(d.alerts) ? d.alerts : [];
         if (disposed) return;
-        const allowed = anchorMonitor?.alertDeviceIds?.length ? anchorMonitor.alertDeviceIds.includes(deviceId) : true;
-        if (!allowed) return;
+        if (!shouldReceiveAnchorAlarmPopUp(anchorMonitor?.alertDeviceIds, deviceId)) return;
         if (!activeAnchorAlertRef.current && list.length) setActiveAnchorAlert(list[0]!);
       } catch {
         /* ignore */
