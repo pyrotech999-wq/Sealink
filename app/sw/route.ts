@@ -11,7 +11,17 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  event.respondWith(fetch(event.request));
+  const req = event.request;
+  try {
+    const u = new URL(req.url);
+    if (u.pathname === "/api/anchor/commands") {
+      event.respondWith(fetch(req, { cache: "no-store" }));
+      return;
+    }
+  } catch (_) {
+    /* ignore bad URL */
+  }
+  event.respondWith(fetch(req));
 });
 `;
 

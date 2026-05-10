@@ -968,7 +968,66 @@ export default function HomeLocationMap({
 
   /** Prevents overlapping polls; never leave true if heartbeat hangs (see timeout below). */
   const monitorAnchorPollInFlightRef = useRef(false);
+  /** After a transport-level fetch failure, poll at 5s until a request succeeds again. */
+  const monitorCommandPollNetworkIssueRef = useRef(false);
   const monitorManualPollRef = useRef<(() => void) | null>(null);
+
+  type MonitorCmdApiSelfTest = {
+    url: string;
+    onlineLabel: string;
+    status: number | null;
+    responseText: string;
+    errorName: string | null;
+    errorMessage: string | null;
+    at: number;
+  };
+  const [monitorCmdApiSelfTest, setMonitorCmdApiSelfTest] = useState<MonitorCmdApiSelfTest | null>(null);
+
+  const runMonitorCommandsApiSelfTest = useCallback(async () => {
+    if (typeof window === "undefined" || !deviceId || deviceId === "server") return;
+    const url = new URL("/api/anchor/commands", window.location.origin);
+    url.searchParams.set("role", "monitor");
+    const urlStr = url.toString();
+    const online = typeof navigator !== "undefined" ? navigator.onLine : true;
+    const onlineLabel = online ? "online" : "offline";
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 10_000);
+    try {
+      const res = await fetch(urlStr, {
+        method: "GET",
+        credentials: "include",
+        cache: "no-store",
+        signal: controller.signal,
+        headers: {
+          [ANCHOR_DEVICE_ID_HEADER]: deviceId,
+          Accept: "application/json",
+        },
+      });
+      const text = await res.text();
+      setMonitorCmdApiSelfTest({
+        url: urlStr,
+        onlineLabel,
+        status: res.status,
+        responseText: text.slice(0, 12_000),
+        errorName: null,
+        errorMessage: null,
+        at: Date.now(),
+      });
+    } catch (e) {
+      const err = e instanceof Error ? e : new Error(String(e));
+      setMonitorCmdApiSelfTest({
+        url: urlStr,
+        onlineLabel,
+        status: null,
+        responseText: "",
+        errorName: err.name,
+        errorMessage: err.message,
+        at: Date.now(),
+      });
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  }, [deviceId]);
 
   /** Monitoring handset: HTTP poll for remote commands (no Realtime). Uses `queued → received → applied`. */
   useEffect(() => {
@@ -1094,13 +1153,6 @@ export default function HomeLocationMap({
         const activeSessionId = `${anchorUserUidRef.current ?? "no-uid"}|armed:${snap.armed}|r${snap.radiusM}|la=${snap.lastAlertAt ?? "null"}|sil=${snap.remoteAlarmSilencedUntilReset === true}`;
         const monitoringActive = snap.armed && eff === deviceId;
 
-        anchorCommandClientLog("boat_command_poll_start", { deviceId: deviceId.slice(0, 12), visibility: document.visibilityState });
-        const hr = await fetch("/api/anchor/commands?role=monitor", {
-          credentials: "same-origin",
-          cache: "no-store",
-          headers: { [ANCHOR_DEVICE_ID_HEADER]: deviceId },
-        });
-
         const updateDebug = (patch: {
           lastPollAt?: number | null;
           lastHttpStatus?: number | null;
@@ -1121,6 +1173,63 @@ export default function HomeLocationMap({
         }) => {
           setMonitorCmdPollDebug((d) => ({ ...d, ...patch }));
         };
+
+        anchorCommandClientLog("boat_command_poll_start", { deviceId: deviceId.slice(0, 12), visibility: document.visibilityState });
+
+        const commandsUrl = new URL("/api/anchor/commands", window.location.origin);
+        commandsUrl.searchParams.set("role", "monitor");
+        const controller = new AbortController();
+        const pollFetchTimeout = window.setTimeout(() => controller.abort(), 10_000);
+        let hr: Response;
+        try {
+          hr = await fetch(commandsUrl.toString(), {
+            method: "GET",
+            credentials: "include",
+            cache: "no-store",
+            signal: controller.signal,
+            headers: {
+              [ANCHOR_DEVICE_ID_HEADER]: deviceId,
+              Accept: "application/json",
+            },
+          });
+        } catch (fetchErr) {
+          monitorCommandPollNetworkIssueRef.current = true;
+          anchorCommandClientLog("boat_command_poll_fetch_failed", {
+            deviceId: deviceId.slice(0, 12),
+            err: fetchErr instanceof Error ? fetchErr.message : String(fetchErr),
+          });
+          updateDebug({
+            lastPollAt: Date.now(),
+            lastHttpStatus: null,
+            lastPollAccepted: false,
+            lastServerEffective: null,
+            lastClientEff: eff,
+            lastCommandCount: null,
+            lastError: fetchErr instanceof Error ? fetchErr.message : String(fetchErr),
+            lastRawPreview: null,
+            lastActiveSessionId: activeSessionId,
+            lastResponseBody: null,
+            lastReason: "network_fetch_failed",
+            lastHeaderSent: deviceId,
+            lastJsonOk: null,
+            lastServerExceptionStack: null,
+            lastClientPollExceptionStack:
+              fetchErr instanceof Error ? fetchErr.stack ?? null : null,
+          });
+          try {
+            localStorage.setItem(
+              heartbeatKey,
+              JSON.stringify({ at: Date.now(), pollOk: false, httpStatus: null, pollAccepted: null }),
+            );
+          } catch {
+            /* ignore */
+          }
+          return;
+        } finally {
+          window.clearTimeout(pollFetchTimeout);
+        }
+
+        monitorCommandPollNetworkIssueRef.current = false;
 
         if (!hr.ok) {
           anchorCommandClientLog("boat_command_poll_http_error", { status: hr.status });
