@@ -37,25 +37,76 @@ export async function GET(req: Request): Promise<Response> {
   if (url.searchParams.get("role") === "monitor") {
     const headerDevice = req.headers.get(DEVICE_HEADER)?.trim() || "";
     const effective = await getEffectiveMonitorDeviceIdForUid(u.uid);
+    const geoForLog = await getAnchorGeofenceConfig(u.uid);
+    const activeSessionFingerprint = `${u.uid}|armed=${geoForLog.armed}|r=${geoForLog.radiusM}|mon_geo=${geoForLog.monitorDeviceId}|la=${geoForLog.lastAlertAt ?? "null"}`;
     const pollAccepted = Boolean(effective && headerDevice && headerDevice === effective);
+    const match = effective && headerDevice ? headerDevice === effective : false;
+
+    console.warn(
+      "[ANCHOR_MONITOR_POLL_SRV]",
+      JSON.stringify({
+        uid: u.uid,
+        headerDeviceId: headerDevice || null,
+        effectiveMonitorDeviceId: effective ?? null,
+        match,
+        activeSessionFingerprint,
+        pollAccepted,
+      }),
+    );
+
     if (!pollAccepted) {
-      const [mon, geo] = await Promise.all([getAnchorMonitorConfig(u.uid), getAnchorGeofenceConfig(u.uid)]);
+      const mon = await getAnchorMonitorConfig(u.uid);
       anchorCommandServerLog("monitor_poll_denied", {
         uid: u.uid,
         headerDevice: headerDevice ? `${headerDevice.slice(0, 8)}…` : "",
         effective: effective ?? null,
         serverMonitor: mon.monitorDeviceId,
-        geofenceMonitor: geo.monitorDeviceId,
+        geofenceMonitor: geoForLog.monitorDeviceId,
       });
+      console.warn(
+        "[ANCHOR_MONITOR_POLL_SRV]",
+        JSON.stringify({
+          phase: "denied",
+          uid: u.uid,
+          commandsQueuedFound: 0,
+          commandsReturned: 0,
+          serverEffectiveMonitorDeviceId: effective ?? null,
+        }),
+      );
       return NextResponse.json(
-        { commands: [], pollAccepted: false as const },
+        {
+          commands: [],
+          pollAccepted: false as const,
+          serverEffectiveMonitorDeviceId: effective ?? null,
+        },
         { headers: { "Cache-Control": "no-store" } },
       );
     }
     const commands = await listQueuedAnchorSessionCommands(u.uid);
     anchorCommandServerLog("monitor_poll_ok", { uid: u.uid, count: commands.length, ids: commands.map((c) => c.id) });
+    console.warn(
+      "[ANCHOR_MONITOR_POLL_SRV]",
+      JSON.stringify({
+        phase: "ok",
+        uid: u.uid,
+        commandsQueuedFound: commands.length,
+        commandsReturned: commands.length,
+        serverEffectiveMonitorDeviceId: effective ?? null,
+        commands: commands.map((c) => ({
+          id: c.id,
+          type: c.type,
+          status: c.status,
+          meters: c.meters,
+          sourceDeviceId: c.sourceDeviceId,
+        })),
+      }),
+    );
     return NextResponse.json(
-      { commands, pollAccepted: true as const },
+      {
+        commands,
+        pollAccepted: true as const,
+        serverEffectiveMonitorDeviceId: effective ?? null,
+      },
       { headers: { "Cache-Control": "no-store" } },
     );
   }
