@@ -29,6 +29,10 @@ export type AnchorSessionCommandRow = {
   meters: number | null;
   status: AnchorSessionCommandStatus;
   sourceDeviceId: string;
+  /** Server-resolved active anchor session (armed centre fingerprint). */
+  sessionId: string | null;
+  /** Server-resolved effective monitor device id (client must not set). */
+  targetDeviceId: string | null;
   errorMessage: string | null;
   createdAt: string;
   appliedAt: string | null;
@@ -68,6 +72,8 @@ function mapRowDb(uid: string, r: Record<string, unknown>): AnchorSessionCommand
   if (ct !== "INCREASE_RADIUS" && ct !== "RESET_ANCHOR" && ct !== "SILENCE_UNTIL_RESET") return null;
   const st = r.status;
   if (st !== "queued" && st !== "received" && st !== "applied" && st !== "failed") return null;
+  const sid = r.session_id != null ? String(r.session_id).trim() : null;
+  const tid = r.target_device_id != null ? String(r.target_device_id).trim() : null;
   return {
     id,
     userUid: uid,
@@ -75,6 +81,8 @@ function mapRowDb(uid: string, r: Record<string, unknown>): AnchorSessionCommand
     meters: typeof r.meters === "number" && Number.isFinite(r.meters) ? Math.round(r.meters as number) : null,
     status: st as AnchorSessionCommandStatus,
     sourceDeviceId: String(r.source_device_id ?? "").trim().slice(0, 80),
+    sessionId: sid && sid.length > 0 ? sid.slice(0, 200) : null,
+    targetDeviceId: tid && tid.length > 0 ? tid.slice(0, 100) : null,
     errorMessage: r.error_message != null ? String(r.error_message) : null,
     createdAt: String(r.created_at ?? new Date().toISOString()),
     appliedAt: r.applied_at != null ? String(r.applied_at) : null,
@@ -159,6 +167,8 @@ export async function createAnchorSessionCommand(args: {
   type: AnchorSessionCommandType;
   meters?: number | null;
   sourceDeviceId: string;
+  sessionId: string;
+  targetDeviceId: string;
 }): Promise<AnchorSessionCommandRow> {
   return enqueue(async () => {
     const id = randomUUID();
@@ -173,6 +183,8 @@ export async function createAnchorSessionCommand(args: {
           : null,
       status: "queued",
       sourceDeviceId: args.sourceDeviceId.trim().slice(0, 80),
+      sessionId: args.sessionId.trim().slice(0, 200),
+      targetDeviceId: args.targetDeviceId.trim().slice(0, 100),
       errorMessage: null,
       createdAt: now,
       appliedAt: null,
@@ -184,6 +196,8 @@ export async function createAnchorSessionCommand(args: {
       type: args.type,
       meters: row.meters,
       sourceDeviceId: row.sourceDeviceId,
+      sessionId: row.sessionId,
+      targetDeviceId: row.targetDeviceId,
     });
 
     if (isSupabaseConfigured()) {
@@ -195,6 +209,8 @@ export async function createAnchorSessionCommand(args: {
         meters: row.meters,
         status: row.status,
         source_device_id: row.sourceDeviceId,
+        session_id: row.sessionId,
+        target_device_id: row.targetDeviceId,
         error_message: null,
         created_at: row.createdAt,
         applied_at: null,
@@ -225,7 +241,10 @@ export type MonitorPollListLookupError = {
   hint?: string;
 };
 
-export async function listQueuedCommandsForMonitorPoll(uid: string): Promise<{
+export async function listQueuedCommandsForMonitorPoll(
+  uid: string,
+  sessionFingerprint: string | null,
+): Promise<{
   rows: AnchorSessionCommandRow[];
   timedOut: boolean;
   lookupError?: MonitorPollListLookupError | null;
@@ -233,14 +252,23 @@ export async function listQueuedCommandsForMonitorPoll(uid: string): Promise<{
   const queryShape = {
     table: "anchor_session_commands",
     sqlShape:
-      "SELECT * FROM anchor_session_commands WHERE user_uid = $1 AND status IN ('queued','received') ORDER BY created_at ASC LIMIT 10",
-    params: { user_uid: uid, status_in: ["queued", "received"] as const, limit: 10 },
+      "SELECT * FROM anchor_session_commands WHERE user_uid = $1 AND session_id = $2 AND status IN ('queued','received') ORDER BY created_at ASC LIMIT 10",
+    params: { user_uid: uid, session_id: sessionFingerprint, status_in: ["queued", "received"] as const, limit: 10 },
   };
+
+  if (sessionFingerprint == null || sessionFingerprint === "") {
+    return { rows: [], timedOut: false };
+  }
 
   if (!isSupabaseConfigured()) {
     try {
       const rows = readRaw()
-        .filter((r) => r.userUid === uid && (r.status === "queued" || r.status === "received"))
+        .filter(
+          (r) =>
+            r.userUid === uid &&
+            (r.status === "queued" || r.status === "received") &&
+            r.sessionId === sessionFingerprint,
+        )
         .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
         .slice(0, 10);
       return { rows, timedOut: false };
@@ -260,6 +288,7 @@ export async function listQueuedCommandsForMonitorPoll(uid: string): Promise<{
     .from("anchor_session_commands")
     .select("*")
     .eq("user_uid", uid)
+    .eq("session_id", sessionFingerprint)
     .in("status", ["queued", "received"])
     .order("created_at", { ascending: true })
     .limit(10);
