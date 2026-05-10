@@ -767,7 +767,8 @@ export default function HomeLocationMap({
     const now = Date.now();
     if (now - lastAnchorReportAt.current < 180_000) return; // 3 minutes
     lastAnchorReportAt.current = now;
-    const name = getDeviceName() || "This device";
+    const name = getDeviceName().replace(/[\r\n]+/g, " ").trim().slice(0, 40);
+    if (!name) return;
     const payload = { deviceId, name, lat: pos.lat, lng: pos.lng };
     void fetch("/api/anchor/devices", {
       method: "POST",
@@ -3270,7 +3271,7 @@ export default function HomeLocationMap({
                       try {
                         const r = await enqueueAndAwaitAnchorCommand({
                           type: "RESET_ANCHOR",
-                          sourceDeviceId: deviceId,
+                          callerDeviceId: deviceId,
                           signal,
                           onWaitingForBoat: () => setAnchorBreachResetError("Waiting for boat device…"),
                         });
@@ -3319,7 +3320,7 @@ export default function HomeLocationMap({
                         const r = await enqueueAndAwaitAnchorCommand({
                           type: "INCREASE_RADIUS",
                           meters: 10,
-                          sourceDeviceId: deviceId,
+                          callerDeviceId: deviceId,
                           signal,
                           onWaitingForBoat: () => setAnchorBreachResetError("Waiting for boat device…"),
                         });
@@ -3367,7 +3368,7 @@ export default function HomeLocationMap({
                       try {
                         const r = await enqueueAndAwaitAnchorCommand({
                           type: "SILENCE_UNTIL_RESET",
-                          sourceDeviceId: deviceId,
+                          callerDeviceId: deviceId,
                           signal,
                           onWaitingForBoat: () => setAnchorBreachResetError("Waiting for boat device…"),
                         });

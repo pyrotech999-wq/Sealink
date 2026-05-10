@@ -88,19 +88,26 @@ function toDb(uid: string, c: AnchorAlertConfig, updatedAt: string): Record<stri
   };
 }
 
+/**
+ * Read current row without touching the serialisation queue.
+ * **Must** be used from inside `setAnchorGeofenceConfig`'s `enqueue` callback — calling `getAnchorGeofenceConfig` there
+ * deadlocks (inner read waits on the same queue tail that only advances after the outer task finishes → 504).
+ */
+async function readAnchorGeofenceConfigRowUnqueued(uid: string): Promise<AnchorGeofenceConfigRow> {
+  if (isSupabaseConfigured()) {
+    const sb = supabaseAdmin();
+    const { data, error } = await sb.from("anchor_geofence_config").select("*").eq("user_uid", uid).maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) return defaults(uid);
+    return fromDb(uid, data as Record<string, unknown>);
+  }
+  const list = readRaw();
+  const row = list.find((x) => x.uid === uid);
+  return row ?? defaults(uid);
+}
+
 export async function getAnchorGeofenceConfig(uid: string): Promise<AnchorGeofenceConfigRow> {
-  return enqueue(async () => {
-    if (isSupabaseConfigured()) {
-      const sb = supabaseAdmin();
-      const { data, error } = await sb.from("anchor_geofence_config").select("*").eq("user_uid", uid).maybeSingle();
-      if (error) throw new Error(error.message);
-      if (!data) return defaults(uid);
-      return fromDb(uid, data as Record<string, unknown>);
-    }
-    const list = readRaw();
-    const row = list.find((x) => x.uid === uid);
-    return row ?? defaults(uid);
-  });
+  return enqueue(() => readAnchorGeofenceConfigRowUnqueued(uid));
 }
 
 export async function setAnchorGeofenceConfig(
@@ -109,7 +116,7 @@ export async function setAnchorGeofenceConfig(
   opts?: { isAdmin?: boolean },
 ): Promise<AnchorGeofenceConfigRow> {
   return enqueue(async () => {
-    const cur = await getAnchorGeofenceConfig(uid);
+    const cur = await readAnchorGeofenceConfigRowUnqueued(uid);
     const updatedAt = new Date().toISOString();
     const next: AnchorGeofenceConfigRow = {
       ...cur,

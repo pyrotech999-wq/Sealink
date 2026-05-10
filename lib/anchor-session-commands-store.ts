@@ -29,6 +29,10 @@ export type AnchorSessionCommandRow = {
   meters: number | null;
   status: AnchorSessionCommandStatus;
   sourceDeviceId: string;
+  /** Server-resolved active anchor session (armed centre fingerprint). */
+  sessionId: string | null;
+  /** Server-resolved effective monitor device id (client must not set). */
+  targetDeviceId: string | null;
   errorMessage: string | null;
   createdAt: string;
   appliedAt: string | null;
@@ -50,7 +54,13 @@ function readRaw(): AnchorSessionCommandRow[] {
     if (!existsSync(DATA_PATH)) return [];
     const raw = readFileSync(DATA_PATH, "utf-8");
     const parsed = JSON.parse(raw) as unknown;
-    return Array.isArray(parsed) ? (parsed as AnchorSessionCommandRow[]) : [];
+    if (!Array.isArray(parsed)) return [];
+    return (parsed as Partial<AnchorSessionCommandRow>[]).map((r) => ({
+      ...(r as AnchorSessionCommandRow),
+      sessionId: r.sessionId != null && String(r.sessionId).trim() ? String(r.sessionId).trim().slice(0, 200) : null,
+      targetDeviceId:
+        r.targetDeviceId != null && String(r.targetDeviceId).trim() ? String(r.targetDeviceId).trim().slice(0, 100) : null,
+    }));
   } catch {
     return [];
   }
@@ -68,6 +78,8 @@ function mapRowDb(uid: string, r: Record<string, unknown>): AnchorSessionCommand
   if (ct !== "INCREASE_RADIUS" && ct !== "RESET_ANCHOR" && ct !== "SILENCE_UNTIL_RESET") return null;
   const st = r.status;
   if (st !== "queued" && st !== "received" && st !== "applied" && st !== "failed") return null;
+  const sid = r.session_id != null ? String(r.session_id).trim() : null;
+  const tid = r.target_device_id != null ? String(r.target_device_id).trim() : null;
   return {
     id,
     userUid: uid,
@@ -75,6 +87,8 @@ function mapRowDb(uid: string, r: Record<string, unknown>): AnchorSessionCommand
     meters: typeof r.meters === "number" && Number.isFinite(r.meters) ? Math.round(r.meters as number) : null,
     status: st as AnchorSessionCommandStatus,
     sourceDeviceId: String(r.source_device_id ?? "").trim().slice(0, 80),
+    sessionId: sid && sid.length > 0 ? sid.slice(0, 200) : null,
+    targetDeviceId: tid && tid.length > 0 ? tid.slice(0, 100) : null,
     errorMessage: r.error_message != null ? String(r.error_message) : null,
     createdAt: String(r.created_at ?? new Date().toISOString()),
     appliedAt: r.applied_at != null ? String(r.applied_at) : null,
@@ -159,6 +173,8 @@ export async function createAnchorSessionCommand(args: {
   type: AnchorSessionCommandType;
   meters?: number | null;
   sourceDeviceId: string;
+  sessionId: string;
+  targetDeviceId: string;
 }): Promise<AnchorSessionCommandRow> {
   return enqueue(async () => {
     const id = randomUUID();
@@ -173,6 +189,8 @@ export async function createAnchorSessionCommand(args: {
           : null,
       status: "queued",
       sourceDeviceId: args.sourceDeviceId.trim().slice(0, 80),
+      sessionId: args.sessionId.trim().slice(0, 200),
+      targetDeviceId: args.targetDeviceId.trim().slice(0, 100),
       errorMessage: null,
       createdAt: now,
       appliedAt: null,
@@ -184,6 +202,8 @@ export async function createAnchorSessionCommand(args: {
       type: args.type,
       meters: row.meters,
       sourceDeviceId: row.sourceDeviceId,
+      sessionId: row.sessionId,
+      targetDeviceId: row.targetDeviceId,
     });
 
     if (isSupabaseConfigured()) {
@@ -195,6 +215,8 @@ export async function createAnchorSessionCommand(args: {
         meters: row.meters,
         status: row.status,
         source_device_id: row.sourceDeviceId,
+        session_id: row.sessionId,
+        target_device_id: row.targetDeviceId,
         error_message: null,
         created_at: row.createdAt,
         applied_at: null,
@@ -208,6 +230,114 @@ export async function createAnchorSessionCommand(args: {
     writeRaw(list);
     return row;
   });
+}
+
+const MONITOR_POLL_LIST_MS = 2000;
+
+/**
+ * Read-only queue for HTTP monitor poll: **does not** use the global command-store mutex or stale expiry
+ * (those stay on enqueue/create/patch paths). Uses `idx_anchor_session_commands_user_status_created`:
+ * `user_uid`, `status` in (`queued`,`received`), `order created_at`, `LIMIT 10`, narrow `select`.
+ * Fail-fast {@link MONITOR_POLL_LIST_MS} (returns `{ timedOut: true }` — route maps to `query_timeout`).
+ */
+export type MonitorPollListLookupError = {
+  message: string;
+  code?: string;
+  details?: string;
+  hint?: string;
+};
+
+export async function listQueuedCommandsForMonitorPoll(
+  uid: string,
+  sessionFingerprint: string | null,
+): Promise<{
+  rows: AnchorSessionCommandRow[];
+  timedOut: boolean;
+  lookupError?: MonitorPollListLookupError | null;
+}> {
+  const queryShape = {
+    table: "anchor_session_commands",
+    sqlShape:
+      "SELECT * FROM anchor_session_commands WHERE user_uid = $1 AND session_id = $2 AND status IN ('queued','received') ORDER BY created_at ASC LIMIT 10",
+    params: { user_uid: uid, session_id: sessionFingerprint, status_in: ["queued", "received"] as const, limit: 10 },
+  };
+
+  if (sessionFingerprint == null || sessionFingerprint === "") {
+    return { rows: [], timedOut: false };
+  }
+
+  if (!isSupabaseConfigured()) {
+    try {
+      const rows = readRaw()
+        .filter(
+          (r) =>
+            r.userUid === uid &&
+            (r.status === "queued" || r.status === "received") &&
+            r.sessionId === sessionFingerprint,
+        )
+        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+        .slice(0, 10);
+      return { rows, timedOut: false };
+    } catch (e) {
+      const err = e instanceof Error ? e : new Error(String(e));
+      return {
+        rows: [],
+        timedOut: false,
+        lookupError: { message: err.message, details: "json_file_read_failed" },
+      };
+    }
+  }
+
+  const sb = supabaseAdmin();
+  /** `select('*')` matches the enqueue path and avoids subtle column / projection mismatches with PostgREST. */
+  const q = sb
+    .from("anchor_session_commands")
+    .select("*")
+    .eq("user_uid", uid)
+    .eq("session_id", sessionFingerprint)
+    .in("status", ["queued", "received"])
+    .order("created_at", { ascending: true })
+    .limit(10);
+
+  const started = Date.now();
+  try {
+    const res = (await Promise.race([
+      q,
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("MONITOR_POLL_LIST_TIMEOUT")), MONITOR_POLL_LIST_MS);
+      }),
+    ])) as { data: unknown[] | null; error: { message: string; code?: string; details?: string; hint?: string } | null };
+
+    if (res.error) {
+      const le: MonitorPollListLookupError = {
+        message: res.error.message,
+        code: res.error.code,
+        details: res.error.details,
+        hint: res.error.hint,
+      };
+      return { rows: [], timedOut: false, lookupError: le };
+    }
+
+    const rows = (res.data ?? [])
+      .map((x) => mapRowDb(uid, x as Record<string, unknown>))
+      .filter((x): x is AnchorSessionCommandRow => x != null);
+    return { rows, timedOut: false };
+  } catch (e) {
+    if (e instanceof Error && e.message === "MONITOR_POLL_LIST_TIMEOUT") {
+      console.warn("[anchor_session_commands] listQueuedCommandsForMonitorPoll timeout", {
+        uid,
+        ms: Date.now() - started,
+        query: queryShape,
+      });
+      return { rows: [], timedOut: true };
+    }
+    const err = e instanceof Error ? e : new Error(String(e));
+    return {
+      rows: [],
+      timedOut: false,
+      lookupError: { message: err.message, details: err.stack },
+    };
+  }
 }
 
 /** Commands the monitoring handset should act on (`queued` or stuck `received` for retry). */

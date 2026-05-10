@@ -26,14 +26,17 @@ import {
 
 async function registerSessionDevice(
   currentDeviceId: string,
-): Promise<{ ok: true } | { ok: false; error?: string; status?: number }> {
+  explicitName?: string,
+): Promise<{ ok: true } | { ok: false; error?: string; status?: number; code?: "NAME_REQUIRED" }> {
   if (!currentDeviceId || currentDeviceId === "server") return { ok: true };
+  const deviceName = (explicitName ?? getDeviceName()).replace(/[\r\n]+/g, " ").trim().slice(0, 40);
+  if (!deviceName) return { ok: false, code: "NAME_REQUIRED" };
   try {
     const r = await fetch("/api/demo/register-device", {
       method: "POST",
       credentials: "same-origin",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ deviceId: currentDeviceId, deviceName: getDeviceName() }),
+      body: JSON.stringify({ deviceId: currentDeviceId, deviceName }),
     });
     if (!r.ok) {
       const j = (await r.json().catch(() => ({}))) as { error?: string };
@@ -147,6 +150,8 @@ export function AnchorAlertModal({
   );
   const [androidNativeDistanceM, setAndroidNativeDistanceM] = useState<number | null>(null);
   const openRef = useRef(open);
+  const deviceLabelRef = useRef(deviceLabel);
+  deviceLabelRef.current = deviceLabel;
   const configRef = useRef(config);
   configRef.current = config;
   const onUpdateRef = useRef(onUpdate);
@@ -159,18 +164,24 @@ export function AnchorAlertModal({
   const acc = horizontalAccuracyM;
   const accuracyOkForArm =
     acc == null || !Number.isFinite(acc) ? hasFix && pos != null : acc <= GPS_REFINE_TARGET_ACCURACY_M;
-  const canSet = sharing && hasFix && pos != null && accuracyOkForArm;
+  const effectiveDeviceName = useMemo(
+    () => deviceLabel.replace(/[\r\n]+/g, " ").trim().slice(0, 40),
+    [deviceLabel],
+  );
+  const deviceNameOk = effectiveDeviceName.length > 0;
+  const canSet = sharing && hasFix && pos != null && accuracyOkForArm && deviceNameOk;
   const hasAnchor = config.lat != null && config.lng != null;
   const showAndroidPreciseHint = isLikelyAndroid();
 
   const hint = useMemo(() => {
     if (!sharing) return "Turn on “Share my location on this map” first.";
+    if (!deviceNameOk) return "Enter a short name for this device below (e.g. Helm iPhone) so alerts and device lists show who is who.";
     if (!hasFix) return "Waiting for a GPS fix…";
     if (acc != null && Number.isFinite(acc) && acc > GPS_REFINE_TARGET_ACCURACY_M) {
       return `GPS accuracy is about ±${Math.round(acc)}m. Wait until it’s about ±${GPS_REFINE_TARGET_ACCURACY_M}m or better before arming (open sky, still water), or until the 30s lock phase ends and try again.`;
     }
     return null;
-  }, [sharing, hasFix, acc]);
+  }, [sharing, hasFix, acc, deviceNameOk]);
 
   const androidArmNeedsBackgroundFg = isCapacitorAndroidNative() && monitorDeviceId === "this";
 
@@ -180,7 +191,18 @@ export function AnchorAlertModal({
     setDevicesListHint(null);
     setDevicesRefreshing(true);
     try {
-      const reg = await registerSessionDevice(deviceId);
+      const nameForReg =
+        deviceLabelRef.current.replace(/[\r\n]+/g, " ").trim().slice(0, 40) ||
+        getDeviceName().replace(/[\r\n]+/g, " ").trim().slice(0, 40);
+      if (!nameForReg) {
+        setDevicesLoadError("Enter a name for this device in the field below, then tap Refresh devices again.");
+        return;
+      }
+      const reg = await registerSessionDevice(deviceId, nameForReg);
+      if (!reg.ok && reg.code === "NAME_REQUIRED") {
+        setDevicesLoadError("Enter a name for this device in the field below, then tap Refresh devices again.");
+        return;
+      }
       const r = await fetch("/api/anchor/devices", { credentials: "same-origin", cache: "no-store" });
       const d = (await r.json()) as {
         devices?: { deviceId: string; name: string; updatedAt: string; lastFixAt: string | null }[];
@@ -212,6 +234,11 @@ export function AnchorAlertModal({
       setDevicesRefreshing(false);
     }
   }, [deviceId, emergencyDisableLiveMapApis]);
+
+  useEffect(() => {
+    if (!open) return;
+    queueMicrotask(() => setDeviceLabel(getDeviceName()));
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -507,14 +534,31 @@ export function AnchorAlertModal({
 
         <div className="mt-4 space-y-3">
           <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-            This device label (to recognise it later)
+            This device name <span className="text-red-600 dark:text-red-400">(required)</span>
             <input
               value={deviceLabel}
               onChange={(e) => setDeviceLabel(e.target.value)}
-              onBlur={() => setDeviceName(deviceLabel)}
-              placeholder="e.g. iPad on boat"
+              onBlur={() => {
+                const t = deviceLabel.replace(/[\r\n]+/g, " ").trim().slice(0, 40);
+                if (t !== deviceLabel) setDeviceLabel(t);
+                setDeviceName(t);
+                if (!t || emergencyDisableLiveMapApis || !deviceId || deviceId === "server") return;
+                void registerSessionDevice(deviceId, t);
+                void fetch("/api/anchor/devices", {
+                  method: "POST",
+                  credentials: "same-origin",
+                  headers: { "Content-Type": "application/json", Accept: "application/json" },
+                  body: JSON.stringify({ deviceId, name: t }),
+                }).catch(() => undefined);
+              }}
+              placeholder="e.g. Helm iPhone"
+              required
+              autoComplete="off"
               className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
             />
+            <span className="mt-1 block text-[11px] font-normal text-zinc-500 dark:text-zinc-400">
+              Shown in device lists and anchor warnings. Use a unique name on each phone or tablet.
+            </span>
           </label>
 
           <div className="rounded-lg border border-emerald-200 bg-emerald-50/90 px-3 py-3 text-xs text-emerald-950 dark:border-emerald-900/45 dark:bg-emerald-950/25 dark:text-emerald-50">
@@ -537,6 +581,11 @@ export function AnchorAlertModal({
                 value={monitorDeviceId}
                 onChange={(e) => {
                   const v = e.target.value;
+                  const trimmedName = deviceLabel.replace(/[\r\n]+/g, " ").trim().slice(0, 40);
+                  if (!trimmedName) {
+                    setRolesSaveHint("Enter this device’s name in the required field above before changing who monitors.");
+                    return;
+                  }
                   const nextResolved = resolveMonitorDeviceIdForApi(v, deviceId);
                   const curResolved = monitor?.monitorDeviceId ?? null;
                   if (curResolved != null && curResolved !== nextResolved) {
@@ -615,6 +664,10 @@ export function AnchorAlertModal({
                   onClick={() => {
                     void (async () => {
                       setRolesSaveHint(null);
+                      if (!deviceLabel.replace(/[\r\n]+/g, " ").trim().slice(0, 40)) {
+                        setRolesSaveHint("Enter a name for this device in the required field above before saving.");
+                        return;
+                      }
                       if ((alertMode === "other" || alertMode === "both") && !alertOtherId) {
                         setRolesSaveHint("Choose the other device in the list above, or switch “Alert on” to this device only.");
                         return;

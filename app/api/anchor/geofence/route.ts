@@ -6,6 +6,9 @@ import { resolveThisMonitorDeviceIdForServerPersist } from "@/lib/anchor-monitor
 import { anchorCommandServerLog } from "@/lib/anchor-command-server-log";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 const DEVICE_HEADER = "x-sealink-device-id";
 
