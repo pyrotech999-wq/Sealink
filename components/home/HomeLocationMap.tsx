@@ -68,6 +68,7 @@ import {
 } from "@/lib/capacitor-anchor-alert-android";
 import { getNativeLocationBridge } from "@/lib/native-location-bridge";
 import { clearPresentedAnchorAlertId, shouldReceiveAnchorAlarmPopUp, writePresentedAnchorAlertId } from "@/lib/anchor-alarm-recipient";
+import { getGpsFixForAnchorReset } from "@/lib/anchor-reset-gps";
 import { ANCHOR_LIVE_APIS_BLOCKED } from "@/lib/anchor-live-client-flags";
 import { startAnchorAlarmSiren, stopAnchorAlarmSiren } from "@/lib/anchor-alarm-sound";
 import { getDeviceName, getOrCreateDeviceId } from "@/lib/device-id";
@@ -2021,6 +2022,7 @@ export default function HomeLocationMap({
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ seenId }),
+                        credentials: "same-origin",
                       });
                     } catch {
                       /* ignore */
@@ -2035,8 +2037,11 @@ export default function HomeLocationMap({
                         : anchorCfgRef.current.monitorDeviceId === "this"
                           ? deviceId
                           : anchorCfgRef.current.monitorDeviceId;
-                      let fix: { lat: number; lng: number } | null = null;
-                      if (effectiveMonitor === deviceId && pos) fix = { lat: pos.lat, lng: pos.lng };
+                      const mapFix =
+                        pos && Number.isFinite(pos.lat) && Number.isFinite(pos.lng)
+                          ? { lat: pos.lat, lng: pos.lng }
+                          : null;
+                      let fix = await getGpsFixForAnchorReset(mapFix);
                       if (!fix) {
                         const r = await fetch("/api/anchor/devices", { credentials: "same-origin", cache: "no-store" });
                         const d = (await r.json()) as {
@@ -2060,6 +2065,7 @@ export default function HomeLocationMap({
                         await fetch("/api/anchor/geofence", {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
+                          credentials: "same-origin",
                           body: JSON.stringify({
                             lat: fix.lat,
                             lng: fix.lng,
@@ -2071,6 +2077,7 @@ export default function HomeLocationMap({
                         await fetch("/api/anchor/geofence", {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
+                          credentials: "same-origin",
                           body: JSON.stringify({ lastAlertAt: null, lastBearingDeg: null }),
                         });
                       }
@@ -2088,7 +2095,7 @@ export default function HomeLocationMap({
               }}
               className="h-14 w-full rounded-xl bg-emerald-500 text-base font-bold text-white shadow-lg hover:bg-emerald-400 sm:max-w-xs"
             >
-              Reset anchor here
+              Reset anchor at this device
             </button>
             <button
               type="button"
