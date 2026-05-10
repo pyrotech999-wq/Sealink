@@ -21,7 +21,12 @@ import { getOrCreateDeviceId } from "@/lib/device-id";
 import { isBareMetaDataDeletionPage } from "@/lib/messaging-chrome-paths";
 import { type LatLng as AnchorResetLatLng } from "@/lib/anchor-reset-gps";
 import { anchorRadiusAfterAddingMeters } from "@/lib/anchor-alert-storage";
-import { ANCHOR_DEVICE_ID_HEADER, enqueueAndAwaitAnchorCommand, postAnchorSessionCommand } from "@/lib/anchor-commands-client";
+import {
+  ANCHOR_DEVICE_ID_HEADER,
+  type AnchorRemoteCommandPostDebug,
+  enqueueAndAwaitAnchorCommand,
+  postAnchorSessionCommand,
+} from "@/lib/anchor-commands-client";
 
 const POLL_MS = 20_000;
 
@@ -49,6 +54,12 @@ export function AnchorAlertsGlobalHost() {
   const [resetError, setResetError] = useState<string | null>(null);
   const [remoteAnchorCmdDebug, setRemoteAnchorCmdDebug] = useState(false);
   const [remoteAnchorCmdDebugJson, setRemoteAnchorCmdDebugJson] = useState<string | null>(null);
+  /** Last remote anchor action POST + optional terminal status (always updated after Increase / Reset / Silence when not monitor). */
+  const [remoteAnchorActionDebug, setRemoteAnchorActionDebug] = useState<{
+    postDebug: AnchorRemoteCommandPostDebug;
+    terminalStatus?: string;
+    error?: string;
+  } | null>(null);
 
   useEffect(() => {
     const read = () => {
@@ -352,9 +363,14 @@ export function AnchorAlertsGlobalHost() {
                 } else {
                   const r = await enqueueAndAwaitAnchorCommand({
                     type: "RESET_ANCHOR",
-                    sourceDeviceId: deviceId,
+                    callerDeviceId: deviceId,
                     signal,
                     onWaitingForBoat: () => setResetError("Waiting for boat device…"),
+                  });
+                  setRemoteAnchorActionDebug({
+                    postDebug: r.postDebug,
+                    terminalStatus: r.ok ? r.terminalStatus : undefined,
+                    error: r.ok ? undefined : r.error,
                   });
                   if (!r.ok) {
                     setResetError(r.error);
@@ -446,9 +462,14 @@ export function AnchorAlertsGlobalHost() {
                   const r = await enqueueAndAwaitAnchorCommand({
                     type: "INCREASE_RADIUS",
                     meters: 10,
-                    sourceDeviceId: deviceId,
+                    callerDeviceId: deviceId,
                     signal,
                     onWaitingForBoat: () => setResetError("Waiting for boat device…"),
+                  });
+                  setRemoteAnchorActionDebug({
+                    postDebug: r.postDebug,
+                    terminalStatus: r.ok ? r.terminalStatus : undefined,
+                    error: r.ok ? undefined : r.error,
                   });
                   if (!r.ok) {
                     setResetError(r.error);
@@ -547,9 +568,14 @@ export function AnchorAlertsGlobalHost() {
                 } else {
                   const r = await enqueueAndAwaitAnchorCommand({
                     type: "SILENCE_UNTIL_RESET",
-                    sourceDeviceId: deviceId,
+                    callerDeviceId: deviceId,
                     signal,
                     onWaitingForBoat: () => setResetError("Waiting for boat device…"),
+                  });
+                  setRemoteAnchorActionDebug({
+                    postDebug: r.postDebug,
+                    terminalStatus: r.ok ? r.terminalStatus : undefined,
+                    error: r.ok ? undefined : r.error,
                   });
                   if (!r.ok) {
                     setResetError(r.error);
@@ -591,6 +617,14 @@ export function AnchorAlertsGlobalHost() {
         >
           {resetBusyKind === "silence" ? "Working…" : "Silence until anchor reset"}
         </button>
+        {remoteAnchorActionDebug ? (
+          <div className="pointer-events-auto mx-auto mt-2 max-w-lg rounded-lg border border-cyan-500/50 bg-cyan-950/40 px-3 py-2 text-left">
+            <div className="text-[10px] font-bold uppercase tracking-wide text-cyan-200">Remote command POST (last action)</div>
+            <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-[9px] text-cyan-50">
+              {JSON.stringify(remoteAnchorActionDebug, null, 2)}
+            </pre>
+          </div>
+        ) : null}
         <a
           href="/anchor-alarm"
           aria-disabled={resetBusyKind !== null}
@@ -645,7 +679,7 @@ export function AnchorAlertsGlobalHost() {
                     const posted = await postAnchorSessionCommand({
                       type: "INCREASE_RADIUS",
                       meters: 10,
-                      sourceDeviceId: deviceId,
+                      callerDeviceId: deviceId,
                     });
                     setRemoteAnchorCmdDebugJson(JSON.stringify(posted, null, 2));
                   })();
