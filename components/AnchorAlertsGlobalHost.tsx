@@ -12,7 +12,10 @@ import {
 } from "@/lib/anchor-alarm-recipient";
 import { ANCHOR_LIVE_APIS_BLOCKED } from "@/lib/anchor-live-client-flags";
 import { clearNativeAndroidAnchorAlarm, isCapacitorAndroidNative } from "@/lib/capacitor-anchor-alert-android";
-import { getGpsFixForAnchorReset } from "@/lib/anchor-reset-gps";
+import {
+  effectiveMonitorDeviceIdFromServer,
+  resolveAnchorResetCentreCoordinates,
+} from "@/lib/anchor-reset-centre-client";
 import { getOrCreateDeviceId } from "@/lib/device-id";
 import { isBareMetaDataDeletionPage } from "@/lib/messaging-chrome-paths";
 
@@ -208,10 +211,34 @@ export function AnchorAlertsGlobalHost() {
               setResetError(null);
               setResetBusy(true);
               try {
-                const fix = await getGpsFixForAnchorReset(null);
+                const [mr, gr] = await Promise.all([
+                  fetch("/api/anchor/monitor", { credentials: "same-origin", cache: "no-store" }),
+                  fetch("/api/anchor/geofence", { credentials: "same-origin", cache: "no-store" }),
+                ]);
+                if (!mr.ok || !gr.ok) {
+                  setResetError("Could not load anchor settings. Check your connection and try again.");
+                  return;
+                }
+                const mj = (await mr.json()) as { config?: { monitorDeviceId?: string | null } };
+                const gj = (await gr.json()) as { config?: { monitorDeviceId?: string } };
+                const effective = effectiveMonitorDeviceIdFromServer({
+                  serverMonitorDeviceId: mj.config?.monitorDeviceId,
+                  geofenceMonitorDeviceId: gj.config?.monitorDeviceId,
+                });
+                if (!effective) {
+                  setResetError(
+                    "SeaLink does not know which device is monitoring yet. On the boat phone, open Anchor alarm, tap Save on monitor & alert devices, then try again here.",
+                  );
+                  return;
+                }
+                const fix = await resolveAnchorResetCentreCoordinates({
+                  thisDeviceId: deviceId,
+                  effectiveMonitorDeviceId: effective,
+                  mapPosIfThisDeviceIsMonitor: null,
+                });
                 if (!fix) {
                   setResetError(
-                    "Could not read a GPS fix on this phone. Allow location for SeaLink, wait for a fix outdoors, or reset from the map on the Anchor alarm page.",
+                    "No recent GPS for the monitoring device. Open SeaLink on that handset with location sharing until a fix appears, then try again.",
                   );
                   return;
                 }
@@ -248,7 +275,7 @@ export function AnchorAlertsGlobalHost() {
           }}
           className="h-14 w-full rounded-xl bg-emerald-500 text-base font-bold text-white shadow-lg hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-xs"
         >
-          {resetBusy ? "Getting GPS…" : "Reset anchor at this phone"}
+          {resetBusy ? "Loading monitor position…" : "Reset at monitor position"}
         </button>
         <Link
           href="/anchor-alarm"
@@ -287,8 +314,9 @@ export function AnchorAlertsGlobalHost() {
       <p className="bg-black/40 px-4 py-2 text-center text-[11px] text-white/75">
         Leave SeaLink signed in on this device (even in the background) so it can pick up alerts from your monitoring phone.
         <span className="mt-1 block opacity-90">
-          <strong className="text-white/90">Reset anchor at this phone</strong> moves the orange geofence centre to this
-          handset’s GPS and clears the alert (same account as the monitor).
+          <strong className="text-white/90">Reset at monitor position</strong> keeps the same radius and moves the orange
+          ring to the <strong className="text-white/90">monitoring device’s</strong> latest GPS (from the server), then
+          clears this alert.
         </span>
       </p>
     </div>
