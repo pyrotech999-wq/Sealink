@@ -142,14 +142,14 @@ async function getMonitorPollJson(uid: string, req: Request, reqStart: number): 
 
     const listLogCtx = {
       uid,
-      sessionId: null as string | null,
+      sessionFingerprint: sessionFp,
       targetDeviceId: headerDevice || null,
       statusFilter: ["queued", "received"] as const,
       query: {
         table: "anchor_session_commands",
         sqlShape:
-          "SELECT * FROM anchor_session_commands WHERE user_uid = $1 AND status IN ('queued','received') ORDER BY created_at ASC LIMIT 10",
-        params: { user_uid: uid, limit: 10 },
+          "SELECT * FROM anchor_session_commands WHERE user_uid = $1 AND session_id = $2 AND status IN ('queued','received') ORDER BY created_at ASC LIMIT 10",
+        params: { user_uid: uid, session_id: sessionFp, limit: 10 },
       },
     };
 
@@ -195,7 +195,9 @@ async function getMonitorPollJson(uid: string, req: Request, reqStart: number): 
       commands: commandPayload,
       pollAccepted: true as const,
       serverEffectiveMonitorDeviceId: effective ?? null,
-      ...(rows.length === 0 ? { reason: "queue_empty" } : {}),
+      ...(rows.length === 0
+        ? { reason: sessionFp ? ("queue_empty" as const) : ("no_active_anchor_session" as const) }
+        : {}),
     };
   } catch (e) {
     const err = e instanceof Error ? e : new Error(String(e));
