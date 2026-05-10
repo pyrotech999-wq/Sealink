@@ -1,7 +1,9 @@
 "use client";
 
 import { ANCHOR_COMMAND_STALE_BOAT_ERROR } from "@/lib/anchor-command-constants";
-export { ANCHOR_DEVICE_ID_HEADER } from "@/lib/anchor-device-id-header";
+import { ANCHOR_DEVICE_ID_HEADER } from "@/lib/anchor-device-id-header";
+
+export { ANCHOR_DEVICE_ID_HEADER };
 
 export const ANCHOR_COMMAND_BOAT_OFFLINE_MSG = ANCHOR_COMMAND_STALE_BOAT_ERROR;
 
