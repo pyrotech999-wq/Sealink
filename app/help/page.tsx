@@ -33,6 +33,7 @@ const toc: { id: string; label: string }[] = [
   { id: "messages-broadcast-audience", label: "Messages — who sees broadcasts" },
   { id: "anchor", label: "Anchor watch" },
   { id: "anchor-detailed-setup", label: "Anchor — detailed setup" },
+  { id: "anchor-email-second-device", label: "Anchor — email & second device" },
   { id: "anchor-android-location", label: "Android location (anchor)" },
   { id: "sea-summary", label: "Sea state on Home" },
   { id: "mob", label: "Man overboard (MOB)" },
@@ -768,6 +769,43 @@ export default function HelpPage() {
               </ul>
               <p className="rounded-lg border border-amber-900/40 bg-amber-950/25 px-3 py-2 text-xs leading-5 text-amber-100/90">
                 Anchor alerts depend on phone GPS and internet. Never rely on them as your only drag alarm.
+              </p>
+
+              <h3
+                id="anchor-email-second-device"
+                className="scroll-mt-24 pt-6 text-base font-semibold tracking-tight text-zinc-100"
+              >
+                Second device, background tabs, and email
+              </h3>
+              <p className="text-zinc-400">
+                If the <strong className="text-zinc-200">receiving</strong> phone or tablet does{" "}
+                <strong className="text-zinc-200">not</strong> have SeaLink open (or the site cannot run in the
+                background), the <strong className="text-zinc-200">in-app full-screen anchor alarm</strong> is{" "}
+                <strong className="text-zinc-200">unlikely to appear</strong> at all — the browser or app needs a chance
+                to talk to the server and play sound. Leaving SeaLink <strong className="text-zinc-200">signed in</strong> in
+                a <strong className="text-zinc-200">background tab</strong>, or using the installed app / PWA, gives the
+                best chance of a timely on-device alert; force-quitting or having no session at all means you should not
+                count on the pop-up.
+              </p>
+              <p className="mt-3 text-zinc-400">
+                When a <strong className="text-zinc-200">geofence breach</strong> is recorded, SeaLink can also send{" "}
+                <strong className="text-zinc-200">one email</strong> to the <strong className="text-zinc-200">address on
+                your SeaLink account</strong> (the same email you sign in with). Treat that as a backup: you should still
+                get word that an alert happened even if the second device never woke the app. Email delivery needs outgoing
+                mail to be configured on the SeaLink server; if your crew never receives these, ask whoever runs hosting to
+                confirm SMTP is set up.
+              </p>
+              <p className="mt-3 rounded-lg border border-sky-900/40 bg-sky-950/25 px-3 py-2 text-xs leading-5 text-sky-100/90">
+                <strong className="text-sky-200">Spam and junk folders:</strong> automated messages often land in{" "}
+                <strong className="text-sky-100">Spam</strong> or <strong className="text-sky-100">Junk</strong> first.
+                Ask everyone on the account to check there after a test alert, then use{" "}
+                <strong className="text-sky-100">Not spam</strong> / <strong className="text-sky-100">Move to inbox</strong>{" "}
+                (wording varies by provider) so future SeaLink anchor messages are more likely to arrive in the normal inbox.
+                On many phones you can also create a{" "}
+                <strong className="text-sky-100">VIP</strong>, <strong className="text-sky-100">focused</strong>, or{" "}
+                <strong className="text-sky-100">filter rule</strong> so mail from the <strong className="text-sky-100">same
+                sender address</strong> as the alert (the “From” line on the email) rings or shows a banner like a message
+                alert — that is done in your mail app or system settings, not inside SeaLink.
               </p>
             </Section>
 
