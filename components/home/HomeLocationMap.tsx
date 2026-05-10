@@ -48,7 +48,18 @@ import {
   processAnchorGeoSample,
   type AnchorGpsQuality,
 } from "@/lib/anchor-gps-stabilizer";
-import { getAnchorAlertConfig, setAnchorAlertConfig } from "@/lib/anchor-alert-storage";
+import {
+  anchorRadiusAfterAddingMeters,
+  getAnchorAlertConfig,
+  setAnchorAlertConfig,
+} from "@/lib/anchor-alert-storage";
+import {
+  ANCHOR_DEVICE_ID_HEADER,
+  anchorCommandClientLog,
+  enqueueAndAwaitAnchorCommand,
+  patchAnchorSessionCommandStatus,
+  type AnchorSessionCommandApi,
+} from "@/lib/anchor-commands-client";
 import {
   GPS_REFINE_MAX_MS,
   GPS_REFINE_TARGET_ACCURACY_M,
@@ -71,6 +82,7 @@ import { clearPresentedAnchorAlertId, shouldReceiveAnchorAlarmPopUp, writePresen
 import {
   createAnchorResetNetworkAbort,
   effectiveMonitorDeviceIdForHomeMap,
+  effectiveMonitorDeviceIdFromServer,
   isAnchorResetAbortError,
   resolveAnchorResetCentreCoordinates,
 } from "@/lib/anchor-reset-centre-client";
