@@ -31,6 +31,7 @@ function defaultGeofenceRow(uid: string): AnchorGeofenceConfigRow {
 export async function getEffectiveMonitorAndGeofence(uid: string): Promise<{
   effective: string | null;
   geo: AnchorGeofenceConfigRow;
+  monitor: AnchorMonitorConfig;
 }> {
   const [monRes, geoRes] = await Promise.allSettled([getAnchorMonitorConfig(uid), getAnchorGeofenceConfig(uid)]);
 
@@ -47,7 +48,7 @@ export async function getEffectiveMonitorAndGeofence(uid: string): Promise<{
     serverMonitorDeviceId: monitor.monitorDeviceId,
     geofenceMonitorDeviceId: geo.monitorDeviceId,
   });
-  return { effective, geo };
+  return { effective, geo, monitor };
 }
 
 /**
