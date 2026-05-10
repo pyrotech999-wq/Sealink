@@ -2,6 +2,25 @@ import { getGpsFixForAnchorReset } from "@/lib/anchor-reset-gps";
 
 export type LatLng = { lat: number; lng: number };
 
+/** Default cap for anchor reset fetches so the UI cannot spin forever on a hung request. */
+export const ANCHOR_RESET_NETWORK_TIMEOUT_MS = 32_000;
+
+export function createAnchorResetNetworkAbort(
+  ms: number = ANCHOR_RESET_NETWORK_TIMEOUT_MS,
+): { signal: AbortSignal; clear: () => void } {
+  const c = new AbortController();
+  const t = setTimeout(() => c.abort(), ms);
+  return {
+    signal: c.signal,
+    clear: () => clearTimeout(t),
+  };
+}
+
+export function isAnchorResetAbortError(e: unknown): boolean {
+  if (typeof DOMException !== "undefined" && e instanceof DOMException && e.name === "AbortError") return true;
+  return e !== null && typeof e === "object" && "name" in e && (e as { name?: string }).name === "AbortError";
+}
+
 function validMapPos(p: LatLng | null | undefined): p is LatLng {
   return (
     p != null &&
@@ -28,12 +47,15 @@ export async function resolveAnchorResetCentreCoordinates(args: {
    * Still uses `mapPosIfThisDeviceIsMonitor` when this handset is the monitor; otherwise falls through to `/api/anchor/devices`.
    */
   allowBrowserGpsFallback?: boolean;
+  /** When set, passed to `/api/anchor/devices` so callers can bound wait time. */
+  signal?: AbortSignal;
 }): Promise<LatLng | null> {
   const {
     thisDeviceId,
     effectiveMonitorDeviceId,
     mapPosIfThisDeviceIsMonitor,
     allowBrowserGpsFallback = true,
+    signal,
   } = args;
 
   let fix: LatLng | null = null;
@@ -49,7 +71,11 @@ export async function resolveAnchorResetCentreCoordinates(args: {
 
   if (!fix) {
     try {
-      const r = await fetch("/api/anchor/devices", { credentials: "same-origin", cache: "no-store" });
+      const r = await fetch("/api/anchor/devices", {
+        credentials: "same-origin",
+        cache: "no-store",
+        ...(signal ? { signal } : {}),
+      });
       if (!r.ok) return null;
       const d = (await r.json()) as {
         devices?: { deviceId: string; lastLat: number | null; lastLng: number | null }[];
@@ -64,7 +90,8 @@ export async function resolveAnchorResetCentreCoordinates(args: {
       ) {
         fix = { lat: row.lastLat, lng: row.lastLng };
       }
-    } catch {
+    } catch (e) {
+      if (isAnchorResetAbortError(e)) throw e;
       return null;
     }
   }

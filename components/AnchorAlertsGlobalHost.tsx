@@ -12,7 +12,9 @@ import {
 import { ANCHOR_LIVE_APIS_BLOCKED } from "@/lib/anchor-live-client-flags";
 import { clearNativeAndroidAnchorAlarm, isCapacitorAndroidNative } from "@/lib/capacitor-anchor-alert-android";
 import {
+  createAnchorResetNetworkAbort,
   effectiveMonitorDeviceIdFromServer,
+  isAnchorResetAbortError,
   resolveAnchorResetCentreCoordinates,
 } from "@/lib/anchor-reset-centre-client";
 import { getOrCreateDeviceId } from "@/lib/device-id";
@@ -39,34 +41,41 @@ export function AnchorAlertsGlobalHost() {
   const [resetBusyKind, setResetBusyKind] = useState<null | "monitor" | "this">(null);
   const [resetError, setResetError] = useState<string | null>(null);
 
-  const applyGeofenceResetAndDismiss = useCallback(async (fix: AnchorResetLatLng, seenId: string): Promise<void> => {
-    if (!ANCHOR_LIVE_APIS_BLOCKED) {
-      try {
-        await fetch("/api/anchor/alerts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ seenId }),
-          credentials: "same-origin",
-        });
-        await fetch("/api/anchor/geofence", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "same-origin",
-          body: JSON.stringify({
-            lat: fix.lat,
-            lng: fix.lng,
-            lastAlertAt: null,
-            lastBearingDeg: null,
-          }),
-        });
-      } catch {
-        setResetError("Could not save the new anchor. Check your connection and try again.");
-        throw new Error("save");
+  const applyGeofenceResetAndDismiss = useCallback(
+    async (fix: AnchorResetLatLng, seenId: string, opts?: { signal?: AbortSignal }): Promise<void> => {
+      const signal = opts?.signal;
+      if (!ANCHOR_LIVE_APIS_BLOCKED) {
+        try {
+          await fetch("/api/anchor/alerts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ seenId }),
+            credentials: "same-origin",
+            ...(signal ? { signal } : {}),
+          });
+          await fetch("/api/anchor/geofence", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            ...(signal ? { signal } : {}),
+            body: JSON.stringify({
+              lat: fix.lat,
+              lng: fix.lng,
+              lastAlertAt: null,
+              lastBearingDeg: null,
+            }),
+          });
+        } catch (e) {
+          if (isAnchorResetAbortError(e)) throw e;
+          setResetError("Could not save the new anchor. Check your connection and try again.");
+          throw new Error("save");
+        }
       }
-    }
-    clearPresentedAnchorAlertId();
-    setAlert(null);
-  }, []);
+      clearPresentedAnchorAlertId();
+      setAlert(null);
+    },
+    [],
+  );
 
   useEffect(() => {
     alertRef.current = alert;
@@ -244,10 +253,19 @@ export function AnchorAlertsGlobalHost() {
             void (async () => {
               setResetError(null);
               setResetBusyKind("monitor");
+              const { signal, clear } = createAnchorResetNetworkAbort();
               try {
                 const [mr, gr] = await Promise.all([
-                  fetch("/api/anchor/monitor", { credentials: "same-origin", cache: "no-store" }),
-                  fetch("/api/anchor/geofence", { credentials: "same-origin", cache: "no-store" }),
+                  fetch("/api/anchor/monitor", {
+                    credentials: "same-origin",
+                    cache: "no-store",
+                    signal,
+                  }),
+                  fetch("/api/anchor/geofence", {
+                    credentials: "same-origin",
+                    cache: "no-store",
+                    signal,
+                  }),
                 ]);
                 if (!mr.ok || !gr.ok) {
                   setResetError("Could not load anchor settings. Check your connection and try again.");
@@ -270,6 +288,7 @@ export function AnchorAlertsGlobalHost() {
                   effectiveMonitorDeviceId: effective,
                   mapPosIfThisDeviceIsMonitor: null,
                   allowBrowserGpsFallback: false,
+                  signal,
                 });
                 if (!fix) {
                   setResetError(
@@ -277,10 +296,16 @@ export function AnchorAlertsGlobalHost() {
                   );
                   return;
                 }
-                await applyGeofenceResetAndDismiss(fix, seenId);
+                await applyGeofenceResetAndDismiss(fix, seenId, { signal });
               } catch (e) {
                 if (e instanceof Error && e.message === "save") return;
+                if (isAnchorResetAbortError(e)) {
+                  setResetError(
+                    "Request timed out. Try “This phone’s GPS”, check your connection, or open Anchor alarm.",
+                  );
+                }
               } finally {
+                clear();
                 setResetBusyKind(null);
               }
             })();
@@ -303,6 +328,7 @@ export function AnchorAlertsGlobalHost() {
             void (async () => {
               setResetError(null);
               setResetBusyKind("this");
+              const { signal, clear } = createAnchorResetNetworkAbort(45_000);
               try {
                 const fix = await getGpsFixForAnchorReset(null);
                 if (!fix) {
@@ -311,10 +337,16 @@ export function AnchorAlertsGlobalHost() {
                   );
                   return;
                 }
-                await applyGeofenceResetAndDismiss(fix, seenId);
+                await applyGeofenceResetAndDismiss(fix, seenId, { signal });
               } catch (e) {
                 if (e instanceof Error && e.message === "save") return;
+                if (isAnchorResetAbortError(e)) {
+                  setResetError(
+                    "Request timed out while saving. Check your connection, try again, or use Mark seen.",
+                  );
+                }
               } finally {
+                clear();
                 setResetBusyKind(null);
               }
             })();

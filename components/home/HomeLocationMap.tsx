@@ -69,7 +69,9 @@ import {
 import { getNativeLocationBridge } from "@/lib/native-location-bridge";
 import { clearPresentedAnchorAlertId, shouldReceiveAnchorAlarmPopUp, writePresentedAnchorAlertId } from "@/lib/anchor-alarm-recipient";
 import {
+  createAnchorResetNetworkAbort,
   effectiveMonitorDeviceIdForHomeMap,
+  isAnchorResetAbortError,
   resolveAnchorResetCentreCoordinates,
 } from "@/lib/anchor-reset-centre-client";
 import { getGpsFixForAnchorReset } from "@/lib/anchor-reset-gps";
@@ -2099,6 +2101,7 @@ export default function HomeLocationMap({
                 void (async () => {
                   setAnchorBreachResetError(null);
                   setAnchorBreachResetBusyKind("monitor");
+                  const { signal, clear } = createAnchorResetNetworkAbort();
                   try {
                     if (ANCHOR_LIVE_APIS_BLOCKED) {
                       const effectiveMonitor = effectiveMonitorDeviceIdForHomeMap({
@@ -2115,6 +2118,7 @@ export default function HomeLocationMap({
                         effectiveMonitorDeviceId: effectiveMonitor,
                         mapPosIfThisDeviceIsMonitor: mapPos,
                         allowBrowserGpsFallback: true,
+                        signal,
                       });
                       if (!fix) {
                         setAnchorBreachResetError("Could not resolve a position in offline mode.");
@@ -2148,6 +2152,7 @@ export default function HomeLocationMap({
                       effectiveMonitorDeviceId: effectiveMonitor,
                       mapPosIfThisDeviceIsMonitor: mapPos,
                       allowBrowserGpsFallback: false,
+                      signal,
                     });
                     if (!fix) {
                       setAnchorBreachResetError(
@@ -2162,6 +2167,7 @@ export default function HomeLocationMap({
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ seenId }),
                         credentials: "same-origin",
+                        signal,
                       });
                       const merged = {
                         ...anchorCfgRef.current,
@@ -2176,6 +2182,7 @@ export default function HomeLocationMap({
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         credentials: "same-origin",
+                        signal,
                         body: JSON.stringify({
                           lat: fix.lat,
                           lng: fix.lng,
@@ -2183,13 +2190,21 @@ export default function HomeLocationMap({
                           lastBearingDeg: null,
                         }),
                       });
-                    } catch {
+                    } catch (e) {
+                      if (isAnchorResetAbortError(e)) throw e;
                       setAnchorBreachResetError("Could not save. Check your connection and try again.");
                       return;
                     }
                     clearPresentedAnchorAlertId();
                     setActiveAnchorAlert(null);
+                  } catch (e) {
+                    if (isAnchorResetAbortError(e)) {
+                      setAnchorBreachResetError(
+                        "Request timed out. Try “This phone’s GPS”, check your connection, or open Anchor alarm.",
+                      );
+                    }
                   } finally {
+                    clear();
                     setAnchorBreachResetBusyKind(null);
                   }
                 })();
@@ -2212,6 +2227,7 @@ export default function HomeLocationMap({
                 void (async () => {
                   setAnchorBreachResetError(null);
                   setAnchorBreachResetBusyKind("this");
+                  const { signal, clear } = createAnchorResetNetworkAbort(45_000);
                   try {
                     if (ANCHOR_LIVE_APIS_BLOCKED) {
                       const mapPos =
@@ -2255,6 +2271,7 @@ export default function HomeLocationMap({
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ seenId }),
                         credentials: "same-origin",
+                        signal,
                       });
                       const merged = {
                         ...anchorCfgRef.current,
@@ -2269,6 +2286,7 @@ export default function HomeLocationMap({
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         credentials: "same-origin",
+                        signal,
                         body: JSON.stringify({
                           lat: fix.lat,
                           lng: fix.lng,
@@ -2276,13 +2294,21 @@ export default function HomeLocationMap({
                           lastBearingDeg: null,
                         }),
                       });
-                    } catch {
+                    } catch (e) {
+                      if (isAnchorResetAbortError(e)) throw e;
                       setAnchorBreachResetError("Could not save. Check your connection and try again.");
                       return;
                     }
                     clearPresentedAnchorAlertId();
                     setActiveAnchorAlert(null);
+                  } catch (e) {
+                    if (isAnchorResetAbortError(e)) {
+                      setAnchorBreachResetError(
+                        "Request timed out while saving. Check your connection, try again, or use Mark seen.",
+                      );
+                    }
                   } finally {
+                    clear();
                     setAnchorBreachResetBusyKind(null);
                   }
                 })();
