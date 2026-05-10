@@ -23,8 +23,18 @@ export async function resolveAnchorResetCentreCoordinates(args: {
   effectiveMonitorDeviceId: string;
   /** Live map position when this device is the monitor; ignored otherwise. */
   mapPosIfThisDeviceIsMonitor: LatLng | null;
+  /**
+   * When false, never waits on one-shot browser geolocation (e.g. global breach overlay on a receiver).
+   * Still uses `mapPosIfThisDeviceIsMonitor` when this handset is the monitor; otherwise falls through to `/api/anchor/devices`.
+   */
+  allowBrowserGpsFallback?: boolean;
 }): Promise<LatLng | null> {
-  const { thisDeviceId, effectiveMonitorDeviceId, mapPosIfThisDeviceIsMonitor } = args;
+  const {
+    thisDeviceId,
+    effectiveMonitorDeviceId,
+    mapPosIfThisDeviceIsMonitor,
+    allowBrowserGpsFallback = true,
+  } = args;
 
   let fix: LatLng | null = null;
 
@@ -32,7 +42,7 @@ export async function resolveAnchorResetCentreCoordinates(args: {
     if (validMapPos(mapPosIfThisDeviceIsMonitor)) {
       fix = mapPosIfThisDeviceIsMonitor;
     }
-    if (!fix) {
+    if (!fix && allowBrowserGpsFallback) {
       fix = await getGpsFixForAnchorReset(null);
     }
   }

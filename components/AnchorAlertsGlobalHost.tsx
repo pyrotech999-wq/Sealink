@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { startAnchorAlarmSiren, stopAnchorAlarmSiren } from "@/lib/anchor-alarm-sound";
@@ -238,6 +237,7 @@ export function AnchorAlertsGlobalHost() {
                   thisDeviceId: deviceId,
                   effectiveMonitorDeviceId: effective,
                   mapPosIfThisDeviceIsMonitor: null,
+                  allowBrowserGpsFallback: false,
                 });
                 if (!fix) {
                   setResetError(
@@ -280,12 +280,16 @@ export function AnchorAlertsGlobalHost() {
         >
           {resetBusy ? "Loading monitor position…" : "Reset at monitor position"}
         </button>
-        <Link
+        <a
           href="/anchor-alarm"
           className="inline-flex h-14 w-full items-center justify-center rounded-xl border-2 border-white/80 bg-white/10 px-4 text-base font-bold text-white hover:bg-white/20 sm:max-w-xs"
+          onClick={() => {
+            stopAnchorAlarmSiren();
+            if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
+          }}
         >
           Open map &amp; anchor
-        </Link>
+        </a>
         <button
           type="button"
           onClick={() => {
