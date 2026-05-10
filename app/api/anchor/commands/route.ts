@@ -132,17 +132,52 @@ async function getMonitorPollJson(uid: string, req: Request, reqStart: number): 
     }
 
     const tDb = Date.now();
-    const { rows, timedOut } = await listQueuedCommandsForMonitorPoll(uid);
+    const { rows, timedOut, lookupError } = await listQueuedCommandsForMonitorPoll(uid);
     console.warn("[ANCHOR_MONITOR_GET_TIMING]", "db_command_query_await_ms", Date.now() - tDb);
     timing(reqStart, "after_db_command_query");
 
-    if (timedOut) {
+    const listLogCtx = {
+      uid,
+      sessionId: null as string | null,
+      targetDeviceId: headerDevice || null,
+      statusFilter: ["queued", "received"] as const,
+      query: {
+        table: "anchor_session_commands",
+        sqlShape:
+          "SELECT * FROM anchor_session_commands WHERE user_uid = $1 AND status IN ('queued','received') ORDER BY created_at ASC LIMIT 10",
+        params: { user_uid: uid, limit: 10 },
+      },
+    };
+
+    if (lookupError) {
+      console.error("[MONITOR_LIST_QUEUE_FAILED]", lookupError, listLogCtx);
       return {
         ok: true,
         commands: [],
-        pollAccepted: false as const,
+        pollAccepted: true as const,
         serverEffectiveMonitorDeviceId: effective ?? null,
-        reason: "query_timeout",
+        reason: "queue_lookup_failed_but_nonfatal",
+        error: lookupError.message,
+        debugCode: "MONITOR_LIST_QUEUE_FAILED",
+        lookupCode: lookupError.code ?? null,
+        lookupDetails: lookupError.details ?? null,
+        lookupHint: lookupError.hint ?? null,
+      };
+    }
+
+    if (timedOut) {
+      console.error("[MONITOR_LIST_QUEUE_FAILED]", new Error("MONITOR_POLL_LIST_TIMEOUT"), {
+        ...listLogCtx,
+        note: "query exceeded monitor poll list budget (see MONITOR_POLL_LIST_MS in anchor-session-commands-store)",
+      });
+      return {
+        ok: true,
+        commands: [],
+        pollAccepted: true as const,
+        serverEffectiveMonitorDeviceId: effective ?? null,
+        reason: "queue_lookup_failed_but_nonfatal",
+        error: "query_timeout",
+        debugCode: "MONITOR_LIST_QUEUE_FAILED",
       };
     }
 
