@@ -210,6 +210,93 @@ export async function createAnchorSessionCommand(args: {
   });
 }
 
+const MONITOR_POLL_LIST_MS = 2000;
+
+/**
+ * Read-only queue for HTTP monitor poll: **does not** use the global command-store mutex or stale expiry
+ * (those stay on enqueue/create/patch paths). Bounded `LIMIT 10`, narrow `select`, indexed filter.
+ * `Promise.race` fail-fast at {@link MONITOR_POLL_LIST_MS}.
+ */
+export async function listQueuedCommandsForMonitorPoll(uid: string): Promise<{
+  rows: AnchorSessionCommandRow[];
+  timedOut: boolean;
+}> {
+  if (!isSupabaseConfigured()) {
+    const rows = readRaw()
+      .filter((r) => r.userUid === uid && (r.status === "queued" || r.status === "received"))
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+      .slice(0, 10);
+    return { rows, timedOut: false };
+  }
+
+  const sb = supabaseAdmin();
+  const q = sb
+    .from("anchor_session_commands")
+    .select("id, user_uid, command_type, meters, status, source_device_id, error_message, created_at, applied_at")
+    .eq("user_uid", uid)
+    .eq("status", "queued")
+    .order("created_at", { ascending: true })
+    .limit(10);
+
+  const started = Date.now();
+  let data: unknown[] | null = null;
+  let error: { message: string } | null = null;
+  try {
+    const out = await Promise.race([
+      q,
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("MONITOR_POLL_LIST_TIMEOUT")), MONITOR_POLL_LIST_MS);
+      }),
+    ]);
+    const res = out as { data: unknown[] | null; error: { message: string } | null };
+    data = res.data ?? null;
+    error = res.error;
+  } catch (e) {
+    if (e instanceof Error && e.message === "MONITOR_POLL_LIST_TIMEOUT") {
+      console.warn("[anchor_session_commands] listQueuedCommandsForMonitorPoll timeout", {
+        uid,
+        ms: Date.now() - started,
+      });
+      return { rows: [], timedOut: true };
+    }
+    throw e;
+  }
+
+  if (error) throw new Error(error.message);
+  const rows = (data ?? [])
+    .map((x) => mapRowDb(uid, x as Record<string, unknown>))
+    .filter((x): x is AnchorSessionCommandRow => x != null);
+
+  const received = await sb
+    .from("anchor_session_commands")
+    .select("id, user_uid, command_type, meters, status, source_device_id, error_message, created_at, applied_at")
+    .eq("user_uid", uid)
+    .eq("status", "received")
+    .order("created_at", { ascending: true })
+    .limit(10);
+
+  const r2 = await Promise.race([
+    received,
+    new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error("MONITOR_POLL_LIST_TIMEOUT")), Math.max(0, MONITOR_POLL_LIST_MS - (Date.now() - started)));
+    }),
+  ]).catch((e) => {
+    if (e instanceof Error && e.message === "MONITOR_POLL_LIST_TIMEOUT") return { data: null as unknown[] | null, error: null };
+    throw e;
+  }) as { data: unknown[] | null; error: { message: string } | null };
+
+  if (r2.error) throw new Error(r2.error.message);
+  const receivedRows = (r2.data ?? [])
+    .map((x) => mapRowDb(uid, x as Record<string, unknown>))
+    .filter((x): x is AnchorSessionCommandRow => x != null);
+
+  const merged = [...rows, ...receivedRows]
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+    .slice(0, 10);
+
+  return { rows: merged, timedOut: false };
+}
+
 /** Commands the monitoring handset should act on (`queued` or stuck `received` for retry). */
 export async function listQueuedAnchorSessionCommands(uid: string): Promise<AnchorSessionCommandRow[]> {
   return enqueue(async () => {
