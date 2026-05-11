@@ -10,7 +10,7 @@ import {
 } from "react";
 import { usePathname } from "next/navigation";
 import { getBroadcastAlertsSilenced, getMessageAlertSoundOn } from "@/lib/broadcast-alert-preferences";
-import { playBroadcastAlertSound, playVicinityDmAlertSound } from "@/lib/broadcast-alert-sound";
+import { playBroadcastAlertSound, playVicinityDmAlertSound, primeMessageAlertAudio } from "@/lib/broadcast-alert-sound";
 import { BOTTOM_DOCK_OFFSET } from "@/lib/bottom-dock-offset";
 import {
   filterSeenArchive,
@@ -50,6 +50,20 @@ export function BroadcastToastProvider({ children }: { children: React.ReactNode
     const next = loadBroadcastAlerts();
     setAlerts(next);
     setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    const prime = () => {
+      primeMessageAlertAudio();
+      window.removeEventListener("click", prime, true);
+      window.removeEventListener("touchstart", prime, true);
+    };
+    window.addEventListener("click", prime, true);
+    window.addEventListener("touchstart", prime, true);
+    return () => {
+      window.removeEventListener("click", prime, true);
+      window.removeEventListener("touchstart", prime, true);
+    };
   }, []);
 
   useEffect(() => {
@@ -128,6 +142,7 @@ export function BroadcastToastProvider({ children }: { children: React.ReactNode
 
   const onSeen = () => {
     if (!current) return;
+    primeMessageAlertAudio();
     patchAlert(current.key, { seen: true });
     setCurrentIndex(0);
   };
