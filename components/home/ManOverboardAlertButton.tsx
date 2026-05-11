@@ -59,7 +59,7 @@ export function ManOverboardAlertButton({ signedIn, variant = "page" }: Props) {
   const isDock = variant === "dock";
 
   return (
-    <div className={isDock ? "" : "mt-10 mb-1"}>
+    <div className={isDock ? "mx-auto w-1/2" : "mt-10 mb-1"}>
       <button
         type="button"
         disabled={!signedIn}
