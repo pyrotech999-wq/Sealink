@@ -8,7 +8,7 @@ import { buildAnchorSessionFingerprint } from "@/lib/anchor-session-fingerprint"
 import {
   createAnchorSessionCommand,
   getAnchorSessionCommand,
-  listPendingAnchorSessionCommandsForUid,
+
   listQueuedCommandsForMonitorPoll,
   type AnchorSessionCommandRow,
   type AnchorSessionCommandType,
@@ -197,40 +197,8 @@ export async function GET(req: Request): Promise<Response> {
       return NextResponse.json(body, { status: 200, headers: noStore });
     }
 
-    if (role === "diagnostics") {
-      try {
-        const effective = await getEffectiveMonitorDeviceIdForUid(u.uid);
-        const [mon, geo, pending] = await Promise.all([
-          getAnchorMonitorConfig(u.uid),
-          getAnchorGeofenceConfig(u.uid),
-          listPendingAnchorSessionCommandsForUid(u.uid),
-        ]);
-        anchorCommandServerLog("diagnostics_snapshot", { uid: u.uid, pending: pending.length });
-        return NextResponse.json(
-          {
-            ok: true,
-            effectiveMonitorDeviceId: effective,
-            serverMonitorDeviceId: mon.monitorDeviceId,
-            geofenceMonitorDeviceId: geo.monitorDeviceId,
-            geofenceArmed: geo.armed,
-            pendingCommands: pending,
-            transport: "http_poll" as const,
-            note:
-              "Commands use HTTP polling on the boat (no Supabase Realtime channel). Background browser tabs may throttle timers; use visibility + shorter intervals while armed.",
-          },
-          { headers: noStore },
-        );
-      } catch (error) {
-        logAnchorCommandsGetError({ req, role: "diagnostics", uid, error });
-        return NextResponse.json(devErrorPayload(error, "anchor_commands_get_diagnostics_failed"), {
-          status: 500,
-          headers: noStore,
-        });
-      }
-    }
-
     return NextResponse.json(
-      { ok: false, error: "Use ?role=monitor, ?role=diagnostics, or ?id=", code: "BAD_QUERY" },
+      { ok: false, error: "Use ?role=monitor or ?id=", code: "BAD_QUERY" },
       { status: 400, headers: noStore },
     );
   } catch (error) {
