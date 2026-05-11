@@ -174,6 +174,38 @@ async function expireStaleAnchorSessionCommands(uid: string, nowMs: number): Pro
   }
 }
 
+/**
+ * Mark ALL queued/received commands as failed for this user. Used for manual purge.
+ */
+export async function purgeAllAnchorSessionCommands(uid: string): Promise<number> {
+  return enqueue(async () => {
+    const now = new Date().toISOString();
+    if (isSupabaseConfigured()) {
+      const sb = supabaseAdmin();
+      const { data, error } = await sb
+        .from("anchor_session_commands")
+        .update({ status: "failed", error_message: "purged_by_user", applied_at: now })
+        .eq("user_uid", uid)
+        .in("status", ["queued", "received"])
+        .select("id");
+      if (error) throw new Error(error.message);
+      return Array.isArray(data) ? data.length : 0;
+    }
+    const list = readRaw();
+    let n = 0;
+    for (const row of list) {
+      if (row.userUid === uid && (row.status === "queued" || row.status === "received")) {
+        row.status = "failed";
+        row.errorMessage = "purged_by_user";
+        row.appliedAt = now;
+        n += 1;
+      }
+    }
+    if (n > 0) writeRaw(list);
+    return n;
+  });
+}
+
 export async function createAnchorSessionCommand(args: {
   uid: string;
   type: AnchorSessionCommandType;
