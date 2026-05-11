@@ -139,7 +139,7 @@ async function fetchStormglassTideExtremesNetwork(
 }
 
 /**
- * Per-location RAM cache (12h) + in-flight de-duplication for tide extremes.
+ * Per-location cache (KV 12h → RAM 12h → network) + in-flight de-duplication.
  */
 export async function fetchStormglassTideExtremesCached(
   lat: number,
@@ -149,9 +149,15 @@ export async function fetchStormglassTideExtremesCached(
   signal?: AbortSignal,
 ): Promise<{ table: StormglassTideTable | null; meta: StormglassTideFetchMeta }> {
   const key = tideLocationCacheKey(lat, lng);
-  const hit = tideExtremesCache.get(key);
-  if (hit && Date.now() - hit.storedAt < TIDE_CACHE_TTL_MS) {
-    return { table: hit.value, meta: "memory" };
+  const ramHit = tideExtremesCache.get(key);
+  if (ramHit && Date.now() - ramHit.storedAt < TIDE_CACHE_TTL_MS) {
+    return { table: ramHit.value, meta: "memory" };
+  }
+
+  const kvResult = await tideKvGet<StormglassTideTable | null>(`sg:${key}`, TIDE_CACHE_TTL_MS);
+  if (kvResult.hit) {
+    tideExtremesCache.set(key, { storedAt: Date.now(), value: kvResult.value });
+    return { table: kvResult.value, meta: "memory" };
   }
 
   const existing = tideInflight.get(key);
@@ -165,6 +171,7 @@ export async function fetchStormglassTideExtremesCached(
       try {
         const table = await fetchStormglassTideExtremesNetwork(lat, lng, start, end, signal);
         tideExtremesCache.set(key, { storedAt: Date.now(), value: table });
+        void tideKvSet(`sg:${key}`, table, TIDE_CACHE_TTL_S);
         resolve(table);
       } catch (e) {
         reject(e);

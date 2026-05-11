@@ -13,6 +13,7 @@ import type { TideTableEvent } from "@/lib/tide-table-types";
 import { tideFactsNarrative, type TideFact } from "@/lib/tide-ai-narrative";
 import { summarizeTideExtremes } from "@/lib/tide-height-summary";
 import { fetchTideScheduleFromWebSearch, type TideWebSearchResult } from "@/lib/tide-ai-web-schedule";
+import { tideKvGet, tideKvSet } from "@/lib/tide-kv-cache";
 
 export const runtime = "nodejs";
 
@@ -114,10 +115,17 @@ function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: num
 
 let noaaStationsCache: { fetchedAtMs: number; stations: NoaaStation[] } | null = null;
 const NOAA_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const NOAA_CACHE_TTL_S = Math.round(NOAA_CACHE_TTL_MS / 1000);
 
 async function loadNoaaStations(): Promise<NoaaStation[]> {
   const now = Date.now();
   if (noaaStationsCache && now - noaaStationsCache.fetchedAtMs < NOAA_CACHE_TTL_MS) return noaaStationsCache.stations;
+
+  const kvResult = await tideKvGet<NoaaStation[]>("noaa:stations", NOAA_CACHE_TTL_MS);
+  if (kvResult.hit && Array.isArray(kvResult.value) && kvResult.value.length > 0) {
+    noaaStationsCache = { fetchedAtMs: now, stations: kvResult.value };
+    return kvResult.value;
+  }
 
   const url = new URL("https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json");
   url.searchParams.set("type", "tidepredictions");
@@ -142,6 +150,7 @@ async function loadNoaaStations(): Promise<NoaaStation[]> {
   }
 
   noaaStationsCache = { fetchedAtMs: now, stations: out };
+  if (out.length > 0) void tideKvSet("noaa:stations", out, NOAA_CACHE_TTL_S);
   return out;
 }
 
@@ -159,6 +168,7 @@ type CachedNoaaTidePredictions = { storedAt: number; value: NoaaTideTableFull | 
 const noaaTidePredictionsCache = new Map<string, CachedNoaaTidePredictions>();
 const noaaTidePredictionsInflight = new Map<string, Promise<NoaaTideTableFull | null>>();
 const NOAA_TIDE_PREDICTIONS_TTL_MS = 12 * 60 * 60 * 1000;
+const NOAA_TIDE_PREDICTIONS_TTL_S = Math.round(NOAA_TIDE_PREDICTIONS_TTL_MS / 1000);
 
 async function noaaTideTable(coords: { lat: number; lng: number }): Promise<NoaaTideTableFull | null> {
   const stations = await loadNoaaStations();
@@ -170,7 +180,6 @@ async function noaaTideTable(coords: { lat: number; lng: number }): Promise<Noaa
     if (!best || dKm < best.dKm) best = { st, dKm };
   }
   if (!best) return null;
-  // NOAA coverage is mostly US; avoid showing nonsense if we're far away.
   if (best.dKm > 250) return null;
 
   const pad2 = (n: number) => String(n).padStart(2, "0");
@@ -180,8 +189,14 @@ async function noaaTideTable(coords: { lat: number; lng: number }): Promise<Noaa
   const end = ymd(new Date(now.getTime() + 48 * 60 * 60 * 1000));
   const cacheKey = `${best.st.id}|${begin}|${end}`;
 
-  const hit = noaaTidePredictionsCache.get(cacheKey);
-  if (hit && Date.now() - hit.storedAt < NOAA_TIDE_PREDICTIONS_TTL_MS) return hit.value;
+  const ramHit = noaaTidePredictionsCache.get(cacheKey);
+  if (ramHit && Date.now() - ramHit.storedAt < NOAA_TIDE_PREDICTIONS_TTL_MS) return ramHit.value;
+
+  const kvResult = await tideKvGet<NoaaTideTableFull | null>(`noaa:pred:${cacheKey}`, NOAA_TIDE_PREDICTIONS_TTL_MS);
+  if (kvResult.hit) {
+    noaaTidePredictionsCache.set(cacheKey, { storedAt: Date.now(), value: kvResult.value });
+    return kvResult.value;
+  }
 
   const existing = noaaTidePredictionsInflight.get(cacheKey);
   if (existing) return existing;
@@ -215,7 +230,6 @@ async function noaaTideTable(coords: { lat: number; lng: number }): Promise<Noaa
         if (!t || !Number.isFinite(v)) return null;
         const kind: "high" | "low" | null = typ === "H" || typ.toLowerCase().includes("high") ? "high" : typ === "L" || typ.toLowerCase().includes("low") ? "low" : null;
         if (!kind) return null;
-        // NOAA returns local time string without timezone, e.g. "2026-04-30 07:03"
         const isoish = t.includes("T") ? t : t.replace(" ", "T");
         return { kind, t: isoish, heightM: v };
       })
@@ -234,6 +248,7 @@ async function noaaTideTable(coords: { lat: number; lng: number }): Promise<Noaa
   })()
     .then((v) => {
       noaaTidePredictionsCache.set(cacheKey, { storedAt: Date.now(), value: v });
+      void tideKvSet(`noaa:pred:${cacheKey}`, v, NOAA_TIDE_PREDICTIONS_TTL_S);
       return v;
     })
     .finally(() => {
