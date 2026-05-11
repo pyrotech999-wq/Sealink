@@ -7,6 +7,7 @@ import {
   markAllUnseenAnchorAlertsForUser,
   markAnchorAlertSeen,
 } from "@/lib/anchor-alerts-store";
+import { purgeAllAnchorSessionCommands } from "@/lib/anchor-session-commands-store";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -26,6 +27,14 @@ export async function POST(req: Request): Promise<Response> {
     body = (await req.json()) as unknown;
   } catch {
     body = null;
+  }
+
+  if (body && typeof body === "object" && "purgeAll" in body && (body as { purgeAll?: unknown }).purgeAll === true) {
+    const [alertsMarked, cmdsPurged] = await Promise.all([
+      markAllUnseenAnchorAlertsForUser(user.uid),
+      purgeAllAnchorSessionCommands(user.uid),
+    ]);
+    return NextResponse.json({ ok: true as const, alertsMarked, commandsPurged: cmdsPurged });
   }
 
   if (body && typeof body === "object" && "markAllSeen" in body && (body as { markAllSeen?: unknown }).markAllSeen === true) {
