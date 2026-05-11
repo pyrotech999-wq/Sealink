@@ -9,6 +9,7 @@ import {
   markAnchorAlertSeen,
 } from "@/lib/anchor-alerts-store";
 import { purgeAllAnchorSessionCommands } from "@/lib/anchor-session-commands-store";
+import { getAnchorGeofenceConfig } from "@/lib/anchor-geofence-store";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -58,7 +59,8 @@ export async function POST(req: Request): Promise<Response> {
   const row = await createAnchorAlert(user.uid, msg, { kind });
   if (kind === "alert") {
     sendAnchorGeofenceAlertEmail(user.email, msg);
-    sendAnchorGeofenceAlertTelegram(msg);
+    const geo = await getAnchorGeofenceConfig(user.uid).catch(() => null);
+    sendAnchorGeofenceAlertTelegram(msg, geo?.telegramChatId);
   }
   return NextResponse.json({ ok: true, alert: row });
 }
