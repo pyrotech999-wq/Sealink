@@ -93,6 +93,25 @@ export default function HelpPage() {
         </Link>
       </nav>
 
+      <aside className="mt-8 rounded-xl border-2 border-amber-600/60 bg-amber-950/40 px-4 py-5 sm:px-5" aria-label="Safety notice">
+        <p className="text-sm font-bold text-amber-100">Important Safety Notice</p>
+        <p className="mt-2 text-sm leading-6 text-amber-50/90">
+          SeaLink and all anchor alarm notifications are provided for informational purposes only.
+        </p>
+        <p className="mt-2 text-sm leading-6 text-amber-50/90">
+          SeaLink must not be relied upon for life, safety, emergency response, navigation, collision avoidance,
+          security, anchoring decisions, or protection of property.
+        </p>
+        <p className="mt-2 text-sm leading-6 text-amber-50/90">
+          GPS position data, mobile devices, background app activity, internet connectivity, notifications, and
+          third-party services may be delayed, inaccurate, interrupted, or unavailable at any time.
+        </p>
+        <p className="mt-2 text-sm leading-6 text-amber-50/90">
+          You are solely responsible for maintaining a proper watch, verifying your vessel&apos;s position, and using
+          appropriate marine safety equipment and procedures at all times.
+        </p>
+      </aside>
+
       <header className="mt-8">
         <h1 className="text-3xl font-semibold tracking-tight text-zinc-50">Help centre</h1>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">
