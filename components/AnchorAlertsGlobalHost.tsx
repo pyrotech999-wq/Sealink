@@ -734,13 +734,10 @@ export function AnchorAlertsGlobalHost() {
       <p className="bg-black/40 px-4 py-2 text-center text-[11px] text-white/75">
         Leave SeaLink signed in on this device (even in the background) so it can pick up alerts from your monitoring phone.
         <span className="mt-1 block opacity-90">
-          <strong className="text-white/90">Reset anchor at boat GPS</strong> moves the ring to the monitoring handset’s
-          position (never this phone’s GPS when you are not the monitor). <strong className="text-white/90">Increase
-          geofence</strong> widens the allowed radius by 10&nbsp;m on the boat device.{" "}
-          <strong className="text-white/90">Silence until anchor reset</strong> stops this alarm and pauses new remote
-          breach pop-ups until the boat resets the anchor. If you are the monitor, changes apply immediately; otherwise
-          commands queue until the boat device is online. <strong className="text-white/90">Mark seen</strong> stops the
-          alarm here without moving the ring.
+          <strong className="text-white/90">Reset anchor at boat GPS</strong> moves the ring to the monitoring
+          handset’s position. <strong className="text-white/90">Increase geofence</strong> widens the allowed radius
+          by 10&nbsp;m. <strong className="text-white/90">Turn off anchor monitoring</strong> disarms the anchor alarm
+          on all devices. <strong className="text-white/90">Mark seen</strong> stops the alarm here without moving the ring.
         </span>
       </p>
     </div>
