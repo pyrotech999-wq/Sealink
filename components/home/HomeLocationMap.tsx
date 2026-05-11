@@ -1297,10 +1297,8 @@ export default function HomeLocationMap({
           );
           if (!patched.ok) {
             anchorCommandClientLog("boat_apply_patch_applied_failed", { id: cmd.id, status: patched.status, err: patched.error });
-            updateDebug({ lastError: patched.error ?? `applied_patch_${patched.status}` });
           } else {
             anchorCommandClientLog("boat_command_applied", { id: cmd.id, type: cmd.type });
-            updateDebug({ lastAppliedCommandId: cmd.id, lastError: null });
             console.log("[COMMAND APPLY SUCCESS]", cmd.id);
           }
         };
@@ -1330,7 +1328,6 @@ export default function HomeLocationMap({
               "[ANCHOR_MONITOR_CMD_CLIENT]",
               JSON.stringify({ phase: "command_apply_caught", commandId: command.id, msg }),
             );
-            updateDebug({ lastError: msg });
             await patchAnchorSessionCommandStatus({
               id: command.id,
               monitorDeviceId: deviceId,
@@ -1340,23 +1337,10 @@ export default function HomeLocationMap({
           }
         }
       } catch (clientPollErr) {
-        const err = clientPollErr instanceof Error ? clientPollErr : new Error(String(clientPollErr));
-        console.error("[MONITOR POLL CLIENT EXCEPTION]", err);
-        setMonitorCmdPollDebug((d) => ({
-          ...d,
-          lastPollAt: Date.now(),
-          lastPollAccepted: false,
-          lastError: err.message,
-          lastReason: "monitor_poll_client_exception",
-          lastClientPollExceptionStack: err.stack ?? null,
-        }));
+        console.error("[MONITOR POLL CLIENT EXCEPTION]", clientPollErr instanceof Error ? clientPollErr : new Error(String(clientPollErr)));
       } finally {
         monitorAnchorPollInFlightRef.current = false;
       }
-    };
-
-    monitorManualPollRef.current = () => {
-      void tick();
     };
 
     const intervalMs = () => {
@@ -1387,7 +1371,6 @@ export default function HomeLocationMap({
     return () => {
       disposed = true;
       monitorAnchorPollInFlightRef.current = false;
-      monitorManualPollRef.current = null;
       window.clearInterval(iv);
       document.removeEventListener("visibilitychange", onVis);
       window.removeEventListener("focus", onFocus);
