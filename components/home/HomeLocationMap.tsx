@@ -1323,29 +1323,25 @@ export default function HomeLocationMap({
           pollVerbose = false;
         }
 
-        let commands: AnchorSessionCommandApi[] = [];
-        setMonitorCmdPollDebug((prev) => {
-          const c = Array.isArray(data?.commands) ? data.commands : [];
-          commands = c;
-          return {
-            ...prev,
-            lastPollAt: Date.now(),
-            lastHttpStatus: hr.status,
-            lastPollAccepted: true,
-            lastReason: c.length ? "commands_received" : "no_commands",
-            lastCommandCount: c.length,
-            lastJsonOk: true,
-            lastServerEffective: serverEff,
-            lastClientEff: eff,
-            lastError: null,
-            lastRawPreview: rawText.slice(0, 400),
-            lastActiveSessionId: activeSessionId,
-            lastResponseBody: rawText.slice(0, 12_000),
-            lastHeaderSent: deviceId,
-            lastServerExceptionStack: serverStack,
-            lastClientPollExceptionStack: null,
-          };
-        });
+        const commands: AnchorSessionCommandApi[] = Array.isArray(data?.commands) ? data.commands : [];
+        setMonitorCmdPollDebug((prev) => ({
+          ...prev,
+          lastPollAt: Date.now(),
+          lastHttpStatus: hr.status,
+          lastPollAccepted: true,
+          lastReason: commands.length ? "commands_received" : "no_commands",
+          lastCommandCount: commands.length,
+          lastJsonOk: true,
+          lastServerEffective: serverEff,
+          lastClientEff: eff,
+          lastError: null,
+          lastRawPreview: rawText.slice(0, 400),
+          lastActiveSessionId: activeSessionId,
+          lastResponseBody: rawText.slice(0, 12_000),
+          lastHeaderSent: deviceId,
+          lastServerExceptionStack: serverStack,
+          lastClientPollExceptionStack: null,
+        }));
 
         console.warn(
           "[ANCHOR_MONITOR_CMD_CLIENT]",
