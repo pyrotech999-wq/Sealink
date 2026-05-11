@@ -320,69 +320,6 @@ export default function HomeLocationMap({
   /** Auth uid for this tab — same as server `user_uid` for anchor geofence/commands (from `/api/demo/me`). */
   const [anchorAuthUid, setAnchorAuthUid] = useState<string | null>(null);
   const anchorUserUidRef = useRef<string | null>(null);
-  const [monitorCmdPollDebug, setMonitorCmdPollDebug] = useState<{
-    lastPollAt: number | null;
-    lastHttpStatus: number | null;
-    lastPollAccepted: boolean | null;
-    lastServerEffective: string | null;
-    lastClientEff: string | null;
-    lastCommandCount: number | null;
-    lastError: string | null;
-    lastAppliedCommandId: string | null;
-    lastRawPreview: string | null;
-    lastActiveSessionId: string | null;
-    lastResponseBody: string | null;
-    lastReason: string | null;
-    lastHeaderSent: string | null;
-    lastJsonOk: boolean | null;
-    localAnchorMonitoringEnabled: boolean | null;
-    anchorSessionUidState: string | null;
-    anchorSessionUidPeeked: string | null;
-    alertPipelineSessionNote: string | null;
-    commandPollerSessionFingerprint: string | null;
-    lastServerExceptionStack: string | null;
-    lastClientPollExceptionStack: string | null;
-  }>({
-    lastPollAt: null,
-    lastHttpStatus: null,
-    lastPollAccepted: null,
-    lastServerEffective: null,
-    lastClientEff: null,
-    lastCommandCount: null,
-    lastError: null,
-    lastAppliedCommandId: null,
-    lastRawPreview: null,
-    lastActiveSessionId: null,
-    lastResponseBody: null,
-    lastReason: null,
-    lastHeaderSent: null,
-    lastJsonOk: null,
-    localAnchorMonitoringEnabled: null,
-    anchorSessionUidState: null,
-    anchorSessionUidPeeked: null,
-    alertPipelineSessionNote: null,
-    commandPollerSessionFingerprint: null,
-    lastServerExceptionStack: null,
-    lastClientPollExceptionStack: null,
-  });
-
-  const [anchorPollVerboseDebug, setAnchorPollVerboseDebug] = useState(false);
-  useEffect(() => {
-    const read = () => {
-      try {
-        setAnchorPollVerboseDebug(typeof window !== "undefined" && localStorage.getItem("sealink_anchor_poll_verbose") === "1");
-      } catch {
-        setAnchorPollVerboseDebug(false);
-      }
-    };
-    read();
-    if (typeof window === "undefined") return;
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === "sealink_anchor_poll_verbose" || e.key === null) read();
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
 
   useEffect(() => {
     anchorUserUidRef.current = anchorAuthUid;
@@ -627,31 +564,6 @@ export default function HomeLocationMap({
   const breachIsMonitoringDevice = breachEffectiveMonitor === deviceId;
   const anchorCfgLoadedFromServerRef = useRef(false);
 
-  useEffect(() => {
-    const peek = peekDemoMeCached();
-    const peekUid = typeof peek?.uid === "string" && peek.uid ? peek.uid : null;
-    /* Same string shape as `activeSessionId` in the monitor command poll tick (uid + geofence snapshot). */
-    const fp = anchorAuthUid
-      ? `${anchorAuthUid}|armed:${anchorCfg.armed}|r${anchorCfg.radiusM}|la=${anchorCfg.lastAlertAt ?? "null"}|sil=${anchorCfg.remoteAlarmSilencedUntilReset === true}`
-      : null;
-    setMonitorCmdPollDebug((d) => ({
-      ...d,
-      localAnchorMonitoringEnabled: !!(signedIn && anchorCfg.armed && breachIsMonitoringDevice),
-      anchorSessionUidState: anchorAuthUid,
-      anchorSessionUidPeeked: peekUid,
-      alertPipelineSessionNote: "Alerts: POST /api/anchor/alerts uses auth cookie; server rows use this uid.",
-      commandPollerSessionFingerprint: fp,
-    }));
-  }, [
-    signedIn,
-    anchorAuthUid,
-    anchorCfg.armed,
-    anchorCfg.radiusM,
-    anchorCfg.monitorDeviceId,
-    anchorCfg.lastAlertAt,
-    anchorCfg.remoteAlarmSilencedUntilReset,
-    breachIsMonitoringDevice,
-  ]);
   const [shareNearby, setShareNearby] = useState(() =>
     typeof window !== "undefined" ? getShareNearbyPeers() : false,
   );
@@ -971,64 +883,6 @@ export default function HomeLocationMap({
   const monitorAnchorPollInFlightRef = useRef(false);
   /** After a transport-level fetch failure, poll at 5s until a request succeeds again. */
   const monitorCommandPollNetworkIssueRef = useRef(false);
-  const monitorManualPollRef = useRef<(() => void) | null>(null);
-
-  type MonitorCmdApiSelfTest = {
-    url: string;
-    onlineLabel: string;
-    status: number | null;
-    responseText: string;
-    errorName: string | null;
-    errorMessage: string | null;
-    at: number;
-  };
-  const [monitorCmdApiSelfTest, setMonitorCmdApiSelfTest] = useState<MonitorCmdApiSelfTest | null>(null);
-
-  const runMonitorCommandsApiSelfTest = useCallback(async () => {
-    if (typeof window === "undefined" || !deviceId || deviceId === "server") return;
-    const url = new URL("/api/anchor/commands", window.location.origin);
-    url.searchParams.set("role", "monitor");
-    const urlStr = url.toString();
-    const online = typeof navigator !== "undefined" ? navigator.onLine : true;
-    const onlineLabel = online ? "online" : "offline";
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 10_000);
-    try {
-      const res = await fetch(urlStr, {
-        method: "GET",
-        credentials: "include",
-        cache: "no-store",
-        signal: controller.signal,
-        headers: {
-          [ANCHOR_DEVICE_ID_HEADER]: deviceId,
-          Accept: "application/json",
-        },
-      });
-      const text = await res.text();
-      setMonitorCmdApiSelfTest({
-        url: urlStr,
-        onlineLabel,
-        status: res.status,
-        responseText: text.slice(0, 12_000),
-        errorName: null,
-        errorMessage: null,
-        at: Date.now(),
-      });
-    } catch (e) {
-      const err = e instanceof Error ? e : new Error(String(e));
-      setMonitorCmdApiSelfTest({
-        url: urlStr,
-        onlineLabel,
-        status: null,
-        responseText: "",
-        errorName: err.name,
-        errorMessage: err.message,
-        at: Date.now(),
-      });
-    } finally {
-      window.clearTimeout(timeout);
-    }
-  }, [deviceId]);
 
   /**
    * Re-register this handset as monitor on the server (POST monitor + geofence touch).
@@ -1122,22 +976,6 @@ export default function HomeLocationMap({
           deviceId,
           refServerMon: anchorMonitorRef.current?.monitorDeviceId ?? null,
         });
-        const skipSnap = anchorCfgRef.current;
-        const skipFp = `${anchorUserUidRef.current ?? "no-uid"}|armed:${skipSnap.armed}|r${skipSnap.radiusM}|la=${skipSnap.lastAlertAt ?? "null"}|sil=${skipSnap.remoteAlarmSilencedUntilReset === true}`;
-        setMonitorCmdPollDebug((d) => ({
-          ...d,
-          lastPollAt: Date.now(),
-          lastActiveSessionId: skipFp,
-          lastError: `poll_skipped_tick_eff_ne_device (eff=${eff.slice(0, 12)}…)`,
-          lastClientEff: eff,
-          lastHeaderSent: deviceId,
-          lastHttpStatus: null,
-          lastPollAccepted: null,
-          lastServerEffective: null,
-          lastCommandCount: null,
-          lastJsonOk: null,
-          lastReason: "client_tick_not_monitor",
-        }));
         return;
       }
 
@@ -1145,27 +983,6 @@ export default function HomeLocationMap({
       try {
         const activeSessionId = `${anchorUserUidRef.current ?? "no-uid"}|armed:${snap.armed}|r${snap.radiusM}|la=${snap.lastAlertAt ?? "null"}|sil=${snap.remoteAlarmSilencedUntilReset === true}`;
         const monitoringActive = snap.armed && eff === deviceId;
-
-        const updateDebug = (patch: {
-          lastPollAt?: number | null;
-          lastHttpStatus?: number | null;
-          lastPollAccepted?: boolean | null;
-          lastServerEffective?: string | null;
-          lastClientEff?: string | null;
-          lastCommandCount?: number | null;
-          lastError?: string | null;
-          lastAppliedCommandId?: string | null;
-          lastRawPreview?: string | null;
-          lastActiveSessionId?: string | null;
-          lastResponseBody?: string | null;
-          lastReason?: string | null;
-          lastHeaderSent?: string | null;
-          lastJsonOk?: boolean | null;
-          lastServerExceptionStack?: string | null;
-          lastClientPollExceptionStack?: string | null;
-        }) => {
-          setMonitorCmdPollDebug((d) => ({ ...d, ...patch }));
-        };
 
         anchorCommandClientLog("boat_command_poll_start", { deviceId: deviceId.slice(0, 12), visibility: document.visibilityState });
 
@@ -1191,24 +1008,6 @@ export default function HomeLocationMap({
             deviceId: deviceId.slice(0, 12),
             err: fetchErr instanceof Error ? fetchErr.message : String(fetchErr),
           });
-          updateDebug({
-            lastPollAt: Date.now(),
-            lastHttpStatus: null,
-            lastPollAccepted: false,
-            lastServerEffective: null,
-            lastClientEff: eff,
-            lastCommandCount: null,
-            lastError: fetchErr instanceof Error ? fetchErr.message : String(fetchErr),
-            lastRawPreview: null,
-            lastActiveSessionId: activeSessionId,
-            lastResponseBody: null,
-            lastReason: "network_fetch_failed",
-            lastHeaderSent: deviceId,
-            lastJsonOk: null,
-            lastServerExceptionStack: null,
-            lastClientPollExceptionStack:
-              fetchErr instanceof Error ? fetchErr.stack ?? null : null,
-          });
           try {
             localStorage.setItem(
               heartbeatKey,
@@ -1229,21 +1028,6 @@ export default function HomeLocationMap({
 
         if (!hr.ok) {
           anchorCommandClientLog("boat_command_poll_http_error", { status: hr.status });
-          updateDebug({
-            lastPollAt: Date.now(),
-            lastHttpStatus: hr.status,
-            lastPollAccepted: null,
-            lastServerEffective: null,
-            lastClientEff: eff,
-            lastCommandCount: null,
-            lastError: `poll_http_${hr.status}`,
-            lastRawPreview: null,
-            lastActiveSessionId: activeSessionId,
-            lastResponseBody: null,
-            lastReason: null,
-            lastHeaderSent: deviceId,
-            lastJsonOk: null,
-          });
           console.warn(
             "[ANCHOR_MONITOR_CMD_CLIENT]",
             JSON.stringify({
@@ -1284,23 +1068,6 @@ export default function HomeLocationMap({
 
         if (!jsonOk) {
           anchorCommandClientLog("boat_command_poll_json_error", { previewLen: rawText.length });
-          updateDebug({
-            lastPollAt: Date.now(),
-            lastHttpStatus: hr.status,
-            lastPollAccepted: false,
-            lastServerEffective: null,
-            lastClientEff: eff,
-            lastCommandCount: null,
-            lastError: "json_parse_failed",
-            lastRawPreview: rawText.slice(0, 400),
-            lastActiveSessionId: activeSessionId,
-            lastResponseBody: rawText.slice(0, 800),
-            lastReason: "json_parse_failed",
-            lastHeaderSent: deviceId,
-            lastJsonOk: false,
-            lastServerExceptionStack: null,
-            lastClientPollExceptionStack: null,
-          });
           try {
             localStorage.setItem(
               heartbeatKey,
@@ -1315,33 +1082,7 @@ export default function HomeLocationMap({
         const pollAccepted = data.pollAccepted === true;
         const serverEff = data.serverEffectiveMonitorDeviceId ?? null;
         const serverReason = typeof data.reason === "string" ? data.reason : null;
-        const serverStack = typeof data.stack === "string" && data.stack.trim() ? data.stack : null;
-        let pollVerbose = false;
-        try {
-          pollVerbose = typeof window !== "undefined" && localStorage.getItem("sealink_anchor_poll_verbose") === "1";
-        } catch {
-          pollVerbose = false;
-        }
-
         const commands: AnchorSessionCommandApi[] = Array.isArray(data?.commands) ? data.commands : [];
-        setMonitorCmdPollDebug((prev) => ({
-          ...prev,
-          lastPollAt: Date.now(),
-          lastHttpStatus: hr.status,
-          lastPollAccepted: true,
-          lastReason: commands.length ? "commands_received" : "no_commands",
-          lastCommandCount: commands.length,
-          lastJsonOk: true,
-          lastServerEffective: serverEff,
-          lastClientEff: eff,
-          lastError: null,
-          lastRawPreview: rawText.slice(0, 400),
-          lastActiveSessionId: activeSessionId,
-          lastResponseBody: rawText.slice(0, 12_000),
-          lastHeaderSent: deviceId,
-          lastServerExceptionStack: serverStack,
-          lastClientPollExceptionStack: null,
-        }));
 
         console.warn(
           "[ANCHOR_MONITOR_CMD_CLIENT]",
