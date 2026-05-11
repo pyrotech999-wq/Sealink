@@ -6,7 +6,11 @@ import { parseAnchorRadiusM, type AnchorAlertConfig } from "@/lib/anchor-alert-s
 
 const DATA_PATH = path.join(process.cwd(), "data", "anchor-geofence.json");
 
-export type AnchorGeofenceConfigRow = AnchorAlertConfig & { uid: string; updatedAt: string };
+export type AnchorGeofenceConfigRow = AnchorAlertConfig & {
+  uid: string;
+  updatedAt: string;
+  telegramChatId?: string | null;
+};
 
 let queue: Promise<unknown> = Promise.resolve();
 function enqueue<T>(fn: () => Promise<T>): Promise<T> {
@@ -69,6 +73,7 @@ function fromDb(uid: string, r: Record<string, unknown>): AnchorGeofenceConfigRo
     lastAlertAt: r.last_alert_at != null ? String(r.last_alert_at) : null,
     remoteAlarmSilencedUntilReset: r.remote_alarm_silenced_until_reset === true,
     updatedAt: r.updated_at != null ? String(r.updated_at) : new Date().toISOString(),
+    telegramChatId: typeof r.telegram_chat_id === "string" && r.telegram_chat_id.trim() ? r.telegram_chat_id.trim() : null,
   };
 }
 
@@ -108,6 +113,28 @@ async function readAnchorGeofenceConfigRowUnqueued(uid: string): Promise<AnchorG
 
 export async function getAnchorGeofenceConfig(uid: string): Promise<AnchorGeofenceConfigRow> {
   return enqueue(() => readAnchorGeofenceConfigRowUnqueued(uid));
+}
+
+export async function setTelegramChatId(uid: string, chatId: string | null): Promise<void> {
+  return enqueue(async () => {
+    if (isSupabaseConfigured()) {
+      const sb = supabaseAdmin();
+      const { error } = await sb
+        .from("anchor_geofence_config")
+        .upsert({ user_uid: uid, telegram_chat_id: chatId, updated_at: new Date().toISOString() }, { onConflict: "user_uid" });
+      if (error) throw new Error(error.message);
+      return;
+    }
+    const list = readRaw();
+    const row = list.find((x) => x.uid === uid);
+    if (row) {
+      row.telegramChatId = chatId;
+      row.updatedAt = new Date().toISOString();
+    } else {
+      list.push({ ...defaults(uid), telegramChatId: chatId, updatedAt: new Date().toISOString() });
+    }
+    writeRaw(list);
+  });
 }
 
 export async function setAnchorGeofenceConfig(

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAuthUser } from "@/lib/auth";
-import { getAnchorGeofenceConfig, setAnchorGeofenceConfig } from "@/lib/anchor-geofence-store";
+import { getAnchorGeofenceConfig, setAnchorGeofenceConfig, setTelegramChatId } from "@/lib/anchor-geofence-store";
 import { ANCHOR_RADIUS_ADMIN_TEST_M, parseAnchorRadiusM } from "@/lib/anchor-alert-storage";
 import { resolveThisMonitorDeviceIdForServerPersist } from "@/lib/anchor-monitor-device-resolve";
 import { anchorCommandServerLog } from "@/lib/anchor-command-server-log";
@@ -22,6 +22,7 @@ type Body = {
   lastBearingDeg?: unknown;
   lastAlertAt?: unknown;
   remoteAlarmSilencedUntilReset?: unknown;
+  telegramChatId?: unknown;
 };
 
 export async function GET(): Promise<Response> {
@@ -79,6 +80,15 @@ export async function POST(req: Request): Promise<Response> {
       ? { remoteAlarmSilencedUntilReset: body.remoteAlarmSilencedUntilReset }
       : {}),
   };
+
+  if (typeof body.telegramChatId === "string" || body.telegramChatId === null) {
+    const tid = typeof body.telegramChatId === "string" ? body.telegramChatId.trim().slice(0, 40) : null;
+    try {
+      await setTelegramChatId(u.uid, tid || null);
+    } catch (e) {
+      console.warn("[api/anchor/geofence POST] setTelegramChatId failed", e instanceof Error ? e.message : e);
+    }
+  }
 
   try {
     const next = await setAnchorGeofenceConfig(u.uid, patch, { isAdmin: u.isAdmin });
