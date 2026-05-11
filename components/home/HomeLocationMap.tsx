@@ -1340,7 +1340,7 @@ export default function HomeLocationMap({
             lastError: null,
             lastRawPreview: rawText.slice(0, 400),
             lastActiveSessionId: activeSessionId,
-            lastResponseBody: pollVerbose ? rawText.slice(0, 12_000) : rawText.slice(0, 800),
+            lastResponseBody: rawText.slice(0, 12_000),
             lastHeaderSent: deviceId,
             lastServerExceptionStack: serverStack,
             lastClientPollExceptionStack: null,
@@ -1364,6 +1364,7 @@ export default function HomeLocationMap({
           }),
         );
 
+        const serverDebug = (data as Record<string, unknown>)._debug ?? null;
         try {
           localStorage.setItem(
             heartbeatKey,
@@ -1373,6 +1374,8 @@ export default function HomeLocationMap({
               pollAccepted,
               commandCount: commands.length,
               visibility: document.visibilityState,
+              reason: serverReason,
+              _debug: serverDebug,
             }),
           );
         } catch {
