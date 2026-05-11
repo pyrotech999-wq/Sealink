@@ -136,7 +136,7 @@ async function getMonitorPollJson(uid: string, req: Request, reqStart: number): 
 
     const sessionFp = buildAnchorSessionFingerprint(uid, geoForLog);
     const tDb = Date.now();
-    const { rows, timedOut, lookupError } = await listQueuedCommandsForMonitorPoll(uid, effective);
+    const { rows, timedOut, lookupError, debug: pollDebug } = await listQueuedCommandsForMonitorPoll(uid, effective);
     console.warn("[ANCHOR_MONITOR_GET_TIMING]", "db_command_query_await_ms", Date.now() - tDb);
     timing(reqStart, "after_db_command_query");
 
@@ -145,12 +145,8 @@ async function getMonitorPollJson(uid: string, req: Request, reqStart: number): 
       sessionFingerprint: sessionFp,
       targetDeviceId: effective,
       statusFilter: ["queued", "received"] as const,
-      query: {
-        table: "anchor_session_commands",
-        sqlShape:
-          "SELECT * FROM anchor_session_commands WHERE user_uid = $1 AND target_device_id = $2 AND status IN ('queued','received') ORDER BY created_at ASC LIMIT 10",
-        params: { user_uid: uid, target_device_id: effective, limit: 10 },
-      },
+      filteredRowCount: rows.length,
+      rawDebug: pollDebug,
     };
 
     if (lookupError) {
@@ -166,6 +162,7 @@ async function getMonitorPollJson(uid: string, req: Request, reqStart: number): 
         lookupCode: lookupError.code ?? null,
         lookupDetails: lookupError.details ?? null,
         lookupHint: lookupError.hint ?? null,
+        _debug: { filterTargetDeviceId: effective, sessionFp, ...(pollDebug ?? {}) },
       };
     }
 
@@ -182,6 +179,7 @@ async function getMonitorPollJson(uid: string, req: Request, reqStart: number): 
         reason: "queue_lookup_failed_but_nonfatal",
         error: "query_timeout",
         debugCode: "MONITOR_LIST_QUEUE_FAILED",
+        _debug: { filterTargetDeviceId: effective, sessionFp, ...(pollDebug ?? {}) },
       };
     }
 
@@ -198,6 +196,12 @@ async function getMonitorPollJson(uid: string, req: Request, reqStart: number): 
       ...(rows.length === 0
         ? { reason: "queue_empty" as const }
         : {}),
+      _debug: {
+        filterTargetDeviceId: effective,
+        sessionFp,
+        matchedRows: rows.length,
+        ...(pollDebug ?? {}),
+      },
     };
   } catch (e) {
     const err = e instanceof Error ? e : new Error(String(e));
