@@ -1,5 +1,6 @@
 import type { TideTableEvent } from "@/lib/tide-table-types";
 import { logStormglassRequest } from "@/lib/stormglass-log";
+import { tideKvGet, tideKvSet } from "@/lib/tide-kv-cache";
 
 export type StormglassTideTable = {
   source: "stormglass";
@@ -10,8 +11,8 @@ export type StormglassTideTable = {
 };
 
 const TIDE_LOG_FILE = "lib/stormglass-tide.ts";
-// Wide-area cache to reduce upstream hits (serverless RAM).
 const TIDE_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+const TIDE_CACHE_TTL_S = Math.round(TIDE_CACHE_TTL_MS / 1000);
 
 function bucketCoord(n: number): number {
   // ~0.1° ≈ 11km lat; good enough for tide station lookup and reduces key explosion.
@@ -40,7 +41,8 @@ export function peekStormglassTideExtremesCache(
 ): boolean {
   const key = tideLocationCacheKey(lat, lng);
   const hit = tideExtremesCache.get(key);
-  return Boolean(hit && Date.now() - hit.storedAt < TIDE_CACHE_TTL_MS);
+  if (hit && Date.now() - hit.storedAt < TIDE_CACHE_TTL_MS) return true;
+  return false;
 }
 
 export type StormglassTideFetchMeta = "memory" | "network" | "deduped";
@@ -137,7 +139,7 @@ async function fetchStormglassTideExtremesNetwork(
 }
 
 /**
- * Per-location RAM cache (12h) + in-flight de-duplication for tide extremes.
+ * Per-location cache (KV 12h → RAM 12h → network) + in-flight de-duplication.
  */
 export async function fetchStormglassTideExtremesCached(
   lat: number,
@@ -147,9 +149,15 @@ export async function fetchStormglassTideExtremesCached(
   signal?: AbortSignal,
 ): Promise<{ table: StormglassTideTable | null; meta: StormglassTideFetchMeta }> {
   const key = tideLocationCacheKey(lat, lng);
-  const hit = tideExtremesCache.get(key);
-  if (hit && Date.now() - hit.storedAt < TIDE_CACHE_TTL_MS) {
-    return { table: hit.value, meta: "memory" };
+  const ramHit = tideExtremesCache.get(key);
+  if (ramHit && Date.now() - ramHit.storedAt < TIDE_CACHE_TTL_MS) {
+    return { table: ramHit.value, meta: "memory" };
+  }
+
+  const kvResult = await tideKvGet<StormglassTideTable | null>(`sg:${key}`, TIDE_CACHE_TTL_MS);
+  if (kvResult.hit) {
+    tideExtremesCache.set(key, { storedAt: Date.now(), value: kvResult.value });
+    return { table: kvResult.value, meta: "memory" };
   }
 
   const existing = tideInflight.get(key);
@@ -163,6 +171,7 @@ export async function fetchStormglassTideExtremesCached(
       try {
         const table = await fetchStormglassTideExtremesNetwork(lat, lng, start, end, signal);
         tideExtremesCache.set(key, { storedAt: Date.now(), value: table });
+        void tideKvSet(`sg:${key}`, table, TIDE_CACHE_TTL_S);
         resolve(table);
       } catch (e) {
         reject(e);
