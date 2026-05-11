@@ -26,9 +26,6 @@ export async function listAnchorDevicesForUi(uid: string): Promise<AnchorDeviceR
     });
   }
 
-  for (const r of fromAnchor) {
-    if (!map.has(r.deviceId)) map.set(r.deviceId, r);
-  }
 
   return normaliseAnchorDeviceRowsForUi([...map.values()]);
 }
