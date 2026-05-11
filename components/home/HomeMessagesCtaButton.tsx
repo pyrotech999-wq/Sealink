@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getBroadcastAlertsSilenced, getMessageAlertSoundOn } from "@/lib/broadcast-alert-preferences";
-import { playBroadcastAlertSound } from "@/lib/broadcast-alert-sound";
+import { playBroadcastAlertSound, primeMessageAlertAudio } from "@/lib/broadcast-alert-sound";
 import { subscribeMapLive, type MapLiveResponse } from "@/lib/client/map-live-store";
 import { getMessagePollDelayMs } from "@/lib/message-poll-delays";
 import {
@@ -273,6 +273,7 @@ export function HomeMessagesCtaButton({
     <div className="mt-6">
       <Link
         href={href}
+        onClick={() => primeMessageAlertAudio()}
         className={`flex min-h-[4rem] w-full flex-col items-center justify-center gap-0.5 rounded-xl border-2 px-4 py-3 text-center font-bold tracking-tight shadow-lg transition-colors sm:min-h-[4.25rem] sm:py-4 ${
           showGreen
             ? "border-green-600 bg-green-600 text-white hover:bg-green-500 dark:border-green-500 dark:bg-green-600 dark:hover:bg-green-500"
