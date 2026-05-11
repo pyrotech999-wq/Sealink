@@ -1007,7 +1007,7 @@ export function AnchorAlertModal({
               disabled={!config.armed}
               onClick={() => {
                 void stopAndroidAnchorNativeMonitoringIfNeeded();
-                onUpdate({ ...config, armed: false });
+                onUpdate({ ...config, armed: false, remoteAlarmSilencedUntilReset: false });
                 onClose();
               }}
               className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"

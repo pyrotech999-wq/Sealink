@@ -2376,7 +2376,7 @@ export default function HomeLocationMap({
                 onClick={() => {
                   if (anchorCfg.armed) {
                     void stopAndroidAnchorNativeMonitoringIfNeeded();
-                    const merged = { ...anchorCfg, armed: false, lastAlertAt: null };
+                    const merged = { ...anchorCfg, armed: false, lastAlertAt: null, remoteAlarmSilencedUntilReset: false };
                     setAnchorCfg(merged);
                     setAnchorAlertConfig(merged);
                   } else if (!anchorCompact) {
