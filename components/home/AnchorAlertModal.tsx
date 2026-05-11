@@ -591,9 +591,10 @@ export function AnchorAlertModal({
               className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
             />
             <span className="mt-1 block text-[11px] font-normal text-zinc-500 dark:text-zinc-400">
-              Receive anchor alerts via Telegram. Message @BotFather to create a bot, then send it a message and find your
-              chat ID at{" "}
-              <code className="text-[10px]">api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code>.
+              Receive anchor alerts via Telegram. Get your Telegram Chat ID from{" "}
+              <a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer" className="font-medium text-emerald-700 underline underline-offset-2 dark:text-emerald-400">
+                @userinfobot
+              </a>.
             </span>
           </label>
 
