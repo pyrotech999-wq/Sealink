@@ -80,6 +80,7 @@ export function AnchorAlertsGlobalHost() {
   const alertRef = useRef<AlertRow | null>(null);
   const [alarmBlocked, setAlarmBlocked] = useState(false);
   const [resetBusyKind, setResetBusyKind] = useState<null | "reset" | "increase" | "silence">(null);
+  const [confirmDisarm, setConfirmDisarm] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
   const [remoteAnchorCmdDebug, setRemoteAnchorCmdDebug] = useState(false);
   const [remoteAnchorCmdDebugJson, setRemoteAnchorCmdDebugJson] = useState<string | null>(null);
