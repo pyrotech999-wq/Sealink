@@ -245,6 +245,13 @@ export function AnchorAlertModal({
     if (!open) return;
     if (emergencyDisableLiveMapApis) return;
     void reloadAnchorDevices();
+    void fetch("/api/anchor/geofence", { credentials: "same-origin", cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const tid = d?.config?.telegramChatId;
+        if (typeof tid === "string") setTelegramChatId(tid);
+      })
+      .catch(() => undefined);
   }, [open, reloadAnchorDevices]);
 
   useEffect(() => {
@@ -559,6 +566,34 @@ export function AnchorAlertModal({
             />
             <span className="mt-1 block text-[11px] font-normal text-zinc-500 dark:text-zinc-400">
               Shown in device lists and anchor warnings. Use a unique name on each phone or tablet.
+            </span>
+          </label>
+
+          <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+            Telegram chat ID <span className="text-zinc-400 dark:text-zinc-500">(optional)</span>
+            <input
+              value={telegramChatId}
+              onChange={(e) => setTelegramChatId(e.target.value)}
+              onBlur={() => {
+                const tid = telegramChatId.trim().slice(0, 40);
+                if (tid !== telegramChatId) setTelegramChatId(tid);
+                if (emergencyDisableLiveMapApis) return;
+                void fetch("/api/anchor/geofence", {
+                  method: "POST",
+                  credentials: "same-origin",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ telegramChatId: tid || null }),
+                }).catch(() => undefined);
+              }}
+              placeholder="e.g. 123456789"
+              autoComplete="off"
+              inputMode="numeric"
+              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50"
+            />
+            <span className="mt-1 block text-[11px] font-normal text-zinc-500 dark:text-zinc-400">
+              Receive anchor alerts via Telegram. Message @BotFather to create a bot, then send it a message and find your
+              chat ID at{" "}
+              <code className="text-[10px]">api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code>.
             </span>
           </label>
 
