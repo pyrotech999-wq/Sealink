@@ -22,6 +22,25 @@ export default function TermsPage() {
         </Link>
       </nav>
 
+      <aside className="mt-8 rounded-xl border-2 border-amber-600/60 bg-amber-950/40 px-4 py-5 sm:px-5" aria-label="Safety notice">
+        <p className="text-sm font-bold text-amber-100">Important Safety Notice</p>
+        <p className="mt-2 text-sm leading-6 text-amber-50/90">
+          SeaLink and all anchor alarm notifications are provided for informational purposes only.
+        </p>
+        <p className="mt-2 text-sm leading-6 text-amber-50/90">
+          SeaLink must not be relied upon for life, safety, emergency response, navigation, collision avoidance,
+          security, anchoring decisions, or protection of property.
+        </p>
+        <p className="mt-2 text-sm leading-6 text-amber-50/90">
+          GPS position data, mobile devices, background app activity, internet connectivity, notifications, and
+          third-party services may be delayed, inaccurate, interrupted, or unavailable at any time.
+        </p>
+        <p className="mt-2 text-sm leading-6 text-amber-50/90">
+          You are solely responsible for maintaining a proper watch, verifying your vessel&apos;s position, and using
+          appropriate marine safety equipment and procedures at all times.
+        </p>
+      </aside>
+
       <h1 className="mt-8 text-2xl font-semibold tracking-tight text-zinc-50">Terms of use</h1>
       <p className="mt-2 text-sm text-zinc-400">
         Last updated April 2026. These terms are also referred to as <strong className="text-zinc-300">terms and conditions</strong> or{" "}
