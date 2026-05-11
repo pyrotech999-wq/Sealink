@@ -896,32 +896,26 @@ export function SignUpForm() {
               <input
                 type="checkbox"
                 className="mt-0.5 size-4 rounded border-zinc-300 text-green-700 focus:ring-green-600"
-                checked={form.agreeTerms}
-                onChange={(ev) => set("agreeTerms", ev.target.checked)}
+                checked={form.agreeTerms && form.agreePrivacy}
+                onChange={(ev) => {
+                  set("agreeTerms", ev.target.checked);
+                  set("agreePrivacy", ev.target.checked);
+                }}
               />
               <span className="text-sm text-zinc-700 dark:text-zinc-300">
                 I agree to the{" "}
                 <Link href="/terms" className="font-medium text-green-800 underline-offset-2 hover:underline dark:text-green-400">
-                  terms of use
-                </Link>
-              </span>
-            </label>
-            {errors.agreeTerms && <p className="ml-7 text-xs text-red-600">{errors.agreeTerms}</p>}
-            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-900/50">
-              <input
-                type="checkbox"
-                className="mt-0.5 size-4 rounded border-zinc-300 text-green-700 focus:ring-green-600"
-                checked={form.agreePrivacy}
-                onChange={(ev) => set("agreePrivacy", ev.target.checked)}
-              />
-              <span className="text-sm text-zinc-700 dark:text-zinc-300">
-                I agree to the{" "}
+                  terms and conditions
+                </Link>{" "}
+                and{" "}
                 <Link href="/privacy" className="font-medium text-green-800 underline-offset-2 hover:underline dark:text-green-400">
                   privacy policy
                 </Link>
               </span>
             </label>
-            {errors.agreePrivacy && <p className="ml-7 text-xs text-red-600">{errors.agreePrivacy}</p>}
+            {(errors.agreeTerms || errors.agreePrivacy) && (
+              <p className="ml-7 text-xs text-red-600">{errors.agreeTerms || errors.agreePrivacy}</p>
+            )}
           </div>
         </div>
       )}
