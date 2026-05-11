@@ -136,20 +136,20 @@ async function getMonitorPollJson(uid: string, req: Request, reqStart: number): 
 
     const sessionFp = buildAnchorSessionFingerprint(uid, geoForLog);
     const tDb = Date.now();
-    const { rows, timedOut, lookupError } = await listQueuedCommandsForMonitorPoll(uid, sessionFp);
+    const { rows, timedOut, lookupError } = await listQueuedCommandsForMonitorPoll(uid, effective);
     console.warn("[ANCHOR_MONITOR_GET_TIMING]", "db_command_query_await_ms", Date.now() - tDb);
     timing(reqStart, "after_db_command_query");
 
     const listLogCtx = {
       uid,
       sessionFingerprint: sessionFp,
-      targetDeviceId: headerDevice || null,
+      targetDeviceId: effective,
       statusFilter: ["queued", "received"] as const,
       query: {
         table: "anchor_session_commands",
         sqlShape:
-          "SELECT * FROM anchor_session_commands WHERE user_uid = $1 AND session_id = $2 AND status IN ('queued','received') ORDER BY created_at ASC LIMIT 10",
-        params: { user_uid: uid, session_id: sessionFp, limit: 10 },
+          "SELECT * FROM anchor_session_commands WHERE user_uid = $1 AND target_device_id = $2 AND status IN ('queued','received') ORDER BY created_at ASC LIMIT 10",
+        params: { user_uid: uid, target_device_id: effective, limit: 10 },
       },
     };
 
@@ -196,7 +196,7 @@ async function getMonitorPollJson(uid: string, req: Request, reqStart: number): 
       pollAccepted: true as const,
       serverEffectiveMonitorDeviceId: effective ?? null,
       ...(rows.length === 0
-        ? { reason: sessionFp ? ("queue_empty" as const) : ("no_active_anchor_session" as const) }
+        ? { reason: "queue_empty" as const }
         : {}),
     };
   } catch (e) {
