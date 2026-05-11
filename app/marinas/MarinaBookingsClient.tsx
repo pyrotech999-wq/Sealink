@@ -308,48 +308,10 @@ export function MarinaBookingsClient() {
       <header className="max-w-2xl">
         <h1 className="text-3xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Marina berths</h1>
         <p className="mt-3 text-base leading-7 text-zinc-600 dark:text-zinc-400">
-          Filter by <strong className="font-medium text-zinc-800 dark:text-zinc-200">country</strong>, text search, boat length, or{" "}
-          <strong className="font-medium text-zinc-800 dark:text-zinc-200">near me</strong>.{" "}
-          <strong className="font-medium text-zinc-800 dark:text-zinc-200">Seed fallback:</strong>{" "}
-          {MARINA_WORLD_CATALOG.length} harbours in{" "}
-          <code className="rounded bg-zinc-200/80 px-1 text-sm dark:bg-zinc-800">data/marinas-world.json</code> (
-          <code className="rounded bg-zinc-200/80 px-1 text-sm dark:bg-zinc-800">npm run marinas:build-catalog</code>
-          ). <strong className="font-medium text-zinc-800 dark:text-zinc-200">Expand with OSM:</strong>{" "}
-          <code className="rounded bg-zinc-200/80 px-1 text-sm dark:bg-zinc-800">005_marinas.sql</code> (Supabase migrations) +{" "}
-          <code className="rounded bg-zinc-200/80 px-1 text-sm dark:bg-zinc-800">npm run marinas:import:osm</code>
-          — then listings come from your database import.{" "}
-          <strong className="font-medium text-zinc-800 dark:text-zinc-200">Always confirm with each marina</strong> (berths,
-          terms, access) before you travel. Save berth requests when signed in (Supabase).
+          Filter by country, text search, or use my location to locate nearby marinas.
         </p>
       </header>
 
-      {supabaseReady === true && marinasRowCount === 0 ? (
-        <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
-          <p className="font-medium">Supabase is connected, but the <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/60">marinas</code> table is empty.</p>
-          <p className="mt-2">
-            Run <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/60">005_marinas.sql</code>, then import from OpenStreetMap, e.g.{" "}
-            <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/60">npm run marinas:import:osm -- --countries=GB</code>. Until rows exist, the
-            badge stays on <strong>Seed list</strong> ({MARINA_WORLD_CATALOG.length} harbours from{" "}
-            <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/60">npm run marinas:build-catalog</code> →{" "}
-            <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/60">data/marinas-world.json</code>).
-          </p>
-        </div>
-      ) : null}
-
-      {supabaseReady === true && marinasRowCount === null ? (
-        <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
-          Supabase env is set, but the app could not read the <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/60">marinas</code> table (missing
-          migration <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/60">005_marinas.sql</code>, wrong project, or key permissions). Fix that,
-          then run the OSM import.
-        </div>
-      ) : null}
-
-      {supabaseReady === true && marinasRowCount != null && marinasRowCount > 0 ? (
-        <p className="mt-4 text-xs text-zinc-500 dark:text-zinc-400">
-          Database directory: <strong className="text-zinc-700 dark:text-zinc-300">{marinasRowCount}</strong> marinas (OSM import). List badge should show{" "}
-          <strong className="text-zinc-700 dark:text-zinc-300">OSM directory</strong> when the query returns rows.
-        </p>
-      ) : null}
 
       {meChecked && !signedIn ? (
         <p className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
