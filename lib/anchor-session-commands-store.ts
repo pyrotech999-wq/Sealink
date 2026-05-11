@@ -253,6 +253,17 @@ export type MonitorPollListLookupError = {
   hint?: string;
 };
 
+export type MonitorPollDebug = {
+  rawRowCount: number;
+  rawRows: Array<{
+    id: string;
+    status: string;
+    targetDeviceId: string | null;
+    sessionId: string | null;
+    createdAt: string;
+  }>;
+};
+
 export async function listQueuedCommandsForMonitorPoll(
   uid: string,
   targetDeviceId: string | null,
@@ -260,30 +271,35 @@ export async function listQueuedCommandsForMonitorPoll(
   rows: AnchorSessionCommandRow[];
   timedOut: boolean;
   lookupError?: MonitorPollListLookupError | null;
+  debug?: MonitorPollDebug;
 }> {
-  const queryShape = {
-    table: "anchor_session_commands",
-    sqlShape:
-      "SELECT * FROM anchor_session_commands WHERE user_uid = $1 AND target_device_id = $2 AND status IN ('queued','received') ORDER BY created_at ASC LIMIT 10",
-    params: { user_uid: uid, target_device_id: targetDeviceId, status_in: ["queued", "received"] as const, limit: 10 },
-  };
-
   if (targetDeviceId == null || targetDeviceId === "") {
+    console.warn("[MONITOR_POLL_DEBUG] targetDeviceId is null/empty, returning empty", { uid });
     return { rows: [], timedOut: false };
   }
 
   if (!isSupabaseConfigured()) {
     try {
-      const rows = readRaw()
+      const all = readRaw().filter((r) => r.userUid === uid);
+      const rows = all
         .filter(
           (r) =>
-            r.userUid === uid &&
             (r.status === "queued" || r.status === "received") &&
             r.targetDeviceId === targetDeviceId,
         )
         .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
         .slice(0, 10);
-      return { rows, timedOut: false };
+      const debug: MonitorPollDebug = {
+        rawRowCount: all.length,
+        rawRows: all.slice(0, 20).map((r) => ({
+          id: r.id,
+          status: r.status,
+          targetDeviceId: r.targetDeviceId,
+          sessionId: r.sessionId,
+          createdAt: r.createdAt,
+        })),
+      };
+      return { rows, timedOut: false, debug };
     } catch (e) {
       const err = e instanceof Error ? e : new Error(String(e));
       return {
@@ -295,45 +311,75 @@ export async function listQueuedCommandsForMonitorPoll(
   }
 
   const sb = supabaseAdmin();
-  /** `select('*')` matches the enqueue path and avoids subtle column / projection mismatches with PostgREST. */
-  const q = sb
-    .from("anchor_session_commands")
-    .select("*")
-    .eq("user_uid", uid)
-    .eq("target_device_id", targetDeviceId)
-    .in("status", ["queued", "received"])
-    .order("created_at", { ascending: true })
-    .limit(10);
 
   const started = Date.now();
   try {
-    const res = (await Promise.race([
-      q,
+    const rawQ = sb
+      .from("anchor_session_commands")
+      .select("id, status, target_device_id, session_id, created_at")
+      .eq("user_uid", uid)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    const filteredQ = sb
+      .from("anchor_session_commands")
+      .select("*")
+      .eq("user_uid", uid)
+      .eq("target_device_id", targetDeviceId)
+      .in("status", ["queued", "received"])
+      .order("created_at", { ascending: true })
+      .limit(10);
+
+    const [rawRes, filteredRes] = (await Promise.race([
+      Promise.all([rawQ, filteredQ]),
       new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error("MONITOR_POLL_LIST_TIMEOUT")), MONITOR_POLL_LIST_MS);
       }),
-    ])) as { data: unknown[] | null; error: { message: string; code?: string; details?: string; hint?: string } | null };
+    ])) as [
+      { data: Record<string, unknown>[] | null; error: { message: string; code?: string; details?: string; hint?: string } | null },
+      { data: unknown[] | null; error: { message: string; code?: string; details?: string; hint?: string } | null },
+    ];
 
-    if (res.error) {
+    const rawData = rawRes.data ?? [];
+    const debug: MonitorPollDebug = {
+      rawRowCount: rawData.length,
+      rawRows: rawData.map((r) => ({
+        id: String(r.id ?? ""),
+        status: String(r.status ?? ""),
+        targetDeviceId: r.target_device_id != null ? String(r.target_device_id) : null,
+        sessionId: r.session_id != null ? String(r.session_id) : null,
+        createdAt: String(r.created_at ?? ""),
+      })),
+    };
+
+    console.warn("[MONITOR_POLL_DEBUG]", {
+      uid,
+      filterTargetDeviceId: targetDeviceId,
+      rawRowCount: rawData.length,
+      rawRows: debug.rawRows,
+      filteredError: filteredRes.error,
+      filteredCount: (filteredRes.data ?? []).length,
+    });
+
+    if (filteredRes.error) {
       const le: MonitorPollListLookupError = {
-        message: res.error.message,
-        code: res.error.code,
-        details: res.error.details,
-        hint: res.error.hint,
+        message: filteredRes.error.message,
+        code: filteredRes.error.code,
+        details: filteredRes.error.details,
+        hint: filteredRes.error.hint,
       };
-      return { rows: [], timedOut: false, lookupError: le };
+      return { rows: [], timedOut: false, lookupError: le, debug };
     }
 
-    const rows = (res.data ?? [])
+    const rows = (filteredRes.data ?? [])
       .map((x) => mapRowDb(uid, x as Record<string, unknown>))
       .filter((x): x is AnchorSessionCommandRow => x != null);
-    return { rows, timedOut: false };
+    return { rows, timedOut: false, debug };
   } catch (e) {
     if (e instanceof Error && e.message === "MONITOR_POLL_LIST_TIMEOUT") {
       console.warn("[anchor_session_commands] listQueuedCommandsForMonitorPoll timeout", {
         uid,
         ms: Date.now() - started,
-        query: queryShape,
       });
       return { rows: [], timedOut: true };
     }
