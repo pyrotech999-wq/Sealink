@@ -1,5 +1,6 @@
 import type { TideTableEvent } from "@/lib/tide-table-types";
 import { logStormglassRequest } from "@/lib/stormglass-log";
+import { tideKvGet, tideKvSet } from "@/lib/tide-kv-cache";
 
 export type StormglassTideTable = {
   source: "stormglass";
@@ -10,8 +11,8 @@ export type StormglassTideTable = {
 };
 
 const TIDE_LOG_FILE = "lib/stormglass-tide.ts";
-// Wide-area cache to reduce upstream hits (serverless RAM).
 const TIDE_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+const TIDE_CACHE_TTL_S = Math.round(TIDE_CACHE_TTL_MS / 1000);
 
 function bucketCoord(n: number): number {
   // ~0.1° ≈ 11km lat; good enough for tide station lookup and reduces key explosion.
@@ -40,7 +41,8 @@ export function peekStormglassTideExtremesCache(
 ): boolean {
   const key = tideLocationCacheKey(lat, lng);
   const hit = tideExtremesCache.get(key);
-  return Boolean(hit && Date.now() - hit.storedAt < TIDE_CACHE_TTL_MS);
+  if (hit && Date.now() - hit.storedAt < TIDE_CACHE_TTL_MS) return true;
+  return false;
 }
 
 export type StormglassTideFetchMeta = "memory" | "network" | "deduped";
