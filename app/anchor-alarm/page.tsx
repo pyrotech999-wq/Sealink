@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+
 import { HomeHeader } from "@/components/HomeHeader";
 import { HomeLocationMapLoader } from "@/components/home/HomeLocationMapLoader";
 import { SeaLinkBrandFooter } from "@/components/SeaLinkBrandFooter";
@@ -25,11 +25,7 @@ export default async function AnchorAlarmPage() {
         <h1 className="text-3xl font-semibold tracking-tight text-zinc-50">Anchor alarm</h1>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">
           Share your position on the map, then arm a circular geofence at your GPS fix. While armed, SeaLink can warn you
-          if the monitored device moves outside the ring (this tab should stay open). Your home map still shows a quick
-          ON/OFF status — open this page for full settings.{" "}
-          <Link href="/anchor-command-diagnostics" className="text-sky-400 underline hover:text-sky-300">
-            Anchor command queue diagnostics
-          </Link>
+          if the monitored device moves outside the ring (this tab should stay open).
         </p>
 
         <HomeLocationMapLoader
