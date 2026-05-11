@@ -132,6 +132,7 @@ export function AnchorAlertModal({
   /** When false, angle-change alerts are disabled (stored as 360°). */
   const [angleEnabled, setAngleEnabled] = useState<boolean>((config.angleDeg ?? ANGLE_OFF) < ANGLE_OFF);
   const [deviceLabel, setDeviceLabel] = useState(() => (typeof window !== "undefined" ? getDeviceName() : ""));
+  const [telegramChatId, setTelegramChatId] = useState("");
   const [devices, setDevices] = useState<{ deviceId: string; name: string; updatedAt: string; lastFixAt: string | null }[]>([]);
   const [devicesLoadError, setDevicesLoadError] = useState<string | null>(null);
   /** Explains missing “other device” in lists (registration / second phone). */
