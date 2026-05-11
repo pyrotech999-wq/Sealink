@@ -183,17 +183,7 @@ export function WeatherForecast7Day({ lat, lng }: Props) {
           </h3>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
             Daily maximum wind and gust at 10 m (knots primary; mph in smaller type) with dominant direction (map timeline
-            uses 3-hour steps). Each card’s arrow points{" "}
-            <span className="font-medium text-zinc-600 dark:text-zinc-300">downwind</span>. Sea state is a guide only. Data:{" "}
-            <a
-              href="https://open-meteo.com/"
-              className="font-medium text-green-800 underline-offset-2 hover:underline dark:text-green-400"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Open-Meteo
-            </a>
-            .
+            uses 3-hour steps).
           </p>
         </div>
         <p className="text-[11px] font-medium text-zinc-600 dark:text-zinc-300">
