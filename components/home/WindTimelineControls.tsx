@@ -80,9 +80,6 @@ export function WindTimelineControls({ slots, index, onPrev, onNext, loading }: 
             {from} ({String(fromNum).padStart(3, "0")}°)
           </span>
         </p>
-        <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
-          Step {index + 1} of {slots.length} · Arrow on map points where the wind is blowing
-        </p>
       </div>
     </div>
   );
