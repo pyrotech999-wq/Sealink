@@ -182,8 +182,7 @@ export function WeatherForecast7Day({ lat, lng }: Props) {
             Next {HOME_DAILY_FORECAST_DAYS}-day wind forecast
           </h3>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Daily maximum wind and gust at 10 m (knots primary; mph in smaller type) with dominant direction (map timeline
-            uses 3-hour steps).
+            Daily maximum wind and gust at 10 m (knots primary; mph in smaller type) with dominant direction.
           </p>
         </div>
         <p className="text-[11px] font-medium text-zinc-600 dark:text-zinc-300">

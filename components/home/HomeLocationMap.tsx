@@ -2109,10 +2109,10 @@ export default function HomeLocationMap({
     }, 2000);
   }
 
-  const baseLat = mapPinPos?.lat ?? DEFAULT_MAP_CENTER.lat;
-  const baseLng = mapPinPos?.lng ?? DEFAULT_MAP_CENTER.lng;
-  /** Tiny offset north (~1 m) so the wind readout clears labels. */
-  const windMarkerLat = mapPinPos ? baseLat + 0.000009 : baseLat;
+  const anchorHasGeo = anchorCfg.armed && anchorCfg.lat != null && anchorCfg.lng != null && Number.isFinite(anchorCfg.radiusM);
+  const baseLat = mapPinPos?.lat ?? (anchorHasGeo ? anchorCfg.lat! : DEFAULT_MAP_CENTER.lat);
+  const baseLng = mapPinPos?.lng ?? (anchorHasGeo ? anchorCfg.lng! : DEFAULT_MAP_CENTER.lng);
+  const windMarkerLat = baseLat + 0.000009;
   const windMarkerLng = baseLng;
 
   const activeWind = windSlots.length ? windSlots[Math.min(windSlotIdx, windSlots.length - 1)] : null;
