@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuthUser } from "@/lib/auth";
 import { sendAnchorGeofenceAlertEmail } from "@/lib/anchor-alert-email";
+import { sendAnchorGeofenceAlertTelegram } from "@/lib/anchor-alert-telegram";
 import {
   createAnchorAlert,
   listUnseenAnchorAlerts,
@@ -57,6 +58,7 @@ export async function POST(req: Request): Promise<Response> {
   const row = await createAnchorAlert(user.uid, msg, { kind });
   if (kind === "alert") {
     sendAnchorGeofenceAlertEmail(user.email, msg);
+    sendAnchorGeofenceAlertTelegram(msg);
   }
   return NextResponse.json({ ok: true, alert: row });
 }

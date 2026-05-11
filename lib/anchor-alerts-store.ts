@@ -90,6 +90,46 @@ function mapAlertRow(r: Record<string, unknown>): AnchorAlertRow {
   };
 }
 
+const MAX_UNSEEN_ALERTS = 2;
+
+/**
+ * Supabase: keep only the N newest unseen alerts for this user; delete the rest.
+ */
+async function trimAlertsToLatest(uid: string, keep: number): Promise<void> {
+  try {
+    const sb = supabaseAdmin();
+    const { data } = await sb
+      .from("anchor_alerts")
+      .select("id")
+      .eq("user_uid", uid)
+      .is("seen_at", null)
+      .order("created_at", { ascending: false });
+    if (!data || data.length <= keep) return;
+    const idsToDelete = data.slice(keep).map((r) => (r as { id: string }).id);
+    if (idsToDelete.length === 0) return;
+    await sb.from("anchor_alerts").delete().in("id", idsToDelete);
+  } catch (e) {
+    console.warn("[anchor-alerts] trimAlertsToLatest failed", e instanceof Error ? e.message : e);
+  }
+}
+
+/**
+ * Local JSON: mark all but the N newest unseen alerts for this user as seen (effectively purging them).
+ */
+function trimAlertsLocalToLatest(list: AnchorAlertRow[], uid: string, keep: number): void {
+  const unseen = list
+    .filter((r) => r.uid === uid && !r.seenAt)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  if (unseen.length <= keep) return;
+  const toPurge = new Set(unseen.slice(keep).map((r) => r.id));
+  const now = new Date().toISOString();
+  for (const row of list) {
+    if (toPurge.has(row.id)) {
+      row.seenAt = now;
+    }
+  }
+}
+
 export async function createAnchorAlert(
   uid: string,
   message: string,
@@ -121,11 +161,13 @@ export async function createAnchorAlert(
         expires_at: row.expiresAt,
       });
       if (error) throw new Error(error.message);
+      await trimAlertsToLatest(uid, MAX_UNSEEN_ALERTS);
       return row;
     }
 
     const list = prune(readRaw(), now);
     list.push(row);
+    trimAlertsLocalToLatest(list, uid, MAX_UNSEEN_ALERTS);
     writeRaw(list);
     return row;
   });
