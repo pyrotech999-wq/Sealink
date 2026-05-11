@@ -48,13 +48,13 @@ export default async function Home() {
 
         <HomeLocationMapLoader signedIn={signedIn} isAdmin={authUser?.isAdmin ?? false} anchorPlacement="compact" />
 
-        <HomeMainCtas signedIn={signedIn} />
-
         <SeaStateSummaryBox />
 
         <HomeMarinaBookingCta className="mt-8" />
 
         <ShareAppLink className="mt-8" />
+
+        <HomeMainCtas signedIn={signedIn} />
 
         <SeaLinkBrandFooter />
       </main>
