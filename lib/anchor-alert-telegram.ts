@@ -1,19 +1,21 @@
 import { resolvePublicAppOrigin } from "@/lib/public-app-url";
 
-function isTelegramConfigured(): boolean {
-  return !!(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID);
+function hasBotToken(): boolean {
+  return !!process.env.TELEGRAM_BOT_TOKEN;
 }
 
 /**
  * Sends a Telegram message via the Bot API when an anchor geofence alert fires.
- * Requires TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID env vars.
+ * Uses the user's own chat ID if provided, otherwise falls back to the global
+ * TELEGRAM_CHAT_ID env var. Requires TELEGRAM_BOT_TOKEN in either case.
  * Fire-and-forget: does not block the HTTP response.
  */
-export function sendAnchorGeofenceAlertTelegram(alertMessage: string): void {
-  if (!isTelegramConfigured()) return;
+export function sendAnchorGeofenceAlertTelegram(alertMessage: string, userChatId?: string | null): void {
+  if (!hasBotToken()) return;
+  const chatId = userChatId?.trim() || process.env.TELEGRAM_CHAT_ID || "";
+  if (!chatId) return;
 
   const token = process.env.TELEGRAM_BOT_TOKEN!;
-  const chatId = process.env.TELEGRAM_CHAT_ID!;
   const origin = resolvePublicAppOrigin();
 
   const text = [
