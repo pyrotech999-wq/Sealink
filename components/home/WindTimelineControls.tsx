@@ -51,16 +51,26 @@ export function WindTimelineControls({ slots, index, onPrev, onNext, loading }: 
       <p className="text-center text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
         Forecast step (3-hour)
       </p>
-      <div className="mt-2 flex flex-wrap items-center justify-center gap-2 sm:gap-3">
-        <button
-          type="button"
-          onClick={onPrev}
-          disabled={index <= 0}
-          className="inline-flex h-10 min-w-[7rem] items-center justify-center rounded-lg border border-zinc-300 bg-zinc-50 px-3 text-sm font-semibold text-zinc-800 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
-        >
-          ◀ 3 h earlier
-        </button>
-        <div className="min-w-0 flex-1 basis-[min(100%,18rem)] text-center">
+      <div className="mt-2 flex items-start gap-3">
+        <div className="flex shrink-0 gap-1">
+          <button
+            type="button"
+            onClick={onPrev}
+            disabled={index <= 0}
+            className="inline-flex h-10 items-center justify-center rounded-lg border border-zinc-300 bg-zinc-50 px-3 text-sm font-semibold text-zinc-800 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+          >
+            ◀ 3 h earlier
+          </button>
+          <button
+            type="button"
+            onClick={onNext}
+            disabled={index >= slots.length - 1}
+            className="inline-flex h-10 items-center justify-center rounded-lg border border-zinc-300 bg-zinc-50 px-3 text-sm font-semibold text-zinc-800 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+          >
+            3 h later ▶
+          </button>
+        </div>
+        <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">{formatSlotTime(slot.at)}</p>
           <p className="mt-1 text-xs leading-snug text-zinc-600 dark:text-zinc-400">
             <span className="font-bold text-zinc-800 dark:text-zinc-200">{Math.round(slot.mph)} mph</span>
@@ -75,14 +85,6 @@ export function WindTimelineControls({ slots, index, onPrev, onNext, loading }: 
             Step {index + 1} of {slots.length} · Arrow on map points where the wind is blowing
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onNext}
-          disabled={index >= slots.length - 1}
-          className="inline-flex h-10 min-w-[7rem] items-center justify-center rounded-lg border border-zinc-300 bg-zinc-50 px-3 text-sm font-semibold text-zinc-800 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
-        >
-          3 h later ▶
-        </button>
       </div>
     </div>
   );
