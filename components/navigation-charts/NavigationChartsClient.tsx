@@ -359,27 +359,6 @@ export function NavigationChartsClient() {
       <section className="space-y-3">
         <div className="rounded-xl border border-zinc-200 bg-zinc-50/90 px-3 py-3 dark:border-zinc-700 dark:bg-zinc-950/50">
           <p className="text-xs font-medium text-zinc-800 dark:text-zinc-200">Other web chart viewers</p>
-          <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-600 dark:text-zinc-400">
-            SeaLink cannot embed or restream commercial chart apps. You can open{" "}
-            <a
-              href="https://gpsnauticalcharts.com/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400"
-            >
-              GPS Nautical Charts / i-Boating
-            </a>{" "}
-            in a new tab.{" "}
-            <a
-              href="https://fishing-app.gpsnauticalcharts.com/i-boating-fishing-web-app/fishing-marine-charts-navigation.html"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-mono text-[10px] text-zinc-500 dark:text-zinc-500"
-            >
-              fishing-app.gpsnauticalcharts.com
-            </a>
-            .
-          </p>
           <p className="mt-2 text-[11px] leading-relaxed text-zinc-600 dark:text-zinc-400">
             Tap <strong className="text-zinc-800 dark:text-zinc-200">Open chart in app</strong>. We&apos;ll grab your GPS
             location first, then open the chart centred on you.
