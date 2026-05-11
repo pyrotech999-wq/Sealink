@@ -16,6 +16,8 @@ const MAX_SOUND_DURATION_MS = 3 * 60 * 60 * 1000;
 
 let repeatIntervalId: number | null = null;
 let maxDurationTimeoutId: number | null = null;
+let keepAliveIntervalId: number | null = null;
+const KEEP_ALIVE_INTERVAL_MS = 25_000;
 
 /* --- Web Audio (preferred on breach) --- */
 let audioContext: AudioContext | null = null;
@@ -254,4 +256,44 @@ export async function startAnchorAlarmSiren(): Promise<boolean> {
   }, MAX_SOUND_DURATION_MS);
 
   return true;
+}
+
+/**
+ * Play a silent pulse through the AudioContext to prevent the browser from
+ * suspending it while the anchor is armed. Call once after arming — it
+ * repeats every ~25 s until {@link stopAnchorAlarmKeepAlive} is called.
+ */
+export function startAnchorAlarmKeepAlive(): void {
+  stopAnchorAlarmKeepAlive();
+
+  const ping = () => {
+    const ctx = getAudioContext();
+    if (!ctx || !masterGain) return;
+    if (ctx.state === "suspended") {
+      void ctx.resume().catch(() => undefined);
+      return;
+    }
+    try {
+      const osc = ctx.createOscillator();
+      const silentGain = ctx.createGain();
+      silentGain.gain.value = 0;
+      osc.connect(silentGain);
+      silentGain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.01);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  ping();
+  keepAliveIntervalId = window.setInterval(ping, KEEP_ALIVE_INTERVAL_MS);
+}
+
+/** Stop the keep-alive pulses (safe to call multiple times or when not running). */
+export function stopAnchorAlarmKeepAlive(): void {
+  if (keepAliveIntervalId != null) {
+    window.clearInterval(keepAliveIntervalId);
+    keepAliveIntervalId = null;
+  }
 }

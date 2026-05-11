@@ -89,7 +89,7 @@ import {
 } from "@/lib/anchor-reset-centre-client";
 import { getGpsFixForAnchorReset } from "@/lib/anchor-reset-gps";
 import { ANCHOR_LIVE_APIS_BLOCKED } from "@/lib/anchor-live-client-flags";
-import { startAnchorAlarmSiren, stopAnchorAlarmSiren } from "@/lib/anchor-alarm-sound";
+import { startAnchorAlarmSiren, stopAnchorAlarmSiren, startAnchorAlarmKeepAlive, stopAnchorAlarmKeepAlive } from "@/lib/anchor-alarm-sound";
 import { getDeviceName, getOrCreateDeviceId } from "@/lib/device-id";
 import { clampGeoAccuracyM, humanGeolocationMessage } from "@/lib/geolocation-utils";
 import { manualRefreshNearbyPresence } from "@/lib/client/map-presence-client";
@@ -1413,6 +1413,16 @@ export default function HomeLocationMap({
       if (lock) void lock.release();
     };
   }, [signedIn, anchorCfg.armed, anchorCfg.monitorDeviceId, anchorMonitor?.monitorDeviceId, deviceId]);
+
+  // Keep the Web AudioContext alive while the anchor is armed so breach audio plays without a fresh gesture.
+  useEffect(() => {
+    if (!anchorCfg.armed) {
+      stopAnchorAlarmKeepAlive();
+      return;
+    }
+    startAnchorAlarmKeepAlive();
+    return () => stopAnchorAlarmKeepAlive();
+  }, [anchorCfg.armed]);
 
   // Anchor geofence check: same `pos` as map/forecasts (via posRef); runs every ANCHOR_POSITION_CHECK_INTERVAL_MS on this device when it is the monitor.
   useEffect(() => {
