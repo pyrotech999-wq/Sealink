@@ -592,7 +592,7 @@ export function AnchorAlertModal({
             />
             <span className="mt-1 block text-[11px] font-normal text-zinc-500 dark:text-zinc-400">
               Receive anchor alerts via Telegram. Get your Telegram Chat ID from{" "}
-              <a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer" className="font-medium text-emerald-700 underline underline-offset-2 dark:text-emerald-400">
+              <a href="https://telegram.me/userinfobot" target="_blank" rel="noopener noreferrer" className="font-medium text-emerald-700 underline underline-offset-2 dark:text-emerald-400">
                 @userinfobot
               </a>.
             </span>
