@@ -52,9 +52,9 @@ export default async function Home() {
 
         <SeaStateSummaryBox />
 
-        <ShareAppLink className="mt-8" />
-
         <HomeMarinaBookingCta className="mt-8" />
+
+        <ShareAppLink className="mt-8" />
 
         <SeaLinkBrandFooter />
       </main>
