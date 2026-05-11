@@ -238,7 +238,7 @@ export async function createAnchorSessionCommand(args: {
   });
 }
 
-const MONITOR_POLL_LIST_MS = 2000;
+const MONITOR_POLL_LIST_MS = 5000;
 
 /**
  * Read-only queue for HTTP monitor poll: **does not** use the global command-store mutex or stale expiry
@@ -255,15 +255,24 @@ export type MonitorPollListLookupError = {
 
 export type MonitorPollDebug = {
   rawRowCount: number;
+  matchedCount: number;
+  filterUsed: { user_uid: string; target_device_id: string | null };
   rawRows: Array<{
     id: string;
     status: string;
-    targetDeviceId: string | null;
-    sessionId: string | null;
-    createdAt: string;
+    target_device_id: string | null;
+    session_id: string | null;
+    created_at: string;
+    mapRowDbOk: boolean;
   }>;
+  supabaseError: string | null;
 };
 
+/**
+ * Nuclear debug version: single query filtered by user_uid only,
+ * then in-memory filter by target_device_id + status.
+ * Returns debug payload showing every row the DB has for this user.
+ */
 export async function listQueuedCommandsForMonitorPoll(
   uid: string,
   targetDeviceId: string | null,
@@ -273,9 +282,21 @@ export async function listQueuedCommandsForMonitorPoll(
   lookupError?: MonitorPollListLookupError | null;
   debug?: MonitorPollDebug;
 }> {
+  const mkDebug = (
+    rawRows: MonitorPollDebug["rawRows"],
+    matched: number,
+    sbErr: string | null = null,
+  ): MonitorPollDebug => ({
+    rawRowCount: rawRows.length,
+    matchedCount: matched,
+    filterUsed: { user_uid: uid, target_device_id: targetDeviceId },
+    rawRows,
+    supabaseError: sbErr,
+  });
+
   if (targetDeviceId == null || targetDeviceId === "") {
     console.warn("[MONITOR_POLL_DEBUG] targetDeviceId is null/empty, returning empty", { uid });
-    return { rows: [], timedOut: false };
+    return { rows: [], timedOut: false, debug: mkDebug([], 0, "targetDeviceId_null") };
   }
 
   if (!isSupabaseConfigured()) {
@@ -289,17 +310,15 @@ export async function listQueuedCommandsForMonitorPoll(
         )
         .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
         .slice(0, 10);
-      const debug: MonitorPollDebug = {
-        rawRowCount: all.length,
-        rawRows: all.slice(0, 20).map((r) => ({
-          id: r.id,
-          status: r.status,
-          targetDeviceId: r.targetDeviceId,
-          sessionId: r.sessionId,
-          createdAt: r.createdAt,
-        })),
-      };
-      return { rows, timedOut: false, debug };
+      const debugRows = all.slice(0, 20).map((r) => ({
+        id: r.id,
+        status: r.status,
+        target_device_id: r.targetDeviceId,
+        session_id: r.sessionId,
+        created_at: r.createdAt,
+        mapRowDbOk: true,
+      }));
+      return { rows, timedOut: false, debug: mkDebug(debugRows, rows.length) };
     } catch (e) {
       const err = e instanceof Error ? e : new Error(String(e));
       return {
@@ -311,77 +330,77 @@ export async function listQueuedCommandsForMonitorPoll(
   }
 
   const sb = supabaseAdmin();
-
   const started = Date.now();
   try {
-    const rawQ = sb
+    const allQ = sb
       .from("anchor_session_commands")
-      .select("id, status, target_device_id, session_id, created_at")
+      .select("*")
       .eq("user_uid", uid)
       .order("created_at", { ascending: false })
       .limit(20);
 
-    const filteredQ = sb
-      .from("anchor_session_commands")
-      .select("*")
-      .eq("user_uid", uid)
-      .eq("target_device_id", targetDeviceId)
-      .in("status", ["queued", "received"])
-      .order("created_at", { ascending: true })
-      .limit(10);
-
-    const [rawRes, filteredRes] = (await Promise.race([
-      Promise.all([rawQ, filteredQ]),
+    const res = (await Promise.race([
+      allQ,
       new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error("MONITOR_POLL_LIST_TIMEOUT")), MONITOR_POLL_LIST_MS);
       }),
-    ])) as [
-      { data: Record<string, unknown>[] | null; error: { message: string; code?: string; details?: string; hint?: string } | null },
-      { data: unknown[] | null; error: { message: string; code?: string; details?: string; hint?: string } | null },
-    ];
+    ])) as {
+      data: Record<string, unknown>[] | null;
+      error: { message: string; code?: string; details?: string; hint?: string } | null;
+    };
 
-    const rawData = rawRes.data ?? [];
-    const debug: MonitorPollDebug = {
-      rawRowCount: rawData.length,
-      rawRows: rawData.map((r) => ({
+    const allData = res.data ?? [];
+
+    const debugRows: MonitorPollDebug["rawRows"] = allData.map((r) => {
+      const mapped = mapRowDb(uid, r);
+      return {
         id: String(r.id ?? ""),
         status: String(r.status ?? ""),
-        targetDeviceId: r.target_device_id != null ? String(r.target_device_id) : null,
-        sessionId: r.session_id != null ? String(r.session_id) : null,
-        createdAt: String(r.created_at ?? ""),
-      })),
-    };
+        target_device_id: r.target_device_id != null ? String(r.target_device_id) : null,
+        session_id: r.session_id != null ? String(r.session_id) : null,
+        created_at: String(r.created_at ?? ""),
+        mapRowDbOk: mapped != null,
+      };
+    });
+
+    if (res.error) {
+      console.error("[MONITOR_POLL_DEBUG] Supabase error", res.error);
+      const le: MonitorPollListLookupError = {
+        message: res.error.message,
+        code: res.error.code,
+        details: res.error.details,
+        hint: res.error.hint,
+      };
+      return { rows: [], timedOut: false, lookupError: le, debug: mkDebug(debugRows, 0, res.error.message) };
+    }
+
+    const allMapped = allData
+      .map((x) => mapRowDb(uid, x))
+      .filter((x): x is AnchorSessionCommandRow => x != null);
+
+    const rows = allMapped
+      .filter(
+        (r) =>
+          (r.status === "queued" || r.status === "received") &&
+          r.targetDeviceId === targetDeviceId,
+      )
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+      .slice(0, 10);
 
     console.warn("[MONITOR_POLL_DEBUG]", {
       uid,
       filterTargetDeviceId: targetDeviceId,
-      rawRowCount: rawData.length,
-      rawRows: debug.rawRows,
-      filteredError: filteredRes.error,
-      filteredCount: (filteredRes.data ?? []).length,
+      totalDbRows: allData.length,
+      mappedRows: allMapped.length,
+      matchedRows: rows.length,
+      allStatuses: allMapped.map((r) => `${r.id.slice(0, 8)}:${r.status}:tid=${r.targetDeviceId?.slice(0, 8) ?? "NULL"}`),
     });
 
-    if (filteredRes.error) {
-      const le: MonitorPollListLookupError = {
-        message: filteredRes.error.message,
-        code: filteredRes.error.code,
-        details: filteredRes.error.details,
-        hint: filteredRes.error.hint,
-      };
-      return { rows: [], timedOut: false, lookupError: le, debug };
-    }
-
-    const rows = (filteredRes.data ?? [])
-      .map((x) => mapRowDb(uid, x as Record<string, unknown>))
-      .filter((x): x is AnchorSessionCommandRow => x != null);
-    return { rows, timedOut: false, debug };
+    return { rows, timedOut: false, debug: mkDebug(debugRows, rows.length) };
   } catch (e) {
     if (e instanceof Error && e.message === "MONITOR_POLL_LIST_TIMEOUT") {
-      console.warn("[anchor_session_commands] listQueuedCommandsForMonitorPoll timeout", {
-        uid,
-        ms: Date.now() - started,
-      });
-      return { rows: [], timedOut: true };
+      console.warn("[MONITOR_POLL_DEBUG] timeout", { uid, ms: Date.now() - started });
+      return { rows: [], timedOut: true, debug: mkDebug([], 0, "timeout") };
     }
     const err = e instanceof Error ? e : new Error(String(e));
     return {
