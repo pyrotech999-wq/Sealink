@@ -78,130 +78,53 @@ function logAnchorCommandsGetError(args: {
   });
 }
 
-function timing(reqStart: number, label: string): void {
-  console.warn("[ANCHOR_MONITOR_GET_TIMING]", label, Date.now() - reqStart);
-}
-
 /**
- * Monitor poll: authenticate (caller), resolve effective monitor id, list queued commands, return JSON only.
- * No weather, GPS, geofence writes, alerts, heartbeat, or unrelated tables beyond monitor+geofence read for effective id.
+ * Monitor poll: authenticate, resolve effective monitor id, list queued commands.
  */
-async function getMonitorPollJson(uid: string, req: Request, reqStart: number): Promise<Record<string, unknown>> {
+async function getMonitorPollJson(uid: string, req: Request, _reqStart: number): Promise<Record<string, unknown>> {
   const headerDevice = (req.headers.get(ANCHOR_DEVICE_ID_HEADER) ?? "").trim();
-  timing(reqStart, "after_header_read");
-
   let effective: string | null = null;
 
   try {
-    const tEff = Date.now();
     const { effective: effResolved, geo: geoForLog, monitor } = await getEffectiveMonitorAndGeofence(uid);
-    console.warn("[ANCHOR_MONITOR_GET_TIMING]", "getEffectiveMonitorAndGeofence_await_ms", Date.now() - tEff);
-    timing(reqStart, "after_getEffectiveMonitorAndGeofence");
     effective = effResolved;
 
     if (!headerDevice) {
-      return {
-        ok: true,
-        commands: [],
-        pollAccepted: false as const,
-        serverEffectiveMonitorDeviceId: effective ?? null,
-        reason: "missing_device_header",
-      };
+      return { ok: true, commands: [], pollAccepted: false, serverEffectiveMonitorDeviceId: effective ?? null, reason: "missing_device_header" };
     }
     if (!effective) {
-      return {
-        ok: true,
-        commands: [],
-        pollAccepted: false as const,
-        serverEffectiveMonitorDeviceId: null,
-        reason: "no_effective_monitor_configured",
-      };
+      return { ok: true, commands: [], pollAccepted: false, serverEffectiveMonitorDeviceId: null, reason: "no_effective_monitor_configured" };
     }
     if (headerDevice !== effective) {
       anchorCommandServerLog("monitor_poll_denied", {
         uid,
-        headerDevice: headerDevice ? `${headerDevice.slice(0, 8)}…` : "",
-        effective: effective ?? null,
+        headerDevice: headerDevice.slice(0, 8),
+        effective,
         serverMonitor: monitor.monitorDeviceId,
         geofenceMonitor: geoForLog.monitorDeviceId,
       });
-      return {
-        ok: true,
-        commands: [],
-        pollAccepted: false as const,
-        serverEffectiveMonitorDeviceId: effective ?? null,
-        reason: "header_device_not_effective_monitor",
-      };
+      return { ok: true, commands: [], pollAccepted: false, serverEffectiveMonitorDeviceId: effective, reason: "header_device_not_effective_monitor" };
     }
 
-    const sessionFp = buildAnchorSessionFingerprint(uid, geoForLog);
-    const tDb = Date.now();
-    const { rows, timedOut, lookupError, debug: pollDebug } = await listQueuedCommandsForMonitorPoll(uid, effective);
-    console.warn("[ANCHOR_MONITOR_GET_TIMING]", "db_command_query_await_ms", Date.now() - tDb);
-    timing(reqStart, "after_db_command_query");
-
-    const listLogCtx = {
-      uid,
-      sessionFingerprint: sessionFp,
-      targetDeviceId: effective,
-      statusFilter: ["queued", "received"] as const,
-      filteredRowCount: rows.length,
-      rawDebug: pollDebug,
-    };
+    const { rows, timedOut, lookupError } = await listQueuedCommandsForMonitorPoll(uid, effective);
 
     if (lookupError) {
-      console.error("[MONITOR_LIST_QUEUE_FAILED]", lookupError, listLogCtx);
-      return {
-        ok: true,
-        commands: [],
-        pollAccepted: true as const,
-        serverEffectiveMonitorDeviceId: effective ?? null,
-        reason: "queue_lookup_failed_but_nonfatal",
-        error: lookupError.message,
-        debugCode: "MONITOR_LIST_QUEUE_FAILED",
-        lookupCode: lookupError.code ?? null,
-        lookupDetails: lookupError.details ?? null,
-        lookupHint: lookupError.hint ?? null,
-        _debug: { filterTargetDeviceId: effective, sessionFp, ...(pollDebug ?? {}) },
-      };
+      console.error("[MONITOR_LIST_QUEUE_FAILED]", lookupError.message);
+      return { ok: true, commands: [], pollAccepted: true, serverEffectiveMonitorDeviceId: effective, reason: "queue_lookup_failed_but_nonfatal", error: lookupError.message };
     }
 
     if (timedOut) {
-      console.error("[MONITOR_LIST_QUEUE_FAILED]", new Error("MONITOR_POLL_LIST_TIMEOUT"), {
-        ...listLogCtx,
-        note: "query exceeded monitor poll list budget (see MONITOR_POLL_LIST_MS in anchor-session-commands-store)",
-      });
-      return {
-        ok: true,
-        commands: [],
-        pollAccepted: true as const,
-        serverEffectiveMonitorDeviceId: effective ?? null,
-        reason: "queue_lookup_failed_but_nonfatal",
-        error: "query_timeout",
-        debugCode: "MONITOR_LIST_QUEUE_FAILED",
-        _debug: { filterTargetDeviceId: effective, sessionFp, ...(pollDebug ?? {}) },
-      };
+      return { ok: true, commands: [], pollAccepted: true, serverEffectiveMonitorDeviceId: effective, reason: "queue_lookup_failed_but_nonfatal", error: "query_timeout" };
     }
 
-    const tSer = Date.now();
     const commandPayload = rows.map((c) => toMonitorPollCommandJson(c));
-    console.warn("[ANCHOR_MONITOR_GET_TIMING]", "json_serialize_commands_total_ms", Date.now() - tSer);
-    timing(reqStart, "after_json_commands_map");
 
     return {
       ok: true,
       commands: commandPayload,
-      pollAccepted: true as const,
-      serverEffectiveMonitorDeviceId: effective ?? null,
-      ...(rows.length === 0
-        ? { reason: "queue_empty" as const }
-        : {}),
-      _debug: {
-        filterTargetDeviceId: effective,
-        sessionFp,
-        matchedRows: rows.length,
-        ...(pollDebug ?? {}),
-      },
+      pollAccepted: true,
+      serverEffectiveMonitorDeviceId: effective,
+      ...(rows.length === 0 ? { reason: "queue_empty" } : {}),
     };
   } catch (e) {
     const err = e instanceof Error ? e : new Error(String(e));
@@ -234,17 +157,10 @@ export async function GET(req: Request): Promise<Response> {
   let uid: string | null = null;
 
   try {
-    timing(reqStart, "GET_enter");
-    const tUrl = Date.now();
     const url = new URL(req.url);
-    console.warn("[ANCHOR_MONITOR_GET_TIMING]", "url_parse_ms", Date.now() - tUrl);
-    timing(reqStart, "after_url_parse");
     role = url.searchParams.get("role");
 
-    const tAuth = Date.now();
     const u: AuthUser | null = await requireAuthUser().catch(() => null);
-    console.warn("[ANCHOR_MONITOR_GET_TIMING]", "auth_lookup_requireAuthUser_await_ms", Date.now() - tAuth);
-    timing(reqStart, "after_auth_lookup");
     if (!u?.uid || typeof u.uid !== "string") {
       return NextResponse.json(
         { ok: false, error: "Sign-in required", code: "AUTH_REQUIRED" },
@@ -256,21 +172,15 @@ export async function GET(req: Request): Promise<Response> {
     const id = url.searchParams.get("id");
     if (id?.trim()) {
       try {
-        const tById = Date.now();
         const row = await getAnchorSessionCommand(u.uid, id.trim());
-        console.warn("[ANCHOR_MONITOR_GET_TIMING]", "getAnchorSessionCommand_by_id_await_ms", Date.now() - tById);
         if (!row) {
           return NextResponse.json({ ok: false, error: "Not found", code: "NOT_FOUND" }, { status: 404, headers: noStore });
         }
-        const tJson = Date.now();
-        const res = NextResponse.json({ ok: true, command: row }, { headers: noStore });
-        console.warn("[ANCHOR_MONITOR_GET_TIMING]", "nextResponse_json_by_id_ms", Date.now() - tJson);
-        return res;
+        return NextResponse.json({ ok: true, command: row }, { headers: noStore });
       } catch (error) {
         logAnchorCommandsGetError({ req, role: "id", uid, error });
-        const status = anchorCommandsExposeServerErrors() ? 500 : 500;
         return NextResponse.json(devErrorPayload(error, "anchor_commands_get_by_id_failed"), {
-          status,
+          status: 500,
           headers: noStore,
         });
       }
@@ -278,27 +188,13 @@ export async function GET(req: Request): Promise<Response> {
 
     if (role === "monitor") {
       if (process.env.ANCHOR_MONITOR_POLL_EMPTY === "1") {
-        timing(reqStart, "monitor_hardcoded_empty_branch");
         return NextResponse.json(
-          {
-            ok: true,
-            commands: [],
-            pollAccepted: false,
-            serverEffectiveMonitorDeviceId: null,
-            reason: "hardcoded_empty",
-          },
+          { ok: true, commands: [], pollAccepted: false, serverEffectiveMonitorDeviceId: null, reason: "hardcoded_empty" },
           { status: 200, headers: noStore },
         );
       }
-      const tBody = Date.now();
       const body = await getMonitorPollJson(u.uid, req, reqStart);
-      console.warn("[ANCHOR_MONITOR_GET_TIMING]", "getMonitorPollJson_total_ms", Date.now() - tBody);
-      timing(reqStart, "after_getMonitorPollJson");
-      const tOut = Date.now();
-      const out = NextResponse.json(body, { status: 200, headers: noStore });
-      console.warn("[ANCHOR_MONITOR_GET_TIMING]", "nextResponse_json_monitor_ms", Date.now() - tOut);
-      timing(reqStart, "GET_monitor_done");
-      return out;
+      return NextResponse.json(body, { status: 200, headers: noStore });
     }
 
     if (role === "diagnostics") {
