@@ -568,114 +568,76 @@ export function AnchorAlertsGlobalHost() {
         >
           {resetBusyKind === "increase" ? "Working…" : "Increase geofence (+10 m)"}
         </button>
-        <button
-          type="button"
-          disabled={resetBusyKind !== null || ANCHOR_LIVE_APIS_BLOCKED}
-          onClick={() => {
-            void (async () => {
-              if (!deviceId || deviceId === "server") {
-                setResetError("This page does not have a device id yet. Reload SeaLink, then try again.");
-                return;
-              }
-              setResetError(null);
-              setRemoteAnchorActionDebug(null);
-              setResetBusyKind("silence");
-              const { signal, clear } = createAnchorResetNetworkAbort(120_000);
-              try {
-                const [mr, gr] = await Promise.all([
-                  fetch("/api/anchor/monitor", { credentials: "same-origin", cache: "no-store", signal }),
-                  fetch("/api/anchor/geofence", { credentials: "same-origin", cache: "no-store", signal }),
-                ]);
-                let mj: { config?: { monitorDeviceId?: string | null } } | null = null;
-                let gj: { config?: { monitorDeviceId?: string } } | null = null;
-                if (mr.ok) mj = (await mr.json()) as { config?: { monitorDeviceId?: string | null } };
-                if (gr.ok) gj = (await gr.json()) as { config?: { monitorDeviceId?: string } };
-                if (!mr.ok && !gr.ok) {
-                  setResetError(`Could not load settings (monitor ${mr.status}, geofence ${gr.status}).`);
-                  return;
-                }
-                const effective = effectiveMonitorDeviceIdFromServer({
-                  serverMonitorDeviceId: mj?.config?.monitorDeviceId,
-                  geofenceMonitorDeviceId: gj?.config?.monitorDeviceId,
-                });
-                if (!effective) {
-                  setResetError("Monitoring device is not configured yet.");
-                  return;
-                }
-                if (effective === deviceId) {
-                  const gr1 = await fetch("/api/anchor/geofence", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    credentials: "same-origin",
-                    signal,
-                    body: JSON.stringify({ remoteAlarmSilencedUntilReset: true }),
-                  });
-                  if (!gr1.ok) {
-                    setResetError(`Could not save silence flag (${gr1.status}).`);
-                    return;
-                  }
-                  await fetch("/api/anchor/alerts", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    credentials: "same-origin",
-                    signal,
-                    body: JSON.stringify({ markAllSeen: true }),
-                  }).catch(() => undefined);
-                  stopAnchorAlarmSiren();
-                  if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
-                  clearPresentedAnchorAlertId();
-                  setAlert(null);
-                } else {
-                  const r = await enqueueAndAwaitAnchorCommand({
-                    type: "SILENCE_UNTIL_RESET",
-                    callerDeviceId: deviceId,
-                    signal,
-                    onWaitingForBoat: () => setResetError("Waiting for boat device…"),
-                  });
-                  await applyRemoteActionDebugWithNames(
-                    r.postDebug,
-                    r.ok ? { ok: true, terminalStatus: r.terminalStatus } : { ok: false, error: r.error },
-                  );
-                  if (!r.ok) {
-                    setResetError(r.error);
-                    return;
-                  }
-                  const seenId = alert.id;
-                  if (!ANCHOR_LIVE_APIS_BLOCKED) {
+        {confirmDisarm ? (
+          <div className="flex w-full flex-col gap-2 rounded-xl border border-amber-400/70 bg-amber-950/50 px-4 py-3 sm:max-w-xs">
+            <p className="text-sm font-bold text-amber-100">Turn off anchor monitoring?</p>
+            <p className="text-xs leading-snug text-amber-200/90">This will disarm the anchor alarm on all devices. You will need to re-arm from the anchor settings.</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={resetBusyKind !== null}
+                onClick={() => {
+                  void (async () => {
+                    setResetError(null);
+                    setRemoteAnchorActionDebug(null);
+                    setResetBusyKind("silence");
                     try {
+                      const gr = await fetch("/api/anchor/geofence", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        credentials: "same-origin",
+                        body: JSON.stringify({ armed: false, remoteAlarmSilencedUntilReset: false, lastAlertAt: null }),
+                      });
+                      if (!gr.ok) {
+                        setResetError(`Could not disarm (${gr.status}).`);
+                        return;
+                      }
                       await fetch("/api/anchor/alerts", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ seenId }),
                         credentials: "same-origin",
-                        signal,
-                      });
-                    } catch {
-                      /* ignore */
+                        body: JSON.stringify({ markAllSeen: true }),
+                      }).catch(() => undefined);
+                      stopAnchorAlarmSiren();
+                      if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
+                      clearPresentedAnchorAlertId();
+                      setAlert(null);
+                      setConfirmDisarm(false);
+                    } catch (e) {
+                      if (isAnchorResetAbortError(e)) {
+                        setResetError("That took too long. Check connection, then try again.");
+                      } else {
+                        setResetError(e instanceof Error ? e.message : "Unexpected error.");
+                      }
+                    } finally {
+                      setResetBusyKind(null);
                     }
-                  }
-                  stopAnchorAlarmSiren();
-                  if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
-                  clearPresentedAnchorAlertId();
-                  setAlert(null);
-                  setResetError(null);
-                }
-              } catch (e) {
-                if (isAnchorResetAbortError(e)) {
-                  setResetError("That took too long. Check connection, then try again.");
-                } else {
-                  setResetError(e instanceof Error ? e.message : "Unexpected error.");
-                }
-              } finally {
-                clear();
-                setResetBusyKind(null);
-              }
-            })();
-          }}
-          className="h-12 w-full rounded-xl border border-zinc-400/90 bg-zinc-800/80 text-sm font-bold text-zinc-100 hover:bg-zinc-700/90 disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-xs"
-        >
-          {resetBusyKind === "silence" ? "Working…" : "Silence until anchor reset"}
-        </button>
+                  })();
+                }}
+                className="flex-1 rounded-lg bg-red-600 px-3 py-2 text-sm font-bold text-white hover:bg-red-500 disabled:opacity-50"
+              >
+                {resetBusyKind === "silence" ? "Working…" : "Yes, turn off"}
+              </button>
+              <button
+                type="button"
+                disabled={resetBusyKind !== null}
+                onClick={() => setConfirmDisarm(false)}
+                className="flex-1 rounded-lg border border-white/40 bg-white/10 px-3 py-2 text-sm font-bold text-white hover:bg-white/20 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            disabled={resetBusyKind !== null || ANCHOR_LIVE_APIS_BLOCKED}
+            onClick={() => setConfirmDisarm(true)}
+            className="h-12 w-full rounded-xl border border-zinc-400/90 bg-zinc-800/80 text-sm font-bold text-zinc-100 hover:bg-zinc-700/90 disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-xs"
+          >
+            Turn off anchor monitoring
+          </button>
+        )}
         {remoteAnchorActionDebug ? (
           <div className="pointer-events-auto mx-auto mt-2 max-w-lg rounded-lg border border-cyan-500/50 bg-cyan-950/40 px-3 py-2 text-left">
             <div className="text-[10px] font-bold uppercase tracking-wide text-cyan-200">Remote command POST (last action)</div>
@@ -690,24 +652,6 @@ export function AnchorAlertsGlobalHost() {
             ) : null}
           </div>
         ) : null}
-        <a
-          href="/anchor-alarm"
-          aria-disabled={resetBusyKind !== null}
-          className={`inline-flex h-14 w-full items-center justify-center rounded-xl border-2 border-white/80 bg-white/10 px-4 text-base font-bold text-white hover:bg-white/20 sm:max-w-xs ${resetBusyKind != null ? "pointer-events-none opacity-50" : ""}`}
-          onClick={(e) => {
-            if (resetBusyKind != null) {
-              e.preventDefault();
-              return;
-            }
-            stopAnchorAlarmSiren();
-            if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
-            if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
-            e.preventDefault();
-            window.location.assign("/anchor-alarm");
-          }}
-        >
-          Open map &amp; anchor
-        </a>
         {remoteAnchorCmdDebug && alert ? (
           <div className="pointer-events-auto mx-auto max-w-lg rounded-lg border border-amber-400/60 bg-amber-950/50 px-3 py-2 text-left font-mono text-[10px] text-amber-100">
             <div className="font-bold text-amber-200">Remote anchor command debug</div>
