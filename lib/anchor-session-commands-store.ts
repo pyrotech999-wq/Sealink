@@ -270,14 +270,8 @@ export async function createAnchorSessionCommand(args: {
   });
 }
 
-const MONITOR_POLL_LIST_MS = 5000;
+const MONITOR_POLL_LIST_MS = 4000;
 
-/**
- * Read-only queue for HTTP monitor poll: **does not** use the global command-store mutex or stale expiry
- * (those stay on enqueue/create/patch paths). Uses `idx_anchor_session_commands_user_status_created`:
- * `user_uid`, `status` in (`queued`,`received`), `order created_at`, `LIMIT 10`, narrow `select`.
- * Fail-fast {@link MONITOR_POLL_LIST_MS} (returns `{ timedOut: true }` — route maps to `query_timeout`).
- */
 export type MonitorPollListLookupError = {
   message: string;
   code?: string;
@@ -285,25 +279,9 @@ export type MonitorPollListLookupError = {
   hint?: string;
 };
 
-export type MonitorPollDebug = {
-  rawRowCount: number;
-  matchedCount: number;
-  filterUsed: { user_uid: string; target_device_id: string | null };
-  rawRows: Array<{
-    id: string;
-    status: string;
-    target_device_id: string | null;
-    session_id: string | null;
-    created_at: string;
-    mapRowDbOk: boolean;
-  }>;
-  supabaseError: string | null;
-};
-
 /**
- * Nuclear debug version: single query filtered by user_uid only,
- * then in-memory filter by target_device_id + status.
- * Returns debug payload showing every row the DB has for this user.
+ * Queued/received commands for the monitor poll, filtered by user + target device.
+ * Uses a single `user_uid`-only query with in-memory filter to avoid PostgREST edge cases.
  */
 export async function listQueuedCommandsForMonitorPoll(
   uid: string,
@@ -312,134 +290,58 @@ export async function listQueuedCommandsForMonitorPoll(
   rows: AnchorSessionCommandRow[];
   timedOut: boolean;
   lookupError?: MonitorPollListLookupError | null;
-  debug?: MonitorPollDebug;
 }> {
-  const mkDebug = (
-    rawRows: MonitorPollDebug["rawRows"],
-    matched: number,
-    sbErr: string | null = null,
-  ): MonitorPollDebug => ({
-    rawRowCount: rawRows.length,
-    matchedCount: matched,
-    filterUsed: { user_uid: uid, target_device_id: targetDeviceId },
-    rawRows,
-    supabaseError: sbErr,
-  });
-
   if (targetDeviceId == null || targetDeviceId === "") {
-    console.warn("[MONITOR_POLL_DEBUG] targetDeviceId is null/empty, returning empty", { uid });
-    return { rows: [], timedOut: false, debug: mkDebug([], 0, "targetDeviceId_null") };
+    return { rows: [], timedOut: false };
   }
 
   if (!isSupabaseConfigured()) {
     try {
-      const all = readRaw().filter((r) => r.userUid === uid);
-      const rows = all
+      const rows = readRaw()
         .filter(
           (r) =>
+            r.userUid === uid &&
             (r.status === "queued" || r.status === "received") &&
             r.targetDeviceId === targetDeviceId,
         )
         .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
         .slice(0, 10);
-      const debugRows = all.slice(0, 20).map((r) => ({
-        id: r.id,
-        status: r.status,
-        target_device_id: r.targetDeviceId,
-        session_id: r.sessionId,
-        created_at: r.createdAt,
-        mapRowDbOk: true,
-      }));
-      return { rows, timedOut: false, debug: mkDebug(debugRows, rows.length) };
+      return { rows, timedOut: false };
     } catch (e) {
       const err = e instanceof Error ? e : new Error(String(e));
-      return {
-        rows: [],
-        timedOut: false,
-        lookupError: { message: err.message, details: "json_file_read_failed" },
-      };
+      return { rows: [], timedOut: false, lookupError: { message: err.message } };
     }
   }
 
   const sb = supabaseAdmin();
   const started = Date.now();
   try {
-    const allQ = sb
-      .from("anchor_session_commands")
-      .select("*")
-      .eq("user_uid", uid)
-      .order("created_at", { ascending: false })
-      .limit(20);
-
     const res = (await Promise.race([
-      allQ,
-      new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error("MONITOR_POLL_LIST_TIMEOUT")), MONITOR_POLL_LIST_MS);
-      }),
+      sb.from("anchor_session_commands").select("*").eq("user_uid", uid).order("created_at", { ascending: false }).limit(20),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("MONITOR_POLL_LIST_TIMEOUT")), MONITOR_POLL_LIST_MS)),
     ])) as {
       data: Record<string, unknown>[] | null;
       error: { message: string; code?: string; details?: string; hint?: string } | null;
     };
 
-    const allData = res.data ?? [];
-
-    const debugRows: MonitorPollDebug["rawRows"] = allData.map((r) => {
-      const mapped = mapRowDb(uid, r);
-      return {
-        id: String(r.id ?? ""),
-        status: String(r.status ?? ""),
-        target_device_id: r.target_device_id != null ? String(r.target_device_id) : null,
-        session_id: r.session_id != null ? String(r.session_id) : null,
-        created_at: String(r.created_at ?? ""),
-        mapRowDbOk: mapped != null,
-      };
-    });
-
     if (res.error) {
-      console.error("[MONITOR_POLL_DEBUG] Supabase error", res.error);
-      const le: MonitorPollListLookupError = {
-        message: res.error.message,
-        code: res.error.code,
-        details: res.error.details,
-        hint: res.error.hint,
-      };
-      return { rows: [], timedOut: false, lookupError: le, debug: mkDebug(debugRows, 0, res.error.message) };
+      return { rows: [], timedOut: false, lookupError: { message: res.error.message, code: res.error.code } };
     }
 
-    const allMapped = allData
+    const rows = (res.data ?? [])
       .map((x) => mapRowDb(uid, x))
-      .filter((x): x is AnchorSessionCommandRow => x != null);
-
-    const rows = allMapped
-      .filter(
-        (r) =>
-          (r.status === "queued" || r.status === "received") &&
-          r.targetDeviceId === targetDeviceId,
-      )
+      .filter((x): x is AnchorSessionCommandRow => x != null)
+      .filter((r) => (r.status === "queued" || r.status === "received") && r.targetDeviceId === targetDeviceId)
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
       .slice(0, 10);
 
-    console.warn("[MONITOR_POLL_DEBUG]", {
-      uid,
-      filterTargetDeviceId: targetDeviceId,
-      totalDbRows: allData.length,
-      mappedRows: allMapped.length,
-      matchedRows: rows.length,
-      allStatuses: allMapped.map((r) => `${r.id.slice(0, 8)}:${r.status}:tid=${r.targetDeviceId?.slice(0, 8) ?? "NULL"}`),
-    });
-
-    return { rows, timedOut: false, debug: mkDebug(debugRows, rows.length) };
+    return { rows, timedOut: false };
   } catch (e) {
     if (e instanceof Error && e.message === "MONITOR_POLL_LIST_TIMEOUT") {
-      console.warn("[MONITOR_POLL_DEBUG] timeout", { uid, ms: Date.now() - started });
-      return { rows: [], timedOut: true, debug: mkDebug([], 0, "timeout") };
+      return { rows: [], timedOut: true };
     }
     const err = e instanceof Error ? e : new Error(String(e));
-    return {
-      rows: [],
-      timedOut: false,
-      lookupError: { message: err.message, details: err.stack },
-    };
+    return { rows: [], timedOut: false, lookupError: { message: err.message } };
   }
 }
 

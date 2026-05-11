@@ -1360,7 +1360,6 @@ export default function HomeLocationMap({
           }),
         );
 
-        const serverDebug = (data as Record<string, unknown>)._debug ?? null;
         try {
           localStorage.setItem(
             heartbeatKey,
@@ -1370,8 +1369,6 @@ export default function HomeLocationMap({
               pollAccepted,
               commandCount: commands.length,
               visibility: document.visibilityState,
-              reason: serverReason,
-              _debug: serverDebug,
             }),
           );
         } catch {
