@@ -255,7 +255,7 @@ export type MonitorPollListLookupError = {
 
 export async function listQueuedCommandsForMonitorPoll(
   uid: string,
-  sessionFingerprint: string | null,
+  targetDeviceId: string | null,
 ): Promise<{
   rows: AnchorSessionCommandRow[];
   timedOut: boolean;
@@ -264,11 +264,11 @@ export async function listQueuedCommandsForMonitorPoll(
   const queryShape = {
     table: "anchor_session_commands",
     sqlShape:
-      "SELECT * FROM anchor_session_commands WHERE user_uid = $1 AND session_id = $2 AND status IN ('queued','received') ORDER BY created_at ASC LIMIT 10",
-    params: { user_uid: uid, session_id: sessionFingerprint, status_in: ["queued", "received"] as const, limit: 10 },
+      "SELECT * FROM anchor_session_commands WHERE user_uid = $1 AND target_device_id = $2 AND status IN ('queued','received') ORDER BY created_at ASC LIMIT 10",
+    params: { user_uid: uid, target_device_id: targetDeviceId, status_in: ["queued", "received"] as const, limit: 10 },
   };
 
-  if (sessionFingerprint == null || sessionFingerprint === "") {
+  if (targetDeviceId == null || targetDeviceId === "") {
     return { rows: [], timedOut: false };
   }
 
@@ -279,7 +279,7 @@ export async function listQueuedCommandsForMonitorPoll(
           (r) =>
             r.userUid === uid &&
             (r.status === "queued" || r.status === "received") &&
-            r.sessionId === sessionFingerprint,
+            r.targetDeviceId === targetDeviceId,
         )
         .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
         .slice(0, 10);
@@ -300,7 +300,7 @@ export async function listQueuedCommandsForMonitorPoll(
     .from("anchor_session_commands")
     .select("*")
     .eq("user_uid", uid)
-    .eq("session_id", sessionFingerprint)
+    .eq("target_device_id", targetDeviceId)
     .in("status", ["queued", "received"])
     .order("created_at", { ascending: true })
     .limit(10);
