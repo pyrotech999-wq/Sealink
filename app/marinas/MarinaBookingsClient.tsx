@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { MARINA_WORLD_CATALOG, marinaTelHref, type MarinaListing } from "@/lib/marina-catalog";
+import { marinaTelHref, type MarinaListing } from "@/lib/marina-catalog";
 import { distanceKm } from "@/lib/geo-haversine";
 import { humanGeolocationMessage } from "@/lib/geolocation-utils";
 
@@ -136,7 +136,6 @@ export function MarinaBookingsClient() {
   const [countries, setCountries] = useState<string[]>([]);
   const [listMarinas, setListMarinas] = useState<MarinaListing[]>([]);
   const [listLoading, setListLoading] = useState(true);
-  const [listSource, setListSource] = useState<"supabase" | "seed" | null>(null);
   const [listPage, setListPage] = useState(0);
 
   useEffect(() => {
@@ -186,12 +185,11 @@ export function MarinaBookingsClient() {
         .then((d) => {
           if (ac.signal.aborted) return;
           setListMarinas(Array.isArray(d.marinas) ? d.marinas : []);
-          setListSource(d.source === "supabase" ? "supabase" : "seed");
+
         })
         .catch(() => {
           if (!ac.signal.aborted) {
             setListMarinas([]);
-            setListSource(null);
           }
         })
         .finally(() => {
@@ -308,48 +306,10 @@ export function MarinaBookingsClient() {
       <header className="max-w-2xl">
         <h1 className="text-3xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Marina berths</h1>
         <p className="mt-3 text-base leading-7 text-zinc-600 dark:text-zinc-400">
-          Filter by <strong className="font-medium text-zinc-800 dark:text-zinc-200">country</strong>, text search, boat length, or{" "}
-          <strong className="font-medium text-zinc-800 dark:text-zinc-200">near me</strong>.{" "}
-          <strong className="font-medium text-zinc-800 dark:text-zinc-200">Seed fallback:</strong>{" "}
-          {MARINA_WORLD_CATALOG.length} harbours in{" "}
-          <code className="rounded bg-zinc-200/80 px-1 text-sm dark:bg-zinc-800">data/marinas-world.json</code> (
-          <code className="rounded bg-zinc-200/80 px-1 text-sm dark:bg-zinc-800">npm run marinas:build-catalog</code>
-          ). <strong className="font-medium text-zinc-800 dark:text-zinc-200">Expand with OSM:</strong>{" "}
-          <code className="rounded bg-zinc-200/80 px-1 text-sm dark:bg-zinc-800">005_marinas.sql</code> (Supabase migrations) +{" "}
-          <code className="rounded bg-zinc-200/80 px-1 text-sm dark:bg-zinc-800">npm run marinas:import:osm</code>
-          — then listings come from your database import.{" "}
-          <strong className="font-medium text-zinc-800 dark:text-zinc-200">Always confirm with each marina</strong> (berths,
-          terms, access) before you travel. Save berth requests when signed in (Supabase).
+          Filter by country, text search, or use my location to locate nearby marinas.
         </p>
       </header>
 
-      {supabaseReady === true && marinasRowCount === 0 ? (
-        <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
-          <p className="font-medium">Supabase is connected, but the <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/60">marinas</code> table is empty.</p>
-          <p className="mt-2">
-            Run <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/60">005_marinas.sql</code>, then import from OpenStreetMap, e.g.{" "}
-            <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/60">npm run marinas:import:osm -- --countries=GB</code>. Until rows exist, the
-            badge stays on <strong>Seed list</strong> ({MARINA_WORLD_CATALOG.length} harbours from{" "}
-            <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/60">npm run marinas:build-catalog</code> →{" "}
-            <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/60">data/marinas-world.json</code>).
-          </p>
-        </div>
-      ) : null}
-
-      {supabaseReady === true && marinasRowCount === null ? (
-        <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
-          Supabase env is set, but the app could not read the <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/60">marinas</code> table (missing
-          migration <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/60">005_marinas.sql</code>, wrong project, or key permissions). Fix that,
-          then run the OSM import.
-        </div>
-      ) : null}
-
-      {supabaseReady === true && marinasRowCount != null && marinasRowCount > 0 ? (
-        <p className="mt-4 text-xs text-zinc-500 dark:text-zinc-400">
-          Database directory: <strong className="text-zinc-700 dark:text-zinc-300">{marinasRowCount}</strong> marinas (OSM import). List badge should show{" "}
-          <strong className="text-zinc-700 dark:text-zinc-300">OSM directory</strong> when the query returns rows.
-        </p>
-      ) : null}
 
       {meChecked && !signedIn ? (
         <p className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
@@ -358,33 +318,6 @@ export function MarinaBookingsClient() {
           </Link>{" "}
           to save berth requests to your account. You can still copy enquiries and call marinas without an account.
         </p>
-      ) : null}
-
-      {signedIn && supabaseReady === false ? (
-        <p className="mt-6 rounded-xl border border-zinc-200 bg-zinc-100 px-4 py-3 text-sm text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200">
-          <strong>This deployment</strong> doesn’t have Supabase credentials, so berth requests won’t be saved. Use{" "}
-          <strong>Copy enquiry</strong> and call the marina, or configure the server:
-        </p>
-      ) : null}
-      {signedIn && supabaseReady === false ? (
-        <ul className="mt-2 list-inside list-disc rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300">
-          <li>
-            Set <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">NEXT_PUBLIC_SUPABASE_URL</code> and{" "}
-            <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">SUPABASE_SERVICE_ROLE_KEY</code> (Settings → API
-            → Project URL + <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">service_role</code> secret — not
-            the anon key).
-          </li>
-          <li>
-            On <strong>Vercel / your host</strong>, add the same variables for Production (and Preview if needed), then{" "}
-            <strong>redeploy</strong> — <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">.env.local</code> only
-            applies on your laptop.
-          </li>
-          <li>
-            In Supabase SQL Editor, run{" "}
-            <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">004_marina_berth_requests.sql</code> (and earlier
-            migrations if you haven’t).
-          </li>
-        </ul>
       ) : null}
 
       <section className="mt-8 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 sm:p-6">
@@ -548,15 +481,6 @@ export function MarinaBookingsClient() {
                 ? "0 marinas"
                 : `Showing ${rangeFrom}–${rangeTo} of ${listMarinas.length} marina${listMarinas.length === 1 ? "" : "s"}`}
           </h2>
-          {listSource === "supabase" ? (
-            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200">
-              OSM directory
-            </span>
-          ) : listSource === "seed" ? (
-            <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-              Seed list
-            </span>
-          ) : null}
         </div>
         {!listLoading && listMarinas.length > LIST_PAGE_SIZE ? (
           <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -802,14 +726,6 @@ export function MarinaBookingsClient() {
         </section>
       ) : null}
 
-      <p className="mt-10 pb-4 text-center text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">
-        Seed fallback: {MARINA_WORLD_CATALOG.length} harbours in{" "}
-        <code className="rounded bg-zinc-200/80 px-1 dark:bg-zinc-800">data/marinas-world.json</code> (
-        <code className="rounded bg-zinc-200/80 px-1 dark:bg-zinc-800">npm run marinas:build-catalog</code>). Expand with OSM:{" "}
-        <code className="rounded bg-zinc-200/80 px-1 dark:bg-zinc-800">005_marinas.sql</code> +{" "}
-        <code className="rounded bg-zinc-200/80 px-1 dark:bg-zinc-800">npm run marinas:import:osm</code>. Always confirm with
-        each marina.
-      </p>
     </div>
   );
 }
