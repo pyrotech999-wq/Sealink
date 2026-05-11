@@ -333,30 +333,37 @@ export function SignInForm() {
             Important Safety Notice
           </p>
           <p className="mt-2 text-xs leading-5 text-amber-800 dark:text-amber-200">
-            SeaLink and all anchor alarm notifications are provided for informational purposes only.
+            SeaLink app and the anchor alarm notifications are provided for informational purposes only.
           </p>
           <p className="mt-1.5 text-xs leading-5 text-amber-800 dark:text-amber-200">
             SeaLink must not be relied upon for life, safety, emergency response, navigation, collision
             avoidance, security, anchoring decisions, or protection of property.
           </p>
-          <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900/60">
-            <input
-              type="checkbox"
-              checked={agree}
-              onChange={(e) => setAgree(e.target.checked)}
-              className="mt-0.5 size-4 rounded border-zinc-300 text-green-700 focus:ring-green-600"
-            />
-            <span className="text-sm text-zinc-700 dark:text-zinc-300">
-              I have read and agree to the{" "}
-              <Link href="/terms" className="font-medium text-green-800 underline-offset-2 hover:underline dark:text-green-400">
-                terms
-              </Link>{" "}
-              and{" "}
-              <Link href="/privacy" className="font-medium text-green-800 underline-offset-2 hover:underline dark:text-green-400">
-                privacy policy
-              </Link>
-            </span>
-          </label>
+          <p className="mt-2 text-xs leading-5 text-amber-800 dark:text-amber-200">
+            By continuing you agree to the{" "}
+            <Link href="/terms" className="font-medium text-amber-900 underline underline-offset-2 dark:text-amber-100">
+              terms
+            </Link>{" "}
+            and{" "}
+            <Link href="/privacy" className="font-medium text-amber-900 underline underline-offset-2 dark:text-amber-100">
+              privacy policy
+            </Link>
+            .
+          </p>
+          {!agree && (
+            <button
+              type="button"
+              onClick={() => setAgree(true)}
+              className="mt-3 flex h-9 w-full items-center justify-center rounded-lg bg-amber-700 text-sm font-semibold text-white hover:bg-amber-800 dark:bg-amber-600 dark:hover:bg-amber-700"
+            >
+              OK
+            </button>
+          )}
+          {agree && (
+            <p className="mt-3 text-center text-xs font-medium text-green-700 dark:text-green-400">
+              Accepted
+            </p>
+          )}
         </div>
       </div>
       <button
