@@ -301,9 +301,11 @@ export default function HomeLocationMap({
     null | "monitor" | "this" | "remote_reset" | "remote_increase" | "remote_silence"
   >(null);
   const [anchorBreachResetError, setAnchorBreachResetError] = useState<string | null>(null);
+  const [confirmDisarm, setConfirmDisarm] = useState(false);
   useEffect(() => {
     setAnchorBreachResetError(null);
     setAnchorBreachResetBusyKind(null);
+    setConfirmDisarm(false);
   }, [activeAnchorAlert?.id]);
 
   useEffect(() => {
@@ -3015,54 +3017,78 @@ export default function HomeLocationMap({
                 >
                   {anchorBreachResetBusyKind === "remote_increase" ? "Sending…" : "Increase geofence (+10 m)"}
                 </button>
-                <button
-                  type="button"
-                  disabled={anchorBreachResetBusyKind !== null || ANCHOR_LIVE_APIS_BLOCKED}
-                  onClick={() => {
-                    stopAlarm();
-                    if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
-                    const seenId = activeAnchorAlert.id;
-                    void (async () => {
-                      setAnchorBreachResetError(null);
-                      setAnchorBreachResetBusyKind("remote_silence");
-                      const { signal, clear } = createAnchorResetNetworkAbort(120_000);
-                      try {
-                        const r = await enqueueAndAwaitAnchorCommand({
-                          type: "SILENCE_UNTIL_RESET",
-                          callerDeviceId: deviceId,
-                          signal,
-                          onWaitingForBoat: () => setAnchorBreachResetError("Waiting for boat device…"),
-                        });
-                        if (!r.ok) {
-                          setAnchorBreachResetError(r.error);
-                          return;
-                        }
-                        if (!ANCHOR_LIVE_APIS_BLOCKED) {
-                          try {
-                            await fetch("/api/anchor/alerts", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ seenId }),
-                              credentials: "same-origin",
-                              signal,
-                            });
-                          } catch {
-                            /* ignore */
-                          }
-                        }
-                        clearPresentedAnchorAlertId();
-                        setActiveAnchorAlert(null);
-                        setAnchorBreachResetError(null);
-                      } finally {
-                        clear();
-                        setAnchorBreachResetBusyKind(null);
-                      }
-                    })();
-                  }}
-                  className="h-12 w-full rounded-xl border border-zinc-400/90 bg-zinc-800/80 text-sm font-bold text-zinc-100 hover:bg-zinc-700/90 disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-xs"
-                >
-                  {anchorBreachResetBusyKind === "remote_silence" ? "Sending…" : "Silence until anchor reset"}
-                </button>
+                {confirmDisarm ? (
+                  <div className="flex w-full flex-col gap-2 rounded-xl border border-amber-400/70 bg-amber-950/50 px-4 py-3 sm:max-w-xs">
+                    <p className="text-sm font-bold text-amber-100">Turn off anchor monitoring?</p>
+                    <p className="text-xs leading-snug text-amber-200/90">This will disarm the anchor alarm on all devices. You will need to re-arm from the anchor settings.</p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        disabled={anchorBreachResetBusyKind !== null}
+                        onClick={() => {
+                          stopAlarm();
+                          if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
+                          void (async () => {
+                            setAnchorBreachResetError(null);
+                            setAnchorBreachResetBusyKind("remote_silence");
+                            try {
+                              const gr = await fetch("/api/anchor/geofence", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                credentials: "same-origin",
+                                body: JSON.stringify({ armed: false, remoteAlarmSilencedUntilReset: false, lastAlertAt: null }),
+                              });
+                              if (!gr.ok) {
+                                setAnchorBreachResetError(`Could not disarm (${gr.status}).`);
+                                return;
+                              }
+                              await fetch("/api/anchor/alerts", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                credentials: "same-origin",
+                                body: JSON.stringify({ markAllSeen: true }),
+                              }).catch(() => undefined);
+                              const merged = { ...anchorCfgRef.current, armed: false, lastAlertAt: null, remoteAlarmSilencedUntilReset: false };
+                              setAnchorCfg(merged);
+                              setAnchorAlertConfig(merged);
+                              clearPresentedAnchorAlertId();
+                              setActiveAnchorAlert(null);
+                              setConfirmDisarm(false);
+                            } catch (e) {
+                              if (isAnchorResetAbortError(e)) {
+                                setAnchorBreachResetError("That took too long. Check connection, then try again.");
+                              } else {
+                                setAnchorBreachResetError(e instanceof Error ? e.message : "Unexpected error.");
+                              }
+                            } finally {
+                              setAnchorBreachResetBusyKind(null);
+                            }
+                          })();
+                        }}
+                        className="flex-1 rounded-lg bg-red-600 px-3 py-2 text-sm font-bold text-white hover:bg-red-500 disabled:opacity-50"
+                      >
+                        {anchorBreachResetBusyKind === "remote_silence" ? "Working…" : "Yes, turn off"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={anchorBreachResetBusyKind !== null}
+                        onClick={() => setConfirmDisarm(false)}
+                        className="flex-1 rounded-lg border border-white/40 bg-white/10 px-3 py-2 text-sm font-bold text-white hover:bg-white/20 disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={anchorBreachResetBusyKind !== null || ANCHOR_LIVE_APIS_BLOCKED}
+                    onClick={() => setConfirmDisarm(true)}
+                    className="h-12 w-full rounded-xl border border-zinc-400/90 bg-zinc-800/80 text-sm font-bold text-zinc-100 hover:bg-zinc-700/90 disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-xs"
+                  >
+                    Turn off anchor monitoring
+                  </button>
+                )}
               </>
             )}
             <button
@@ -3111,7 +3137,8 @@ export default function HomeLocationMap({
               <>
                 This handset is <strong className="text-white/85">not</strong> the monitoring device — actions are sent
                 as commands to the boat. <strong className="text-white/85">Reset</strong> uses only the boat GPS.{" "}
-                <strong className="text-white/85">Silence</strong> mutes remote alerts until the boat resets the anchor.{" "}
+                <strong className="text-white/85">Turn off anchor monitoring</strong> disarms the anchor alarm on all
+                devices.{" "}
                 <strong className="text-white/85">Mark seen</strong> stops the alarm here without changing the geofence.
               </>
             )}
