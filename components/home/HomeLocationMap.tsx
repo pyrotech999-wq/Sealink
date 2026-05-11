@@ -2376,9 +2376,18 @@ export default function HomeLocationMap({
                 onClick={() => {
                   if (anchorCfg.armed) {
                     void stopAndroidAnchorNativeMonitoringIfNeeded();
-                    const merged = { ...anchorCfg, armed: false, lastAlertAt: null };
+                    const merged = { ...anchorCfg, armed: false, lastAlertAt: null, remoteAlarmSilencedUntilReset: false };
                     setAnchorCfg(merged);
                     setAnchorAlertConfig(merged);
+                    if (!ANCHOR_LIVE_APIS_BLOCKED) {
+                      void fetch("/api/anchor/geofence", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        credentials: "same-origin",
+                        body: JSON.stringify({ armed: false, remoteAlarmSilencedUntilReset: false, lastAlertAt: null }),
+                        keepalive: true,
+                      }).catch(() => undefined);
+                    }
                   } else if (!anchorCompact) {
                     setAnchorOpen(true);
                   }
@@ -3130,6 +3139,7 @@ export default function HomeLocationMap({
               ...next,
               lastAlertAt: null,
               lastBearingDeg: anchorChanged ? null : anchorCfg.lastBearingDeg,
+              ...(next.armed === false ? { remoteAlarmSilencedUntilReset: false } : {}),
             };
             setAnchorCfg(merged);
             setAnchorAlertConfig(merged);
