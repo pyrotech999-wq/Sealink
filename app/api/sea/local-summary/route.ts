@@ -393,6 +393,7 @@ async function fetchWorldTidesTable(coords: { lat: number; lng: number }): Promi
   })()
     .then((v) => {
       worldTidesCache.set(key, { storedAt: Date.now(), value: v });
+      void tideKvSet(`wt:${key}`, v, WORLD_TIDES_CACHE_TTL_S);
       return v;
     })
     .finally(() => {
