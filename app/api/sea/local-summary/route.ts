@@ -312,13 +312,13 @@ type CachedWorldTides = { storedAt: number; value: WorldTidesTable | null };
 const worldTidesCache = new Map<string, CachedWorldTides>();
 const worldTidesInflight = new Map<string, Promise<WorldTidesTable | null>>();
 const WORLD_TIDES_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+const WORLD_TIDES_CACHE_TTL_S = Math.round(WORLD_TIDES_CACHE_TTL_MS / 1000);
 
 function bucketCoord(n: number): number {
   return Math.round(n * 10) / 10;
 }
 
 function worldTidesCacheKey(coords: { lat: number; lng: number }): string {
-  // Cache broadly across a grid bucket to maximize hit rate.
   return `lat=${bucketCoord(coords.lat).toFixed(1)}|lng=${bucketCoord(coords.lng).toFixed(1)}|days=3|datum=CD`;
 }
 
@@ -327,8 +327,15 @@ async function fetchWorldTidesTable(coords: { lat: number; lng: number }): Promi
   if (!(typeof worldTidesKey === "string" && worldTidesKey.trim())) return null;
 
   const key = worldTidesCacheKey(coords);
-  const hit = worldTidesCache.get(key);
-  if (hit && Date.now() - hit.storedAt < WORLD_TIDES_CACHE_TTL_MS) return hit.value;
+  const ramHit = worldTidesCache.get(key);
+  if (ramHit && Date.now() - ramHit.storedAt < WORLD_TIDES_CACHE_TTL_MS) return ramHit.value;
+
+  const kvResult = await tideKvGet<WorldTidesTable | null>(`wt:${key}`, WORLD_TIDES_CACHE_TTL_MS);
+  if (kvResult.hit) {
+    worldTidesCache.set(key, { storedAt: Date.now(), value: kvResult.value });
+    return kvResult.value;
+  }
+
   const existing = worldTidesInflight.get(key);
   if (existing) return existing;
 
