@@ -6,7 +6,6 @@ import { startAnchorAlarmSiren, stopAnchorAlarmSiren } from "@/lib/anchor-alarm-
 import {
   clearPresentedAnchorAlertId,
   readPresentedAnchorAlertId,
-  shouldReceiveAnchorAlarmPopUp,
   writePresentedAnchorAlertId,
 } from "@/lib/anchor-alarm-recipient";
 import { ANCHOR_LIVE_APIS_BLOCKED } from "@/lib/anchor-live-client-flags";
@@ -198,21 +197,6 @@ export function AnchorAlertsGlobalHost() {
         if (!mj.signedIn) {
           if (disposed) return;
           setAlert(null);
-          return;
-        }
-
-        const mr = await fetch("/api/anchor/monitor", { credentials: "same-origin", cache: "no-store" });
-        if (!mr.ok) return;
-        const md = (await mr.json()) as { config?: { alertDeviceIds?: string[]; monitorDeviceId?: string | null } };
-        const alertDeviceIds = Array.isArray(md?.config?.alertDeviceIds) ? md.config!.alertDeviceIds : [];
-        if (!shouldReceiveAnchorAlarmPopUp(alertDeviceIds, deviceId)) {
-          if (disposed) return;
-          if (alertRef.current) {
-            stopAnchorAlarmSiren();
-            setAlarmBlocked(false);
-            clearPresentedAnchorAlertId();
-            setAlert(null);
-          }
           return;
         }
 
