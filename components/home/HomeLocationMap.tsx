@@ -3176,7 +3176,7 @@ export default function HomeLocationMap({
               ...next,
               lastAlertAt: null,
               lastBearingDeg: anchorChanged ? null : anchorCfg.lastBearingDeg,
-              ...(next.armed === false ? { remoteAlarmSilencedUntilReset: false } : {}),
+              remoteAlarmSilencedUntilReset: false,
             };
             setAnchorCfg(merged);
             setAnchorAlertConfig(merged);
