@@ -28,7 +28,7 @@ const fallback = process.env.NEXT_PUBLIC_APP_URL?.trim();
 const serverUrl = (explicit || fallback)?.replace(/\/+$/, "") ?? "";
 
 const config: CapacitorConfig = {
-  appId: "com.sealink.app",
+  appId: "com.SeaLink",
   appName: "SeaLink",
   webDir: "public",
   ...(serverUrl
