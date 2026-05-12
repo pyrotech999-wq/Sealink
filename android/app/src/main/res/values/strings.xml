@@ -2,8 +2,8 @@
 <resources>
     <string name="app_name">SeaLink</string>
     <string name="title_activity_main">SeaLink</string>
-    <string name="package_name">com.sealink.app</string>
-    <string name="custom_url_scheme">com.sealink.app</string>
+    <string name="package_name">com.SeaLink</string>
+    <string name="custom_url_scheme">com.SeaLink</string>
     <string name="anchor_alert_fg_notification_title">SeaLink Anchor Alert</string>
     <string name="anchor_alert_fg_notification_text">SeaLink Anchor Alert is monitoring your anchor position.</string>
 </resources>
