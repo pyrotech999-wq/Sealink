@@ -3,8 +3,8 @@ import { normaliseAnchorDeviceRowsForUi } from "@/lib/anchor-device-display";
 import { listAnchorDevices, type AnchorDeviceRow } from "@/lib/anchor-devices-store";
 
 /**
- * Devices for anchor UI: active account_devices (max 2) are the source of truth; anchor store adds last GPS.
- * Anchor-only rows are included if present (e.g. legacy data).
+ * Devices for anchor UI: all account_devices entries (regardless of session active flag)
+ * plus anchor_devices fallback. The active flag controls session limits, not anchor visibility.
  */
 export async function listAnchorDevicesForUi(uid: string): Promise<AnchorDeviceRow[]> {
   const [fromAnchor, accountDevs] = await Promise.all([listAnchorDevices(uid), listAccountDevices(uid)]);
@@ -12,7 +12,6 @@ export async function listAnchorDevicesForUi(uid: string): Promise<AnchorDeviceR
   const map = new Map<string, AnchorDeviceRow>();
 
   for (const a of accountDevs) {
-    if (!a.active) continue;
     const gps = anchorById.get(a.deviceId);
     const name = (gps?.name?.trim() || a.name?.trim() || "This device").slice(0, 40) || "This device";
     map.set(a.deviceId, {
@@ -26,6 +25,10 @@ export async function listAnchorDevicesForUi(uid: string): Promise<AnchorDeviceR
     });
   }
 
+  for (const r of fromAnchor) {
+    if (map.has(r.deviceId)) continue;
+    map.set(r.deviceId, r);
+  }
 
   return normaliseAnchorDeviceRowsForUi([...map.values()]);
 }
