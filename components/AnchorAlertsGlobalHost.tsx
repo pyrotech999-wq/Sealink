@@ -61,11 +61,6 @@ function summarizeSessionFingerprint(sessionId: string | null): string | null {
 
 type AlertRow = { id: string; message: string; createdAt: string };
 
-type AnchorGeofencePollConfig = {
-  monitorDeviceId?: string;
-  remoteAlarmSilencedUntilReset?: boolean;
-};
-
 /**
  * Polls anchor inbox on every signed-in route so the **receiving** phone gets alarms without staying on the map.
  * De-duplicates with {@link HomeLocationMap} via `sessionStorage` so the same server alert does not open twice.
@@ -206,21 +201,9 @@ export function AnchorAlertsGlobalHost() {
           return;
         }
 
-        const [mr, gr] = await Promise.all([
-          fetch("/api/anchor/monitor", { credentials: "same-origin", cache: "no-store" }),
-          fetch("/api/anchor/geofence", { credentials: "same-origin", cache: "no-store" }),
-        ]);
+        const mr = await fetch("/api/anchor/monitor", { credentials: "same-origin", cache: "no-store" });
         if (!mr.ok) return;
         const md = (await mr.json()) as { config?: { alertDeviceIds?: string[]; monitorDeviceId?: string | null } };
-        let gcfg: AnchorGeofencePollConfig | null = null;
-        if (gr.ok) {
-          try {
-            const gd = (await gr.json()) as { config?: AnchorGeofencePollConfig };
-            gcfg = gd.config && typeof gd.config === "object" ? gd.config : null;
-          } catch {
-            gcfg = null;
-          }
-        }
         const alertDeviceIds = Array.isArray(md?.config?.alertDeviceIds) ? md.config!.alertDeviceIds : [];
         if (!shouldReceiveAnchorAlarmPopUp(alertDeviceIds, deviceId)) {
           if (disposed) return;
@@ -240,21 +223,6 @@ export function AnchorAlertsGlobalHost() {
         if (disposed) return;
         const first = list[0];
         if (!first) {
-          if (alertRef.current) {
-            stopAnchorAlarmSiren();
-            setAlarmBlocked(false);
-            clearPresentedAnchorAlertId();
-            setAlert(null);
-          }
-          return;
-        }
-
-        const effective = effectiveMonitorDeviceIdFromServer({
-          serverMonitorDeviceId: md?.config?.monitorDeviceId,
-          geofenceMonitorDeviceId: gcfg?.monitorDeviceId,
-        });
-        if (gcfg?.remoteAlarmSilencedUntilReset === true && effective) {
-          if (disposed) return;
           if (alertRef.current) {
             stopAnchorAlarmSiren();
             setAlarmBlocked(false);

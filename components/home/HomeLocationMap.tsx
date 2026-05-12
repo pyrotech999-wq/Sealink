@@ -518,7 +518,6 @@ export default function HomeLocationMap({
           typeof s.lastAlarmMessage === "string" &&
           s.lastAlarmMessage.trim()
         ) {
-          if (anchorCfgRef.current.remoteAlarmSilencedUntilReset === true) return;
           if (!shouldReceiveAnchorAlarmPopUp(anchorMonitorRef.current?.alertDeviceIds, deviceId)) return;
           const cur = activeAnchorAlertRef.current;
           if (!cur || cur.id.startsWith("native-")) {
@@ -1500,8 +1499,6 @@ export default function HomeLocationMap({
       }
 
       if (!driftTriggered && !angleTriggered) return;
-
-      if (anchorCfg.remoteAlarmSilencedUntilReset === true) return;
 
       const last = anchorCfg.lastAlertAt ? new Date(anchorCfg.lastAlertAt).getTime() : 0;
       const now = Date.now();
