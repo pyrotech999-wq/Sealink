@@ -31,14 +31,10 @@ const config: CapacitorConfig = {
   appId: "com.SeaLink",
   appName: "SeaLink",
   webDir: "public",
-  ...(serverUrl
-    ? {
-        server: {
-          url: serverUrl,
-          cleartext: serverUrl.startsWith("http://"),
-        },
-      }
-    : {}),
+  server: {
+    url: "https://sealinkapp.com",
+    cleartext: false,
+  },
 };
 
 export default config;
