@@ -10,6 +10,8 @@ import {
   type OpcRegionId,
   type OpcTimelineKey,
 } from "@/lib/weather/opc-products";
+import { useIsMobileApp } from "@/hooks/useIsMobileApp";
+import { ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
 
 const FORECAST_KEYS: OpcTimelineKey[] = ["24h", "48h", "72h", "96h"];
 
@@ -18,6 +20,7 @@ function clampIdx(n: number, a: number, b: number): number {
 }
 
 export function OpcChartsBox() {
+  const { isMobile, mounted } = useIsMobileApp();
   const [regionId, setRegionId] = useState<OpcRegionId>("atlantic");
   const region = useMemo(() => getOpcRegion(regionId), [regionId]);
 
@@ -68,6 +71,134 @@ export function OpcChartsBox() {
     },
     [canStepForecast, effectiveTimeline, family.productsByTimeline],
   );
+
+  if (mounted && isMobile) {
+    return (
+      <div className="space-y-4 text-slate-100">
+        {/* Region & Family Selectors */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-col gap-1 text-left">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Region</label>
+            <select
+              value={regionId}
+              onChange={(e) => {
+                const next = e.target.value as OpcRegionId;
+                setRegionId(next);
+                const nextRegion = getOpcRegion(next);
+                const stillHasFamily = nextRegion.families.some((f) => f.id === familyId);
+                if (!stillHasFamily) setFamilyId(nextRegion.families[0]!.id);
+              }}
+              className="w-full rounded-xl border border-white/[0.08] bg-black/40 px-3 py-2.5 text-xs font-bold text-slate-200 outline-none focus:border-indigo-500 transition-all"
+            >
+              {OPC_REGIONS.map((r) => (
+                <option key={r.id} value={r.id} className="bg-zinc-950 text-white">
+                  {r.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1 text-left">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Chart Type</label>
+            <select
+              value={familyId}
+              onChange={(e) => setFamilyId(e.target.value as OpcChartFamilyId)}
+              className="w-full rounded-xl border border-white/[0.08] bg-black/40 px-3 py-2.5 text-xs font-bold text-slate-200 outline-none focus:border-indigo-500 transition-all"
+            >
+              {region.families.map((f) => (
+                <option key={f.id} value={f.id} className="bg-zinc-950 text-white">
+                  {f.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Timeline selector */}
+        <div className="flex flex-col gap-1 text-left">
+          <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Forecast Period</label>
+          <div className="flex items-center gap-2">
+            <div className="flex-1 flex gap-1 overflow-x-auto pb-1.5 scrollbar-hide">
+              {OPC_TIMELINES.map(({ key, label }) => {
+                const enabled = !!family.productsByTimeline[key];
+                const active = key === effectiveTimeline;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    disabled={!enabled}
+                    onClick={() => setTimeline(key)}
+                    className={`h-9 px-3 rounded-xl text-xs font-bold transition-all shrink-0 active:scale-95 ${
+                      active
+                        ? "bg-indigo-600 text-white shadow-md border border-indigo-500/20"
+                        : enabled
+                          ? "bg-white/[0.03] border border-white/[0.05] text-slate-300 hover:bg-white/[0.06]"
+                          : "text-zinc-600 opacity-30 cursor-not-allowed border border-transparent"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Steppers */}
+            <div className="flex gap-1 shrink-0">
+              <button
+                type="button"
+                disabled={!canStepForecast || forecastIdx <= 0}
+                onClick={() => stepForecast(-1)}
+                className="h-9 w-9 rounded-xl border border-white/[0.06] bg-white/[0.03] active:bg-white/[0.08] flex items-center justify-center text-slate-300 disabled:opacity-30 active:scale-95 transition-all"
+                title="Previous forecast period"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <button
+                type="button"
+                disabled={!canStepForecast || forecastIdx >= FORECAST_KEYS.length - 1}
+                onClick={() => stepForecast(1)}
+                className="h-9 w-9 rounded-xl border border-white/[0.06] bg-white/[0.03] active:bg-white/[0.08] flex items-center justify-center text-slate-300 disabled:opacity-30 active:scale-95 transition-all"
+                title="Next forecast period"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Chart View Container */}
+        <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-black/25 flex flex-col shadow-inner">
+          <div className="flex items-center justify-between border-b border-white/[0.05] px-3.5 py-2 text-[10px] text-zinc-400 font-bold bg-[#091220]/45">
+            <span className="truncate">{region.label} · {family.label} · {effectiveTimeline.toUpperCase()}</span>
+            <a
+              className="shrink-0 flex items-center gap-1 text-[9px] font-extrabold text-blue-400 bg-blue-500/10 border border-blue-500/25 px-2 py-0.5 rounded-lg active:scale-95 transition-all"
+              href="https://ocean.weather.gov/Loops/index.php"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <span>OPC Site</span>
+              <ExternalLink size={8} />
+            </a>
+          </div>
+
+          <div className="flex items-center justify-center p-2 bg-zinc-950/20">
+            {imgSrc ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={imgSrc}
+                alt=""
+                className="h-auto w-full rounded-xl bg-white shadow-lg border border-white/[0.04]"
+              />
+            ) : (
+              <div className="w-full py-16 text-center text-xs text-zinc-500">
+                No chart available for this selection.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 sm:p-5">
@@ -200,4 +331,3 @@ export function OpcChartsBox() {
     </section>
   );
 }
-

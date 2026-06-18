@@ -4,6 +4,10 @@ export type HourlyWindSlot = {
   mph: number;
   /** Degrees, direction wind blows *from* (met convention) */
   dirFromDeg: number;
+  /** Wind gust in mph */
+  gustMph: number;
+  /** Sea state description (e.g., "Rough seas developing") */
+  seaStateDescription?: string;
 };
 
 type OpenMeteoHourly = {
@@ -11,6 +15,7 @@ type OpenMeteoHourly = {
     time?: string[];
     wind_speed_10m?: number[];
     wind_direction_10m?: number[];
+    wind_gusts_10m?: number[];
   };
 };
 
@@ -25,7 +30,7 @@ export async function fetchWindSlotsEvery3h(
   const url = new URL("https://api.open-meteo.com/v1/forecast");
   url.searchParams.set("latitude", String(lat));
   url.searchParams.set("longitude", String(lng));
-  url.searchParams.set("hourly", "wind_speed_10m,wind_direction_10m");
+  url.searchParams.set("hourly", "wind_speed_10m,wind_direction_10m,wind_gusts_10m");
   url.searchParams.set("forecast_days", "7");
   url.searchParams.set("wind_speed_unit", "mph");
   url.searchParams.set("timezone", "auto");
@@ -39,6 +44,7 @@ export async function fetchWindSlotsEvery3h(
   const times = data.hourly?.time ?? [];
   const speeds = data.hourly?.wind_speed_10m ?? [];
   const dirs = data.hourly?.wind_direction_10m ?? [];
+  const gusts = data.hourly?.wind_gusts_10m ?? [];
 
   const out: HourlyWindSlot[] = [];
   for (let i = 0; i < times.length; i += 3) {
@@ -46,9 +52,11 @@ export async function fetchWindSlotsEvery3h(
     if (!at) continue;
     const rawM = speeds[i];
     const rawD = dirs[i];
+    const rawG = gusts[i];
     const mph = typeof rawM === "number" && !Number.isNaN(rawM) ? rawM : 0;
     const dirFromDeg = typeof rawD === "number" && !Number.isNaN(rawD) ? rawD : 0;
-    out.push({ at, mph, dirFromDeg });
+    const gustMph = typeof rawG === "number" && !Number.isNaN(rawG) ? rawG : 0;
+    out.push({ at, mph, dirFromDeg, gustMph });
   }
   return out;
 }

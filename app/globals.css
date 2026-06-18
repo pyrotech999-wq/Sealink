@@ -172,3 +172,10 @@ html.dark .sealink-weather-scroll::-webkit-scrollbar-thumb:hover {
 .sealink-broadcast-new-replies {
   animation: sealink-broadcast-reply-flash 2s ease-in-out infinite;
 }
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}

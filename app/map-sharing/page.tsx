@@ -1,29 +1,14 @@
-import { HomeHeader } from "@/components/HomeHeader";
-import { HomeLocationMapLoader } from "@/components/home/HomeLocationMapLoader";
-import { SeaLinkBrandFooter } from "@/components/SeaLinkBrandFooter";
 import { getAuthUser } from "@/lib/auth";
+import MapSharingSwitcher from "./MapSharingSwitcher";
 
 export const dynamic = "force-dynamic";
 
 export default async function MapSharingSettingsPage() {
   const authUser = await getAuthUser();
   const signedIn = Boolean(authUser);
+  const isAdmin = authUser?.isAdmin ?? false;
 
   return (
-    <div className="flex flex-1 flex-col bg-black">
-      <HomeHeader signedIn={signedIn} isAdmin={authUser?.isAdmin ?? false} />
-
-      <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col px-4 py-8 sm:px-6 sm:py-10">
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-50">Map sharing</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
-          Set your pin details and the three sharing options, then use the green or grey button to turn GPS sharing on
-          or off. The live map is on the home page.
-        </p>
-
-        <HomeLocationMapLoader signedIn={signedIn} isAdmin={authUser?.isAdmin ?? false} sharingUiMode="settings" />
-
-        <SeaLinkBrandFooter />
-      </main>
-    </div>
+    <MapSharingSwitcher signedIn={signedIn} isAdmin={isAdmin} />
   );
 }

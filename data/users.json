@@ -8,5 +8,25 @@
     },
     "createdAt": "2026-05-01T08:43:24.175Z",
     "updatedAt": "2026-05-01T08:43:24.175Z"
+  },
+  "daniel123@yopmail.com": {
+    "uid": "58b623dd5649931ab85407deda178b5d",
+    "email": "daniel123@yopmail.com",
+    "password": {
+      "saltHex": "5f3e27f973cf74c8aff0a78ca980e7b4",
+      "hashHex": "87d05195eeb6244b9fb549f998903178e337f87694a615540fc6fd659c5b72aaf30f7df2132b8e7811e089af9d063b619e46bca79bb228c7e64b07b91fb6ec61"
+    },
+    "createdAt": "2026-06-12T11:13:14.450Z",
+    "updatedAt": "2026-06-12T11:13:14.450Z"
+  },
+  "d@gmail.com": {
+    "uid": "1e4c3b698efe0f0939e7a9e37400baca",
+    "email": "d@gmail.com",
+    "password": {
+      "saltHex": "dcc3ca77a49e8e44c7cb9e7d50d0c249",
+      "hashHex": "af6abb292e5a11c72e3c34863bc0067ca3f7c0cd4f3536a8c4179615d96b0b4d28daccb3f8b1e6437e4ca4d1cb5bf31added2f7b2bf42c530ebd820d5055696b"
+    },
+    "createdAt": "2026-06-18T12:57:04.556Z",
+    "updatedAt": "2026-06-18T12:57:04.556Z"
   }
 }

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { paymentEnvStatus } from "@/lib/payment-env-status";
-import { PaymentClient } from "./PaymentClient";
+import PaymentSwitcher from "./PaymentSwitcher";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +20,7 @@ export default async function PaymentPage({ searchParams }: Props) {
 
   return (
     <div className="flex flex-1 flex-col bg-black">
-      <PaymentClient
+      <PaymentSwitcher
         showCanceled={showCanceled}
         planRequired={planRequired}
         initialStripeSubscriptionsReady={envPay.stripeSubscriptions}
@@ -29,3 +29,4 @@ export default async function PaymentPage({ searchParams }: Props) {
     </div>
   );
 }
+

@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { MessagingBroadcastClient } from "./MessagingBroadcastClient";
 import { canSendGlobalAreaBroadcast, getAuthUser } from "@/lib/auth";
+import MessagesSwitcher from "@/components/mobile/messages/MessagesSwitcher";
 
 export const metadata: Metadata = {
   title: "Messages",
@@ -15,6 +16,7 @@ export default async function MessagingPage() {
   const canSendGlobalBroadcast = authUser ? canSendGlobalAreaBroadcast(authUser.email) : false;
 
   return (
+    <MessagesSwitcher signedIn={signedIn} canSendGlobalBroadcast={canSendGlobalBroadcast}>
     <div className="flex min-h-0 flex-1 flex-col bg-zinc-100 dark:bg-zinc-950">
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-8 sm:px-6 sm:py-10">
         <Link
@@ -46,5 +48,6 @@ export default async function MessagingPage() {
         </div>
       </main>
     </div>
+    </MessagesSwitcher>
   );
 }

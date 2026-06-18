@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AttributionControl, Circle, MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import { LifeOnSeasDailyModal } from "@/components/home/LifeOnSeasDailyModal";
 import { AnchorAlertModal } from "@/components/home/AnchorAlertModal";
+import { useIsMobileApp } from "@/hooks/useIsMobileApp";
 import { HomeMessagesCtaButton } from "@/components/home/HomeMessagesCtaButton";
 import { WeatherForecast7Day } from "@/components/home/WeatherForecast7Day";
 import {
@@ -249,6 +250,7 @@ export default function HomeLocationMap({
   /** When false: hide friends toggle, nearby ring, and peer pins (e.g. dedicated anchor page). */
   showNearbyFriends?: boolean;
 }) {
+  const { isMobile, mounted } = useIsMobileApp();
   const isSettings = sharingUiMode === "settings";
   const anchorCompact = anchorPlacement === "compact" && !isSettings;
   const [boatInput, setBoatInput] = useState(() => (typeof window !== "undefined" ? getBoatName() : ""));
@@ -298,10 +300,14 @@ export default function HomeLocationMap({
   }, [activeAnchorAlert]);
 
   const [anchorBreachResetBusyKind, setAnchorBreachResetBusyKind] = useState<
-    null | "monitor" | "this" | "remote_reset" | "remote_increase" | "remote_silence"
+    null | "monitor" | "this" | "this_phone" | "remote_reset" | "remote_increase" | "remote_silence" | "disarm_all"
   >(null);
   const [anchorBreachResetError, setAnchorBreachResetError] = useState<string | null>(null);
   const [confirmDisarm, setConfirmDisarm] = useState(false);
+
+
+
+
   useEffect(() => {
     setAnchorBreachResetError(null);
     setAnchorBreachResetBusyKind(null);
@@ -1759,7 +1765,7 @@ export default function HomeLocationMap({
     const accuracyForStabilizer = (accuracyRaw: number | null): number =>
       accuracyRaw ?? ANCHOR_MAX_HORIZ_ACCURACY_M;
 
-    let tryFinishRefinement: (accuracyRaw: number | null) => void = () => {};
+    let tryFinishRefinement: (accuracyRaw: number | null) => void = () => { };
 
     const applyGeoSample = (lat: number, lng: number, accuracyRaw: number | null, timestampMs: number) => {
       if (disposed) return;
@@ -1812,10 +1818,10 @@ export default function HomeLocationMap({
       const opts: PositionOptions = refining
         ? GPS_REFINE_WATCH_OPTIONS
         : {
-            enableHighAccuracy: true,
-            maximumAge: 0,
-            timeout: armed ? 55_000 : 35_000,
-          };
+          enableHighAccuracy: true,
+          maximumAge: 0,
+          timeout: armed ? 55_000 : 35_000,
+        };
       navigator.geolocation.getCurrentPosition(
         (p) => {
           if (disposed) return;
@@ -2155,7 +2161,159 @@ export default function HomeLocationMap({
       : DEFAULT_CENTER;
   const zoom = mapPinPos ? 14 : hasAnchorGeofence ? 17 : DEFAULT_ZOOM;
 
-  const sharingSettingsPanel = (
+  const sharingSettingsPanel = isMobile ? (
+    <div className="flex flex-col gap-5">
+      {/* Name and Boat Name block */}
+      <div className="bg-gradient-to-br from-[#0c1a30]/85 to-[#061020]/95 border border-white/[0.08] p-5 rounded-[24px] shadow-lg space-y-4">
+        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 block">Identification</span>
+
+        <div>
+          <label htmlFor="sharing-name" className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5 pl-1">
+            Your Name
+          </label>
+          <input
+            id="sharing-name"
+            value={fullName}
+            onChange={(e) => setFullNameState(e.target.value)}
+            onBlur={persistFullName}
+            placeholder="e.g. Colin"
+            className="w-full rounded-xl border border-white/[0.08] bg-[#0c1a30] px-3.5 py-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30 transition-all font-sans"
+          />
+          <span className="text-[9px] text-slate-500 mt-1 pl-1 block leading-tight">
+            Shown after boat name in the nearby popup radar circle.
+          </span>
+        </div>
+
+        <div>
+          <label htmlFor="sharing-boat" className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5 pl-1">
+            Boat Name
+          </label>
+          <input
+            id="sharing-boat"
+            value={boatInput}
+            onChange={(e) => setBoatInput(e.target.value)}
+            onBlur={persistBoat}
+            placeholder="e.g. Sea Sprite"
+            className="w-full rounded-xl border border-white/[0.08] bg-[#0c1a30] px-3.5 py-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30 transition-all font-sans"
+          />
+        </div>
+      </div>
+
+      {/* Sharing options block */}
+      <div className="bg-gradient-to-br from-[#0c1a30]/85 to-[#061020]/95 border border-white/[0.08] p-5 rounded-[24px] shadow-lg space-y-4">
+        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 block">Radar Options</span>
+
+        {/* Option 1: Profile image */}
+        <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/[0.06] bg-black/20 p-4 transition-all hover:bg-black/35 select-none">
+          <input
+            type="checkbox"
+            className="mt-0.5 h-4.5 w-4.5 rounded border-white/20 bg-slate-900 text-cyan-600 focus:ring-cyan-600"
+            checked={showAvatar}
+            onChange={(e) => persistShowAvatar(e.target.checked)}
+          />
+          <div>
+            <span className="text-xs font-bold text-slate-200 block">Show profile avatar</span>
+            <span className="mt-1 block text-[10px] text-slate-400 leading-normal">
+              Displays your profile photo on the map pin instead of a generic icon indicator.
+            </span>
+          </div>
+        </label>
+
+        {/* Option 2: Show Friends */}
+        {EMERGENCY_REENABLE_NEARBY_PRESENCE && (
+          <div className={`rounded-2xl border p-4 space-y-3 transition-all ${sharing && !pos
+            ? "border-blue-500/20 bg-blue-500/[0.02]"
+            : "border-white/[0.06] bg-black/20"
+            }`}>
+            <label className="flex cursor-pointer items-start gap-3 select-none">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4.5 w-4.5 rounded border-white/20 bg-slate-900 text-blue-600 disabled:opacity-50"
+                checked={shareNearby}
+                disabled={Boolean(sharing && !pos)}
+                onChange={(e) => {
+                  const on = e.target.checked;
+                  setShareNearby(on);
+                  setShareNearbyPeers(on);
+                  if (!on) setNearbyPeers([]);
+                }}
+              />
+              <div>
+                <span className="text-xs font-bold text-slate-200 block">Show nearby crew (within 5 miles)</span>
+                <span className="mt-1 block text-[10px] text-slate-400 leading-normal">
+                  Renders unselected crew vessels within a 5 statute mile radius from your console.
+                </span>
+              </div>
+            </label>
+            {sharing && shareNearby && (
+              <div className="pt-2 border-t border-white/[0.05] flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => requestNearbyManualRefresh()}
+                  disabled={nearbyRefreshBlocked || !signedIn || !refreshCoords}
+                  className="h-9 px-3.5 rounded-xl border border-white/[0.08] bg-white/[0.05] text-xs font-bold text-white hover:bg-white/[0.1] active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                >
+                  Refresh peers radar
+                </button>
+                <div className="text-right">
+                  {nearbyRefreshStatusText && (
+                    <p className="text-[9px] text-slate-400 font-mono tracking-tight">{nearbyRefreshStatusText}</p>
+                  )}
+                  {!refreshCoords && (
+                    <p className="text-[9px] text-amber-400 font-mono tracking-tight">Acquiring GPS fix...</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Option 3: Background Consent */}
+        <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-amber-500/10 bg-amber-500/[0.02] p-4 transition-all hover:bg-amber-500/[0.05] select-none">
+          <input
+            type="checkbox"
+            className="mt-0.5 h-4.5 w-4.5 rounded border-white/20 bg-slate-900 text-amber-600 focus:ring-amber-600"
+            checked={bgConsent}
+            onChange={(e) => {
+              const on = e.target.checked;
+              setBackgroundLocationConsent(on);
+              setBgConsentState(on);
+            }}
+          />
+          <div>
+            <span className="text-xs font-bold text-amber-400 block">Keep background updates active</span>
+            <span className="mt-1 block text-[10px] text-slate-400 leading-normal">
+              Allows updates to continue executing in the background while the tab/app is unfocused. Recommended for smart anchor alarms.
+            </span>
+          </div>
+        </label>
+      </div>
+
+      {/* Large Start/Stop Broadcast Action Button */}
+      <div className="space-y-2.5">
+        <button
+          type="button"
+          onClick={() => {
+            setGeoError(null);
+            setSharingOn(!sharing);
+          }}
+          className={`w-full h-12 rounded-xl text-xs font-bold text-white shadow-lg transition-all flex items-center justify-center gap-2 active:scale-[0.98] ${sharing
+            ? "bg-gradient-to-r from-red-600 to-rose-700 hover:brightness-110 shadow-[0_4px_15px_rgba(220,38,38,0.2)] border border-red-500/10"
+            : "bg-gradient-to-r from-emerald-600 to-teal-700 hover:brightness-110 shadow-[0_4px_15px_rgba(5,150,105,0.2)] border border-emerald-500/10"
+            }`}
+        >
+          <span className={`size-2 rounded-full ${sharing ? "bg-red-400 animate-pulse" : "bg-emerald-400"}`} />
+          {sharing ? "Stop Location Broadcast" : "Start Location Broadcast"}
+        </button>
+
+        {sharing && locMode && (
+          <p className="text-center text-[10px] text-slate-400 font-mono tracking-tight bg-black/20 py-2.5 px-4 rounded-xl border border-white/[0.04]">
+            Status: {locMode}
+          </p>
+        )}
+      </div>
+    </div>
+  ) : (
     <div className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
       <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">On your pin</p>
       <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
@@ -2196,11 +2354,10 @@ export default function HomeLocationMap({
       {EMERGENCY_REENABLE_NEARBY_PRESENCE ? (
         <>
           <div
-            className={`flex flex-col gap-2 rounded-lg border p-3 text-[11px] leading-snug sm:flex-row sm:items-center sm:justify-between ${
-              sharing && !pos
-                ? "cursor-wait border-blue-200/80 bg-blue-50/50 text-blue-900 dark:border-blue-900/40 dark:bg-blue-950/25 dark:text-blue-100"
-                : "border-blue-200 bg-blue-50/90 text-blue-950 dark:border-blue-900/50 dark:bg-blue-950/35 dark:text-blue-100"
-            }`}
+            className={`flex flex-col gap-2 rounded-lg border p-3 text-[11px] leading-snug sm:flex-row sm:items-center sm:justify-between ${sharing && !pos
+              ? "cursor-wait border-blue-200/80 bg-blue-50/50 text-blue-900 dark:border-blue-900/40 dark:bg-blue-950/25 dark:text-blue-100"
+              : "border-blue-200 bg-blue-50/90 text-blue-950 dark:border-blue-900/50 dark:bg-blue-950/35 dark:text-blue-100"
+              }`}
           >
             <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-2">
               <input
@@ -2261,11 +2418,10 @@ export default function HomeLocationMap({
           setGeoError(null);
           setSharingOn(!sharing);
         }}
-        className={`flex h-10 w-full items-center justify-center rounded-lg text-sm font-medium ${
-          sharing
-            ? "border border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
-            : "bg-green-600 text-white hover:bg-green-700"
-        }`}
+        className={`flex h-10 w-full items-center justify-center rounded-lg text-sm font-medium ${sharing
+          ? "border border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+          : "bg-green-600 text-white hover:bg-green-700"
+          }`}
       >
         {sharing ? "Stop sharing location on map" : "Share my location on this map"}
       </button>
@@ -2275,6 +2431,606 @@ export default function HomeLocationMap({
       ) : null}
     </div>
   );
+
+  if (mounted && isMobile) {
+    if (isSettings) {
+      return (
+        <section className="w-full space-y-4 px-2" aria-labelledby="map-heading">
+          <div className="flex items-center justify-between pb-2 border-b border-white/[0.05]">
+            <div>
+              <h2 id="map-heading" className="text-base font-extrabold tracking-tight text-slate-100">
+                Map Sharing Settings
+              </h2>
+              <p className="text-[10px] text-zinc-500 mt-0.5">
+                Choose details to show on your map pin
+              </p>
+            </div>
+            <Link
+              href="/"
+              className="inline-flex h-9 px-4 items-center justify-center rounded-xl bg-white/[0.03] active:bg-white/[0.08] border border-white/[0.06] text-xs font-semibold text-zinc-300 transition-all"
+            >
+              ← Map
+            </Link>
+          </div>
+          {geoError ? (
+            <p className="rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2 text-xs text-red-400">
+              {geoError}
+            </p>
+          ) : null}
+          <div className="space-y-4">
+            {sharingSettingsPanel}
+          </div>
+        </section>
+      );
+    }
+
+    return (
+      <section className="w-full space-y-4 px-2 pb-8 animate-fadeIn" aria-labelledby="map-heading">
+        {/* Mobile Header Info Row */}
+        <div className="flex flex-col gap-2 border-b border-white/[0.05] pb-3 shrink-0">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 id="map-heading" className="text-base font-extrabold tracking-tight text-slate-100">
+                Marine Radar Map
+              </h2>
+              <p className="text-[10px] text-zinc-500 mt-0.5">
+                Real-time tracking and weather data
+              </p>
+            </div>
+
+            {/* Quick Actions Row */}
+            <div className="flex items-center gap-2">
+              {sharing && showNearbyFriends ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !shareNearby;
+                    setShareNearby(next);
+                    setShareNearbyPeers(next);
+                    if (!next) setNearbyPeers([]);
+                  }}
+                  className={`inline-flex h-9 items-center justify-center rounded-xl px-3 text-xs font-bold transition-all border ${shareNearby
+                    ? "border-blue-700 bg-blue-600 text-white"
+                    : "border-white/[0.06] bg-white/[0.03] text-slate-300"
+                    }`}
+                >
+                  Friends: {shareNearby ? "ON" : "OFF"}
+                </button>
+              ) : null}
+              {anchorCompact ? (
+                !anchorCfg.armed ? (
+                  <Link
+                    href="/anchor-alarm"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-red-500/20 bg-red-500/10 px-3 text-xs font-bold text-red-400 hover:bg-red-500/20"
+                  >
+                    ⚓ Off
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void stopAndroidAnchorNativeMonitoringIfNeeded();
+                      const merged = { ...anchorCfg, armed: false, lastAlertAt: null, remoteAlarmSilencedUntilReset: false };
+                      setAnchorCfg(merged);
+                      setAnchorAlertConfig(merged);
+                      if (!ANCHOR_LIVE_APIS_BLOCKED) {
+                        void fetch("/api/anchor/geofence", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          credentials: "same-origin",
+                          body: JSON.stringify({ armed: false, remoteAlarmSilencedUntilReset: false, lastAlertAt: null }),
+                          keepalive: true,
+                        }).catch(() => undefined);
+                      }
+                    }}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 text-xs font-bold text-emerald-400 hover:bg-emerald-500/20"
+                  >
+                    ⚓ Armed
+                  </button>
+                )
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setAnchorOpen(true)}
+                  className="inline-flex h-9 items-center justify-center rounded-xl border border-indigo-500/20 bg-indigo-500/10 px-3 text-xs font-bold text-indigo-400"
+                >
+                  Anchor alert
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* GPS Coarse Jitter Warn in Header */}
+          {anchorCfg.armed && anchorLocQuality && anchorLocQuality !== "ok" ? (
+            <p className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[10px] leading-relaxed text-amber-200">
+              {anchorLocQuality === "poor_accuracy"
+                ? `GPS accuracy coarser than ±${ANCHOR_MAX_HORIZ_ACCURACY_M}m — drift checks paused.`
+                : "Stabilizing GPS for the anchor — hold steady..."}
+            </p>
+          ) : null}
+        </div>
+
+        {/* Leaflet Map Frame */}
+        <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0c182c]/40 shadow-2xl h-[340px] sm:h-[380px] w-full min-h-[250px]">
+          <MapContainer
+            center={center}
+            zoom={zoom}
+            className="h-full w-full [&_.leaflet-tile-pane]:opacity-90 [&_.leaflet-popup-content]:max-w-[200px] [&_.leaflet-popup-content]:!m-0 [&_.leaflet-popup-content]:p-2 [&_.leaflet-popup-content]:text-sm"
+            scrollWheelZoom
+            attributionControl={false}
+          >
+            <AttributionControl position="bottomright" prefix={false} />
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+            <MapResizeFix />
+            {activeWind && windIcon ? (
+              <Marker
+                key={`wind-${activeWind.at}-${windSlotIdx}`}
+                position={[windMarkerLat, windMarkerLng]}
+                icon={windIcon}
+                zIndexOffset={650}
+              />
+            ) : null}
+            {hasAnchorGeofence ? (
+              <>
+                <Circle
+                  center={[anchorCfg.lat!, anchorCfg.lng!]}
+                  radius={anchorCfg.radiusM}
+                  pathOptions={{
+                    color: "#d97706",
+                    fillColor: "#f59e0b",
+                    fillOpacity: 0.1,
+                    weight: 2,
+                    dashArray: "10 8",
+                  }}
+                />
+                <Marker
+                  position={[anchorCfg.lat!, anchorCfg.lng!]}
+                  icon={anchorGeofenceIcon}
+                  zIndexOffset={580}
+                >
+                  <Popup maxWidth={220}>
+                    <p className="m-0 text-xs font-semibold text-zinc-900">Anchor geofence</p>
+                    <p className="mt-1 m-0 text-xs text-zinc-600">
+                      Allowed radius {anchorCfg.radiusM}m.
+                    </p>
+                  </Popup>
+                </Marker>
+              </>
+            ) : null}
+            {mapPinPos ? (
+              <>
+                <MapRecenter lat={mapPinPos.lat} lng={mapPinPos.lng} zoom={14} />
+                <Circle
+                  center={[mapPinPos.lat, mapPinPos.lng]}
+                  radius={mapPinPos.accuracyM}
+                  pathOptions={{
+                    color: "#16a34a",
+                    fillColor: "#22c55e",
+                    fillOpacity: 0.12,
+                    weight: 1,
+                  }}
+                />
+                {friendsActive ? (
+                  <Circle
+                    center={[mapPinPos.lat, mapPinPos.lng]}
+                    radius={NEARBY_RING_METRES}
+                    pathOptions={{
+                      color: "#3b82f6",
+                      fillColor: "#3b82f6",
+                      fillOpacity: 0.04,
+                      weight: 1,
+                      dashArray: "6 10",
+                    }}
+                  />
+                ) : null}
+                {friendsActive
+                  ? nearbyPeers.map((p) => (
+                    <Marker
+                      key={`nearby-${p.id}`}
+                      position={[p.lat, p.lng]}
+                      icon={buildNearbyPinIcon(p.avatarDataUrl || "")}
+                      zIndexOffset={620}
+                    >
+                      <Popup maxWidth={200}>
+                        <NearbyPeerPopupBody label={p.label} />
+                      </Popup>
+                    </Marker>
+                  ))
+                  : null}
+                <Marker
+                  key={`${boatInput}:${pinAvatarPeek ? "peek" : "circle"}:${avatarUrl ? avatarUrl.slice(0, 24) : "no-avatar"}`}
+                  position={[mapPinPos.lat, mapPinPos.lng]}
+                  icon={pinIconVisible}
+                  zIndexOffset={750}
+                  eventHandlers={{
+                    click: () => peekMyAvatarOnPin(),
+                  }}
+                />
+              </>
+            ) : null}
+          </MapContainer>
+        </div>
+
+        {/* Wind Timeline Dashboard */}
+        {windErr ? (
+          <p className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-200">
+            Hourly wind: {windErr}
+          </p>
+        ) : null}
+        <WindTimelineControls
+          slots={windSlots}
+          index={windSlotIdx}
+          loading={windLoading}
+          onPrev={() => setWindSlotIdx((i) => Math.max(0, i - 1))}
+          onNext={() => setWindSlotIdx((i) => Math.min(windSlots.length - 1, i + 1))}
+        />
+
+        {/* Telemetry and Sharing Status Card */}
+        <div className="rounded-2xl border border-white/[0.06] bg-[#0c192c]/45 p-4 space-y-3 shadow-md">
+          <p className="text-xs text-zinc-300">
+            Location Sharing: <span className="font-extrabold text-slate-100">{sharing ? "ACTIVE" : "OFF"}</span>
+            {sharing && (pos || gpsRefining) ? (
+              <>
+                {pos ? " · GPS Locked" : " · Acquiring Fix"}
+                {geoAccuracyRawM != null && Number.isFinite(geoAccuracyRawM) ? (
+                  <>
+                    {" · "}
+                    <span className="font-semibold text-zinc-400">
+                      ±{Math.round(geoAccuracyRawM)} m accuracy
+                    </span>
+                  </>
+                ) : null}
+              </>
+            ) : null}
+          </p>
+
+          {sharing && gpsRefining ? (
+            <p className="rounded-xl border border-sky-500/20 bg-sky-500/[0.03] p-3 text-[10px] leading-relaxed text-sky-200">
+              <strong className="font-bold text-sky-300">GPS Warm-up:</strong> High-precision fixes requested. Checking accuracy targeting {GPS_REFINE_TARGET_ACCURACY_M} m...
+            </p>
+          ) : null}
+
+          <Link
+            href="/map-sharing"
+            prefetch={false}
+            className={`flex h-12 w-full items-center justify-center rounded-xl text-sm font-semibold transition-all active:scale-[0.98] ${sharing
+              ? "border border-white/[0.1] bg-white/[0.03] text-slate-300 hover:bg-white/[0.08]"
+              : "bg-green-600 text-white hover:bg-green-500"
+              }`}
+          >
+            {sharing ? "Configure Settings / Stop Sharing" : "Share My Location on Map"}
+          </Link>
+        </div>
+
+        {/* Extraneous Widgets */}
+        {showHomeMapExtras ? (
+          <HomeMessagesCtaButton
+            signedIn={signedIn}
+            readLat={forecastLat}
+            readLng={forecastLng}
+            emergencyDisableLiveMapApis={EMERGENCY_DISABLE_LIVE_MAP_APIS && !EMERGENCY_REENABLE_MAP_LIVE_POLLING}
+          />
+        ) : null}
+
+        {showHomeMapExtras ? (
+          <WeatherForecast7Day lat={forecastCoords.lat} lng={forecastCoords.lng} />
+        ) : null}
+
+        {showHomeMapExtras ? (
+          <LifeOnSeasDailyModal
+            open={lifeSeasOpen}
+            onClose={() => setLifeSeasOpen(false)}
+            pinLive={Boolean(sharing && pos)}
+            lat={pos?.lat ?? null}
+            lng={pos?.lng ?? null}
+          />
+        ) : null}
+
+        {activeAnchorAlert ? (
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="sealink-anchor-alarm-title"
+            aria-describedby="sealink-anchor-alarm-detail"
+            className="sealink-anchor-siren-overlay fixed inset-0 z-[1200] flex flex-col shadow-[inset_0_0_80px_rgba(0,0,0,0.35)]"
+          >
+            <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4 pt-[max(1rem,env(safe-area-inset-top))] text-center">
+              <p
+                id="sealink-anchor-alarm-title"
+                className="text-4xl font-black uppercase leading-none tracking-tight text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)] sm:text-5xl"
+              >
+                Anchor alarm
+              </p>
+              <p className="mt-2 text-sm font-bold uppercase tracking-[0.2em] text-amber-200">Geofence breach — check the boat</p>
+              <p
+                id="sealink-anchor-alarm-detail"
+                className="mt-6 max-w-lg text-lg font-semibold leading-snug text-white sm:text-xl"
+              >
+                {activeAnchorAlert.message}
+              </p>
+              <p className="mt-4 text-xs font-medium text-white/80">
+                {new Date(activeAnchorAlert.createdAt).toLocaleString("en-GB")}
+              </p>
+              {alarmBlocked ? (
+                <button
+                  type="button"
+                  onClick={() => void startAlarm()}
+                  className="mt-6 rounded-xl border-2 border-white/90 bg-black/25 px-5 py-3 text-sm font-bold text-white backdrop-blur-sm hover:bg-black/40"
+                >
+                  Tap to play alarm sound
+                </button>
+              ) : null}
+              {anchorBreachResetError ? (
+                <p className="mt-4 max-w-md rounded-lg border border-amber-500/50 bg-amber-950/40 px-3 py-2 text-xs leading-snug text-amber-100">
+                  {anchorBreachResetError}
+                </p>
+              ) : null}
+            </div>
+            <div className="flex shrink-0 flex-col gap-3 border-t-2 border-white/25 bg-black/35 px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-md sm:flex-row sm:justify-center">
+              {breachIsMonitoringDevice ? (
+                <>
+                  <button
+                    type="button"
+                    disabled={anchorBreachResetBusyKind !== null}
+                    onClick={() => {
+                      stopAlarm();
+                      if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
+                      const seenId = activeAnchorAlert.id;
+                      void (async () => {
+                        setAnchorBreachResetError(null);
+                        setAnchorBreachResetBusyKind("monitor");
+                        const { signal, clear } = createAnchorResetNetworkAbort();
+                        try {
+                          if (ANCHOR_LIVE_APIS_BLOCKED) {
+                            const mapPos =
+                              pos && Number.isFinite(pos.lat) && Number.isFinite(pos.lng)
+                                ? { lat: pos.lat, lng: pos.lng }
+                                : null;
+                            const cur = await getGpsFixForAnchorReset(mapPos);
+                            if (!cur) {
+                              setAnchorBreachResetError("Could not resolve location. Verify GPS permissions.");
+                              return;
+                            }
+                            const next = { ...anchorCfg, lat: cur.lat, lng: cur.lng, lastAlertAt: null, remoteAlarmSilencedUntilReset: false };
+                            setAnchorCfg(next);
+                            setAnchorAlertConfig(next);
+                          } else {
+                            const effectiveMonitor = effectiveMonitorDeviceIdForHomeMap({
+                              thisDeviceId: deviceId,
+                              serverMonitorDeviceId: anchorMonitor?.monitorDeviceId,
+                              geofenceMonitorDeviceId: anchorCfg.monitorDeviceId,
+                            });
+                            const mapPos =
+                              pos && Number.isFinite(pos.lat) && Number.isFinite(pos.lng)
+                                ? { lat: pos.lat, lng: pos.lng }
+                                : null;
+                            const nextCoords = await resolveAnchorResetCentreCoordinates({
+                              thisDeviceId: deviceId,
+                              effectiveMonitorDeviceId: effectiveMonitor,
+                              mapPosIfThisDeviceIsMonitor: mapPos,
+                              allowBrowserGpsFallback: true,
+                              signal,
+                            });
+                            if (!nextCoords) {
+                              setAnchorBreachResetError("Could not resolve monitor position.");
+                              return;
+                            }
+                            const next = { ...anchorCfg, lat: nextCoords.lat, lng: nextCoords.lng, lastAlertAt: null, remoteAlarmSilencedUntilReset: false };
+                            setAnchorCfg(next);
+                            setAnchorAlertConfig(next);
+                          }
+                          await fetch("/api/anchor/alerts", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ seenId, disarmMonitor: false, resetAnchorCoords: true }),
+                            credentials: "same-origin",
+                          });
+                          setActiveAnchorAlert(null);
+                        } catch (e: unknown) {
+                          if (isAnchorResetAbortError(e)) return;
+                          setAnchorBreachResetError(e instanceof Error ? e.message : "Reset command failed.");
+                        } finally {
+                          setAnchorBreachResetBusyKind(null);
+                          clear();
+                        }
+                      })();
+                    }}
+                    className="h-14 w-full rounded-xl bg-green-600 text-base font-bold text-white shadow-lg hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-xs"
+                  >
+                    Reset at monitor position
+                  </button>
+                  <button
+                    type="button"
+                    disabled={anchorBreachResetBusyKind !== null || !pos}
+                    onClick={() => {
+                      stopAlarm();
+                      if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
+                      const seenId = activeAnchorAlert.id;
+                      void (async () => {
+                        setAnchorBreachResetError(null);
+                        setAnchorBreachResetBusyKind("this_phone");
+                        try {
+                          const next = { ...anchorCfg, lat: pos!.lat, lng: pos!.lng, lastAlertAt: null, remoteAlarmSilencedUntilReset: false };
+                          setAnchorCfg(next);
+                          setAnchorAlertConfig(next);
+                          await fetch("/api/anchor/alerts", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ seenId, disarmMonitor: false, resetAnchorCoords: true }),
+                            credentials: "same-origin",
+                          });
+                          setActiveAnchorAlert(null);
+                        } catch (e: unknown) {
+                          setAnchorBreachResetError(e instanceof Error ? e.message : "Reset command failed.");
+                        } finally {
+                          setAnchorBreachResetBusyKind(null);
+                        }
+                      })();
+                    }}
+                    className="h-14 w-full rounded-xl border border-zinc-700 bg-[#151f32] text-base font-bold text-zinc-100 shadow-lg hover:bg-[#1f2d48] disabled:cursor-not-allowed disabled:opacity-50 sm:max-w-xs"
+                  >
+                    Use this phone’s GPS
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    disabled={anchorBreachResetBusyKind !== null}
+                    onClick={() => {
+                      stopAlarm();
+                      const seenId = activeAnchorAlert.id;
+                      void (async () => {
+                        setAnchorBreachResetError(null);
+                        setAnchorBreachResetBusyKind("monitor");
+                        const { signal, clear } = createAnchorResetNetworkAbort();
+                        try {
+                          await fetch("/api/anchor/alerts", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ seenId, disarmMonitor: false, resetAnchorCoords: true }),
+                            credentials: "same-origin",
+                          });
+                          setActiveAnchorAlert(null);
+                        } catch (e: unknown) {
+                          if (isAnchorResetAbortError(e)) return;
+                          setAnchorBreachResetError(e instanceof Error ? e.message : "Reset command failed.");
+                        } finally {
+                          setAnchorBreachResetBusyKind(null);
+                          clear();
+                        }
+                      })();
+                    }}
+                    className="h-14 w-full rounded-xl bg-green-600 text-base font-bold text-white shadow-lg hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-xs"
+                  >
+                    Reset at boat position
+                  </button>
+                  <button
+                    type="button"
+                    disabled={anchorBreachResetBusyKind !== null}
+                    onClick={() => {
+                      stopAlarm();
+                      const seenId = activeAnchorAlert.id;
+                      void (async () => {
+                        setAnchorBreachResetError(null);
+                        setAnchorBreachResetBusyKind("disarm_all");
+                        try {
+                          await fetch("/api/anchor/alerts", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ seenId, disarmMonitor: true, resetAnchorCoords: false }),
+                            credentials: "same-origin",
+                          });
+                          setActiveAnchorAlert(null);
+                        } catch (e: unknown) {
+                          setAnchorBreachResetError(e instanceof Error ? e.message : "Disarm command failed.");
+                        } finally {
+                          setAnchorBreachResetBusyKind(null);
+                        }
+                      })();
+                    }}
+                    className="h-14 w-full rounded-xl border border-zinc-700 bg-[#151f32] text-base font-bold text-zinc-100 shadow-lg hover:bg-[#1f2d48] disabled:cursor-not-allowed disabled:opacity-50 sm:max-w-xs"
+                  >
+                    Turn off anchor monitoring
+                  </button>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  stopAlarm();
+                  if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
+                  const id = activeAnchorAlert.id;
+                  void (async () => {
+                    try {
+                      await fetch("/api/anchor/alerts", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ seenId: id }),
+                        credentials: "same-origin",
+                      });
+                    } catch {
+                      /* ignore */
+                    }
+                    clearPresentedAnchorAlertId();
+                    setActiveAnchorAlert(null);
+                  })();
+                }}
+                className="h-14 w-full rounded-xl border-2 border-white bg-white/95 text-base font-bold text-red-700 shadow-lg hover:bg-white disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-xs"
+              >
+                Mark seen (stop alarm)
+              </button>
+            </div>
+            <p className="bg-black/40 px-4 py-2 text-center text-[11px] text-white/75">
+              {breachIsMonitoringDevice ? (
+                <>
+                  <strong className="text-white/85">Reset at monitor position</strong> keeps your radius (e.g. 10&nbsp;m)
+                  and moves the orange ring to the <strong className="text-white/85">monitoring device’s</strong> latest GPS.
+                </>
+              ) : (
+                <>
+                  This handset is <strong className="text-white/85">not</strong> the monitoring device — actions are sent
+                  as commands to the boat.
+                </>
+              )}
+            </p>
+          </div>
+        ) : null}
+
+        {!anchorCompact ? (
+          <AnchorAlertModal
+            open={anchorOpen}
+            onClose={() => setAnchorOpen(false)}
+            isAdmin={isAdmin}
+            emergencyDisableLiveMapApis={ANCHOR_LIVE_APIS_BLOCKED}
+            sharing={sharing}
+            hasFix={Boolean(pos)}
+            pos={pos ? { lat: pos.lat, lng: pos.lng } : null}
+            horizontalAccuracyM={geoAccuracyRawM}
+            anchorGpsQuality={anchorCfg.armed ? anchorLocQuality : null}
+            showIOSPreciseHint={isLikelyIOS()}
+            deviceId={deviceId}
+            monitor={anchorMonitor}
+            config={{
+              armed: anchorCfg.armed,
+              lat: anchorCfg.lat,
+              lng: anchorCfg.lng,
+              radiusM: anchorCfg.radiusM,
+              angleDeg: anchorCfg.angleDeg ?? 360,
+              monitorDeviceId: anchorCfg.monitorDeviceId,
+              lastBearingDeg: anchorCfg.lastBearingDeg,
+            }}
+            onUpdate={(next) => {
+              const anchorChanged = next.lat !== anchorCfg.lat || next.lng !== anchorCfg.lng;
+              const merged = {
+                ...anchorCfg,
+                ...next,
+                lastAlertAt: null,
+                lastBearingDeg: anchorChanged ? null : anchorCfg.lastBearingDeg,
+                remoteAlarmSilencedUntilReset: false,
+              };
+              setAnchorCfg(merged);
+              setAnchorAlertConfig(merged);
+              if (!ANCHOR_LIVE_APIS_BLOCKED && sharing) {
+                void fetch("/api/anchor/geofence", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    [ANCHOR_DEVICE_ID_HEADER]: deviceId,
+                  },
+                  body: JSON.stringify(merged),
+                }).catch(() => undefined);
+              }
+            }}
+            onMonitorRolesSaved={(cfg) => setAnchorMonitor(cfg)}
+          />
+        ) : null}
+      </section>
+    );
+  }
 
   return (
     <section className={`w-full space-y-4 ${isSettings ? "mt-4" : "mt-8"}`} aria-labelledby="map-heading">
@@ -2326,11 +3082,10 @@ export default function HomeLocationMap({
                   setShareNearbyPeers(next);
                   if (!next) setNearbyPeers([]);
                 }}
-                className={`inline-flex h-10 shrink-0 items-center justify-center rounded-lg px-4 text-sm font-semibold ${
-                  shareNearby
-                    ? "border border-blue-700 bg-blue-600 text-white hover:bg-blue-700"
-                    : "border border-zinc-300 bg-zinc-50 text-zinc-800 hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
-                }`}
+                className={`inline-flex h-10 shrink-0 items-center justify-center rounded-lg px-4 text-sm font-semibold ${shareNearby
+                  ? "border border-blue-700 bg-blue-600 text-white hover:bg-blue-700"
+                  : "border border-zinc-300 bg-zinc-50 text-zinc-800 hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                  }`}
               >
                 {shareNearby ? "Friends: ON" : "Show friends"}
               </button>
@@ -2401,11 +3156,10 @@ export default function HomeLocationMap({
                     setAnchorOpen(true);
                   }
                 }}
-                className={`relative z-50 inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold sm:min-h-9 sm:px-3.5 sm:text-sm ${
-                  anchorCfg.armed
-                    ? "border-green-300 bg-green-50 text-green-900 hover:bg-green-100 dark:border-green-900/50 dark:bg-green-950/40 dark:text-green-100 dark:hover:bg-green-950/60"
-                    : "border-red-300 bg-red-50 text-red-900 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100 dark:hover:bg-red-950/60"
-                }`}
+                className={`relative z-50 inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold sm:min-h-9 sm:px-3.5 sm:text-sm ${anchorCfg.armed
+                  ? "border-green-300 bg-green-50 text-green-900 hover:bg-green-100 dark:border-green-900/50 dark:bg-green-950/40 dark:text-green-100 dark:hover:bg-green-950/60"
+                  : "border-red-300 bg-red-50 text-red-900 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100 dark:hover:bg-red-950/60"
+                  }`}
                 title={anchorCfg.armed ? "Turn anchor alarm off" : "Open anchor alert settings"}
               >
                 <span className="shrink-0">Anchor</span>
@@ -2519,17 +3273,17 @@ export default function HomeLocationMap({
                     ) : null}
                     {friendsActive
                       ? nearbyPeers.map((p) => (
-                          <Marker
-                            key={`nearby-${p.id}`}
-                            position={[p.lat, p.lng]}
-                            icon={buildNearbyPinIcon(p.avatarDataUrl || "")}
-                            zIndexOffset={620}
-                          >
-                            <Popup maxWidth={200}>
-                              <NearbyPeerPopupBody label={p.label} />
-                            </Popup>
-                          </Marker>
-                        ))
+                        <Marker
+                          key={`nearby-${p.id}`}
+                          position={[p.lat, p.lng]}
+                          icon={buildNearbyPinIcon(p.avatarDataUrl || "")}
+                          zIndexOffset={620}
+                        >
+                          <Popup maxWidth={200}>
+                            <NearbyPeerPopupBody label={p.label} />
+                          </Popup>
+                        </Marker>
+                      ))
                       : null}
                     <Marker
                       key={`${boatInput}:${pinAvatarPeek ? "peek" : "circle"}:${avatarUrl ? avatarUrl.slice(0, 24) : "no-avatar"}`}
@@ -2605,11 +3359,10 @@ export default function HomeLocationMap({
             <Link
               href="/map-sharing"
               prefetch={false}
-              className={`mt-3 flex h-10 w-full items-center justify-center rounded-lg text-sm font-medium ${
-                sharing
-                  ? "border border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
-                  : "bg-green-600 text-white hover:bg-green-700"
-              }`}
+              className={`mt-3 flex h-10 w-full items-center justify-center rounded-lg text-sm font-medium ${sharing
+                ? "border border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                : "bg-green-600 text-white hover:bg-green-700"
+                }`}
             >
               {sharing ? "Stop sharing location on map" : "Share my location on this map"}
             </Link>
@@ -2686,234 +3439,234 @@ export default function HomeLocationMap({
           <div className="flex shrink-0 flex-col gap-3 border-t-2 border-white/25 bg-black/35 px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-md sm:flex-row sm:justify-center">
             {breachIsMonitoringDevice ? (
               <>
-            <button
-              type="button"
-              disabled={anchorBreachResetBusyKind !== null}
-              onClick={() => {
-                stopAlarm();
-                if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
-                const seenId = activeAnchorAlert.id;
-                void (async () => {
-                  setAnchorBreachResetError(null);
-                  setAnchorBreachResetBusyKind("monitor");
-                  const { signal, clear } = createAnchorResetNetworkAbort();
-                  try {
-                    if (ANCHOR_LIVE_APIS_BLOCKED) {
-                      const effectiveMonitor = effectiveMonitorDeviceIdForHomeMap({
-                        thisDeviceId: deviceId,
-                        serverMonitorDeviceId: anchorMonitor?.monitorDeviceId,
-                        geofenceMonitorDeviceId: anchorCfgRef.current.monitorDeviceId,
-                      });
-                      const mapPos =
-                        pos && Number.isFinite(pos.lat) && Number.isFinite(pos.lng)
-                          ? { lat: pos.lat, lng: pos.lng }
-                          : null;
-                      const fix = await resolveAnchorResetCentreCoordinates({
-                        thisDeviceId: deviceId,
-                        effectiveMonitorDeviceId: effectiveMonitor,
-                        mapPosIfThisDeviceIsMonitor: mapPos,
-                        allowBrowserGpsFallback: true,
-                        signal,
-                      });
-                      if (!fix) {
-                        setAnchorBreachResetError("Could not resolve a position in offline mode.");
-                        return;
+                <button
+                  type="button"
+                  disabled={anchorBreachResetBusyKind !== null}
+                  onClick={() => {
+                    stopAlarm();
+                    if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
+                    const seenId = activeAnchorAlert.id;
+                    void (async () => {
+                      setAnchorBreachResetError(null);
+                      setAnchorBreachResetBusyKind("monitor");
+                      const { signal, clear } = createAnchorResetNetworkAbort();
+                      try {
+                        if (ANCHOR_LIVE_APIS_BLOCKED) {
+                          const effectiveMonitor = effectiveMonitorDeviceIdForHomeMap({
+                            thisDeviceId: deviceId,
+                            serverMonitorDeviceId: anchorMonitor?.monitorDeviceId,
+                            geofenceMonitorDeviceId: anchorCfgRef.current.monitorDeviceId,
+                          });
+                          const mapPos =
+                            pos && Number.isFinite(pos.lat) && Number.isFinite(pos.lng)
+                              ? { lat: pos.lat, lng: pos.lng }
+                              : null;
+                          const fix = await resolveAnchorResetCentreCoordinates({
+                            thisDeviceId: deviceId,
+                            effectiveMonitorDeviceId: effectiveMonitor,
+                            mapPosIfThisDeviceIsMonitor: mapPos,
+                            allowBrowserGpsFallback: true,
+                            signal,
+                          });
+                          if (!fix) {
+                            setAnchorBreachResetError("Could not resolve a position in offline mode.");
+                            return;
+                          }
+                          const merged = {
+                            ...anchorCfgRef.current,
+                            lat: fix.lat,
+                            lng: fix.lng,
+                            lastAlertAt: null,
+                            lastBearingDeg: null,
+                          };
+                          setAnchorCfg(merged);
+                          setAnchorAlertConfig(merged);
+                          clearPresentedAnchorAlertId();
+                          setActiveAnchorAlert(null);
+                          return;
+                        }
+
+                        const effectiveMonitor = effectiveMonitorDeviceIdForHomeMap({
+                          thisDeviceId: deviceId,
+                          serverMonitorDeviceId: anchorMonitor?.monitorDeviceId,
+                          geofenceMonitorDeviceId: anchorCfgRef.current.monitorDeviceId,
+                        });
+                        const mapPos =
+                          pos && Number.isFinite(pos.lat) && Number.isFinite(pos.lng)
+                            ? { lat: pos.lat, lng: pos.lng }
+                            : null;
+                        const fix = await resolveAnchorResetCentreCoordinates({
+                          thisDeviceId: deviceId,
+                          effectiveMonitorDeviceId: effectiveMonitor,
+                          mapPosIfThisDeviceIsMonitor: mapPos,
+                          allowBrowserGpsFallback: false,
+                          signal,
+                        });
+                        if (!fix) {
+                          setAnchorBreachResetError(
+                            "No monitor GPS on the server yet. Try “This phone’s GPS”, wait for the boat phone to report a fix, or tap Mark seen.",
+                          );
+                          return;
+                        }
+
+                        try {
+                          await fetch("/api/anchor/alerts", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ seenId }),
+                            credentials: "same-origin",
+                            signal,
+                          });
+                          const merged = {
+                            ...anchorCfgRef.current,
+                            lat: fix.lat,
+                            lng: fix.lng,
+                            lastAlertAt: null,
+                            lastBearingDeg: null,
+                          };
+                          setAnchorCfg(merged);
+                          setAnchorAlertConfig(merged);
+                          await fetch("/api/anchor/geofence", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            credentials: "same-origin",
+                            signal,
+                            body: JSON.stringify({
+                              lat: fix.lat,
+                              lng: fix.lng,
+                              lastAlertAt: null,
+                              lastBearingDeg: null,
+                              remoteAlarmSilencedUntilReset: false,
+                            }),
+                          });
+                        } catch (e) {
+                          if (isAnchorResetAbortError(e)) throw e;
+                          setAnchorBreachResetError("Could not save. Check your connection and try again.");
+                          return;
+                        }
+                        clearPresentedAnchorAlertId();
+                        setActiveAnchorAlert(null);
+                      } catch (e) {
+                        if (isAnchorResetAbortError(e)) {
+                          setAnchorBreachResetError(
+                            "Request timed out. Try “This phone’s GPS”, check your connection, or open Anchor alarm.",
+                          );
+                        }
+                      } finally {
+                        clear();
+                        setAnchorBreachResetBusyKind(null);
                       }
-                      const merged = {
-                        ...anchorCfgRef.current,
-                        lat: fix.lat,
-                        lng: fix.lng,
-                        lastAlertAt: null,
-                        lastBearingDeg: null,
-                      };
-                      setAnchorCfg(merged);
-                      setAnchorAlertConfig(merged);
-                      clearPresentedAnchorAlertId();
-                      setActiveAnchorAlert(null);
-                      return;
-                    }
+                    })();
+                  }}
+                  className="h-14 w-full rounded-xl bg-emerald-500 text-base font-bold text-white shadow-lg hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-xs"
+                >
+                  {anchorBreachResetBusyKind === "monitor"
+                    ? "Loading monitor position…"
+                    : anchorBreachResetBusyKind === "this"
+                      ? "Please wait…"
+                      : "Reset at monitor position"}
+                </button>
+                <button
+                  type="button"
+                  disabled={anchorBreachResetBusyKind !== null}
+                  onClick={() => {
+                    stopAlarm();
+                    if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
+                    const seenId = activeAnchorAlert.id;
+                    void (async () => {
+                      setAnchorBreachResetError(null);
+                      setAnchorBreachResetBusyKind("this");
+                      const { signal, clear } = createAnchorResetNetworkAbort(45_000);
+                      try {
+                        if (ANCHOR_LIVE_APIS_BLOCKED) {
+                          const mapPos =
+                            pos && Number.isFinite(pos.lat) && Number.isFinite(pos.lng)
+                              ? { lat: pos.lat, lng: pos.lng }
+                              : null;
+                          const fix = await getGpsFixForAnchorReset(mapPos);
+                          if (!fix) {
+                            setAnchorBreachResetError("Could not read GPS in offline mode.");
+                            return;
+                          }
+                          const merged = {
+                            ...anchorCfgRef.current,
+                            lat: fix.lat,
+                            lng: fix.lng,
+                            lastAlertAt: null,
+                            lastBearingDeg: null,
+                          };
+                          setAnchorCfg(merged);
+                          setAnchorAlertConfig(merged);
+                          clearPresentedAnchorAlertId();
+                          setActiveAnchorAlert(null);
+                          return;
+                        }
 
-                    const effectiveMonitor = effectiveMonitorDeviceIdForHomeMap({
-                      thisDeviceId: deviceId,
-                      serverMonitorDeviceId: anchorMonitor?.monitorDeviceId,
-                      geofenceMonitorDeviceId: anchorCfgRef.current.monitorDeviceId,
-                    });
-                    const mapPos =
-                      pos && Number.isFinite(pos.lat) && Number.isFinite(pos.lng)
-                        ? { lat: pos.lat, lng: pos.lng }
-                        : null;
-                    const fix = await resolveAnchorResetCentreCoordinates({
-                      thisDeviceId: deviceId,
-                      effectiveMonitorDeviceId: effectiveMonitor,
-                      mapPosIfThisDeviceIsMonitor: mapPos,
-                      allowBrowserGpsFallback: false,
-                      signal,
-                    });
-                    if (!fix) {
-                      setAnchorBreachResetError(
-                        "No monitor GPS on the server yet. Try “This phone’s GPS”, wait for the boat phone to report a fix, or tap Mark seen.",
-                      );
-                      return;
-                    }
+                        const mapPos =
+                          pos && Number.isFinite(pos.lat) && Number.isFinite(pos.lng)
+                            ? { lat: pos.lat, lng: pos.lng }
+                            : null;
+                        const fix = await getGpsFixForAnchorReset(mapPos);
+                        if (!fix) {
+                          setAnchorBreachResetError(
+                            "Could not read GPS on this phone (permission, timeout, or no signal). Allow location for SeaLink, try outdoors, or use Mark seen.",
+                          );
+                          return;
+                        }
 
-                    try {
-                      await fetch("/api/anchor/alerts", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ seenId }),
-                        credentials: "same-origin",
-                        signal,
-                      });
-                      const merged = {
-                        ...anchorCfgRef.current,
-                        lat: fix.lat,
-                        lng: fix.lng,
-                        lastAlertAt: null,
-                        lastBearingDeg: null,
-                      };
-                      setAnchorCfg(merged);
-                      setAnchorAlertConfig(merged);
-                      await fetch("/api/anchor/geofence", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        credentials: "same-origin",
-                        signal,
-                        body: JSON.stringify({
-                          lat: fix.lat,
-                          lng: fix.lng,
-                          lastAlertAt: null,
-                          lastBearingDeg: null,
-                          remoteAlarmSilencedUntilReset: false,
-                        }),
-                      });
-                    } catch (e) {
-                      if (isAnchorResetAbortError(e)) throw e;
-                      setAnchorBreachResetError("Could not save. Check your connection and try again.");
-                      return;
-                    }
-                    clearPresentedAnchorAlertId();
-                    setActiveAnchorAlert(null);
-                  } catch (e) {
-                    if (isAnchorResetAbortError(e)) {
-                      setAnchorBreachResetError(
-                        "Request timed out. Try “This phone’s GPS”, check your connection, or open Anchor alarm.",
-                      );
-                    }
-                  } finally {
-                    clear();
-                    setAnchorBreachResetBusyKind(null);
-                  }
-                })();
-              }}
-              className="h-14 w-full rounded-xl bg-emerald-500 text-base font-bold text-white shadow-lg hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-xs"
-            >
-              {anchorBreachResetBusyKind === "monitor"
-                ? "Loading monitor position…"
-                : anchorBreachResetBusyKind === "this"
-                  ? "Please wait…"
-                  : "Reset at monitor position"}
-            </button>
-            <button
-              type="button"
-              disabled={anchorBreachResetBusyKind !== null}
-              onClick={() => {
-                stopAlarm();
-                if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
-                const seenId = activeAnchorAlert.id;
-                void (async () => {
-                  setAnchorBreachResetError(null);
-                  setAnchorBreachResetBusyKind("this");
-                  const { signal, clear } = createAnchorResetNetworkAbort(45_000);
-                  try {
-                    if (ANCHOR_LIVE_APIS_BLOCKED) {
-                      const mapPos =
-                        pos && Number.isFinite(pos.lat) && Number.isFinite(pos.lng)
-                          ? { lat: pos.lat, lng: pos.lng }
-                          : null;
-                      const fix = await getGpsFixForAnchorReset(mapPos);
-                      if (!fix) {
-                        setAnchorBreachResetError("Could not read GPS in offline mode.");
-                        return;
+                        try {
+                          await fetch("/api/anchor/alerts", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ seenId }),
+                            credentials: "same-origin",
+                            signal,
+                          });
+                          const merged = {
+                            ...anchorCfgRef.current,
+                            lat: fix.lat,
+                            lng: fix.lng,
+                            lastAlertAt: null,
+                            lastBearingDeg: null,
+                          };
+                          setAnchorCfg(merged);
+                          setAnchorAlertConfig(merged);
+                          await fetch("/api/anchor/geofence", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            credentials: "same-origin",
+                            signal,
+                            body: JSON.stringify({
+                              lat: fix.lat,
+                              lng: fix.lng,
+                              lastAlertAt: null,
+                              lastBearingDeg: null,
+                              remoteAlarmSilencedUntilReset: false,
+                            }),
+                          });
+                        } catch (e) {
+                          if (isAnchorResetAbortError(e)) throw e;
+                          setAnchorBreachResetError("Could not save. Check your connection and try again.");
+                          return;
+                        }
+                        clearPresentedAnchorAlertId();
+                        setActiveAnchorAlert(null);
+                      } catch (e) {
+                        if (isAnchorResetAbortError(e)) {
+                          setAnchorBreachResetError(
+                            "Request timed out while saving. Check your connection, try again, or use Mark seen.",
+                          );
+                        }
+                      } finally {
+                        clear();
+                        setAnchorBreachResetBusyKind(null);
                       }
-                      const merged = {
-                        ...anchorCfgRef.current,
-                        lat: fix.lat,
-                        lng: fix.lng,
-                        lastAlertAt: null,
-                        lastBearingDeg: null,
-                      };
-                      setAnchorCfg(merged);
-                      setAnchorAlertConfig(merged);
-                      clearPresentedAnchorAlertId();
-                      setActiveAnchorAlert(null);
-                      return;
-                    }
-
-                    const mapPos =
-                      pos && Number.isFinite(pos.lat) && Number.isFinite(pos.lng)
-                        ? { lat: pos.lat, lng: pos.lng }
-                        : null;
-                    const fix = await getGpsFixForAnchorReset(mapPos);
-                    if (!fix) {
-                      setAnchorBreachResetError(
-                        "Could not read GPS on this phone (permission, timeout, or no signal). Allow location for SeaLink, try outdoors, or use Mark seen.",
-                      );
-                      return;
-                    }
-
-                    try {
-                      await fetch("/api/anchor/alerts", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ seenId }),
-                        credentials: "same-origin",
-                        signal,
-                      });
-                      const merged = {
-                        ...anchorCfgRef.current,
-                        lat: fix.lat,
-                        lng: fix.lng,
-                        lastAlertAt: null,
-                        lastBearingDeg: null,
-                      };
-                      setAnchorCfg(merged);
-                      setAnchorAlertConfig(merged);
-                      await fetch("/api/anchor/geofence", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        credentials: "same-origin",
-                        signal,
-                        body: JSON.stringify({
-                          lat: fix.lat,
-                          lng: fix.lng,
-                          lastAlertAt: null,
-                          lastBearingDeg: null,
-                          remoteAlarmSilencedUntilReset: false,
-                        }),
-                      });
-                    } catch (e) {
-                      if (isAnchorResetAbortError(e)) throw e;
-                      setAnchorBreachResetError("Could not save. Check your connection and try again.");
-                      return;
-                    }
-                    clearPresentedAnchorAlertId();
-                    setActiveAnchorAlert(null);
-                  } catch (e) {
-                    if (isAnchorResetAbortError(e)) {
-                      setAnchorBreachResetError(
-                        "Request timed out while saving. Check your connection, try again, or use Mark seen.",
-                      );
-                    }
-                  } finally {
-                    clear();
-                    setAnchorBreachResetBusyKind(null);
-                  }
-                })();
-              }}
-              className="h-14 w-full rounded-xl border-2 border-emerald-300/90 bg-emerald-950/50 text-base font-bold text-emerald-50 shadow-lg hover:bg-emerald-900/60 disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-xs"
-            >
-              {anchorBreachResetBusyKind === "this" ? "Getting this phone’s GPS…" : "This phone’s GPS"}
-            </button>
+                    })();
+                  }}
+                  className="h-14 w-full rounded-xl border-2 border-emerald-300/90 bg-emerald-950/50 text-base font-bold text-emerald-50 shadow-lg hover:bg-emerald-900/60 disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-xs"
+                >
+                  {anchorBreachResetBusyKind === "this" ? "Getting this phone’s GPS…" : "This phone’s GPS"}
+                </button>
               </>
             ) : (
               <>

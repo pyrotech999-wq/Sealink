@@ -17,6 +17,7 @@ import { AnchorAlertsGlobalHost } from "@/components/AnchorAlertsGlobalHost";
 import { ProfileNameGate } from "@/components/ProfileNameGate";
 import { resolvePublicAppOrigin } from "@/lib/public-app-url";
 import "./globals.css";
+import NavigationSwitcher from "@/components/NavigationSwitcher";
 
 function getMetadataBase(): URL {
   return new URL(resolvePublicAppOrigin());
@@ -85,7 +86,8 @@ export default function RootLayout({
           <ServiceWorkerRegister />
           <SessionDeviceRegistrar />
           <SessionProfileEmailSync />
-          <TopNav />
+          {/* <TopNav /> */}
+          <NavigationSwitcher />
           <BroadcastReplyAlertsHost />
           <MobSenderActiveBanner />
           <MobIncomingAlertHost />
@@ -95,7 +97,7 @@ export default function RootLayout({
           {children}
           <AnchorAlertsGlobalHost />
           <BroadcastAwayToasts />
-          <BottomNav />
+          {/* <BottomNav /> */}
         </BroadcastToastProvider>
       </body>
     </html>

@@ -21,6 +21,20 @@ import {
   iBoatingMarineChartsAppUrlForLatLng,
 } from "@/lib/navigation-charts/iboating-charts-url";
 import { parseKapFile } from "@/lib/navigation-charts/parse-kap";
+import { useIsMobileApp } from "@/hooks/useIsMobileApp";
+import {
+  ArrowLeft,
+  Compass,
+  Upload,
+  Activity,
+  ExternalLink,
+  ChevronDown,
+  ChevronUp,
+  Map,
+  Check,
+  AlertTriangle,
+  ChevronRight,
+} from "lucide-react";
 
 const NavigationChartsMap = dynamic(() => import("./NavigationChartsMap"), {
   ssr: false,
@@ -72,6 +86,8 @@ export function NavigationChartsClient() {
   const [locError, setLocError] = useState<string>("");
   const [shareStatus, setShareStatus] = useState<string>("");
   const [locating, setLocating] = useState(false);
+  const [isPilotChartsOpen, setIsPilotChartsOpen] = useState(false);
+  const { isMobile, mounted } = useIsMobileApp();
 
   const iBoatingHref = useMemo(
     () => iBoatingMarineChartsAppUrl(metadata?.bounds ?? null),
@@ -288,13 +304,12 @@ export function NavigationChartsClient() {
         <p
           role="status"
           aria-live="polite"
-          className={`rounded-xl border px-3 py-2 text-sm ${
-            status === "loading"
-              ? "border-sky-200 bg-sky-50 text-sky-950 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-100"
-              : status === "success"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900/50 dark:bg-emerald-950/35 dark:text-emerald-100"
-                : "border-red-200 bg-red-50 text-red-900 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100"
-          }`}
+          className={`rounded-xl border px-3 py-2 text-sm ${status === "loading"
+            ? "border-sky-200 bg-sky-50 text-sky-950 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-100"
+            : status === "success"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900/50 dark:bg-emerald-950/35 dark:text-emerald-100"
+              : "border-red-200 bg-red-50 text-red-900 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100"
+            }`}
         >
           {status === "error" ? (
             <>
@@ -337,68 +352,105 @@ export function NavigationChartsClient() {
       </div>
     );
 
+
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 sm:gap-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Link
-          href="/weather"
-          className="inline-flex h-10 min-h-10 w-full shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800 sm:w-auto"
-        >
-          ← Back to Weather
-        </Link>
-      </div>
-
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-3xl">
-          Navigation Charts
-        </h1>
-        <p className="max-w-2xl text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-          Open the chart viewer centred on your current location.
-        </p>
-      </header>
-      <section className="space-y-3">
-        <div className="rounded-xl border border-zinc-200 bg-zinc-50/90 px-3 py-3 dark:border-zinc-700 dark:bg-zinc-950/50">
-          <p className="text-xs font-medium text-zinc-800 dark:text-zinc-200">Other web chart viewers</p>
-          <p className="mt-2 text-[11px] leading-relaxed text-zinc-600 dark:text-zinc-400">
-            Tap <strong className="text-zinc-800 dark:text-zinc-200">Open chart in app</strong>. We&apos;ll grab your GPS
-            location first, then open the chart centred on you.
-          </p>
-          <div className="mt-3 flex flex-col gap-2">
-            <button
-              type="button"
-              onClick={onSendToApp}
-              disabled={locating}
-              className={`inline-flex h-12 w-full items-center justify-center rounded-xl px-4 text-base font-semibold text-white shadow-sm ${
-                locating
-                  ? "cursor-not-allowed bg-emerald-700/70"
-                  : "bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700"
-              }`}
+    <div className="flex min-h-0 flex-1 flex-col bg-zinc-50 dark:bg-zinc-950">
+      <main className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-6 sm:px-6 sm:pb-8 sm:pt-8 animate-fade-in">
+        <div className="flex min-h-0 flex-1 flex-col gap-4 sm:gap-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <Link
+              href="/weather"
+              className="inline-flex h-10 min-h-10 w-full shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800 sm:w-auto"
             >
-              {locating ? "Getting your location…" : "Open chart in app"}
-            </button>
-            {locError ? (
-              <p className="text-[11px] text-red-700 dark:text-red-300" role="status" aria-live="polite">
-                {locError}
-              </p>
-            ) : null}
-            {shareStatus ? (
-              <p className="text-[11px] text-zinc-600 dark:text-zinc-400" role="status" aria-live="polite">
-                {shareStatus}
-              </p>
-            ) : null}
-            {userLocation ? (
-              <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
-                Location:{" "}
-                <span className="font-mono">
-                  {userLocation.lat.toFixed(5)}, {userLocation.lng.toFixed(5)}
-                </span>
-                {userLocation.accuracyM != null ? ` (±${Math.round(userLocation.accuracyM)}m)` : ""}
-              </p>
-            ) : null}
+              ← Back to Weather
+            </Link>
           </div>
-        </div>
-      </section>
 
+          <header className="space-y-1">
+            <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-3xl">
+              Navigation Charts
+            </h1>
+            <p className="max-w-2xl text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+              Open the chart viewer centred on your current location.
+            </p>
+          </header>
+          <section className="space-y-3">
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50/90 px-3 py-3 dark:border-zinc-700 dark:bg-zinc-950/50">
+              <p className="text-xs font-medium text-zinc-800 dark:text-zinc-200">Other web chart viewers</p>
+              <p className="mt-2 text-[11px] leading-relaxed text-zinc-600 dark:text-zinc-400">
+                Tap <strong className="text-zinc-800 dark:text-zinc-200">Open chart in app</strong>. We&apos;ll grab your GPS
+                location first, then open the chart centred on you.
+              </p>
+              <div className="mt-3 flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={onSendToApp}
+                  disabled={locating}
+                  className={`inline-flex h-12 w-full items-center justify-center rounded-xl px-4 text-base font-semibold text-white shadow-sm ${locating
+                    ? "cursor-not-allowed bg-emerald-700/70"
+                    : "bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700"
+                    }`}
+                >
+                  {locating ? "Getting your location…" : "Open chart in app"}
+                </button>
+                {locError ? (
+                  <p className="text-[11px] text-red-700 dark:text-red-300" role="status" aria-live="polite">
+                    {locError}
+                  </p>
+                ) : null}
+                {shareStatus ? (
+                  <p className="text-[11px] text-zinc-600 dark:text-zinc-400" role="status" aria-live="polite">
+                    {shareStatus}
+                  </p>
+                ) : null}
+                {userLocation ? (
+                  <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
+                    Location:{" "}
+                    <span className="font-mono">
+                      {userLocation.lat.toFixed(5)}, {userLocation.lng.toFixed(5)}
+                    </span>
+                    {userLocation.accuracyM != null ? ` (±${Math.round(userLocation.accuracyM)}m)` : ""}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div className="mt-5 sm:mt-6">
+          <Link
+            href="/colregs"
+            className="group block rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-emerald-50 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow md:p-5 dark:border-emerald-900/40 dark:from-emerald-950/25 dark:via-zinc-950 dark:to-emerald-950/25"
+            aria-label="Open COLREGs: The International Regulations for Preventing Collisions at Sea"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <div className="text-2xl font-black tracking-tight text-emerald-900 sm:text-3xl dark:text-emerald-200">
+                    COLREGs
+                  </div>
+                  <span className="inline-flex items-center rounded-full bg-emerald-600 px-2 py-0.5 text-[11px] font-bold tracking-wide text-white shadow-sm">
+                    TAP TO OPEN
+                  </span>
+                </div>
+                <div className="mt-1 text-sm font-medium leading-snug text-zinc-700 sm:text-base dark:text-zinc-300">
+                  The International Regulations for Preventing Collisions at Sea
+                </div>
+                <div className="mt-2 text-xs font-semibold text-emerald-800/90 dark:text-emerald-200/90">
+                  Quick rules summary + link to full PDF
+                </div>
+              </div>
+              <div
+                aria-hidden="true"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-sm transition group-hover:translate-x-0.5 group-hover:bg-emerald-500"
+              >
+                <span className="text-xl leading-none">→</span>
+              </div>
+            </div>
+          </Link>
+        </div>
+      </main>
     </div>
   );
 }

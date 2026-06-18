@@ -563,533 +563,533 @@ export function SignUpForm() {
         inert={signupDisclaimerOpen ? true : undefined}
         className="rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-950"
       >
-      {errors.submit ? (
-        <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-200">
-          {errors.submit}
-        </p>
-      ) : null}
+        {errors.submit ? (
+          <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-200">
+            {errors.submit}
+          </p>
+        ) : null}
 
-      <div className="mb-6">
-        <OAuthProviderButtons emphasizeGoogle signUpCaption />
-      </div>
-
-      <div className="mb-6">
-        <div className="flex items-center justify-between gap-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Step {step} of 4</p>
-          <p className="text-xs text-zinc-500">{progress}%</p>
+        <div className="mb-6">
+          <OAuthProviderButtons emphasizeGoogle signUpCaption />
         </div>
-        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-          <div
-            className="h-full rounded-full bg-green-600 transition-[width] duration-300 ease-out"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-      </div>
 
-      {step === 1 && (
-        <div className="space-y-5">
-          <div>
-            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Profile photo</p>
-            <p className="mt-0.5 text-xs text-zinc-500">
-              A clear face photo helps people in your Circle recognise you on the map. Large pictures are resized in your
-              browser to under 5MB automatically.
-            </p>
-            <div className="mt-3 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-              <div className="relative size-24 shrink-0 overflow-hidden rounded-full border-2 border-dashed border-zinc-300 bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900">
-                {photoPreview ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- user-uploaded blob preview
-                  <img src={photoPreview} alt="Profile preview" className="size-full object-cover" />
-                ) : (
-                  <span className="flex size-full items-center justify-center text-xs text-zinc-400">No photo</span>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  className="hidden"
-                  disabled={photoProcessing}
-                  onChange={(e) => void onPickPhoto(e)}
-                />
-                <button
-                  type="button"
-                  disabled={photoProcessing}
-                  onClick={() => fileInputRef.current?.click()}
-                  className="inline-flex h-9 items-center justify-center rounded-lg bg-green-700 px-3 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-60"
-                >
-                  {photoProcessing ? "Resizing…" : "Upload photo"}
-                </button>
-                {photoPreview && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Step {step} of 4</p>
+            <p className="text-xs text-zinc-500">{progress}%</p>
+          </div>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+            <div
+              className="h-full rounded-full bg-green-600 transition-[width] duration-300 ease-out"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
+
+        {step === 1 && (
+          <div className="space-y-5">
+            <div>
+              <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Profile photo</p>
+              <p className="mt-0.5 text-xs text-zinc-500">
+                A clear face photo helps people in your Circle recognise you on the map. Large pictures are resized in your
+                browser to under 5MB automatically.
+              </p>
+              <div className="mt-3 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+                <div className="relative size-24 shrink-0 overflow-hidden rounded-full border-2 border-dashed border-zinc-300 bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900">
+                  {photoPreview ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- user-uploaded blob preview
+                    <img src={photoPreview} alt="Profile preview" className="size-full object-cover" />
+                  ) : (
+                    <span className="flex size-full items-center justify-center text-xs text-zinc-400">No photo</span>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    disabled={photoProcessing}
+                    onChange={(e) => void onPickPhoto(e)}
+                  />
                   <button
                     type="button"
-                    onClick={removePhoto}
-                    className="inline-flex h-9 items-center justify-center rounded-lg border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                    disabled={photoProcessing}
+                    onClick={() => fileInputRef.current?.click()}
+                    className="inline-flex h-9 items-center justify-center rounded-lg bg-green-700 px-3 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-60"
                   >
-                    Remove
+                    {photoProcessing ? "Resizing…" : "Upload photo"}
                   </button>
-                )}
+                  {photoPreview && (
+                    <button
+                      type="button"
+                      onClick={removePhoto}
+                      className="inline-flex h-9 items-center justify-center rounded-lg border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
               </div>
+              {errors.profilePhoto && <p className="mt-2 text-xs text-red-600">{errors.profilePhoto}</p>}
             </div>
-            {errors.profilePhoto && <p className="mt-2 text-xs text-red-600">{errors.profilePhoto}</p>}
-          </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="age">
-                Age
-              </label>
-              <input
-                id="age"
-                type="number"
-                inputMode="numeric"
-                min={13}
-                max={120}
-                className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 placeholder:text-zinc-400 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-                value={form.age}
-                onChange={(ev) => set("age", ev.target.value)}
-                placeholder="e.g. 28"
-              />
-              {errors.age && <p className="mt-1 text-xs text-red-600">{errors.age}</p>}
-            </div>
-            <div>
-              <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="contactName">
-                Your name <span className="font-normal text-red-600 dark:text-red-400">(required)</span>
-              </label>
-              <input
-                id="contactName"
-                required
-                minLength={2}
-                maxLength={120}
-                autoComplete="name"
-                className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-                value={form.contactName}
-                onChange={(ev) => set("contactName", ev.target.value)}
-              />
-              {errors.contactName && <p className="mt-1 text-xs text-red-600">{errors.contactName}</p>}
-            </div>
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="boatName">
-              Boat name
-            </label>
-            <input
-              id="boatName"
-              className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 placeholder:text-zinc-400 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-              value={form.boatName}
-              onChange={(ev) => set("boatName", ev.target.value)}
-              placeholder="e.g. Wavy"
-            />
-            {errors.boatName && <p className="mt-1 text-xs text-red-600">{errors.boatName}</p>}
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="email">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-              value={form.email}
-              onChange={(ev) => set("email", ev.target.value)}
-            />
-            {errors.email && <p className="mt-1 text-xs text-red-600">{errors.email}</p>}
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="companyName">
-              Family or household name <span className="font-normal text-zinc-500">(optional)</span>
-            </label>
-            <input
-              id="companyName"
-              autoComplete="organization"
-              className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 placeholder:text-zinc-400 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-              value={form.companyName}
-              onChange={(ev) => set("companyName", ev.target.value)}
-              placeholder="e.g. The Smiths"
-            />
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="companyNumber">
-                Invite code <span className="font-normal text-zinc-500">(optional)</span>
-              </label>
-              <input
-                id="companyNumber"
-                className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-                value={form.companyNumber}
-                onChange={(ev) => set("companyNumber", ev.target.value)}
-                placeholder="If someone invited you"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="jobTitle">
-                Map nickname <span className="font-normal text-zinc-500">(optional)</span>
-              </label>
-              <input
-                id="jobTitle"
-                autoComplete="nickname"
-                className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-                value={form.jobTitle}
-                onChange={(ev) => set("jobTitle", ev.target.value)}
-                placeholder="e.g. Mum, Alex"
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {step === 2 && (
-        <div className="space-y-4">
-          <p className="text-xs text-zinc-500">
-            Home address is <strong className="text-zinc-700 dark:text-zinc-300">optional</strong> — it can power place
-            alerts in a fuller build. Your phone number below is still used for matching and alerts.
-          </p>
-          <div>
-            <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="line1">
-              Address line 1 <span className="font-normal text-zinc-500">(optional)</span>
-            </label>
-            <input
-              id="line1"
-              autoComplete="address-line1"
-              className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-              value={form.line1}
-              onChange={(ev) => set("line1", ev.target.value)}
-            />
-            {errors.line1 && <p className="mt-1 text-xs text-red-600">{errors.line1}</p>}
-          </div>
-          <div>
-            <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="line2">
-              Address line 2 <span className="font-normal text-zinc-500">(optional)</span>
-            </label>
-            <input
-              id="line2"
-              autoComplete="address-line2"
-              className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-              value={form.line2}
-              onChange={(ev) => set("line2", ev.target.value)}
-            />
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="city">
-                Town / city <span className="font-normal text-zinc-500">(optional)</span>
-              </label>
-              <input
-                id="city"
-                autoComplete="address-level2"
-                className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-                value={form.city}
-                onChange={(ev) => set("city", ev.target.value)}
-              />
-              {errors.city && <p className="mt-1 text-xs text-red-600">{errors.city}</p>}
-            </div>
-            <div>
-              <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="postcode">
-                Postcode <span className="font-normal text-zinc-500">(optional)</span>
-              </label>
-              <input
-                id="postcode"
-                autoComplete="postal-code"
-                className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-                value={form.postcode}
-                onChange={(ev) => set("postcode", ev.target.value)}
-              />
-              {errors.postcode && <p className="mt-1 text-xs text-red-600">{errors.postcode}</p>}
-            </div>
-          </div>
-          <div>
-            <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200" id="phone-label">
-              Mobile phone <span className="font-normal text-zinc-500">(with country code)</span>
-            </span>
-            <div className="mt-1.5 flex flex-col gap-2 sm:flex-row">
-              <label className="sr-only" htmlFor="phoneDial">
-                Country calling code
-              </label>
-              <select
-                id="phoneDial"
-                aria-labelledby="phone-label"
-                className="w-full shrink-0 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 sm:max-w-[220px]"
-                value={form.phoneDial}
-                onChange={(ev) => set("phoneDial", ev.target.value)}
-              >
-                {PHONE_DIAL_OPTIONS.map((o) => (
-                  <option key={o.dial} value={o.dial}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-              <div className="min-w-0 flex-1">
-                <label className="sr-only" htmlFor="phone">
-                  Phone number
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="age">
+                  Age
                 </label>
                 <input
-                  id="phone"
-                  type="tel"
-                  autoComplete="tel-national"
-                  inputMode="tel"
-                  aria-labelledby="phone-label"
-                  placeholder="e.g. 7700 900123"
-                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-                  value={form.phone}
-                  onChange={(ev) => set("phone", ev.target.value)}
+                  id="age"
+                  type="number"
+                  inputMode="numeric"
+                  min={13}
+                  max={120}
+                  className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 placeholder:text-zinc-400 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                  value={form.age}
+                  onChange={(ev) => set("age", ev.target.value)}
+                  placeholder="e.g. 28"
+                />
+                {errors.age && <p className="mt-1 text-xs text-red-600">{errors.age}</p>}
+              </div>
+              <div>
+                <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="contactName">
+                  Your name <span className="font-normal text-red-600 dark:text-red-400">(required)</span>
+                </label>
+                <input
+                  id="contactName"
+                  required
+                  minLength={2}
+                  maxLength={120}
+                  autoComplete="name"
+                  className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                  value={form.contactName}
+                  onChange={(ev) => set("contactName", ev.target.value)}
+                />
+                {errors.contactName && <p className="mt-1 text-xs text-red-600">{errors.contactName}</p>}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="boatName">
+                Boat name
+              </label>
+              <input
+                id="boatName"
+                className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 placeholder:text-zinc-400 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                value={form.boatName}
+                onChange={(ev) => set("boatName", ev.target.value)}
+                placeholder="e.g. Wavy"
+              />
+              {errors.boatName && <p className="mt-1 text-xs text-red-600">{errors.boatName}</p>}
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="email">
+                Email
+              </label>
+              <input
+                id="email"
+                type="email"
+                autoComplete="email"
+                className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                value={form.email}
+                onChange={(ev) => set("email", ev.target.value)}
+              />
+              {errors.email && <p className="mt-1 text-xs text-red-600">{errors.email}</p>}
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="companyName">
+                Family or household name <span className="font-normal text-zinc-500">(optional)</span>
+              </label>
+              <input
+                id="companyName"
+                autoComplete="organization"
+                className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 placeholder:text-zinc-400 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                value={form.companyName}
+                onChange={(ev) => set("companyName", ev.target.value)}
+                placeholder="e.g. The Smiths"
+              />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="companyNumber">
+                  Invite code <span className="font-normal text-zinc-500">(optional)</span>
+                </label>
+                <input
+                  id="companyNumber"
+                  className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                  value={form.companyNumber}
+                  onChange={(ev) => set("companyNumber", ev.target.value)}
+                  placeholder="If someone invited you"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="jobTitle">
+                  Map nickname <span className="font-normal text-zinc-500">(optional)</span>
+                </label>
+                <input
+                  id="jobTitle"
+                  autoComplete="nickname"
+                  className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                  value={form.jobTitle}
+                  onChange={(ev) => set("jobTitle", ev.target.value)}
+                  placeholder="e.g. Mum, Alex"
                 />
               </div>
             </div>
-            <p className="mt-1 text-xs text-zinc-500">
-              We store this as an international number (e.g. +44…) for matching and alerts.
-            </p>
-            {errors.phoneDial && <p className="mt-1 text-xs text-red-600">{errors.phoneDial}</p>}
-            {errors.phone && <p className="mt-1 text-xs text-red-600">{errors.phone}</p>}
           </div>
-        </div>
-      )}
+        )}
 
-      {step === 3 && (
-        <div className="space-y-4">
-          <div>
-            <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="password">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              autoComplete="new-password"
-              className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-              value={form.password}
-              onChange={(ev) => set("password", ev.target.value)}
-            />
-            {errors.password && <p className="mt-1 text-xs text-red-600">{errors.password}</p>}
-            <p className="mt-1 text-xs text-zinc-500">At least 10 characters.</p>
-          </div>
-          <div>
-            <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="confirmPassword">
-              Confirm password
-            </label>
-            <input
-              id="confirmPassword"
-              type="password"
-              autoComplete="new-password"
-              className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-              value={form.confirmPassword}
-              onChange={(ev) => set("confirmPassword", ev.target.value)}
-            />
-            {errors.confirmPassword && <p className="mt-1 text-xs text-red-600">{errors.confirmPassword}</p>}
-          </div>
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-950/30">
-            <p className="text-sm font-bold text-amber-900 dark:text-amber-100">
-              Important Safety Notice
+        {step === 2 && (
+          <div className="space-y-4">
+            <p className="text-xs text-zinc-500">
+              Home address is <strong className="text-zinc-700 dark:text-zinc-300">optional</strong> — it can power place
+              alerts in a fuller build. Your phone number below is still used for matching and alerts.
             </p>
-            <p className="mt-2 text-xs leading-5 text-amber-800 dark:text-amber-200">
-              SeaLink app and the anchor alarm notifications are provided for informational purposes only.
-            </p>
-            <p className="mt-1.5 text-xs leading-5 text-amber-800 dark:text-amber-200">
-              SeaLink must not be relied upon for life, safety, emergency response, navigation, collision
-              avoidance, security, anchoring decisions, or protection of property.
-            </p>
-          </div>
-          <div className="space-y-2">
-            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-900/50">
+            <div>
+              <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="line1">
+                Address line 1 <span className="font-normal text-zinc-500">(optional)</span>
+              </label>
               <input
-                type="checkbox"
-                className="mt-0.5 size-4 rounded border-zinc-300 text-green-700 focus:ring-green-600"
-                checked={form.agreeTerms && form.agreePrivacy}
-                onChange={(ev) => {
-                  set("agreeTerms", ev.target.checked);
-                  set("agreePrivacy", ev.target.checked);
-                }}
+                id="line1"
+                autoComplete="address-line1"
+                className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                value={form.line1}
+                onChange={(ev) => set("line1", ev.target.value)}
               />
-              <span className="text-sm text-zinc-700 dark:text-zinc-300">
-                I agree to the{" "}
-                <Link href="/terms" className="font-medium text-green-800 underline-offset-2 hover:underline dark:text-green-400">
-                  terms and conditions
-                </Link>{" "}
-                and{" "}
-                <Link href="/privacy" className="font-medium text-green-800 underline-offset-2 hover:underline dark:text-green-400">
-                  privacy policy
-                </Link>
+              {errors.line1 && <p className="mt-1 text-xs text-red-600">{errors.line1}</p>}
+            </div>
+            <div>
+              <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="line2">
+                Address line 2 <span className="font-normal text-zinc-500">(optional)</span>
+              </label>
+              <input
+                id="line2"
+                autoComplete="address-line2"
+                className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                value={form.line2}
+                onChange={(ev) => set("line2", ev.target.value)}
+              />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="city">
+                  Town / city <span className="font-normal text-zinc-500">(optional)</span>
+                </label>
+                <input
+                  id="city"
+                  autoComplete="address-level2"
+                  className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                  value={form.city}
+                  onChange={(ev) => set("city", ev.target.value)}
+                />
+                {errors.city && <p className="mt-1 text-xs text-red-600">{errors.city}</p>}
+              </div>
+              <div>
+                <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="postcode">
+                  Postcode <span className="font-normal text-zinc-500">(optional)</span>
+                </label>
+                <input
+                  id="postcode"
+                  autoComplete="postal-code"
+                  className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                  value={form.postcode}
+                  onChange={(ev) => set("postcode", ev.target.value)}
+                />
+                {errors.postcode && <p className="mt-1 text-xs text-red-600">{errors.postcode}</p>}
+              </div>
+            </div>
+            <div>
+              <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200" id="phone-label">
+                Mobile phone <span className="font-normal text-zinc-500">(with country code)</span>
               </span>
-            </label>
-            {(errors.agreeTerms || errors.agreePrivacy) && (
-              <p className="ml-7 text-xs text-red-600">{errors.agreeTerms || errors.agreePrivacy}</p>
+              <div className="mt-1.5 flex flex-col gap-2 sm:flex-row">
+                <label className="sr-only" htmlFor="phoneDial">
+                  Country calling code
+                </label>
+                <select
+                  id="phoneDial"
+                  aria-labelledby="phone-label"
+                  className="w-full shrink-0 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 sm:max-w-[220px]"
+                  value={form.phoneDial}
+                  onChange={(ev) => set("phoneDial", ev.target.value)}
+                >
+                  {PHONE_DIAL_OPTIONS.map((o) => (
+                    <option key={o.dial} value={o.dial}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                <div className="min-w-0 flex-1">
+                  <label className="sr-only" htmlFor="phone">
+                    Phone number
+                  </label>
+                  <input
+                    id="phone"
+                    type="tel"
+                    autoComplete="tel-national"
+                    inputMode="tel"
+                    aria-labelledby="phone-label"
+                    placeholder="e.g. 7700 900123"
+                    className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                    value={form.phone}
+                    onChange={(ev) => set("phone", ev.target.value)}
+                  />
+                </div>
+              </div>
+              <p className="mt-1 text-xs text-zinc-500">
+                We store this as an international number (e.g. +44…) for matching and alerts.
+              </p>
+              {errors.phoneDial && <p className="mt-1 text-xs text-red-600">{errors.phoneDial}</p>}
+              {errors.phone && <p className="mt-1 text-xs text-red-600">{errors.phone}</p>}
+            </div>
+          </div>
+        )}
+
+        {step === 3 && (
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="password">
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                autoComplete="new-password"
+                className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                value={form.password}
+                onChange={(ev) => set("password", ev.target.value)}
+              />
+              {errors.password && <p className="mt-1 text-xs text-red-600">{errors.password}</p>}
+              <p className="mt-1 text-xs text-zinc-500">At least 10 characters.</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-zinc-800 dark:text-zinc-200" htmlFor="confirmPassword">
+                Confirm password
+              </label>
+              <input
+                id="confirmPassword"
+                type="password"
+                autoComplete="new-password"
+                className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                value={form.confirmPassword}
+                onChange={(ev) => set("confirmPassword", ev.target.value)}
+              />
+              {errors.confirmPassword && <p className="mt-1 text-xs text-red-600">{errors.confirmPassword}</p>}
+            </div>
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-950/30">
+              <p className="text-sm font-bold text-amber-900 dark:text-amber-100">
+                Important Safety Notice
+              </p>
+              <p className="mt-2 text-xs leading-5 text-amber-800 dark:text-amber-200">
+                SeaLink app and the anchor alarm notifications are provided for informational purposes only.
+              </p>
+              <p className="mt-1.5 text-xs leading-5 text-amber-800 dark:text-amber-200">
+                SeaLink must not be relied upon for life, safety, emergency response, navigation, collision
+                avoidance, security, anchoring decisions, or protection of property.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-900/50">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 size-4 rounded border-zinc-300 text-green-700 focus:ring-green-600"
+                  checked={form.agreeTerms && form.agreePrivacy}
+                  onChange={(ev) => {
+                    set("agreeTerms", ev.target.checked);
+                    set("agreePrivacy", ev.target.checked);
+                  }}
+                />
+                <span className="text-sm text-zinc-700 dark:text-zinc-300">
+                  I agree to the{" "}
+                  <Link href="/terms" className="font-medium text-green-800 underline-offset-2 hover:underline dark:text-green-400">
+                    terms and conditions
+                  </Link>{" "}
+                  and{" "}
+                  <Link href="/privacy" className="font-medium text-green-800 underline-offset-2 hover:underline dark:text-green-400">
+                    privacy policy
+                  </Link>
+                </span>
+              </label>
+              {(errors.agreeTerms || errors.agreePrivacy) && (
+                <p className="ml-7 text-xs text-red-600">{errors.agreeTerms || errors.agreePrivacy}</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {step === 4 && (
+          <div className="space-y-6">
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/40">
+              <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Location sharing</p>
+              <p className="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-400">
+                Many family-style apps recommend all-day location so your Circle sees arrivals, battery, and driving
+                context. On the web, the browser only shares when you allow it here; on iPhone or Android, pick{" "}
+                <span className="font-medium text-green-800 dark:text-green-400">Always</span> in system settings for the
+                closest behaviour.
+              </p>
+              <div className="mt-3 space-y-2">
+                <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-950">
+                  <input
+                    type="radio"
+                    name="locationAccess"
+                    className="mt-1 text-green-700"
+                    checked={form.locationAccess === "always"}
+                    onChange={() => set("locationAccess", "always")}
+                  />
+                  <span>
+                    <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Always allow</span>
+                    <span className="ml-2 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-green-900 dark:bg-green-900/40 dark:text-green-200">
+                      Recommended
+                    </span>
+                    <span className="mt-0.5 block text-xs text-zinc-500">Best for battery-friendly background updates on your phone.</span>
+                  </span>
+                </label>
+                <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-950">
+                  <input
+                    type="radio"
+                    name="locationAccess"
+                    className="mt-1 text-green-700"
+                    checked={form.locationAccess === "while_using"}
+                    onChange={() => set("locationAccess", "while_using")}
+                  />
+                  <span>
+                    <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Only while using the app</span>
+                    <span className="mt-0.5 block text-xs text-zinc-500">Location when SeaLink is open and active.</span>
+                  </span>
+                </label>
+              </div>
+              <button
+                type="button"
+                onClick={requestLocation}
+                className="mt-3 inline-flex h-9 items-center justify-center rounded-lg border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+              >
+                Check browser location
+              </button>
+              {geoHint && <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">{geoHint}</p>}
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Bluetooth</p>
+                    <p className="mt-1 text-xs text-zinc-500">For Bluetooth tags and in-car accessories some families pair with their map.</p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={form.bluetoothOptIn}
+                    onClick={() => set("bluetoothOptIn", !form.bluetoothOptIn)}
+                    className={`relative inline-flex h-7 w-12 shrink-0 rounded-full transition-colors ${form.bluetoothOptIn ? "bg-green-600" : "bg-zinc-300 dark:bg-zinc-600"}`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block size-6 translate-y-0.5 rounded-full bg-white shadow transition-transform ${form.bluetoothOptIn ? "translate-x-5" : "translate-x-1"}`}
+                    />
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={requestBluetooth}
+                  className="mt-3 w-full rounded-lg border border-zinc-300 bg-white py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                >
+                  Pair / test Bluetooth
+                </button>
+                {bleHint && <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">{bleHint}</p>}
+              </div>
+
+              <div className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Smart notifications</p>
+                    <p className="mt-1 text-xs text-zinc-500">Circle activity, place alerts, and low-priority nudges — off by default until you opt in.</p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={form.smartNotificationsOptIn}
+                    onClick={() => set("smartNotificationsOptIn", !form.smartNotificationsOptIn)}
+                    className={`relative inline-flex h-7 w-12 shrink-0 rounded-full transition-colors ${form.smartNotificationsOptIn ? "bg-green-600" : "bg-zinc-300 dark:bg-zinc-600"}`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block size-6 translate-y-0.5 rounded-full bg-white shadow transition-transform ${form.smartNotificationsOptIn ? "translate-x-5" : "translate-x-1"}`}
+                    />
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={requestNotifications}
+                  className="mt-3 w-full rounded-lg border border-zinc-300 bg-white py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                >
+                  Enable in browser
+                </button>
+                {notifHint && <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">{notifHint}</p>}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+              <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Add people to your Circle</p>
+              <p className="mt-1 text-xs text-zinc-500">Invite family or friends by email so they can join your Circle (optional).</p>
+              <textarea
+                className="mt-2 min-h-[88px] w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                placeholder="mum@email.com, partner@email.com"
+                value={form.invitedEmails}
+                onChange={(ev) => set("invitedEmails", ev.target.value)}
+              />
+            </div>
+
+            <div className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+              <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Share the app</p>
+              <p className="mt-1 text-xs text-zinc-500">Send your invite link by message or copy the app link for crew or family.</p>
+              <button
+                type="button"
+                onClick={shareApp}
+                className="mt-3 w-full rounded-lg bg-green-600 py-2.5 text-sm font-medium text-white hover:bg-green-700"
+              >
+                Share SeaLink
+              </button>
+              {shareHint && <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">{shareHint}</p>}
+            </div>
+          </div>
+        )}
+
+        <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
+          <div className="flex gap-2">
+            {step > 1 && (
+              <button
+                type="button"
+                onClick={back}
+                className="inline-flex h-10 items-center justify-center rounded-lg border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+              >
+                Back
+              </button>
+            )}
+          </div>
+          <div className="flex gap-2 sm:ml-auto">
+            {step < 4 ? (
+              <button
+                type="button"
+                disabled={photoProcessing}
+                onClick={next}
+                className="inline-flex h-10 flex-1 items-center justify-center rounded-lg bg-green-700 px-4 text-sm font-medium text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none"
+              >
+                Continue
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={!step4PrimaryReady || submitting}
+                onClick={() => void completeSignUp()}
+                className="inline-flex h-10 flex-1 items-center justify-center rounded-lg bg-green-700 px-4 text-sm font-medium text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none"
+              >
+                {submitting ? "Creating account…" : "Create account"}
+              </button>
             )}
           </div>
         </div>
-      )}
-
-      {step === 4 && (
-        <div className="space-y-6">
-          <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/40">
-            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Location sharing</p>
-            <p className="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-400">
-              Many family-style apps recommend all-day location so your Circle sees arrivals, battery, and driving
-              context. On the web, the browser only shares when you allow it here; on iPhone or Android, pick{" "}
-              <span className="font-medium text-green-800 dark:text-green-400">Always</span> in system settings for the
-              closest behaviour.
-            </p>
-            <div className="mt-3 space-y-2">
-              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-950">
-                <input
-                  type="radio"
-                  name="locationAccess"
-                  className="mt-1 text-green-700"
-                  checked={form.locationAccess === "always"}
-                  onChange={() => set("locationAccess", "always")}
-                />
-                <span>
-                  <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Always allow</span>
-                  <span className="ml-2 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-green-900 dark:bg-green-900/40 dark:text-green-200">
-                    Recommended
-                  </span>
-                  <span className="mt-0.5 block text-xs text-zinc-500">Best for battery-friendly background updates on your phone.</span>
-                </span>
-              </label>
-              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-950">
-                <input
-                  type="radio"
-                  name="locationAccess"
-                  className="mt-1 text-green-700"
-                  checked={form.locationAccess === "while_using"}
-                  onChange={() => set("locationAccess", "while_using")}
-                />
-                <span>
-                  <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Only while using the app</span>
-                  <span className="mt-0.5 block text-xs text-zinc-500">Location when SeaLink is open and active.</span>
-                </span>
-              </label>
-            </div>
-            <button
-              type="button"
-              onClick={requestLocation}
-              className="mt-3 inline-flex h-9 items-center justify-center rounded-lg border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
-            >
-              Check browser location
-            </button>
-            {geoHint && <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">{geoHint}</p>}
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Bluetooth</p>
-                  <p className="mt-1 text-xs text-zinc-500">For Bluetooth tags and in-car accessories some families pair with their map.</p>
-                </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={form.bluetoothOptIn}
-                  onClick={() => set("bluetoothOptIn", !form.bluetoothOptIn)}
-                  className={`relative inline-flex h-7 w-12 shrink-0 rounded-full transition-colors ${form.bluetoothOptIn ? "bg-green-600" : "bg-zinc-300 dark:bg-zinc-600"}`}
-                >
-                  <span
-                    className={`pointer-events-none inline-block size-6 translate-y-0.5 rounded-full bg-white shadow transition-transform ${form.bluetoothOptIn ? "translate-x-5" : "translate-x-1"}`}
-                  />
-                </button>
-              </div>
-              <button
-                type="button"
-                onClick={requestBluetooth}
-                className="mt-3 w-full rounded-lg border border-zinc-300 bg-white py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
-              >
-                Pair / test Bluetooth
-              </button>
-              {bleHint && <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">{bleHint}</p>}
-            </div>
-
-            <div className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Smart notifications</p>
-                  <p className="mt-1 text-xs text-zinc-500">Circle activity, place alerts, and low-priority nudges — off by default until you opt in.</p>
-                </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={form.smartNotificationsOptIn}
-                  onClick={() => set("smartNotificationsOptIn", !form.smartNotificationsOptIn)}
-                  className={`relative inline-flex h-7 w-12 shrink-0 rounded-full transition-colors ${form.smartNotificationsOptIn ? "bg-green-600" : "bg-zinc-300 dark:bg-zinc-600"}`}
-                >
-                  <span
-                    className={`pointer-events-none inline-block size-6 translate-y-0.5 rounded-full bg-white shadow transition-transform ${form.smartNotificationsOptIn ? "translate-x-5" : "translate-x-1"}`}
-                  />
-                </button>
-              </div>
-              <button
-                type="button"
-                onClick={requestNotifications}
-                className="mt-3 w-full rounded-lg border border-zinc-300 bg-white py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
-              >
-                Enable in browser
-              </button>
-              {notifHint && <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">{notifHint}</p>}
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
-            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Add people to your Circle</p>
-            <p className="mt-1 text-xs text-zinc-500">Invite family or friends by email so they can join your Circle (optional).</p>
-            <textarea
-              className="mt-2 min-h-[88px] w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-green-600/30 focus:border-green-600 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-              placeholder="mum@email.com, partner@email.com"
-              value={form.invitedEmails}
-              onChange={(ev) => set("invitedEmails", ev.target.value)}
-            />
-          </div>
-
-          <div className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
-            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Share the app</p>
-            <p className="mt-1 text-xs text-zinc-500">Send your invite link by message or copy the app link for crew or family.</p>
-            <button
-              type="button"
-              onClick={shareApp}
-              className="mt-3 w-full rounded-lg bg-green-600 py-2.5 text-sm font-medium text-white hover:bg-green-700"
-            >
-              Share SeaLink
-            </button>
-            {shareHint && <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">{shareHint}</p>}
-          </div>
-        </div>
-      )}
-
-      <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
-        <div className="flex gap-2">
-          {step > 1 && (
-            <button
-              type="button"
-              onClick={back}
-              className="inline-flex h-10 items-center justify-center rounded-lg border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
-            >
-              Back
-            </button>
-          )}
-        </div>
-        <div className="flex gap-2 sm:ml-auto">
-          {step < 4 ? (
-            <button
-              type="button"
-              disabled={photoProcessing}
-              onClick={next}
-              className="inline-flex h-10 flex-1 items-center justify-center rounded-lg bg-green-700 px-4 text-sm font-medium text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none"
-            >
-              Continue
-            </button>
-          ) : (
-            <button
-              type="button"
-              disabled={!step4PrimaryReady || submitting}
-              onClick={() => void completeSignUp()}
-              className="inline-flex h-10 flex-1 items-center justify-center rounded-lg bg-green-700 px-4 text-sm font-medium text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none"
-            >
-              {submitting ? "Creating account…" : "Create account"}
-            </button>
-          )}
-        </div>
-      </div>
-    </form>
+      </form>
     </>
   );
 }

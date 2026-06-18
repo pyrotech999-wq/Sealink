@@ -16,6 +16,7 @@ import {
   hideBroadcastId,
   readHiddenBroadcastIds,
 } from "@/lib/broadcast-hidden";
+import { useIsMobileApp } from "@/hooks/useIsMobileApp";
 
 const WATERLINE_KEY = "sealink_broadcast_toast_waterline_v1";
 const SOUND_KEY = "sealink_broadcast_sound_v1";
@@ -604,11 +605,10 @@ export function MapBroadcastPanel({
         </p>
         {inboxRows.length === 0 ? (
           <p
-            className={`mt-3 rounded-xl border border-dashed px-3 py-4 text-center ${
-              L
-                ? "border-zinc-300/80 bg-white/80 text-sm text-zinc-600 dark:border-zinc-600 dark:bg-zinc-950/50 dark:text-zinc-400"
-                : "rounded-lg border border-indigo-200/70 bg-white/60 text-[11px] text-indigo-800/70 dark:border-indigo-800/50 dark:bg-zinc-900/40 dark:text-indigo-200/70"
-            }`}
+            className={`mt-3 rounded-xl border border-dashed px-3 py-4 text-center ${L
+              ? "border-zinc-300/80 bg-white/80 text-sm text-zinc-600 dark:border-zinc-600 dark:bg-zinc-950/50 dark:text-zinc-400"
+              : "rounded-lg border border-indigo-200/70 bg-white/60 text-[11px] text-indigo-800/70 dark:border-indigo-800/50 dark:bg-zinc-900/40 dark:text-indigo-200/70"
+              }`}
           >
             {L ? "No direct messages yet. Start one above or wait for a friend to message you." : "No private chats yet."}
           </p>
@@ -679,9 +679,8 @@ export function MapBroadcastPanel({
                   type="button"
                   disabled={deletingThreadId === row.threadId}
                   onClick={(e) => void onDeleteDmThread(row, e)}
-                  className={`shrink-0 self-stretch rounded-xl border border-red-200 bg-red-50 font-semibold text-red-800 hover:bg-red-100 disabled:opacity-50 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950/55 ${
-                    L ? "px-3 py-2 text-base" : "px-2 py-1 text-[11px]"
-                  }`}
+                  className={`shrink-0 self-stretch rounded-xl border border-red-200 bg-red-50 font-semibold text-red-800 hover:bg-red-100 disabled:opacity-50 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950/55 ${L ? "px-3 py-2 text-base" : "px-2 py-1 text-[11px]"
+                    }`}
                 >
                   {deletingThreadId === row.threadId ? "…" : "Delete"}
                 </button>
@@ -781,11 +780,10 @@ export function MapBroadcastPanel({
               role="tab"
               aria-selected={messagingTab === "direct"}
               onClick={() => setMessagingTab("direct")}
-              className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
-                messagingTab === "direct"
-                  ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-50"
-                  : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-              }`}
+              className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${messagingTab === "direct"
+                ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-50"
+                : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+                }`}
             >
               Direct messages
             </button>
@@ -794,11 +792,10 @@ export function MapBroadcastPanel({
               role="tab"
               aria-selected={messagingTab === "area"}
               onClick={() => setMessagingTab("area")}
-              className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
-                messagingTab === "area"
-                  ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-50"
-                  : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-              }`}
+              className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${messagingTab === "area"
+                ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-50"
+                : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+                }`}
             >
               Area broadcasts
             </button>
@@ -824,355 +821,343 @@ export function MapBroadcastPanel({
 
       {showAreaSection ? (
         <>
-      <h3
-        className={
-          L
-            ? "text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50"
-            : "text-base font-semibold tracking-tight text-indigo-950 dark:text-indigo-100"
-        }
-      >
-        Area broadcasts (~5 mi)
-      </h3>
-      <p
-        className={`mt-1 leading-snug ${L ? "text-sm text-zinc-600 dark:text-zinc-400" : "text-[11px] text-indigo-900/85 dark:text-indigo-200/85"}`}
-      >
-        <strong className={`font-semibold ${L ? "text-zinc-800 dark:text-zinc-200" : "text-indigo-950 dark:text-indigo-100"}`}>
-          Reply
-        </strong>{" "}
-        opens a shared thread on a new page.
-      </p>
-
-      <label
-        className={`mt-3 inline-flex cursor-pointer items-center gap-2 font-medium ${L ? "text-sm text-zinc-800 dark:text-zinc-200" : "text-xs text-indigo-900 dark:text-indigo-200"}`}
-      >
-        <input
-          type="checkbox"
-          checked={soundOn}
-          onChange={(e) => {
-            const on = e.target.checked;
-            setSoundOn(on);
-            writeSoundOn(on);
-          }}
-          className="size-4 rounded border-indigo-300 text-indigo-700 focus:ring-indigo-600 dark:border-zinc-600"
-        />
-        Message alert sound
-        <span className={`font-normal ${L ? "text-zinc-500 dark:text-zinc-400" : "text-indigo-800/70 dark:text-indigo-200/70"}`}>
-          (defaults on)
-        </span>
-      </label>
-
-      {err ? (
-        <p
-          className={`mt-2 rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 ${
-            L ? "px-3 py-2 text-sm" : "text-xs"
-          }`}
-        >
-          {err}
-        </p>
-      ) : null}
-
-      <div
-        className={`mt-3 overflow-hidden rounded-xl border bg-white/90 dark:bg-zinc-950/60 ${
-          L ? "border-zinc-200 dark:border-zinc-700" : "border-indigo-200/60 dark:border-indigo-900/40"
-        }`}
-      >
-        <div
-          className={`sealink-thread-scroll min-h-[4.5rem] space-y-2 overflow-y-auto scroll-smooth p-2 pr-1.5 ${
-            L ? "max-h-[min(55vh,28rem)] sm:max-h-[min(60vh,32rem)]" : "max-h-[11rem] sm:max-h-[12rem]"
-          }`}
-          aria-busy={loading}
-        >
-        {loading ? null : visibleMessages.length === 0 ? (
-          <p className={`px-2 py-3 text-indigo-800/80 dark:text-indigo-200/80 ${L ? "text-lg" : "text-xs"}`}>
-            {messages.length === 0
-              ? "No broadcasts in this area yet."
-              : "No messages shown — hidden on this device. Others may still see them."}
+          <h3
+            className={
+              L
+                ? "text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50"
+                : "text-base font-semibold tracking-tight text-indigo-950 dark:text-indigo-100"
+            }
+          >
+            Area broadcasts (~5 mi)
+          </h3>
+          <p
+            className={`mt-1 leading-snug ${L ? "text-sm text-zinc-600 dark:text-zinc-400" : "text-[11px] text-indigo-900/85 dark:text-indigo-200/85"}`}
+          >
+            <strong className={`font-semibold ${L ? "text-zinc-800 dark:text-zinc-200" : "text-indigo-950 dark:text-indigo-100"}`}>
+              Reply
+            </strong>{" "}
+            opens a shared thread on a new page.
           </p>
-        ) : (
-          visibleMessages.map((m) => {
-            const allClear =
-              !m.isMob && m.body.trimStart().startsWith(MOB_CANCEL_BROADCAST_INTRO);
-            const mobMapHref =
-              m.isMob || allClear ? mapHrefPreferCoords(m.body, m.lat, m.lng) : null;
-            const canOpenThread =
-              signedIn && Number.isFinite(readLat) && Number.isFinite(readLng);
-            return (
-              <article
-                key={m.id}
-                role={canOpenThread ? "button" : undefined}
-                tabIndex={canOpenThread ? 0 : undefined}
-                onKeyDown={
-                  canOpenThread
-                    ? (ev) => {
-                        if (ev.key === "Enter" || ev.key === " ") {
-                          ev.preventDefault();
-                          openBroadcastChat(m);
-                        }
-                      }
-                    : undefined
-                }
-                onClick={(ev) => {
-                  if (!canOpenThread) return;
-                  const el = ev.target as HTMLElement;
-                  if (el.closest("button, a")) return;
-                  openBroadcastChat(m);
-                }}
-                className={`rounded-md border px-2.5 py-2 dark:bg-zinc-900/80 ${L ? "px-3 py-3" : "text-sm"} ${
-                  m.isMob
-                    ? "border-red-400/90 bg-red-50/90 dark:border-red-800/70 dark:bg-red-950/35"
-                    : allClear
-                      ? "border-emerald-700/50 bg-emerald-50/90 dark:border-emerald-800/60 dark:bg-emerald-950/30"
-                      : "border-indigo-100/80 bg-white dark:border-indigo-900/30"
-                } ${canOpenThread ? "cursor-pointer transition hover:border-indigo-300 hover:shadow-sm dark:hover:border-indigo-600" : ""}`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <p
-                    className={`font-medium text-indigo-600 dark:text-indigo-400 ${L ? "text-base leading-snug" : "text-[11px] leading-snug"}`}
-                  >
-                    {fmtTime(m.createdAt)}
-                    {m.isMob ? (
-                      <span
-                        className={`ml-2 rounded bg-red-600 font-bold text-white dark:bg-red-700 ${L ? "px-2 py-1 text-sm" : "px-1 py-0.5 text-[10px]"}`}
-                      >
-                        MOB
-                      </span>
-                    ) : null}
-                    {allClear ? (
-                      <span
-                        className={`ml-2 rounded bg-emerald-700 font-bold text-white dark:bg-emerald-800 ${L ? "px-2 py-1 text-sm" : "px-1 py-0.5 text-[10px]"}`}
-                      >
-                        All clear
-                      </span>
-                    ) : null}
-                    {m.isGlobal ? (
-                      <span
-                        className={`ml-2 rounded bg-amber-100 text-amber-950 dark:bg-amber-900/50 dark:text-amber-100 ${L ? "px-2 py-1 text-sm" : "px-1 py-0.5 text-[10px]"}`}
-                      >
-                        All areas
-                      </span>
-                    ) : null}
-                    {!m.isGlobal && m.audience === "friends_nearby" ? (
-                      <span
-                        className={`ml-2 rounded bg-violet-200/90 text-violet-950 dark:bg-violet-900/55 dark:text-violet-100 ${L ? "px-2 py-1 text-sm" : "px-1 py-0.5 text-[10px]"}`}
-                        title="Only IFM friends within ~5 mi could see this"
-                      >
-                        Friends nearby
-                      </span>
-                    ) : null}
-                    {!m.isGlobal && m.audience === "friends_global" ? (
-                      <span
-                        className={`ml-2 rounded bg-fuchsia-200/90 text-fuchsia-950 dark:bg-fuchsia-900/50 dark:text-fuchsia-50 ${L ? "px-2 py-1 text-sm" : "px-1 py-0.5 text-[10px]"}`}
-                        title="Only your IFM friends (anywhere) could see this"
-                      >
-                        Friends worldwide
-                      </span>
-                    ) : null}
-                    {m.isMine ? (
-                      <span
-                        className={`ml-2 rounded bg-indigo-100 text-indigo-900 dark:bg-indigo-900/60 dark:text-indigo-100 ${L ? "px-2 py-1 text-sm" : "px-1 py-0.5 text-[10px]"}`}
-                      >
-                        You
-                      </span>
-                    ) : null}
-                    {unreadBroadcastReplyIds.has(m.id) ? (
-                      <span
-                        className={`sealink-broadcast-new-replies ml-2 inline-block rounded-md px-2 py-0.5 font-bold text-white ${L ? "text-sm" : "text-[10px]"}`}
-                      >
-                        New replies
-                      </span>
-                    ) : null}
-                  </p>
-                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
-                    {signedIn && m.authorUid ? (
-                      <button
-                        type="button"
-                        onClick={(ev) => {
-                          ev.stopPropagation();
-                          openBroadcastChat(m);
-                        }}
-                        className={`rounded-md border border-indigo-200 bg-indigo-50 font-semibold text-indigo-900 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-100 dark:hover:bg-indigo-900/40 ${
-                          L ? "px-3 py-2 text-base" : "px-2 py-0.5 text-[11px]"
-                        }`}
-                      >
-                        Reply
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (window.confirm("Hide this message on this device only? It stays visible for other people.")) {
-                          onHideOnDevice(m.id);
-                        }
-                      }}
-                      className={`rounded-md border border-zinc-300 bg-zinc-100 font-semibold text-zinc-800 hover:bg-zinc-200 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700 ${
-                        L ? "px-3 py-2 text-base" : "px-2 py-0.5 text-[11px]"
-                      }`}
-                    >
-                      Hide
-                    </button>
-                    {m.canAdminDelete ? (
-                      <button
-                        type="button"
-                        onClick={() => void onAdminDelete(m)}
-                        className={`rounded-md border border-red-200 bg-red-50 font-semibold text-red-800 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950/55 ${
-                          L ? "px-3 py-2 text-base" : "px-2 py-0.5 text-[11px]"
-                        }`}
-                      >
-                        Admin delete
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-                {mobMapHref ? (
-                  <a
-                    href={mobMapHref}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={`mt-2 inline-flex w-full items-center justify-center rounded-lg bg-sky-600 py-2 text-center font-bold text-white hover:bg-sky-500 ${
-                      L ? "py-3 text-xl" : "text-xs sm:text-sm"
-                    }`}
-                  >
-                    Open sender position on map
-                  </a>
-                ) : null}
-                <div
-                  className={`mt-1 whitespace-pre-wrap leading-snug text-zinc-800 dark:text-zinc-200 ${
-                    L ? "text-lg leading-relaxed sm:text-xl" : ""
-                  }`}
-                >
-                  <LinkifiedPlainText text={m.body} />
-                </div>
-              </article>
-            );
-          })
-        )}
-        </div>
-      </div>
 
-      {canSend && sendLat != null && sendLng != null ? (
-        <form onSubmit={(e) => void onSend(e)} className="mt-3 space-y-2">
-          {canSendGlobalBroadcast ? (
-            <label
-              className={`flex cursor-pointer items-start gap-2 font-medium text-indigo-900 dark:text-indigo-200 ${
-                L ? "text-lg" : "text-xs"
-              }`}
-            >
-              <input
-                type="checkbox"
-                checked={broadcastAllAreas}
-                onChange={(e) => setBroadcastAllAreas(e.target.checked)}
-                className="mt-0.5 size-4 shrink-0 rounded border-indigo-300 text-indigo-700 focus:ring-indigo-600"
-              />
-              <span>
-                Send to <strong className="font-semibold">all map areas</strong> (not only ~5 mi from here)
-              </span>
-            </label>
-          ) : null}
-          {!broadcastAllAreas ? (
-            <fieldset
-              className={`rounded-lg border border-indigo-200/80 bg-indigo-50/40 px-3 py-2 dark:border-indigo-800/60 dark:bg-indigo-950/25 ${L ? "space-y-2 py-3" : "space-y-1.5"}`}
-            >
-              <legend className={`px-1 font-semibold text-indigo-900 dark:text-indigo-100 ${L ? "text-base" : "text-xs"}`}>
-                Who can see this
-              </legend>
-              <label className={`flex cursor-pointer items-start gap-2 text-indigo-900 dark:text-indigo-100 ${L ? "text-base" : "text-xs"}`}>
-                <input
-                  type="radio"
-                  name="broadcastAudience"
-                  checked={broadcastAudience === "all_nearby"}
-                  onChange={() => setBroadcastAudience("all_nearby")}
-                  className="mt-0.5 size-4 shrink-0 border-indigo-300 text-indigo-700 focus:ring-indigo-600"
-                />
-                <span>
-                  <strong className="font-semibold">Everyone nearby</strong> (~5 mi)
-                </span>
-              </label>
-              <label className={`flex cursor-pointer items-start gap-2 text-indigo-900 dark:text-indigo-100 ${L ? "text-base" : "text-xs"}`}>
-                <input
-                  type="radio"
-                  name="broadcastAudience"
-                  checked={broadcastAudience === "friends_nearby"}
-                  onChange={() => setBroadcastAudience("friends_nearby")}
-                  className="mt-0.5 size-4 shrink-0 border-indigo-300 text-violet-700 focus:ring-violet-600"
-                />
-                <span>
-                  <strong className="font-semibold">IFM friends nearby</strong> (~5 mi)
-                </span>
-              </label>
-              <label className={`flex cursor-pointer items-start gap-2 text-indigo-900 dark:text-indigo-100 ${L ? "text-base" : "text-xs"}`}>
-                <input
-                  type="radio"
-                  name="broadcastAudience"
-                  checked={broadcastAudience === "friends_global"}
-                  onChange={() => setBroadcastAudience("friends_global")}
-                  className="mt-0.5 size-4 shrink-0 border-indigo-300 text-fuchsia-700 focus:ring-fuchsia-600"
-                />
-                <span>
-                  <strong className="font-semibold">IFM friends worldwide</strong>
-                </span>
-              </label>
-              <p className={`text-indigo-800/85 dark:text-indigo-200/75 ${L ? "text-sm pl-6" : "text-[10px] leading-snug pl-6"}`}>
-                Manage friends on the IFM map.
-              </p>
-            </fieldset>
-          ) : null}
           <label
-            className={`block font-medium text-indigo-900 dark:text-indigo-200 ${L ? "text-lg" : "text-xs"}`}
+            className={`mt-3 inline-flex cursor-pointer items-center gap-2 font-medium ${L ? "text-sm text-zinc-800 dark:text-zinc-200" : "text-xs text-indigo-900 dark:text-indigo-200"}`}
           >
-            {broadcastAllAreas && canSendGlobalBroadcast
-              ? "Broadcast (all areas)"
-              : broadcastAudience === "friends_nearby"
-                ? "Message (IFM friends within ~5 mi)"
-                : broadcastAudience === "friends_global"
-                  ? "Message (IFM friends worldwide)"
-                  : "Broadcast to ~5 mi"}
-            <textarea
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              rows={L ? 4 : 3}
-              maxLength={500}
-              placeholder={
-                broadcastAudience === "friends_nearby"
-                  ? "Heads-up for IFM friends in range…"
-                  : broadcastAudience === "friends_global"
-                    ? "Heads-up for your IFM friends anywhere…"
-                    : "Short heads-up for nearby boaters…"
-              }
-              className={`mt-1 w-full rounded-lg border border-indigo-200 bg-white px-2 py-1.5 text-zinc-900 outline-none focus:border-indigo-500 dark:border-indigo-800 dark:bg-zinc-950 dark:text-zinc-50 ${
-                L ? "py-3 text-base sm:text-lg" : "text-sm"
-              }`}
+            <input
+              type="checkbox"
+              checked={soundOn}
+              onChange={(e) => {
+                const on = e.target.checked;
+                setSoundOn(on);
+                writeSoundOn(on);
+              }}
+              className="size-4 rounded border-indigo-300 text-indigo-700 focus:ring-indigo-600 dark:border-zinc-600"
             />
+            Message alert sound
+            <span className={`font-normal ${L ? "text-zinc-500 dark:text-zinc-400" : "text-indigo-800/70 dark:text-indigo-200/70"}`}>
+              (defaults on)
+            </span>
           </label>
-          <button
-            type="submit"
-            disabled={posting || !draft.trim()}
-            className={`rounded-lg bg-indigo-700 px-3 font-semibold text-white hover:bg-indigo-800 disabled:opacity-50 dark:bg-indigo-600 dark:hover:bg-indigo-500 ${
-              L ? "h-11 text-base" : "h-9 text-sm"
-            }`}
+
+          {err ? (
+            <p
+              className={`mt-2 rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 ${L ? "px-3 py-2 text-sm" : "text-xs"
+                }`}
+            >
+              {err}
+            </p>
+          ) : null}
+
+          <div
+            className={`mt-3 overflow-hidden rounded-xl border bg-white/90 dark:bg-zinc-950/60 ${L ? "border-zinc-200 dark:border-zinc-700" : "border-indigo-200/60 dark:border-indigo-900/40"
+              }`}
           >
-            {posting
-              ? "Sending…"
-              : broadcastAllAreas && canSendGlobalBroadcast
-                ? "Send to all areas"
-                : broadcastAudience === "friends_nearby"
-                  ? "Send to friends nearby"
-                  : broadcastAudience === "friends_global"
-                    ? "Send to friends worldwide"
-                    : "Send broadcast"}
-          </button>
-        </form>
-      ) : (
-        <p className={`mt-3 text-indigo-900/85 dark:text-indigo-200/80 ${L ? "text-sm leading-relaxed text-zinc-600 dark:text-zinc-400" : "text-xs"}`}>
-          Turn on <strong className="text-zinc-800 dark:text-zinc-200">Share my location on this map</strong> on the{" "}
-          <Link
-            href="/"
-            className="font-semibold text-indigo-600 underline underline-offset-2 hover:text-indigo-500 dark:text-indigo-400"
-          >
-            home map
-          </Link>{" "}
-          to send a broadcast from your current position.
-        </p>
-      )}
+            <div
+              className={`sealink-thread-scroll min-h-[4.5rem] space-y-2 overflow-y-auto scroll-smooth p-2 pr-1.5 ${L ? "max-h-[min(55vh,28rem)] sm:max-h-[min(60vh,32rem)]" : "max-h-[11rem] sm:max-h-[12rem]"
+                }`}
+              aria-busy={loading}
+            >
+              {loading ? null : visibleMessages.length === 0 ? (
+                <p className={`px-2 py-3 text-indigo-800/80 dark:text-indigo-200/80 ${L ? "text-lg" : "text-xs"}`}>
+                  {messages.length === 0
+                    ? "No broadcasts in this area yet."
+                    : "No messages shown — hidden on this device. Others may still see them."}
+                </p>
+              ) : (
+                visibleMessages.map((m) => {
+                  const allClear =
+                    !m.isMob && m.body.trimStart().startsWith(MOB_CANCEL_BROADCAST_INTRO);
+                  const mobMapHref =
+                    m.isMob || allClear ? mapHrefPreferCoords(m.body, m.lat, m.lng) : null;
+                  const canOpenThread =
+                    signedIn && Number.isFinite(readLat) && Number.isFinite(readLng);
+                  return (
+                    <article
+                      key={m.id}
+                      role={canOpenThread ? "button" : undefined}
+                      tabIndex={canOpenThread ? 0 : undefined}
+                      onKeyDown={
+                        canOpenThread
+                          ? (ev) => {
+                            if (ev.key === "Enter" || ev.key === " ") {
+                              ev.preventDefault();
+                              openBroadcastChat(m);
+                            }
+                          }
+                          : undefined
+                      }
+                      onClick={(ev) => {
+                        if (!canOpenThread) return;
+                        const el = ev.target as HTMLElement;
+                        if (el.closest("button, a")) return;
+                        openBroadcastChat(m);
+                      }}
+                      className={`rounded-md border px-2.5 py-2 dark:bg-zinc-900/80 ${L ? "px-3 py-3" : "text-sm"} ${m.isMob
+                        ? "border-red-400/90 bg-red-50/90 dark:border-red-800/70 dark:bg-red-950/35"
+                        : allClear
+                          ? "border-emerald-700/50 bg-emerald-50/90 dark:border-emerald-800/60 dark:bg-emerald-950/30"
+                          : "border-indigo-100/80 bg-white dark:border-indigo-900/30"
+                        } ${canOpenThread ? "cursor-pointer transition hover:border-indigo-300 hover:shadow-sm dark:hover:border-indigo-600" : ""}`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p
+                          className={`font-medium text-indigo-600 dark:text-indigo-400 ${L ? "text-base leading-snug" : "text-[11px] leading-snug"}`}
+                        >
+                          {fmtTime(m.createdAt)}
+                          {m.isMob ? (
+                            <span
+                              className={`ml-2 rounded bg-red-600 font-bold text-white dark:bg-red-700 ${L ? "px-2 py-1 text-sm" : "px-1 py-0.5 text-[10px]"}`}
+                            >
+                              MOB
+                            </span>
+                          ) : null}
+                          {allClear ? (
+                            <span
+                              className={`ml-2 rounded bg-emerald-700 font-bold text-white dark:bg-emerald-800 ${L ? "px-2 py-1 text-sm" : "px-1 py-0.5 text-[10px]"}`}
+                            >
+                              All clear
+                            </span>
+                          ) : null}
+                          {m.isGlobal ? (
+                            <span
+                              className={`ml-2 rounded bg-amber-100 text-amber-950 dark:bg-amber-900/50 dark:text-amber-100 ${L ? "px-2 py-1 text-sm" : "px-1 py-0.5 text-[10px]"}`}
+                            >
+                              All areas
+                            </span>
+                          ) : null}
+                          {!m.isGlobal && m.audience === "friends_nearby" ? (
+                            <span
+                              className={`ml-2 rounded bg-violet-200/90 text-violet-950 dark:bg-violet-900/55 dark:text-violet-100 ${L ? "px-2 py-1 text-sm" : "px-1 py-0.5 text-[10px]"}`}
+                              title="Only IFM friends within ~5 mi could see this"
+                            >
+                              Friends nearby
+                            </span>
+                          ) : null}
+                          {!m.isGlobal && m.audience === "friends_global" ? (
+                            <span
+                              className={`ml-2 rounded bg-fuchsia-200/90 text-fuchsia-950 dark:bg-fuchsia-900/50 dark:text-fuchsia-50 ${L ? "px-2 py-1 text-sm" : "px-1 py-0.5 text-[10px]"}`}
+                              title="Only your IFM friends (anywhere) could see this"
+                            >
+                              Friends worldwide
+                            </span>
+                          ) : null}
+                          {m.isMine ? (
+                            <span
+                              className={`ml-2 rounded bg-indigo-100 text-indigo-900 dark:bg-indigo-900/60 dark:text-indigo-100 ${L ? "px-2 py-1 text-sm" : "px-1 py-0.5 text-[10px]"}`}
+                            >
+                              You
+                            </span>
+                          ) : null}
+                          {unreadBroadcastReplyIds.has(m.id) ? (
+                            <span
+                              className={`sealink-broadcast-new-replies ml-2 inline-block rounded-md px-2 py-0.5 font-bold text-white ${L ? "text-sm" : "text-[10px]"}`}
+                            >
+                              New replies
+                            </span>
+                          ) : null}
+                        </p>
+                        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+                          {signedIn && m.authorUid ? (
+                            <button
+                              type="button"
+                              onClick={(ev) => {
+                                ev.stopPropagation();
+                                openBroadcastChat(m);
+                              }}
+                              className={`rounded-md border border-indigo-200 bg-indigo-50 font-semibold text-indigo-900 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-100 dark:hover:bg-indigo-900/40 ${L ? "px-3 py-2 text-base" : "px-2 py-0.5 text-[11px]"
+                                }`}
+                            >
+                              Reply
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm("Hide this message on this device only? It stays visible for other people.")) {
+                                onHideOnDevice(m.id);
+                              }
+                            }}
+                            className={`rounded-md border border-zinc-300 bg-zinc-100 font-semibold text-zinc-800 hover:bg-zinc-200 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700 ${L ? "px-3 py-2 text-base" : "px-2 py-0.5 text-[11px]"
+                              }`}
+                          >
+                            Hide
+                          </button>
+                          {m.canAdminDelete ? (
+                            <button
+                              type="button"
+                              onClick={() => void onAdminDelete(m)}
+                              className={`rounded-md border border-red-200 bg-red-50 font-semibold text-red-800 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950/55 ${L ? "px-3 py-2 text-base" : "px-2 py-0.5 text-[11px]"
+                                }`}
+                            >
+                              Admin delete
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                      {mobMapHref ? (
+                        <a
+                          href={mobMapHref}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`mt-2 inline-flex w-full items-center justify-center rounded-lg bg-sky-600 py-2 text-center font-bold text-white hover:bg-sky-500 ${L ? "py-3 text-xl" : "text-xs sm:text-sm"
+                            }`}
+                        >
+                          Open sender position on map
+                        </a>
+                      ) : null}
+                      <div
+                        className={`mt-1 whitespace-pre-wrap leading-snug text-zinc-800 dark:text-zinc-200 ${L ? "text-lg leading-relaxed sm:text-xl" : ""
+                          }`}
+                      >
+                        <LinkifiedPlainText text={m.body} />
+                      </div>
+                    </article>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {canSend && sendLat != null && sendLng != null ? (
+            <form onSubmit={(e) => void onSend(e)} className="mt-3 space-y-2">
+              {canSendGlobalBroadcast ? (
+                <label
+                  className={`flex cursor-pointer items-start gap-2 font-medium text-indigo-900 dark:text-indigo-200 ${L ? "text-lg" : "text-xs"
+                    }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={broadcastAllAreas}
+                    onChange={(e) => setBroadcastAllAreas(e.target.checked)}
+                    className="mt-0.5 size-4 shrink-0 rounded border-indigo-300 text-indigo-700 focus:ring-indigo-600"
+                  />
+                  <span>
+                    Send to <strong className="font-semibold">all map areas</strong> (not only ~5 mi from here)
+                  </span>
+                </label>
+              ) : null}
+              {!broadcastAllAreas ? (
+                <fieldset
+                  className={`rounded-lg border border-indigo-200/80 bg-indigo-50/40 px-3 py-2 dark:border-indigo-800/60 dark:bg-indigo-950/25 ${L ? "space-y-2 py-3" : "space-y-1.5"}`}
+                >
+                  <legend className={`px-1 font-semibold text-indigo-900 dark:text-indigo-100 ${L ? "text-base" : "text-xs"}`}>
+                    Who can see this
+                  </legend>
+                  <label className={`flex cursor-pointer items-start gap-2 text-indigo-900 dark:text-indigo-100 ${L ? "text-base" : "text-xs"}`}>
+                    <input
+                      type="radio"
+                      name="broadcastAudience"
+                      checked={broadcastAudience === "all_nearby"}
+                      onChange={() => setBroadcastAudience("all_nearby")}
+                      className="mt-0.5 size-4 shrink-0 border-indigo-300 text-indigo-700 focus:ring-indigo-600"
+                    />
+                    <span>
+                      <strong className="font-semibold">Everyone nearby</strong> (~5 mi)
+                    </span>
+                  </label>
+                  <label className={`flex cursor-pointer items-start gap-2 text-indigo-900 dark:text-indigo-100 ${L ? "text-base" : "text-xs"}`}>
+                    <input
+                      type="radio"
+                      name="broadcastAudience"
+                      checked={broadcastAudience === "friends_nearby"}
+                      onChange={() => setBroadcastAudience("friends_nearby")}
+                      className="mt-0.5 size-4 shrink-0 border-indigo-300 text-violet-700 focus:ring-violet-600"
+                    />
+                    <span>
+                      <strong className="font-semibold">IFM friends nearby</strong> (~5 mi)
+                    </span>
+                  </label>
+                  <label className={`flex cursor-pointer items-start gap-2 text-indigo-900 dark:text-indigo-100 ${L ? "text-base" : "text-xs"}`}>
+                    <input
+                      type="radio"
+                      name="broadcastAudience"
+                      checked={broadcastAudience === "friends_global"}
+                      onChange={() => setBroadcastAudience("friends_global")}
+                      className="mt-0.5 size-4 shrink-0 border-indigo-300 text-fuchsia-700 focus:ring-fuchsia-600"
+                    />
+                    <span>
+                      <strong className="font-semibold">IFM friends worldwide</strong>
+                    </span>
+                  </label>
+                  <p className={`text-indigo-800/85 dark:text-indigo-200/75 ${L ? "text-sm pl-6" : "text-[10px] leading-snug pl-6"}`}>
+                    Manage friends on the IFM map.
+                  </p>
+                </fieldset>
+              ) : null}
+              <label
+                className={`block font-medium text-indigo-900 dark:text-indigo-200 ${L ? "text-lg" : "text-xs"}`}
+              >
+                {broadcastAllAreas && canSendGlobalBroadcast
+                  ? "Broadcast (all areas)"
+                  : broadcastAudience === "friends_nearby"
+                    ? "Message (IFM friends within ~5 mi)"
+                    : broadcastAudience === "friends_global"
+                      ? "Message (IFM friends worldwide)"
+                      : "Broadcast to ~5 mi"}
+                <textarea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  rows={L ? 4 : 3}
+                  maxLength={500}
+                  placeholder={
+                    broadcastAudience === "friends_nearby"
+                      ? "Heads-up for IFM friends in range…"
+                      : broadcastAudience === "friends_global"
+                        ? "Heads-up for your IFM friends anywhere…"
+                        : "Short heads-up for nearby boaters…"
+                  }
+                  className={`mt-1 w-full rounded-lg border border-indigo-200 bg-white px-2 py-1.5 text-zinc-900 outline-none focus:border-indigo-500 dark:border-indigo-800 dark:bg-zinc-950 dark:text-zinc-50 ${L ? "py-3 text-base sm:text-lg" : "text-sm"
+                    }`}
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={posting || !draft.trim()}
+                className={`rounded-lg bg-indigo-700 px-3 font-semibold text-white hover:bg-indigo-800 disabled:opacity-50 dark:bg-indigo-600 dark:hover:bg-indigo-500 ${L ? "h-11 text-base" : "h-9 text-sm"
+                  }`}
+              >
+                {posting
+                  ? "Sending…"
+                  : broadcastAllAreas && canSendGlobalBroadcast
+                    ? "Send to all areas"
+                    : broadcastAudience === "friends_nearby"
+                      ? "Send to friends nearby"
+                      : broadcastAudience === "friends_global"
+                        ? "Send to friends worldwide"
+                        : "Send broadcast"}
+              </button>
+            </form>
+          ) : (
+            <p className={`mt-3 text-indigo-900/85 dark:text-indigo-200/80 ${L ? "text-sm leading-relaxed text-zinc-600 dark:text-zinc-400" : "text-xs"}`}>
+              Turn on <strong className="text-zinc-800 dark:text-zinc-200">Share my location on this map</strong> on the{" "}
+              <Link
+                href="/"
+                className="font-semibold text-indigo-600 underline underline-offset-2 hover:text-indigo-500 dark:text-indigo-400"
+              >
+                home map
+              </Link>{" "}
+              to send a broadcast from your current position.
+            </p>
+          )}
         </>
       ) : null}
 

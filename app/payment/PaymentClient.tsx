@@ -188,11 +188,10 @@ export function PaymentClient({
         ) : null}
         {isAdmin && paypalEnv != null && paypalConfigured ? (
           <p
-            className={`mb-4 rounded-lg border px-3 py-2 text-xs font-medium ${
-              paypalEnv === "live"
-                ? "border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100"
-                : "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100"
-            }`}
+            className={`mb-4 rounded-lg border px-3 py-2 text-xs font-medium ${paypalEnv === "live"
+              ? "border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100"
+              : "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100"
+              }`}
           >
             PayPal is in <span className="font-semibold">{paypalEnv === "live" ? "live" : "sandbox"}</span> mode
             {paypalEnv === "sandbox"
@@ -245,11 +244,10 @@ export function PaymentClient({
               type="button"
               disabled={!stripeSubscriptionsReady}
               onClick={() => setBillingProvider("stripe")}
-              className={`rounded-xl border-2 px-4 py-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                billingProvider === "stripe"
-                  ? "border-green-600 bg-green-50 dark:border-green-500 dark:bg-green-950/40"
-                  : "border-zinc-200 bg-zinc-50 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900/50"
-              }`}
+              className={`rounded-xl border-2 px-4 py-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${billingProvider === "stripe"
+                ? "border-green-600 bg-green-50 dark:border-green-500 dark:bg-green-950/40"
+                : "border-zinc-200 bg-zinc-50 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900/50"
+                }`}
             >
               <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Card (Stripe)</p>
               <p className="mt-0.5 text-[11px] text-zinc-500">Visa, Mastercard, etc. — sign in required</p>
@@ -258,11 +256,10 @@ export function PaymentClient({
               type="button"
               disabled={!paypalSubscriptionsReady}
               onClick={() => setBillingProvider("paypal")}
-              className={`rounded-xl border-2 px-4 py-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                billingProvider === "paypal"
-                  ? "border-green-600 bg-green-50 dark:border-green-500 dark:bg-green-950/40"
-                  : "border-zinc-200 bg-zinc-50 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900/50"
-              }`}
+              className={`rounded-xl border-2 px-4 py-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${billingProvider === "paypal"
+                ? "border-green-600 bg-green-50 dark:border-green-500 dark:bg-green-950/40"
+                : "border-zinc-200 bg-zinc-50 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900/50"
+                }`}
             >
               <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">PayPal</p>
               <p className="mt-0.5 text-[11px] text-zinc-500">PayPal balance or linked card</p>
@@ -283,11 +280,10 @@ export function PaymentClient({
           <button
             type="button"
             onClick={() => setPlan("monthly")}
-            className={`rounded-xl border-2 px-3 py-3 text-left transition-colors ${
-              plan === "monthly"
-                ? "border-green-600 bg-green-50 dark:border-green-500 dark:bg-green-950/40"
-                : "border-zinc-200 bg-zinc-50 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900/50"
-            }`}
+            className={`rounded-xl border-2 px-3 py-3 text-left transition-colors ${plan === "monthly"
+              ? "border-green-600 bg-green-50 dark:border-green-500 dark:bg-green-950/40"
+              : "border-zinc-200 bg-zinc-50 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900/50"
+              }`}
           >
             <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Monthly</p>
             <p className="mt-1 text-lg font-semibold text-zinc-900 dark:text-zinc-50">£{MONTHLY_GBP}/mo</p>
@@ -295,11 +291,10 @@ export function PaymentClient({
           <button
             type="button"
             onClick={() => setPlan("annual")}
-            className={`rounded-xl border-2 px-3 py-3 text-left transition-colors ${
-              plan === "annual"
-                ? "border-green-600 bg-green-50 dark:border-green-500 dark:bg-green-950/40"
-                : "border-zinc-200 bg-zinc-50 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900/50"
-            }`}
+            className={`rounded-xl border-2 px-3 py-3 text-left transition-colors ${plan === "annual"
+              ? "border-green-600 bg-green-50 dark:border-green-500 dark:bg-green-950/40"
+              : "border-zinc-200 bg-zinc-50 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900/50"
+              }`}
           >
             <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Annual</p>
             <p className="mt-1 text-lg font-semibold text-zinc-900 dark:text-zinc-50">£{ANNUAL_GBP}/yr</p>
