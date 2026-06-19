@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { startAnchorAlarmSiren, stopAnchorAlarmSiren } from "@/lib/anchor-alarm-sound";
+import { startAnchorAlarmSiren, stopAnchorAlarmSiren, primeAnchorAlarmAudio } from "@/lib/anchor-alarm-sound";
 import {
   clearPresentedAnchorAlertId,
   readPresentedAnchorAlertId,
@@ -177,6 +177,42 @@ export function AnchorAlertsGlobalHost() {
   }, [alert?.id]);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    let listenersRegistered = false;
+
+    const primeAudio = () => {
+      void primeAnchorAlarmAudio();
+      cleanup();
+    };
+
+    const cleanup = () => {
+      if (listenersRegistered) {
+        window.removeEventListener("click", primeAudio);
+        window.removeEventListener("touchstart", primeAudio);
+        window.removeEventListener("keydown", primeAudio);
+        listenersRegistered = false;
+      }
+    };
+
+    fetch("/api/demo/me", { credentials: "same-origin" })
+      .then((r) => r.json())
+      .then((data: any) => {
+        if (data?.signedIn) {
+          window.addEventListener("click", primeAudio);
+          window.addEventListener("touchstart", primeAudio);
+          window.addEventListener("keydown", primeAudio);
+          listenersRegistered = true;
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cleanup();
+    };
+  }, []);
+
+  useEffect(() => {
     if (ANCHOR_LIVE_APIS_BLOCKED) return;
     if (typeof window === "undefined") return;
     if (isBareMetaDataDeletionPage(pathname)) return;
@@ -286,7 +322,17 @@ export function AnchorAlertsGlobalHost() {
       aria-modal="true"
       aria-labelledby="sealink-anchor-global-title"
       aria-describedby="sealink-anchor-global-detail"
-      className="sealink-anchor-siren-overlay fixed inset-0 z-[1210] flex flex-col shadow-[inset_0_0_80px_rgba(0,0,0,0.35)]"
+      className="sealink-anchor-siren-overlay fixed inset-0 z-[1210] flex flex-col shadow-[inset_0_0_80px_rgba(0,0,0,0.35)] cursor-pointer"
+      onClick={() => {
+        if (alarmBlocked) {
+          void startAlarm();
+        }
+      }}
+      onTouchStart={() => {
+        if (alarmBlocked) {
+          void startAlarm();
+        }
+      }}
     >
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4 pt-[max(1rem,env(safe-area-inset-top))] text-center">
         <p
@@ -303,7 +349,11 @@ export function AnchorAlertsGlobalHost() {
         {alarmBlocked ? (
           <button
             type="button"
-            onClick={() => void startAlarm()}
+            onClick={(e) => {
+              e.stopPropagation();
+              void startAlarm();
+            }}
+            onTouchStart={(e) => e.stopPropagation()}
             className="mt-6 rounded-xl border-2 border-white/90 bg-black/25 px-5 py-3 text-sm font-bold text-white backdrop-blur-sm hover:bg-black/40"
           >
             Tap to play alarm sound
@@ -319,7 +369,8 @@ export function AnchorAlertsGlobalHost() {
         <button
           type="button"
           disabled={resetBusyKind !== null}
-          onClick={() => {
+          onClick={(e) => {
+            e.stopPropagation();
             stopAnchorAlarmSiren();
             if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
             const seenId = alert.id;
@@ -417,6 +468,7 @@ export function AnchorAlertsGlobalHost() {
               }
             })();
           }}
+          onTouchStart={(e) => e.stopPropagation()}
           className="h-14 w-full rounded-xl bg-emerald-500 text-base font-bold text-white shadow-lg hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-xs"
         >
           {resetBusyKind === "reset" ? "Working…" : resetBusyKind != null ? "Please wait…" : "Reset anchor at boat GPS"}
@@ -424,7 +476,8 @@ export function AnchorAlertsGlobalHost() {
         <button
           type="button"
           disabled={resetBusyKind !== null || ANCHOR_LIVE_APIS_BLOCKED}
-          onClick={() => {
+          onClick={(e) => {
+            e.stopPropagation();
             void (async () => {
               setResetError(null);
               setRemoteAnchorActionDebug(null);
@@ -516,12 +569,17 @@ export function AnchorAlertsGlobalHost() {
               }
             })();
           }}
+          onTouchStart={(e) => e.stopPropagation()}
           className="h-12 w-full rounded-xl border border-sky-300/80 bg-sky-950/45 text-sm font-bold text-sky-50 hover:bg-sky-900/55 disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-xs"
         >
           {resetBusyKind === "increase" ? "Working…" : "Increase geofence (+10 m)"}
         </button>
         {confirmDisarm ? (
-          <div className="flex w-full flex-col gap-2 rounded-xl border border-amber-400/70 bg-amber-950/50 px-4 py-3 sm:max-w-xs">
+          <div
+            onClick={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            className="flex w-full flex-col gap-2 rounded-xl border border-amber-400/70 bg-amber-950/50 px-4 py-3 sm:max-w-xs"
+          >
             <p className="text-sm font-bold text-amber-100">Turn off anchor monitoring?</p>
             <p className="text-xs leading-snug text-amber-200/90">This will disarm the anchor alarm on all devices. You will need to re-arm from the anchor settings.</p>
             <div className="flex gap-2">
@@ -584,14 +642,22 @@ export function AnchorAlertsGlobalHost() {
           <button
             type="button"
             disabled={resetBusyKind !== null || ANCHOR_LIVE_APIS_BLOCKED}
-            onClick={() => setConfirmDisarm(true)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setConfirmDisarm(true);
+            }}
+            onTouchStart={(e) => e.stopPropagation()}
             className="h-12 w-full rounded-xl border border-zinc-400/90 bg-zinc-800/80 text-sm font-bold text-zinc-100 hover:bg-zinc-700/90 disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-xs"
           >
             Turn off anchor monitoring
           </button>
         )}
         {remoteAnchorActionDebug ? (
-          <div className="pointer-events-auto mx-auto mt-2 max-w-lg rounded-lg border border-cyan-500/50 bg-cyan-950/40 px-3 py-2 text-left">
+          <div
+            onClick={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            className="pointer-events-auto mx-auto mt-2 max-w-lg rounded-lg border border-cyan-500/50 bg-cyan-950/40 px-3 py-2 text-left"
+          >
             <div className="text-[10px] font-bold uppercase tracking-wide text-cyan-200">Remote command POST (last action)</div>
             <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-[9px] text-cyan-50">
               {JSON.stringify(remoteAnchorActionDebug, null, 2)}
@@ -605,7 +671,11 @@ export function AnchorAlertsGlobalHost() {
           </div>
         ) : null}
         {remoteAnchorCmdDebug && alert ? (
-          <div className="pointer-events-auto mx-auto max-w-lg rounded-lg border border-amber-400/60 bg-amber-950/50 px-3 py-2 text-left font-mono text-[10px] text-amber-100">
+          <div
+            onClick={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            className="pointer-events-auto mx-auto max-w-lg rounded-lg border border-amber-400/60 bg-amber-950/50 px-3 py-2 text-left font-mono text-[10px] text-amber-100"
+          >
             <div className="font-bold text-amber-200">Remote anchor command debug</div>
             <p className="mt-1 text-[9px] opacity-90">
               Enable: <code className="rounded bg-black/40 px-1">localStorage.setItem(&quot;sealink_remote_anchor_cmd_debug&quot;,&quot;1&quot;)</code> then reload.
@@ -657,7 +727,8 @@ export function AnchorAlertsGlobalHost() {
         <button
           type="button"
           disabled={resetBusyKind !== null}
-          onClick={() => {
+          onClick={(e) => {
+            e.stopPropagation();
             stopAnchorAlarmSiren();
             if (isCapacitorAndroidNative()) void clearNativeAndroidAnchorAlarm();
             const id = alert.id;
@@ -678,6 +749,7 @@ export function AnchorAlertsGlobalHost() {
               setAlert(null);
             })();
           }}
+          onTouchStart={(e) => e.stopPropagation()}
           className="h-14 w-full rounded-xl border-2 border-white bg-white/95 text-base font-bold text-red-700 shadow-lg hover:bg-white disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-xs"
         >
           Mark seen (stop alarm)

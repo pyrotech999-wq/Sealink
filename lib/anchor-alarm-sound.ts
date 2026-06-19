@@ -56,7 +56,8 @@ async function loadDecodedBuffer(): Promise<AudioBuffer | null> {
     decodePromise = null;
     if (buf) decodedBuffer = buf;
     return buf;
-  } catch {
+  } catch (err) {
+    console.error("Error loading or decoding anchor alarm audio:", err);
     decodePromise = null;
     return null;
   }
@@ -84,7 +85,8 @@ async function playOnceWebAudio(): Promise<boolean> {
   if (ctx.state === "suspended") {
     try {
       await ctx.resume();
-    } catch {
+    } catch (err) {
+      console.error("Failed to resume AudioContext inside playOnceWebAudio:", err);
       return false;
     }
   }
@@ -107,7 +109,8 @@ async function playOnceWebAudio(): Promise<boolean> {
   try {
     src.start(0);
     return true;
-  } catch {
+  } catch (err) {
+    console.error("Failed to start Web Audio source node:", err);
     const i = activeSources.indexOf(src);
     if (i >= 0) activeSources.splice(i, 1);
     return false;
@@ -149,7 +152,8 @@ async function playOnceHtmlAudio(): Promise<boolean> {
   try {
     await a.play();
     return true;
-  } catch {
+  } catch (err) {
+    console.error("Failed to play HTML audio:", err);
     return false;
   }
 }
@@ -165,7 +169,8 @@ export async function primeAnchorAlarmAudio(): Promise<boolean> {
       await loadDecodedBuffer();
       await ctx.resume();
       return ctx.state === "running";
-    } catch {
+    } catch (err) {
+      console.error("Failed to prime Web Audio context:", err);
       return false;
     }
   }
@@ -189,7 +194,8 @@ export async function primeAnchorAlarmAudio(): Promise<boolean> {
       /* ignore */
     }
     return true;
-  } catch {
+  } catch (err) {
+    console.error("Failed to prime HTML audio context fallback:", err);
     return false;
   } finally {
     try {

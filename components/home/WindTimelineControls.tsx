@@ -10,6 +10,7 @@ type Props = {
   onPrev: () => void;
   onNext: () => void;
   loading: boolean;
+  className?: string;
 };
 
 function formatSlotTime(iso: string): string {
@@ -24,19 +25,19 @@ function formatSlotTime(iso: string): string {
   }).format(d);
 }
 
-export function WindTimelineControls({ slots, index, onPrev, onNext, loading }: Props) {
+export function WindTimelineControls({ slots, index, onPrev, onNext, loading, className }: Props) {
   if (loading) {
     return (
-      <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/60">
-        <p className="text-center text-sm text-zinc-500 dark:text-zinc-400">Loading 3-hour wind timeline…</p>
+      <div className={className || "mt-4 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/60"}>
+        <p className="text-center text-xs text-zinc-500 dark:text-zinc-400 py-1">Loading wind timeline…</p>
       </div>
     );
   }
 
   if (!slots.length) {
     return (
-      <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/60">
-        <p className="text-center text-sm text-zinc-500 dark:text-zinc-400">No hourly wind data for this location.</p>
+      <div className={className || "mt-4 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/60"}>
+        <p className="text-center text-xs text-zinc-500 dark:text-zinc-400 py-1">No wind data available.</p>
       </div>
     );
   }
@@ -46,6 +47,50 @@ export function WindTimelineControls({ slots, index, onPrev, onNext, loading }: 
   const from = windFromCompass16(slot.dirFromDeg);
   const fromNum = Math.round(((slot.dirFromDeg % 360) + 360) % 360);
 
+  // Premium Mobile Floating Layout
+  if (className) {
+    return (
+      <div className={`${className} flex items-center justify-between gap-2 py-2 px-3`}>
+        {/* Previous Button */}
+        <button
+          type="button"
+          onClick={onPrev}
+          disabled={index <= 0}
+          className="flex h-9 w-12 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.03] active:bg-white/[0.08] text-zinc-300 disabled:opacity-30 disabled:pointer-events-none transition-all"
+        >
+          <span className="text-[14px]">◀</span>
+          <span className="text-[9px] font-bold ml-0.5">3h</span>
+        </button>
+
+        {/* Forecast Text Details */}
+        <div className="flex-1 text-center min-w-0">
+          <p className="text-[11px] font-extrabold text-slate-100 tracking-wide truncate">
+            {formatSlotTime(slot.at)}
+          </p>
+          <p className="text-[10px] text-zinc-400 mt-0.5 leading-none flex items-center justify-center gap-1 flex-wrap">
+            <span className="font-extrabold text-cyan-400">{Math.round(kn)} kn</span>
+            <span className="opacity-40">·</span>
+            <span>{Math.round(slot.mph)} mph</span>
+            <span className="opacity-40">·</span>
+            <span className="font-semibold text-emerald-400 uppercase tracking-wider">{from}</span>
+          </p>
+        </div>
+
+        {/* Next Button */}
+        <button
+          type="button"
+          onClick={onNext}
+          disabled={index >= slots.length - 1}
+          className="flex h-9 w-12 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.03] active:bg-white/[0.08] text-zinc-300 disabled:opacity-30 disabled:pointer-events-none transition-all"
+        >
+          <span className="text-[9px] font-bold mr-0.5">3h</span>
+          <span className="text-[14px]">▶</span>
+        </button>
+      </div>
+    );
+  }
+
+  // Default Website View
   return (
     <div className="mt-4 rounded-xl border border-zinc-200 bg-white px-3 py-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 sm:px-4">
       <p className="text-center text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">

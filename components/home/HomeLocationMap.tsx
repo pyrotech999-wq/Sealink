@@ -9,6 +9,7 @@
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import Link from "next/link";
+import { Anchor, Users, SlidersHorizontal, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AttributionControl, Circle, MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import { LifeOnSeasDailyModal } from "@/components/home/LifeOnSeasDailyModal";
@@ -2467,91 +2468,26 @@ export default function HomeLocationMap({
     return (
       <section className="w-full space-y-4 px-2 pb-8 animate-fadeIn" aria-labelledby="map-heading">
         {/* Mobile Header Info Row */}
-        <div className="flex flex-col gap-2 border-b border-white/[0.05] pb-3 shrink-0">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 id="map-heading" className="text-base font-extrabold tracking-tight text-slate-100">
-                Marine Radar Map
-              </h2>
-              <p className="text-[10px] text-zinc-500 mt-0.5">
-                Real-time tracking and weather data
-              </p>
-            </div>
-
-            {/* Quick Actions Row */}
-            <div className="flex items-center gap-2">
-              {sharing && showNearbyFriends ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const next = !shareNearby;
-                    setShareNearby(next);
-                    setShareNearbyPeers(next);
-                    if (!next) setNearbyPeers([]);
-                  }}
-                  className={`inline-flex h-9 items-center justify-center rounded-xl px-3 text-xs font-bold transition-all border ${shareNearby
-                    ? "border-blue-700 bg-blue-600 text-white"
-                    : "border-white/[0.06] bg-white/[0.03] text-slate-300"
-                    }`}
-                >
-                  Friends: {shareNearby ? "ON" : "OFF"}
-                </button>
-              ) : null}
-              {anchorCompact ? (
-                !anchorCfg.armed ? (
-                  <Link
-                    href="/anchor-alarm"
-                    className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-red-500/20 bg-red-500/10 px-3 text-xs font-bold text-red-400 hover:bg-red-500/20"
-                  >
-                    ⚓ Off
-                  </Link>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void stopAndroidAnchorNativeMonitoringIfNeeded();
-                      const merged = { ...anchorCfg, armed: false, lastAlertAt: null, remoteAlarmSilencedUntilReset: false };
-                      setAnchorCfg(merged);
-                      setAnchorAlertConfig(merged);
-                      if (!ANCHOR_LIVE_APIS_BLOCKED) {
-                        void fetch("/api/anchor/geofence", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          credentials: "same-origin",
-                          body: JSON.stringify({ armed: false, remoteAlarmSilencedUntilReset: false, lastAlertAt: null }),
-                          keepalive: true,
-                        }).catch(() => undefined);
-                      }
-                    }}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 text-xs font-bold text-emerald-400 hover:bg-emerald-500/20"
-                  >
-                    ⚓ Armed
-                  </button>
-                )
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setAnchorOpen(true)}
-                  className="inline-flex h-9 items-center justify-center rounded-xl border border-indigo-500/20 bg-indigo-500/10 px-3 text-xs font-bold text-indigo-400"
-                >
-                  Anchor alert
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* GPS Coarse Jitter Warn in Header */}
-          {anchorCfg.armed && anchorLocQuality && anchorLocQuality !== "ok" ? (
-            <p className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[10px] leading-relaxed text-amber-200">
-              {anchorLocQuality === "poor_accuracy"
-                ? `GPS accuracy coarser than ±${ANCHOR_MAX_HORIZ_ACCURACY_M}m — drift checks paused.`
-                : "Stabilizing GPS for the anchor — hold steady..."}
-            </p>
-          ) : null}
+        <div className="flex flex-col gap-1 border-b border-white/[0.05] pb-2 shrink-0">
+          <h2 id="map-heading" className="text-base font-extrabold tracking-tight text-slate-100">
+            Marine Radar Map
+          </h2>
+          <p className="text-[10px] text-zinc-500">
+            Real-time tracking and weather data
+          </p>
         </div>
 
-        {/* Leaflet Map Frame */}
-        <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0c182c]/40 shadow-2xl h-[340px] sm:h-[380px] w-full min-h-[250px]">
+        {/* GPS Coarse Jitter Warn */}
+        {anchorCfg.armed && anchorLocQuality && anchorLocQuality !== "ok" && (
+          <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[10px] leading-relaxed text-amber-200">
+            {anchorLocQuality === "poor_accuracy"
+              ? `GPS accuracy coarser than ±${ANCHOR_MAX_HORIZ_ACCURACY_M}m — drift checks paused.`
+              : "Stabilizing GPS for the anchor — hold steady..."}
+          </div>
+        )}
+
+        {/* Leaflet Map Frame with Floating Controls */}
+        <div className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-[#0c182c]/40 shadow-2xl h-[420px] sm:h-[460px] w-full min-h-[300px]">
           <MapContainer
             center={center}
             zoom={zoom}
@@ -2652,57 +2588,175 @@ export default function HomeLocationMap({
               </>
             ) : null}
           </MapContainer>
+
+          {/* Top-Left GPS Status Pill */}
+          <div className="absolute top-3 left-3 z-[1000] flex flex-col gap-2 pointer-events-none">
+            <div className="flex items-center gap-2 bg-[#0c192c]/90 border border-white/[0.08] rounded-full px-3 py-1.5 text-[10px] font-bold text-slate-100 shadow-lg pointer-events-auto">
+              <span className={`h-2 w-2 rounded-full ${sharing ? (pos ? "bg-emerald-500 animate-pulse" : "bg-amber-500 animate-pulse") : "bg-zinc-500"}`} />
+              <span className="tracking-wide uppercase">
+                {sharing ? (pos ? "GPS Active" : "Searching...") : "GPS Offline"}
+              </span>
+              {sharing && geoAccuracyRawM != null && Number.isFinite(geoAccuracyRawM) && (
+                <span className="text-zinc-400 border-l border-white/15 pl-2 font-medium">
+                  ±{Math.round(geoAccuracyRawM)}m
+                </span>
+              )}
+            </div>
+            {sharing && gpsRefining && (
+              <div className="flex items-center gap-1.5 bg-sky-950/90 border border-sky-500/20 rounded-lg px-2.5 py-1 text-[9px] font-semibold text-sky-200 shadow-lg pointer-events-auto max-w-max animate-pulse">
+                <span className="h-1.5 w-1.5 rounded-full bg-sky-400 animate-ping" />
+                <span>Refining GPS...</span>
+              </div>
+            )}
+          </div>
+
+          {/* Top-Right FAB Column */}
+          <div className="absolute top-3 right-3 z-[1000] flex flex-col gap-2.5 pointer-events-auto">
+            {/* Friends map toggle */}
+            {sharing && showNearbyFriends && (
+              <div className="flex flex-col items-end gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !shareNearby;
+                    setShareNearby(next);
+                    setShareNearbyPeers(next);
+                    if (!next) setNearbyPeers([]);
+                  }}
+                  className={`flex h-10 w-10 items-center justify-center rounded-full border shadow-xl backdrop-blur-md transition-all active:scale-95 ${shareNearby
+                    ? "border-blue-500/40 bg-blue-600/90 text-white"
+                    : "border-white/10 bg-[#0c192c]/85 text-zinc-300 hover:text-white"
+                    }`}
+                  title={`Friends: ${shareNearby ? "ON" : "OFF"}`}
+                >
+                  <Users className="h-4.5 w-4.5" />
+                </button>
+
+                {/* Refresh peers button underneath toggle if enabled */}
+                {EMERGENCY_REENABLE_NEARBY_PRESENCE && shareNearby && (
+                  <button
+                    type="button"
+                    onClick={() => requestNearbyManualRefresh()}
+                    disabled={nearbyRefreshBlocked || !signedIn || !refreshCoords}
+                    className="flex h-8 w-8 items-center justify-center rounded-full border border-blue-500/30 bg-blue-950/90 text-blue-200 hover:bg-blue-900/50 disabled:opacity-40 transition-all active:scale-95 shadow-md"
+                    title="Refresh nearby users"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${nearbyRefreshBlocked ? "animate-spin" : ""}`} />
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Anchor alert status indicator */}
+            {anchorCompact ? (
+              !anchorCfg.armed ? (
+                <Link
+                  href="/anchor-alarm"
+                  className="flex h-10 w-10 items-center justify-center rounded-full border border-red-500/30 bg-red-950/80 text-red-400 shadow-xl backdrop-blur-md transition-all active:scale-95 animate-pulse"
+                  title="Anchor alarm: OFF (Tap to set up)"
+                >
+                  <Anchor className="h-4.5 w-4.5" />
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void stopAndroidAnchorNativeMonitoringIfNeeded();
+                    const merged = { ...anchorCfg, armed: false, lastAlertAt: null, remoteAlarmSilencedUntilReset: false };
+                    setAnchorCfg(merged);
+                    setAnchorAlertConfig(merged);
+                    if (!ANCHOR_LIVE_APIS_BLOCKED) {
+                      void fetch("/api/anchor/geofence", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        credentials: "same-origin",
+                        body: JSON.stringify({ armed: false, remoteAlarmSilencedUntilReset: false, lastAlertAt: null }),
+                        keepalive: true,
+                      }).catch(() => undefined);
+                    }
+                  }}
+                  className="flex h-10 w-10 items-center justify-center rounded-full border border-emerald-500/40 bg-emerald-600/90 text-white shadow-xl backdrop-blur-md transition-all active:scale-95"
+                  title="Anchor alarm: ARMED (Click to disarm)"
+                >
+                  <Anchor className="h-4.5 w-4.5" />
+                </button>
+              )
+            ) : (
+              <button
+                type="button"
+                onClick={() => setAnchorOpen(true)}
+                className={`flex h-10 w-10 items-center justify-center rounded-full border shadow-xl backdrop-blur-md transition-all active:scale-95 ${anchorCfg.armed
+                  ? "border-emerald-500/40 bg-emerald-600/90 text-white"
+                  : "border-indigo-500/30 bg-[#0c192c]/85 text-indigo-400"
+                  }`}
+                title="Anchor alert settings"
+              >
+                <Anchor className="h-4.5 w-4.5" />
+              </button>
+            )}
+
+            {/* Settings shortcut */}
+            <Link
+              href="/map-sharing"
+              prefetch={false}
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#0c192c]/85 text-zinc-300 hover:text-white shadow-xl backdrop-blur-md transition-all active:scale-95"
+              title="Configure map sharing settings"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+            </Link>
+          </div>
+
+          {/* Bottom Floating Wind Timeline Controls Overlay */}
+          <div className="absolute bottom-3 left-3 right-3 z-[1000] pointer-events-auto flex flex-col gap-1.5">
+            {windErr && (
+              <div className="bg-amber-950/90 border border-amber-500/30 rounded-xl px-3 py-1.5 text-[10px] text-amber-200 shadow-lg max-w-max">
+                Hourly wind: {windErr}
+              </div>
+            )}
+            <WindTimelineControls
+              slots={windSlots}
+              index={windSlotIdx}
+              loading={windLoading}
+              onPrev={() => setWindSlotIdx((i) => Math.max(0, i - 1))}
+              onNext={() => setWindSlotIdx((i) => Math.min(windSlots.length - 1, i + 1))}
+              className="mt-0 rounded-2xl border border-white/[0.08] bg-slate-950/85 backdrop-blur-md px-3 py-2.5 shadow-2xl text-slate-100 sm:px-4"
+            />
+          </div>
         </div>
 
-        {/* Wind Timeline Dashboard */}
-        {windErr ? (
-          <p className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-200">
-            Hourly wind: {windErr}
-          </p>
-        ) : null}
-        <WindTimelineControls
-          slots={windSlots}
-          index={windSlotIdx}
-          loading={windLoading}
-          onPrev={() => setWindSlotIdx((i) => Math.max(0, i - 1))}
-          onNext={() => setWindSlotIdx((i) => Math.min(windSlots.length - 1, i + 1))}
-        />
+        {/* Telemetry and Sharing Status Action Card */}
+        <div className="rounded-3xl border border-white/[0.06] bg-[#0c192c]/45 p-4.5 space-y-3.5 shadow-md">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              Location Sharing Status
+            </span>
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold tracking-wide ${sharing
+              ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+              : "bg-zinc-500/10 text-zinc-400 border border-zinc-500/20"
+              }`}>
+              {sharing ? "ACTIVE" : "DISABLED"}
+            </span>
+          </div>
 
-        {/* Telemetry and Sharing Status Card */}
-        <div className="rounded-2xl border border-white/[0.06] bg-[#0c192c]/45 p-4 space-y-3 shadow-md">
-          <p className="text-xs text-zinc-300">
-            Location Sharing: <span className="font-extrabold text-slate-100">{sharing ? "ACTIVE" : "OFF"}</span>
-            {sharing && (pos || gpsRefining) ? (
-              <>
-                {pos ? " · GPS Locked" : " · Acquiring Fix"}
-                {geoAccuracyRawM != null && Number.isFinite(geoAccuracyRawM) ? (
-                  <>
-                    {" · "}
-                    <span className="font-semibold text-zinc-400">
-                      ±{Math.round(geoAccuracyRawM)} m accuracy
-                    </span>
-                  </>
-                ) : null}
-              </>
-            ) : null}
-          </p>
-
-          {sharing && gpsRefining ? (
+          {sharing && gpsRefining && (
             <p className="rounded-xl border border-sky-500/20 bg-sky-500/[0.03] p-3 text-[10px] leading-relaxed text-sky-200">
               <strong className="font-bold text-sky-300">GPS Warm-up:</strong> High-precision fixes requested. Checking accuracy targeting {GPS_REFINE_TARGET_ACCURACY_M} m...
             </p>
-          ) : null}
+          )}
 
-          <Link
-            href="/map-sharing"
-            prefetch={false}
-            className={`flex h-12 w-full items-center justify-center rounded-xl text-sm font-semibold transition-all active:scale-[0.98] ${sharing
-              ? "border border-white/[0.1] bg-white/[0.03] text-slate-300 hover:bg-white/[0.08]"
-              : "bg-green-600 text-white hover:bg-green-500"
+          <button
+            type="button"
+            onClick={() => {
+              setGeoError(null);
+              setSharingOn(!sharing);
+            }}
+            className={`flex h-12 w-full items-center justify-center rounded-2xl text-sm font-semibold transition-all active:scale-[0.98] ${sharing
+              ? "border border-white/[0.1] bg-white/[0.02] text-zinc-300 hover:bg-white/[0.06] hover:text-white"
+              : "bg-cyan-600 text-white hover:bg-cyan-500 shadow-[0_0_20px_rgba(8,145,178,0.3)]"
               }`}
           >
-            {sharing ? "Configure Settings / Stop Sharing" : "Share My Location on Map"}
-          </Link>
+            {sharing ? "Stop Sharing My Position" : "Share My Location on Map"}
+          </button>
         </div>
 
         {/* Extraneous Widgets */}

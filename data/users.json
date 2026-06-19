@@ -28,5 +28,15 @@
     },
     "createdAt": "2026-06-18T12:57:04.556Z",
     "updatedAt": "2026-06-18T12:57:04.556Z"
+  },
+  "allison123@yopmail.com": {
+    "uid": "462e8465937b16bded82b22697474e6d",
+    "email": "allison123@yopmail.com",
+    "password": {
+      "saltHex": "3ce4c4c9dcf8a729385422843b84a63d",
+      "hashHex": "a1119d9b5b9029cdc6169a3411aeee2e297b06a842c22b1743510af27937ddc7b9f46ff2890cb958c7696dab39c915efc5c0b7adfa45ecffee69bc35303d2106"
+    },
+    "createdAt": "2026-06-19T07:30:25.461Z",
+    "updatedAt": "2026-06-19T07:30:25.461Z"
   }
 }

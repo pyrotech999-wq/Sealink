@@ -3,6 +3,8 @@
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useIsMobileApp } from "@/hooks/useIsMobileApp";
+import { Activity, Waves } from "lucide-react";
 import {
   AttributionControl,
   CircleMarker,
@@ -278,6 +280,7 @@ function LayerLegend({ layer }: { layer: LayerId }) {
 }
 
 export function WeatherModelChartViewer() {
+  const { isMobile, mounted } = useIsMobileApp();
   const [region, setRegion] = useState<WeatherChartRegionId>("europe");
   const [layer, setLayer] = useState<LayerId>("wind10m");
   const [lead, setLead] = useState(0);
@@ -467,6 +470,237 @@ export function WeatherModelChartViewer() {
 
   // Removed: pressure/precipitation/temperature layers.
 
+  if (mounted && isMobile) {
+    return (
+      <div className="space-y-4 text-slate-100 text-left animate-fadeIn">
+        {/* Layer Selector Tabs */}
+        <div className="flex gap-2 bg-[#0a1424]/40 border border-white/[0.05] rounded-2xl p-1.5 shadow-inner">
+          {LAYERS.map((l) => {
+            const isActive = l.id === layer;
+            return (
+              <button
+                key={l.id}
+                type="button"
+                onClick={() => setLayer(l.id)}
+                className={`flex-1 h-9 rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center justify-center gap-1.5 ${isActive
+                  ? "bg-cyan-600 text-white shadow-lg shadow-cyan-900/30"
+                  : "text-slate-400 hover:text-white"
+                  }`}
+              >
+                {l.id === "wind10m" ? <Activity size={13} /> : <Waves size={13} />}
+                <span>{l.label} Forecast</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Map Frame with Floating Controls */}
+        <div className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-[#0c182c]/40 shadow-2xl h-[380px] sm:h-[420px] w-full min-h-[250px]">
+          <MapContainer
+            className="h-full w-full [&_.leaflet-tile-pane]:opacity-90 [&_.leaflet-popup-content]:max-w-[200px] [&_.leaflet-popup-content]:!m-0 [&_.leaflet-popup-content]:p-2 [&_.leaflet-popup-content]:text-sm"
+            bounds={regionConfig.mapBounds}
+            boundsOptions={{ padding: [18, 18], maxZoom: 12 }}
+            scrollWheelZoom
+            attributionControl={false}
+          >
+            <AttributionControl position="bottomright" prefix={false} />
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+            <FitBoundsTrigger bounds={regionConfig.mapBounds} trigger={fitTick} />
+
+            {showMapLayer && layer === "wind10m"
+              ? points.map((p, i) => {
+                const sp = p.windSpeedKn;
+                const dir = p.windDirFromDeg;
+                if (sp == null || dir == null || !Number.isFinite(sp) || !Number.isFinite(dir)) return null;
+                return (
+                  <Marker
+                    key={`w-${mapFrameLead}-${i}-${sp}-${dir}`}
+                    position={[p.lat, p.lng]}
+                    icon={windArrowIcon(dir, sp)}
+                  >
+                    <Popup>
+                      <div className="text-xs text-zinc-900 font-semibold p-1">
+                        <div className="font-extrabold text-cyan-800">10m Wind Speed</div>
+                        <div className="text-base font-black mt-0.5">{sp.toFixed(0)} kn</div>
+                        <div className="text-[10px] text-zinc-500 font-medium mt-0.5">From {Math.round(dir)}°</div>
+                      </div>
+                    </Popup>
+                  </Marker>
+                );
+              })
+              : null}
+
+            {showMapLayer && layer === "waves"
+              ? points.map((p, i) => {
+                const h = p.waveHeightM;
+                const wd = p.waveDirFromDeg;
+                if (h == null || !Number.isFinite(h) || h < 0.05) return null;
+                const color = waveHeightColor(h);
+                const showDir =
+                  wd != null && Number.isFinite(wd) && Number.isFinite(h) && h >= 0.12;
+                return (
+                  <CircleMarker
+                    key={`wh-${mapFrameLead}-${i}-${h}`}
+                    center={[p.lat, p.lng]}
+                    radius={8 + clamp(h, 0, 4) * 2}
+                    pathOptions={{ color: "rgba(255,255,255,0.3)", weight: 1, fillColor: color, fillOpacity: 0.88 }}
+                  >
+                    <Popup>
+                      <div className="text-xs text-zinc-900 font-semibold p-1">
+                        <div className="font-extrabold text-blue-800">Wave Height</div>
+                        <div className="text-base font-black mt-0.5">{h.toFixed(2)} m</div>
+                        {showDir && <div className="text-[10px] text-zinc-500 font-medium mt-0.5">Direction (from) {Math.round(wd!)}°</div>}
+                      </div>
+                    </Popup>
+                  </CircleMarker>
+                );
+              })
+              : null}
+
+            {showMapLayer && layer === "waves"
+              ? points.map((p, i) => {
+                const h = p.waveHeightM;
+                const wd = p.waveDirFromDeg;
+                if (h == null || wd == null || !Number.isFinite(h) || h < 0.12 || !Number.isFinite(wd)) return null;
+                return (
+                  <Marker
+                    key={`wa-${mapFrameLead}-${i}-${h}-${wd}`}
+                    position={[p.lat, p.lng]}
+                    icon={waveArrowIcon(wd, h)}
+                    interactive={false}
+                  />
+                );
+              })
+              : null}
+          </MapContainer>
+
+          {/* Floating Top-Left Legend Overlay */}
+          <div className="absolute top-3 left-3 z-[1000] pointer-events-none w-[130px]">
+            <LayerLegend layer={layer} />
+          </div>
+
+          {/* Floating Top-Right Region Control */}
+          <div className="absolute top-3 right-3 z-[1000] flex flex-col gap-2 pointer-events-auto">
+            <select
+              value={region}
+              onChange={(e) => {
+                setRegion(e.target.value as WeatherChartRegionId);
+                setFitTick((n) => n + 1);
+              }}
+              className="rounded-xl border border-white/[0.08] bg-[#0c192c]/90 px-3 py-2 text-xs font-bold text-slate-200 outline-none shadow-lg backdrop-blur-md"
+            >
+              {WEATHER_CHART_REGIONS.map((r) => (
+                <option key={r.id} value={r.id} className="bg-zinc-950 text-white">
+                  {r.label}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => setFitTick((n) => n + 1)}
+              className="flex h-8 items-center justify-center rounded-xl border border-white/[0.08] bg-[#0c192c]/90 text-[10px] font-bold text-zinc-300 active:scale-95 transition-all shadow-lg backdrop-blur-md px-2"
+            >
+              Fit region
+            </button>
+          </div>
+
+          {/* Loading Indicator Overlay */}
+          {loading && (
+            <div className="absolute inset-0 z-[1100] flex flex-col items-center justify-center gap-1.5 bg-black/40 text-xs font-semibold text-white pointer-events-none backdrop-blur-[1px]">
+              <div className="h-5 w-5 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin" />
+              <span>Loading +{lead}h forecast…</span>
+            </div>
+          )}
+        </div>
+
+        {/* Floating/Overlay Bottom Controls Card */}
+        <div className="rounded-3xl border border-white/[0.06] bg-[#0c192c]/45 p-4 space-y-3.5 shadow-md">
+          {/* Header Info details */}
+          <div className="flex items-center justify-between gap-2 border-b border-white/[0.05] pb-2">
+            <div>
+              <p className="text-[11px] font-extrabold text-slate-100 tracking-wide">
+                {activeLayer.label} Forecast
+              </p>
+              {uiMatches && mapFrame?.timeIso ? (
+                <p className="text-[9px] font-mono text-zinc-400 mt-0.5">
+                  +{lead}h · {new Date(mapFrame.timeIso).toLocaleString("en-GB", { weekday: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                </p>
+              ) : (
+                <p className="text-[9px] font-mono text-zinc-400 mt-0.5">
+                  +{lead}h timestep
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setPlaying((p) => !p)}
+                className={`h-8 px-3 rounded-lg text-xs font-bold transition-all active:scale-95 ${playing ? "bg-amber-600 text-white" : "bg-emerald-600 text-white"
+                  }`}
+              >
+                {playing ? "Pause" : "Play Loop"}
+              </button>
+              <button
+                type="button"
+                onClick={() => step(-1)}
+                disabled={lead <= 0}
+                className="h-8 w-8 rounded-lg border border-white/10 bg-white/[0.03] text-zinc-300 disabled:opacity-30 disabled:pointer-events-none active:scale-95 transition-all flex items-center justify-center font-bold text-xs"
+              >
+                −3h
+              </button>
+              <button
+                type="button"
+                onClick={() => step(1)}
+                disabled={lead >= MAX_LEAD_H}
+                className="h-8 w-8 rounded-lg border border-white/10 bg-white/[0.03] text-zinc-300 disabled:opacity-30 disabled:pointer-events-none active:scale-95 transition-all flex items-center justify-center font-bold text-xs"
+              >
+                +3h
+              </button>
+            </div>
+          </div>
+
+          {/* Timeline Range Slider */}
+          <div className="space-y-1">
+            <input
+              type="range"
+              min={0}
+              max={Math.max(0, HOURS.length - 1)}
+              value={leadIndex}
+              onChange={(e) => setLead(HOURS[Number(e.target.value)] ?? 0)}
+              className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+            />
+            <div className="flex justify-between text-[8px] font-bold font-mono text-zinc-500">
+              <span>+0h (Now)</span>
+              <span>+{HOURS[Math.floor(HOURS.length / 2)]}h</span>
+              <span>+{MAX_LEAD_H}h (Limit)</span>
+            </div>
+          </div>
+
+          {/* Status notices */}
+          {loadErr && (
+            <p className="rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2 text-[10px] text-red-400">
+              {loadErr}
+            </p>
+          )}
+          {staleNotice && !loadErr && (
+            <p className="rounded-xl border border-sky-500/20 bg-sky-500/5 px-3 py-2 text-[10px] text-sky-300 leading-normal">
+              Using cached GFS forecast data.
+            </p>
+          )}
+          {timestepEmpty && (
+            <p className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[10px] text-amber-400 leading-normal">
+              No GFS data at +{lead}h for this region.
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <section className="flex flex-col gap-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -632,68 +866,68 @@ export function WeatherModelChartViewer() {
 
           {showMapLayer && layer === "wind10m"
             ? points.map((p, i) => {
-                const sp = p.windSpeedKn;
-                const dir = p.windDirFromDeg;
-                if (sp == null || dir == null || !Number.isFinite(sp) || !Number.isFinite(dir)) return null;
-                return (
-                  <Marker
-                    key={`w-${mapFrameLead}-${i}-${sp}-${dir}`}
-                    position={[p.lat, p.lng]}
-                    icon={windArrowIcon(dir, sp)}
-                  >
-                    <Popup>
-                      <div className="text-xs">
-                        <div className="font-semibold">10 m wind</div>
-                        <div>{sp.toFixed(0)} kn</div>
-                        <div className="text-zinc-500">From {Math.round(dir)}°</div>
-                      </div>
-                    </Popup>
-                  </Marker>
-                );
-              })
+              const sp = p.windSpeedKn;
+              const dir = p.windDirFromDeg;
+              if (sp == null || dir == null || !Number.isFinite(sp) || !Number.isFinite(dir)) return null;
+              return (
+                <Marker
+                  key={`w-${mapFrameLead}-${i}-${sp}-${dir}`}
+                  position={[p.lat, p.lng]}
+                  icon={windArrowIcon(dir, sp)}
+                >
+                  <Popup>
+                    <div className="text-xs">
+                      <div className="font-semibold">10 m wind</div>
+                      <div>{sp.toFixed(0)} kn</div>
+                      <div className="text-zinc-500">From {Math.round(dir)}°</div>
+                    </div>
+                  </Popup>
+                </Marker>
+              );
+            })
             : null}
 
           {showMapLayer && layer === "waves"
             ? points.map((p, i) => {
-                const h = p.waveHeightM;
-                const wd = p.waveDirFromDeg;
-                if (h == null || !Number.isFinite(h) || h < 0.05) return null;
-                const color = waveHeightColor(h);
-                const showDir =
-                  wd != null && Number.isFinite(wd) && Number.isFinite(h) && h >= 0.12;
-                return (
-                  <CircleMarker
-                    key={`wh-${mapFrameLead}-${i}-${h}`}
-                    center={[p.lat, p.lng]}
-                    radius={9 + clamp(h, 0, 4) * 2.2}
-                    pathOptions={{ color: "rgba(255,255,255,0.35)", weight: 1, fillColor: color, fillOpacity: 0.88 }}
-                  >
-                    <Popup>
-                      <div className="text-xs">
-                        <div className="font-semibold">Waves</div>
-                        <div>{h.toFixed(2)} m</div>
-                        {showDir ? <div className="text-zinc-500">Direction (from) {Math.round(wd!)}°</div> : null}
-                      </div>
-                    </Popup>
-                  </CircleMarker>
-                );
-              })
+              const h = p.waveHeightM;
+              const wd = p.waveDirFromDeg;
+              if (h == null || !Number.isFinite(h) || h < 0.05) return null;
+              const color = waveHeightColor(h);
+              const showDir =
+                wd != null && Number.isFinite(wd) && Number.isFinite(h) && h >= 0.12;
+              return (
+                <CircleMarker
+                  key={`wh-${mapFrameLead}-${i}-${h}`}
+                  center={[p.lat, p.lng]}
+                  radius={9 + clamp(h, 0, 4) * 2.2}
+                  pathOptions={{ color: "rgba(255,255,255,0.35)", weight: 1, fillColor: color, fillOpacity: 0.88 }}
+                >
+                  <Popup>
+                    <div className="text-xs">
+                      <div className="font-semibold">Waves</div>
+                      <div>{h.toFixed(2)} m</div>
+                      {showDir ? <div className="text-zinc-500">Direction (from) {Math.round(wd!)}°</div> : null}
+                    </div>
+                  </Popup>
+                </CircleMarker>
+              );
+            })
             : null}
 
           {showMapLayer && layer === "waves"
             ? points.map((p, i) => {
-                const h = p.waveHeightM;
-                const wd = p.waveDirFromDeg;
-                if (h == null || wd == null || !Number.isFinite(h) || h < 0.12 || !Number.isFinite(wd)) return null;
-                return (
-                  <Marker
-                    key={`wa-${mapFrameLead}-${i}-${h}-${wd}`}
-                    position={[p.lat, p.lng]}
-                    icon={waveArrowIcon(wd, h)}
-                    interactive={false}
-                  />
-                );
-              })
+              const h = p.waveHeightM;
+              const wd = p.waveDirFromDeg;
+              if (h == null || wd == null || !Number.isFinite(h) || h < 0.12 || !Number.isFinite(wd)) return null;
+              return (
+                <Marker
+                  key={`wa-${mapFrameLead}-${i}-${h}-${wd}`}
+                  position={[p.lat, p.lng]}
+                  icon={waveArrowIcon(wd, h)}
+                  interactive={false}
+                />
+              );
+            })
             : null}
 
           {/* Removed: pressure/precipitation/temperature overlays */}

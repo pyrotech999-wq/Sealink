@@ -22,6 +22,7 @@ function clampIdx(n: number, a: number, b: number): number {
 export function OpcChartsBox() {
   const { isMobile, mounted } = useIsMobileApp();
   const [regionId, setRegionId] = useState<OpcRegionId>("atlantic");
+  const [chartDarkMode, setChartDarkMode] = useState(true);
   const region = useMemo(() => getOpcRegion(regionId), [regionId]);
 
   const [familyId, setFamilyId] = useState<OpcChartFamilyId>("surface");
@@ -74,11 +75,11 @@ export function OpcChartsBox() {
 
   if (mounted && isMobile) {
     return (
-      <div className="space-y-4 text-slate-100">
+      <div className="space-y-4 text-slate-100 animate-fadeIn">
         {/* Region & Family Selectors */}
         <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-1 text-left">
-            <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Region</label>
+            <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Region</label>
             <select
               value={regionId}
               onChange={(e) => {
@@ -88,7 +89,7 @@ export function OpcChartsBox() {
                 const stillHasFamily = nextRegion.families.some((f) => f.id === familyId);
                 if (!stillHasFamily) setFamilyId(nextRegion.families[0]!.id);
               }}
-              className="w-full rounded-xl border border-white/[0.08] bg-black/40 px-3 py-2.5 text-xs font-bold text-slate-200 outline-none focus:border-indigo-500 transition-all"
+              className="w-full rounded-xl border border-white/[0.08] bg-black/40 px-3 py-2.5 text-xs font-bold text-slate-200 outline-none focus:border-cyan-500 transition-all shadow-inner"
             >
               {OPC_REGIONS.map((r) => (
                 <option key={r.id} value={r.id} className="bg-zinc-950 text-white">
@@ -99,11 +100,11 @@ export function OpcChartsBox() {
           </div>
 
           <div className="flex flex-col gap-1 text-left">
-            <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Chart Type</label>
+            <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Chart Type</label>
             <select
               value={familyId}
               onChange={(e) => setFamilyId(e.target.value as OpcChartFamilyId)}
-              className="w-full rounded-xl border border-white/[0.08] bg-black/40 px-3 py-2.5 text-xs font-bold text-slate-200 outline-none focus:border-indigo-500 transition-all"
+              className="w-full rounded-xl border border-white/[0.08] bg-black/40 px-3 py-2.5 text-xs font-bold text-slate-200 outline-none focus:border-cyan-500 transition-all shadow-inner"
             >
               {region.families.map((f) => (
                 <option key={f.id} value={f.id} className="bg-zinc-950 text-white">
@@ -114,80 +115,101 @@ export function OpcChartsBox() {
           </div>
         </div>
 
-        {/* Timeline selector */}
-        <div className="flex flex-col gap-1 text-left">
-          <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Forecast Period</label>
-          <div className="flex items-center gap-2">
-            <div className="flex-1 flex gap-1 overflow-x-auto pb-1.5 scrollbar-hide">
-              {OPC_TIMELINES.map(({ key, label }) => {
-                const enabled = !!family.productsByTimeline[key];
-                const active = key === effectiveTimeline;
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    disabled={!enabled}
-                    onClick={() => setTimeline(key)}
-                    className={`h-9 px-3 rounded-xl text-xs font-bold transition-all shrink-0 active:scale-95 ${
-                      active
-                        ? "bg-indigo-600 text-white shadow-md border border-indigo-500/20"
-                        : enabled
-                          ? "bg-white/[0.03] border border-white/[0.05] text-slate-300 hover:bg-white/[0.06]"
-                          : "text-zinc-600 opacity-30 cursor-not-allowed border border-transparent"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
+        {/* Timeline Selector */}
+        <div className="rounded-3xl border border-white/[0.06] bg-[#0c192c]/45 p-4 space-y-3.5 shadow-md">
+          <div className="flex items-center justify-between gap-2 border-b border-white/[0.05] pb-2">
+            <div className="text-left">
+              <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block">Forecast Period</label>
+              <span className="text-xs font-extrabold text-slate-200 mt-0.5 inline-block">
+                {OPC_TIMELINES.find((t) => t.key === effectiveTimeline)?.label || effectiveTimeline.toUpperCase()}
+              </span>
             </div>
 
-            {/* Steppers */}
-            <div className="flex gap-1 shrink-0">
+            <div className="flex items-center gap-1">
               <button
                 type="button"
                 disabled={!canStepForecast || forecastIdx <= 0}
                 onClick={() => stepForecast(-1)}
-                className="h-9 w-9 rounded-xl border border-white/[0.06] bg-white/[0.03] active:bg-white/[0.08] flex items-center justify-center text-slate-300 disabled:opacity-30 active:scale-95 transition-all"
+                className="h-8 px-3 rounded-lg border border-white/10 bg-white/[0.03] text-zinc-300 disabled:opacity-30 disabled:pointer-events-none active:scale-95 transition-all flex items-center justify-center font-bold text-xs"
                 title="Previous forecast period"
               >
-                <ChevronLeft size={16} />
+                ◀ Prev
               </button>
               <button
                 type="button"
                 disabled={!canStepForecast || forecastIdx >= FORECAST_KEYS.length - 1}
                 onClick={() => stepForecast(1)}
-                className="h-9 w-9 rounded-xl border border-white/[0.06] bg-white/[0.03] active:bg-white/[0.08] flex items-center justify-center text-slate-300 disabled:opacity-30 active:scale-95 transition-all"
+                className="h-8 px-3 rounded-lg border border-white/10 bg-white/[0.03] text-zinc-300 disabled:opacity-30 disabled:pointer-events-none active:scale-95 transition-all flex items-center justify-center font-bold text-xs"
                 title="Next forecast period"
               >
-                <ChevronRight size={16} />
+                Next ▶
               </button>
             </div>
           </div>
+
+          {/* Horizontal timeline dots selector for quick jump */}
+          <div className="flex justify-between items-center gap-1.5 overflow-x-auto pb-1.5 scrollbar-hide">
+            {OPC_TIMELINES.map(({ key, label }) => {
+              const enabled = !!family.productsByTimeline[key];
+              const active = key === effectiveTimeline;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  disabled={!enabled}
+                  onClick={() => setTimeline(key)}
+                  className={`h-8 px-3 rounded-lg text-[10px] font-extrabold transition-all shrink-0 active:scale-95 ${active
+                    ? "bg-cyan-600 text-white shadow-md shadow-cyan-900/30"
+                    : enabled
+                      ? "bg-white/[0.03] border border-white/[0.05] text-slate-400 hover:text-white"
+                      : "text-zinc-600 opacity-20 cursor-not-allowed"
+                    }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        {/* Chart View Container */}
-        <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-black/25 flex flex-col shadow-inner">
-          <div className="flex items-center justify-between border-b border-white/[0.05] px-3.5 py-2 text-[10px] text-zinc-400 font-bold bg-[#091220]/45">
-            <span className="truncate">{region.label} · {family.label} · {effectiveTimeline.toUpperCase()}</span>
-            <a
-              className="shrink-0 flex items-center gap-1 text-[9px] font-extrabold text-blue-400 bg-blue-500/10 border border-blue-500/25 px-2 py-0.5 rounded-lg active:scale-95 transition-all"
-              href="https://ocean.weather.gov/Loops/index.php"
-              target="_blank"
-              rel="noreferrer"
-            >
-              <span>OPC Site</span>
-              <ExternalLink size={8} />
-            </a>
+        {/* Chart Viewer Container */}
+        <div className="overflow-hidden rounded-3xl border border-white/[0.06] bg-black/25 flex flex-col shadow-inner">
+          <div className="flex items-center justify-between border-b border-white/[0.05] px-3.5 py-2.5 text-[10px] text-zinc-400 font-bold bg-[#091220]/45">
+            <span className="truncate text-slate-300">{region.label} · {family.label}</span>
+            <div className="flex items-center gap-2">
+              {/* Chart color filter toggle */}
+              <button
+                type="button"
+                onClick={() => setChartDarkMode(!chartDarkMode)}
+                className={`text-[9px] font-extrabold px-2.5 py-1 rounded-lg active:scale-95 transition-all border ${chartDarkMode
+                  ? "bg-cyan-500/10 border-cyan-500/30 text-cyan-400"
+                  : "bg-white/5 border-white/10 text-slate-400"
+                  }`}
+              >
+                {chartDarkMode ? "Dark Chart: ON" : "Dark Chart: OFF"}
+              </button>
+              <a
+                className="shrink-0 flex items-center gap-1 text-[9px] font-extrabold text-blue-400 bg-blue-500/10 border border-blue-500/25 px-2 py-0.5 rounded-lg active:scale-95 transition-all"
+                href="https://ocean.weather.gov/Loops/index.php"
+                target="_blank"
+                rel="noreferrer"
+              >
+                <span>OPC Site</span>
+                <ExternalLink size={8} />
+              </a>
+            </div>
           </div>
 
-          <div className="flex items-center justify-center p-2 bg-zinc-950/20">
+          <div className="flex items-center justify-center p-1.5 bg-zinc-950/40 relative min-h-[220px]">
             {imgSrc ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={imgSrc}
                 alt=""
-                className="h-auto w-full rounded-xl bg-white shadow-lg border border-white/[0.04]"
+                style={{
+                  filter: chartDarkMode ? "invert(1) hue-rotate(180deg) opacity(0.85) contrast(1.15)" : "none",
+                }}
+                className="h-auto w-full rounded-2xl bg-white shadow-lg border border-white/[0.04] transition-all duration-300"
               />
             ) : (
               <div className="w-full py-16 text-center text-xs text-zinc-500">
@@ -259,13 +281,12 @@ export function OpcChartsBox() {
                   type="button"
                   disabled={!enabled}
                   onClick={() => setTimeline(key)}
-                  className={`h-9 px-3 text-xs font-semibold ${
-                    active
-                      ? "bg-emerald-600 text-white"
-                      : enabled
-                        ? "text-zinc-700 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-900"
-                        : "cursor-not-allowed text-zinc-400 opacity-60 dark:text-zinc-600"
-                  }`}
+                  className={`h-9 px-3 text-xs font-semibold ${active
+                    ? "bg-emerald-600 text-white"
+                    : enabled
+                      ? "text-zinc-700 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                      : "cursor-not-allowed text-zinc-400 opacity-60 dark:text-zinc-600"
+                    }`}
                 >
                   {label}
                 </button>

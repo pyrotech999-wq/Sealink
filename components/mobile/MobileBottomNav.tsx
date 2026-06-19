@@ -55,10 +55,21 @@ export function MobileBottomNav() {
     { label: "Messages", href: "/messaging", icon: MessageCircle },
   ];
 
+  const isMoreActive = isDrawerOpen || [
+    "/ifm",
+    "/weather",
+    "/navigation-charts",
+    "/for-sale",
+    "/help",
+    "/terms",
+    "/privacy",
+    "/profile"
+  ].some(path => pathname === path || pathname.startsWith(path + "/"));
+
   return (
     <>
       {/* Bottom Bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-700/80 bg-[#071b36]/95 backdrop-blur-md pb-safe">
+      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-white/[0.08] bg-[#071b36]/95 backdrop-blur-md pb-safe">
         <div className="grid grid-cols-4 relative">
           {primaryTabs.map((tab) => {
             const Icon = tab.icon;
@@ -68,14 +79,17 @@ export function MobileBottomNav() {
               <Link
                 key={tab.href}
                 href={tab.href}
-                className={`flex flex-col items-center justify-center py-2.5 text-[10px] font-medium transition-colors
+                className={`flex flex-col items-center justify-center py-2.5 text-[10px] font-medium transition-colors relative
                 ${active
-                    ? "text-blue-400"
+                    ? "text-cyan-400 font-bold"
                     : "text-slate-400 hover:text-slate-200"
                   }`}
               >
-                <Icon size={18} />
+                <Icon size={18} className={`transition-transform duration-200 ${active ? 'scale-110' : ''}`} />
                 <span className="mt-1">{tab.label}</span>
+                {active && (
+                  <span className="absolute top-0 left-1/4 right-1/4 h-0.5 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)] animate-fade-in" />
+                )}
               </Link>
             );
           })}
@@ -85,21 +99,24 @@ export function MobileBottomNav() {
             <button
               type="button"
               onClick={() => setIsDrawerOpen(!isDrawerOpen)}
-              className={`flex flex-col items-center justify-center py-2.5 text-[10px] font-medium transition-colors w-full h-full
-              ${isDrawerOpen
-                  ? "text-blue-400"
+              className={`flex flex-col items-center justify-center py-2.5 text-[10px] font-medium transition-colors w-full h-full relative
+              ${isMoreActive
+                  ? "text-cyan-400 font-bold"
                   : "text-slate-400 hover:text-slate-200"
                 }`}
             >
-              <MoreHorizontal size={18} />
+              <MoreHorizontal size={18} className={`transition-transform duration-200 ${isMoreActive ? 'scale-110' : ''}`} />
               <span className="mt-1">More</span>
+              {isMoreActive && (
+                <span className="absolute top-0 left-1/4 right-1/4 h-0.5 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)] animate-fade-in" />
+              )}
             </button>
 
             {/* Speech-Bubble Popover Menu */}
             {isDrawerOpen && (
-              <div className="absolute bottom-[60px] right-[-16px] w-64 bg-[#0a182e] border border-white/[0.08] rounded-2xl shadow-2xl z-50 p-2 flex flex-col text-left select-none animate-fade-in">
+              <div className="absolute bottom-[60px] right-3 w-64 bg-[#0a192f]/95 border border-white/[0.08] rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.5)] z-50 p-2 flex flex-col text-left select-none animate-fade-in backdrop-blur-lg">
                 {/* Popover Arrow pointing down to the "More" button center */}
-                <div className="absolute bottom-[-6px] right-[30px] w-3 h-3 bg-[#0a182e] border-r border-b border-white/[0.08] rotate-45" />
+                <div className="absolute bottom-[-6px] right-[37px] w-3 h-3 bg-[#0a192f] border-r border-b border-white/[0.08] rotate-45" />
 
                 {/* Profile/Session Info Card */}
                 {session === null ? (
@@ -154,7 +171,7 @@ export function MobileBottomNav() {
                     href="/ifm"
                     onClick={() => setIsDrawerOpen(false)}
                     className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-colors ${pathname === "/ifm"
-                      ? "bg-indigo-600/10 text-indigo-300"
+                      ? "bg-cyan-500/10 text-cyan-300 font-bold"
                       : "text-slate-300 hover:bg-white/[0.04] active:bg-white/[0.08]"
                       }`}
                   >
@@ -167,7 +184,7 @@ export function MobileBottomNav() {
                     href="/weather"
                     onClick={() => setIsDrawerOpen(false)}
                     className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-colors ${pathname === "/weather"
-                      ? "bg-indigo-600/10 text-indigo-300"
+                      ? "bg-cyan-500/10 text-cyan-300 font-bold"
                       : "text-slate-300 hover:bg-white/[0.04] active:bg-white/[0.08]"
                       }`}
                   >
@@ -180,7 +197,7 @@ export function MobileBottomNav() {
                     href="/navigation-charts"
                     onClick={() => setIsDrawerOpen(false)}
                     className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-colors ${pathname === "/navigation-charts"
-                      ? "bg-indigo-600/10 text-indigo-300"
+                      ? "bg-cyan-500/10 text-cyan-300 font-bold"
                       : "text-slate-300 hover:bg-white/[0.04] active:bg-white/[0.08]"
                       }`}
                   >
@@ -193,7 +210,7 @@ export function MobileBottomNav() {
                     href="/for-sale"
                     onClick={() => setIsDrawerOpen(false)}
                     className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-colors ${pathname === "/for-sale" || pathname.startsWith("/vessels") || pathname.startsWith("/gear")
-                      ? "bg-indigo-600/10 text-indigo-300"
+                      ? "bg-cyan-500/10 text-cyan-300 font-bold"
                       : "text-slate-300 hover:bg-white/[0.04] active:bg-white/[0.08]"
                       }`}
                   >
@@ -209,7 +226,7 @@ export function MobileBottomNav() {
                     href="/help"
                     onClick={() => setIsDrawerOpen(false)}
                     className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-colors ${pathname === "/help"
-                      ? "bg-indigo-600/10 text-indigo-300"
+                      ? "bg-cyan-500/10 text-cyan-300 font-bold"
                       : "text-slate-300 hover:bg-white/[0.04] active:bg-white/[0.08]"
                       }`}
                   >
@@ -222,7 +239,7 @@ export function MobileBottomNav() {
                     href="/terms"
                     onClick={() => setIsDrawerOpen(false)}
                     className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-colors ${pathname === "/terms"
-                      ? "bg-indigo-600/10 text-indigo-300"
+                      ? "bg-cyan-500/10 text-cyan-300 font-bold"
                       : "text-slate-300 hover:bg-white/[0.04] active:bg-white/[0.08]"
                       }`}
                   >
@@ -235,7 +252,7 @@ export function MobileBottomNav() {
                     href="/privacy"
                     onClick={() => setIsDrawerOpen(false)}
                     className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-colors ${pathname === "/privacy"
-                      ? "bg-indigo-600/10 text-indigo-300"
+                      ? "bg-cyan-500/10 text-cyan-300 font-bold"
                       : "text-slate-300 hover:bg-white/[0.04] active:bg-white/[0.08]"
                       }`}
                   >

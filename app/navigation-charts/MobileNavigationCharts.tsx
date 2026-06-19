@@ -284,7 +284,7 @@ export function MobileNavigationCharts() {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto p-4 max-w-md mx-auto w-full space-y-4 pb-24">
+      <div className="flex-1 overflow-y-auto p-4 max-w-md mx-auto w-full space-y-4 pb-24 animate-fadeIn">
         {/* Map Container */}
         <div className="w-full rounded-3xl overflow-hidden border border-white/[0.08] bg-[#0c182c]/40 shadow-2xl relative flex flex-col p-1">
           <NavigationChartsMap
@@ -298,26 +298,27 @@ export function MobileNavigationCharts() {
 
         {/* Loading status step horizontal bars */}
         {status === "loading" && (
-          <div className="bg-[#0c192c]/45 border border-white/[0.06] rounded-2xl p-3.5 space-y-3">
+          <div className="bg-[#0c192c]/55 border border-white/[0.06] rounded-2xl p-4 space-y-3.5 shadow-md">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                <span className="animate-spin inline-block h-3.5 w-3.5 border-2 border-cyan-400 border-t-transparent rounded-full" />
+              <span className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                <span className="animate-spin inline-block h-4 w-4 border-2 border-cyan-400 border-t-transparent rounded-full" />
                 Processing KAP Chart
               </span>
-              <span className="text-[10px] font-mono text-cyan-400">{statusDetail}</span>
+              <span className="text-[10px] font-mono text-cyan-400 font-bold">{statusDetail}</span>
             </div>
-            <div className="grid grid-cols-4 gap-1.5">
+            <div className="grid grid-cols-4 gap-1.5 pt-1">
               {PHASE_ORDER.map((key) => {
                 const cur = phaseIndex(loadPhase);
                 const idx = PHASE_ORDER.indexOf(key);
                 const done = cur > idx || loadPhase === "ready";
                 const active = loadPhase === key;
                 return (
-                  <div key={key} className="space-y-1">
-                    <div className={`h-1.5 rounded-full transition-all duration-300 ${done ? "bg-emerald-500" : active ? "bg-cyan-500 animate-pulse" : "bg-white/[0.08]"
-                      }`} />
-                    <div className="text-[9px] text-center truncate font-medium text-zinc-500">
-                      {PHASE_LABELS[key]}
+                  <div key={key} className="space-y-1.5">
+                    <div className={`h-1.5 rounded-full transition-all duration-300 ${
+                      done ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]" : active ? "bg-cyan-500 animate-pulse shadow-[0_0_8px_rgba(6,182,212,0.4)]" : "bg-white/[0.08]"
+                    }`} />
+                    <div className="text-[9px] text-center truncate font-extrabold text-zinc-500 uppercase tracking-wide">
+                      {PHASE_LABELS[key].split(" ")[0]}
                     </div>
                   </div>
                 );
@@ -328,19 +329,19 @@ export function MobileNavigationCharts() {
 
         {/* Load Status Banners */}
         {status === "success" && (
-          <div className="flex items-center gap-3 bg-emerald-950/40 border border-emerald-500/20 rounded-2xl p-3.5 text-xs text-emerald-300">
-            <span className="flex-shrink-0 flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          <div className="flex items-center gap-3 bg-emerald-950/30 border border-emerald-500/20 rounded-2xl p-3.5 text-xs text-emerald-300 shadow-md">
+            <span className="flex-shrink-0 flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 animate-pulse">
               <Check size={16} />
             </span>
             <div className="flex-1 text-left">
               <p className="font-bold">Chart Georeferenced</p>
-              <p className="text-[10px] text-emerald-400/80 mt-0.5">{statusDetail || "Successfully loaded onto your active instrument display."}</p>
+              <p className="text-[10px] text-emerald-400/80 mt-0.5">{statusDetail || "Loaded onto active instrument display."}</p>
             </div>
           </div>
         )}
 
         {status === "error" && (
-          <div className="flex items-start gap-3 bg-red-950/40 border border-red-500/20 rounded-2xl p-3.5 text-xs text-red-300 text-left">
+          <div className="flex items-start gap-3 bg-red-950/30 border border-red-500/20 rounded-2xl p-3.5 text-xs text-red-300 text-left shadow-md">
             <span className="flex-shrink-0 flex h-7 w-7 items-center justify-center rounded-lg bg-red-500/10 text-red-400 border border-red-500/20">
               <AlertTriangle size={16} />
             </span>
@@ -358,14 +359,14 @@ export function MobileNavigationCharts() {
         )}
 
         {/* Chart Upload / Metadata Card */}
-        <div className="rounded-2xl border border-white/[0.06] bg-[#0c192c]/45 p-4 shadow-lg backdrop-blur-md space-y-4">
+        <div className="rounded-3xl border border-white/[0.06] bg-[#0c192c]/45 p-4.5 shadow-lg backdrop-blur-md space-y-4">
           <div className="flex items-center justify-between border-b border-white/[0.05] pb-2.5">
             <div className="flex items-center gap-2">
               <Upload size={14} className="text-zinc-400" />
               <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">Georeferenced Chart (KAP)</span>
             </div>
             {metadata && (
-              <span className="text-[9px] font-mono text-emerald-400 uppercase font-bold tracking-wider">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
                 KAP Parsed
               </span>
             )}
@@ -382,10 +383,10 @@ export function MobileNavigationCharts() {
           {!metadata ? (
             <div
               onClick={onUploadKapClick}
-              className="border border-dashed border-white/[0.08] hover:border-white/[0.15] bg-white/[0.01] hover:bg-white/[0.02] rounded-xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all active:scale-[0.99]"
+              className="border border-dashed border-violet-500/35 hover:border-violet-500/60 bg-violet-950/5 hover:bg-violet-950/10 rounded-2xl p-7 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all active:scale-[0.99] shadow-inner"
             >
-              <div className="w-10 h-10 rounded-full bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
-                <Upload size={16} />
+              <div className="w-12 h-12 rounded-full bg-violet-500/10 border border-violet-500/35 flex items-center justify-center text-violet-400 shadow-[0_0_15px_rgba(139,92,246,0.15)] animate-pulse">
+                <Upload size={18} />
               </div>
               <div className="text-center">
                 <span className="text-xs font-bold text-slate-200 block">Upload KAP file</span>
@@ -395,55 +396,62 @@ export function MobileNavigationCharts() {
               </div>
             </div>
           ) : (
-            <div className="space-y-3">
-              <div className="flex items-start justify-between bg-white/[0.02] border border-white/[0.04] rounded-xl p-3 text-left">
+            <div className="space-y-3.5">
+              <div className="flex items-center justify-between bg-white/[0.02] border border-white/[0.04] rounded-xl p-3 text-left">
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-bold text-slate-200 truncate">{uploadedFile?.name}</div>
-                  <div className="text-[9px] text-zinc-500 font-mono mt-0.5">
+                  <div className="text-xs font-extrabold text-slate-200 truncate">{uploadedFile?.name}</div>
+                  <div className="text-[9px] text-zinc-500 font-mono mt-0.5 font-semibold">
                     {decodedImageSize ? `${decodedImageSize.width}x${decodedImageSize.height} px` : "Dimensions loading..."}
                   </div>
                 </div>
                 <button
                   onClick={onUploadKapClick}
-                  className="text-[10px] font-bold text-cyan-400 hover:text-cyan-300 ml-2 cursor-pointer"
+                  className="text-[10px] font-extrabold text-cyan-400 hover:text-cyan-300 ml-3 shrink-0 active:scale-95 transition-all"
                 >
                   Replace
                 </button>
               </div>
 
               {(metadata.chartName || metadata.scale || metadata.projection || metadata.datum) && (
-                <div className="bg-white/[0.02] border border-white/[0.04] rounded-xl p-3 text-left space-y-1">
-                  <span className="text-[9px] text-zinc-500 uppercase font-semibold block">Chart Details</span>
-                  {metadata.chartName && (
-                    <p className="text-[10px] text-slate-300 leading-normal font-medium">
-                      Name: <span className="text-slate-100">{metadata.chartName}</span>
-                    </p>
-                  )}
-                  {metadata.scale && (
-                    <p className="text-[10px] text-slate-300 leading-normal font-medium">
-                      Scale: <span className="text-slate-100">{metadata.scale}</span>
-                    </p>
-                  )}
-                  {(metadata.projection || metadata.datum) && (
-                    <p className="text-[10px] text-slate-300 leading-normal font-medium">
-                      Projection: <span className="text-slate-100">{[metadata.projection, metadata.datum].filter(Boolean).join(" / ")}</span>
-                    </p>
-                  )}
+                <div className="bg-[#0c192c]/55 border border-white/[0.06] rounded-xl p-3 text-left space-y-2">
+                  <span className="text-[9px] text-zinc-500 uppercase font-extrabold tracking-wider block">Chart Attributes</span>
+                  <div className="grid grid-cols-2 gap-2 text-[10px]">
+                    {metadata.chartName && (
+                      <div className="col-span-2 bg-white/[0.02] p-2 rounded-lg border border-white/[0.03]">
+                        <span className="text-[8px] text-zinc-500 uppercase font-bold block">Chart Name</span>
+                        <span className="font-extrabold text-slate-200 mt-0.5 block truncate">{metadata.chartName}</span>
+                      </div>
+                    )}
+                    {metadata.scale && (
+                      <div className="bg-white/[0.02] p-2 rounded-lg border border-white/[0.03]">
+                        <span className="text-[8px] text-zinc-500 uppercase font-bold block">Scale</span>
+                        <span className="font-extrabold text-slate-200 mt-0.5 block">{metadata.scale}</span>
+                      </div>
+                    )}
+                    {(metadata.projection || metadata.datum) && (
+                      <div className="bg-white/[0.02] p-2 rounded-lg border border-white/[0.03]">
+                        <span className="text-[8px] text-zinc-500 uppercase font-bold block">Projection</span>
+                        <span className="font-extrabold text-slate-200 mt-0.5 block truncate">
+                          {[metadata.projection, metadata.datum].filter(Boolean).join(" / ")}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
               {metadata.bounds && (
                 <div className="grid grid-cols-2 gap-2 text-left">
-                  <div className="bg-white/[0.02] border border-white/[0.04] rounded-xl p-2.5">
-                    <span className="text-[9px] text-zinc-500 uppercase font-semibold block">South-West Bound</span>
-                    <span className="text-[11px] font-mono font-bold text-slate-300 mt-1 block">
-                      {metadata.bounds[0][0].toFixed(4)}°, {metadata.bounds[0][1].toFixed(4)}°
+                  <div className="bg-gradient-to-br from-[#0c192c]/70 to-[#071120]/80 border border-white/[0.05] rounded-xl p-2.5">
+                    <span className="text-[8px] text-zinc-500 uppercase font-extrabold block">South-West Bound</span>
+                    <span className="text-[10px] font-mono font-bold text-cyan-400 mt-1 block">
+                      {metadata.bounds[0][0].toFixed(5)}°N, {metadata.bounds[0][1].toFixed(5)}°W
                     </span>
                   </div>
-                  <div className="bg-white/[0.02] border border-white/[0.04] rounded-xl p-2.5">
-                    <span className="text-[9px] text-zinc-500 uppercase font-semibold block">North-East Bound</span>
-                    <span className="text-[11px] font-mono font-bold text-slate-300 mt-1 block">
-                      {metadata.bounds[1][0].toFixed(4)}°, {metadata.bounds[1][1].toFixed(4)}°
+                  <div className="bg-gradient-to-br from-[#0c192c]/70 to-[#071120]/80 border border-white/[0.05] rounded-xl p-2.5">
+                    <span className="text-[8px] text-zinc-500 uppercase font-extrabold block">North-East Bound</span>
+                    <span className="text-[10px] font-mono font-bold text-cyan-400 mt-1 block">
+                      {metadata.bounds[1][0].toFixed(5)}°N, {metadata.bounds[1][1].toFixed(5)}°W
                     </span>
                   </div>
                 </div>
@@ -453,47 +461,52 @@ export function MobileNavigationCharts() {
         </div>
 
         {/* External Navigation Apps Card */}
-        <div className="rounded-2xl border border-white/[0.06] bg-[#0c192c]/45 p-4 shadow-lg backdrop-blur-md space-y-4">
+        <div className="rounded-3xl border border-white/[0.06] bg-[#0c192c]/45 p-4.5 shadow-lg backdrop-blur-md space-y-4">
           <div className="flex items-center justify-between border-b border-white/[0.05] pb-2.5">
             <div className="flex items-center gap-2">
               <Compass size={14} className="text-zinc-400" />
-              <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">External Navigation App</span>
+              <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">External Nav Integration</span>
             </div>
-            <span className="text-[9px] font-mono text-zinc-500">
-              {userLocation ? 'GPS ACTIVE' : 'AWAITING LOCK'}
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-extrabold tracking-wide uppercase border ${
+              userLocation
+                ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-400"
+                : "bg-amber-500/10 border-amber-500/25 text-amber-400"
+            }`}>
+              {userLocation ? "GPS Locked" : "Searching GPS..."}
             </span>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-3.5">
             <button
               type="button"
               onClick={onSendToApp}
               disabled={locating}
-              className={`w-full flex items-center justify-center gap-2 rounded-xl h-12 text-sm font-bold text-white transition-all active:scale-[0.98] cursor-pointer ${locating
-                ? "bg-emerald-600/50 cursor-not-allowed"
-                : "bg-emerald-600 hover:bg-emerald-500 shadow-md shadow-emerald-900/20"
-                }`}
+              className={`w-full flex items-center justify-center gap-2 rounded-2xl h-12 text-sm font-bold text-white transition-all active:scale-[0.98] cursor-pointer ${
+                locating
+                  ? "bg-emerald-600/50 cursor-not-allowed"
+                  : "bg-violet-600 hover:bg-violet-500 shadow-lg shadow-violet-900/30 text-white"
+              }`}
             >
               {locating ? (
                 <>
                   <span className="animate-spin inline-block h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full" />
-                  <span>Getting location...</span>
+                  <span>Locating Vessel...</span>
                 </>
               ) : (
                 <>
                   <ExternalLink size={14} />
-                  <span>Open chart in app</span>
+                  <span>Open Chart in iBoating</span>
                 </>
               )}
             </button>
 
             {locError && (
-              <p className="text-[10px] text-red-400 text-left bg-red-950/20 border border-red-500/10 rounded-xl px-3 py-2">
+              <p className="text-[10px] text-red-400 text-left bg-red-950/20 border border-red-500/10 rounded-xl px-3 py-2 leading-relaxed">
                 {locError}
               </p>
             )}
             {shareStatus && (
-              <p className="text-[10px] text-cyan-400 text-left bg-cyan-950/20 border border-cyan-500/10 rounded-xl px-3 py-2">
+              <p className="text-[10px] text-cyan-400 text-left bg-cyan-950/20 border border-cyan-500/10 rounded-xl px-3 py-2 leading-relaxed">
                 {shareStatus}
               </p>
             )}
@@ -503,7 +516,7 @@ export function MobileNavigationCharts() {
                 <div className="text-left">
                   <span className="text-[9px] text-zinc-500 uppercase font-semibold block">Vessel Position</span>
                   <span className="text-xs font-mono font-bold text-slate-200 mt-0.5 block">
-                    {userLocation.lat.toFixed(5)}°, {userLocation.lng.toFixed(5)}°
+                    {userLocation.lat.toFixed(5)}°N, {userLocation.lng.toFixed(5)}°W
                   </span>
                 </div>
                 {userLocation.accuracyM != null && (
@@ -516,12 +529,12 @@ export function MobileNavigationCharts() {
                 )}
               </div>
             ) : (
-              <div className="bg-white/[0.01] border border-white/[0.04] rounded-xl p-3 flex items-center justify-between">
-                <span className="text-[10px] text-zinc-500 text-left">No active device lock. Toggle on map to trace location.</span>
+              <div className="bg-white/[0.01] border border-white/[0.04] rounded-xl p-3.5 flex items-center justify-between">
+                <span className="text-[9px] text-zinc-500 text-left leading-normal max-w-[70%]">No active GPS sensor stream detected for external routing.</span>
                 <button
                   type="button"
                   onClick={onSetMyLocation}
-                  className="text-[10px] font-bold text-cyan-400 whitespace-nowrap ml-2 active:scale-95 cursor-pointer"
+                  className="text-[10px] font-extrabold text-cyan-400 shrink-0 ml-2 active:scale-95 transition-all"
                 >
                   Get GPS Lock
                 </button>
@@ -533,7 +546,7 @@ export function MobileNavigationCharts() {
         {/* COLREGs Link Card */}
         <Link
           href="/colregs"
-          className="group block rounded-2xl border border-white/[0.06] bg-[#0c192c]/45 p-4 active:scale-[0.99] hover:border-white/10 transition-all shadow-md text-left"
+          className="group block rounded-3xl border border-white/[0.06] bg-[#0c192c]/45 p-4 active:scale-[0.99] hover:border-white/10 transition-all shadow-md text-left"
         >
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3.5 min-w-0 flex-1">
@@ -542,13 +555,13 @@ export function MobileNavigationCharts() {
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
-                  <h3 className="text-xs font-bold text-slate-200 group-hover:text-emerald-400 transition-colors">COLREGs Rules</h3>
-                  <span className="inline-flex items-center rounded-full bg-emerald-600 px-1.5 py-0.5 text-[8px] font-bold tracking-wide text-white uppercase">
+                  <h3 className="text-xs font-extrabold text-slate-200 group-hover:text-emerald-400 transition-colors">COLREGs Rules</h3>
+                  <span className="inline-flex items-center rounded-full bg-emerald-600/10 border border-emerald-500/25 px-1.5 py-0.5 text-[8px] font-extrabold tracking-wide text-emerald-400 uppercase">
                     Open
                   </span>
                 </div>
                 <p className="text-[10px] text-slate-400 leading-snug mt-0.5">
-                  International Regulations for Preventing Collisions at Sea. Quick reference.
+                  Collision Prevention Regulations reference guide.
                 </p>
               </div>
             </div>
@@ -557,11 +570,11 @@ export function MobileNavigationCharts() {
         </Link>
 
         {/* Pilot Charts Accordion */}
-        <div className="rounded-2xl border border-white/[0.06] bg-[#0c192c]/45 shadow-lg backdrop-blur-md overflow-hidden">
+        <div className="rounded-3xl border border-white/[0.06] bg-[#0c192c]/45 shadow-lg backdrop-blur-md overflow-hidden">
           <button
             type="button"
             onClick={() => setIsPilotChartsOpen(!isPilotChartsOpen)}
-            className="w-full flex items-center justify-between p-4 border-b border-white/[0.05] cursor-pointer"
+            className="w-full flex items-center justify-between p-4.5 border-b border-white/[0.05] cursor-pointer"
           >
             <div className="flex items-center gap-2">
               <Activity size={14} className="text-zinc-400" />
@@ -571,7 +584,7 @@ export function MobileNavigationCharts() {
           </button>
 
           {isPilotChartsOpen && (
-            <div className="p-4 bg-zinc-950/20 text-left">
+            <div className="p-4 bg-zinc-950/25 text-left">
               <PilotChartsDownloads />
             </div>
           )}

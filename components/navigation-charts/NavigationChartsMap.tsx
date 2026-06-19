@@ -3,6 +3,7 @@
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Compass } from "lucide-react";
 import {
   AttributionControl,
   Circle,
@@ -209,17 +210,20 @@ export default function NavigationChartsMap({
         <button
           type="button"
           onClick={onLocationToggle}
-          className="pointer-events-auto inline-flex h-9 items-center justify-center rounded-lg border border-zinc-200 bg-white/90 px-3 text-xs font-semibold text-zinc-900 shadow-sm backdrop-blur hover:bg-white dark:border-zinc-700 dark:bg-zinc-950/70 dark:text-zinc-100 dark:hover:bg-zinc-900"
+          className={`pointer-events-auto inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border px-3 text-xs font-bold shadow-lg backdrop-blur-md active:scale-95 transition-all ${locEnabled
+            ? "border-blue-500/40 bg-blue-600/90 text-white animate-pulse"
+            : "border-white/10 bg-[#0c192c]/90 text-zinc-300 hover:text-white"
+            }`}
         >
-          {locEnabled ? "Stop showing my location" : "Show my location"}
+          <Compass className={`size-3.5 ${locEnabled ? "animate-spin" : ""}`} />
+          <span>{locEnabled ? "GPS Active" : "Find My Position"}</span>
         </button>
         {locStatus ? (
           <div
-            className={`pointer-events-none rounded-lg border px-2 py-1 text-[11px] backdrop-blur ${
-              locStatus.ok
-                ? "border-emerald-200/80 bg-emerald-50/80 text-emerald-950 dark:border-emerald-900/40 dark:bg-emerald-950/35 dark:text-emerald-100"
-                : "border-red-200/80 bg-red-50/80 text-red-950 dark:border-red-900/40 dark:bg-red-950/35 dark:text-red-100"
-            }`}
+            className={`pointer-events-none rounded-lg border px-2 py-1 text-[11px] backdrop-blur ${locStatus.ok
+              ? "border-emerald-200/80 bg-emerald-50/80 text-emerald-950 dark:border-emerald-900/40 dark:bg-emerald-950/35 dark:text-emerald-100"
+              : "border-red-200/80 bg-red-50/80 text-red-950 dark:border-red-900/40 dark:bg-red-950/35 dark:text-red-100"
+              }`}
             role="status"
             aria-live="polite"
           >

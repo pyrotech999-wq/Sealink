@@ -52,10 +52,8 @@ export default function MobileWeather() {
     return (
       <div className="min-h-screen bg-[#071120] bg-gradient-to-b from-[#0a182e] via-[#040c18] to-[#020610] text-white safe-top safe-bottom flex flex-col">
         {renderHeader('Forecast Models')}
-        <div className="p-4 flex-1 overflow-y-auto pb-20">
-          <div className="rounded-2xl border border-white/[0.06] bg-[#0c192c]/45 p-4 shadow-2xl backdrop-blur-md">
-            <WeatherModelChartViewer />
-          </div>
+        <div className="p-4 flex-1 overflow-y-auto pb-20 space-y-4">
+          <WeatherModelChartViewer />
         </div>
       </div>
     );
@@ -65,10 +63,8 @@ export default function MobileWeather() {
     return (
       <div className="min-h-screen bg-[#071120] bg-gradient-to-b from-[#0a182e] via-[#040c18] to-[#020610] text-white safe-top safe-bottom flex flex-col">
         {renderHeader('Forecast Charts')}
-        <div className="p-4 flex-1 overflow-y-auto pb-20">
-          <div className="rounded-2xl border border-white/[0.06] bg-[#0c192c]/45 p-4 shadow-2xl backdrop-blur-md">
-            <OpcChartsBox />
-          </div>
+        <div className="p-4 flex-1 overflow-y-auto pb-20 space-y-4">
+          <OpcChartsBox />
         </div>
       </div>
     );
@@ -135,19 +131,19 @@ export default function MobileWeather() {
           <p className="text-[10px] text-zinc-500 mt-0.5">Ocean Prediction Center active analyses.</p>
         </div>
 
-        {/* Surface Pressure Maps Card */}
+        {/* Interactive Weather Models Card */}
         <div
-          onClick={() => setView('pressure')}
+          onClick={() => setView('wind')}
           className="group flex items-center justify-between rounded-2xl border border-white/[0.06] bg-[#0c192c]/45 p-4.5 cursor-pointer active:scale-[0.99] hover:border-white/10 transition-all shadow-md text-left"
         >
           <div className="flex items-center gap-3.5 min-w-0 flex-1">
             <div className="flex-shrink-0 w-11 h-11 rounded-xl bg-cyan-950/40 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
-              <Compass className="w-5 h-5" />
+              <Activity className="w-5 h-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <h3 className="text-xs font-bold text-slate-200 group-hover:text-cyan-400 transition-colors">Surface Pressure Maps</h3>
+              <h3 className="text-xs font-bold text-slate-200 group-hover:text-cyan-400 transition-colors">Interactive Weather Models</h3>
               <p className="text-[10px] text-slate-400 leading-snug mt-0.5">
-                OPC surface analysis and forecast charts. Refreshed every 6 hours.
+                GFS/ECMWF global models for wind speed, gusts, rain, and sea temperature.
               </p>
             </div>
           </div>
