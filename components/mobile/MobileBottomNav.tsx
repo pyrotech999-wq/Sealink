@@ -137,7 +137,7 @@ export function MobileBottomNav() {
                       onClick={() => setIsDrawerOpen(false)}
                       className="mt-2 flex items-center justify-between text-[11px] font-bold text-blue-400 hover:text-blue-300"
                     >
-                      <span>Edit Profile</span>
+                      <span>View Profile</span>
                       <ChevronRight size={12} />
                     </Link>
                   </div>
@@ -234,46 +234,6 @@ export function MobileBottomNav() {
                     <span className="text-xs font-bold flex-1">Help Centre</span>
                     <ChevronRight size={12} className="text-zinc-600" />
                   </Link>
-
-                  <Link
-                    href="/terms"
-                    onClick={() => setIsDrawerOpen(false)}
-                    className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-colors ${pathname === "/terms"
-                      ? "bg-cyan-500/10 text-cyan-300 font-bold"
-                      : "text-slate-300 hover:bg-white/[0.04] active:bg-white/[0.08]"
-                      }`}
-                  >
-                    <FileText size={15} className="text-slate-400 shrink-0" />
-                    <span className="text-xs font-bold flex-1">Terms of Use</span>
-                    <ChevronRight size={12} className="text-zinc-600" />
-                  </Link>
-
-                  <Link
-                    href="/privacy"
-                    onClick={() => setIsDrawerOpen(false)}
-                    className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-colors ${pathname === "/privacy"
-                      ? "bg-cyan-500/10 text-cyan-300 font-bold"
-                      : "text-slate-300 hover:bg-white/[0.04] active:bg-white/[0.08]"
-                      }`}
-                  >
-                    <Shield size={15} className="text-emerald-400 shrink-0" />
-                    <span className="text-xs font-bold flex-1">Privacy Policy</span>
-                    <ChevronRight size={12} className="text-zinc-600" />
-                  </Link>
-
-                  {session?.signedIn && (
-                    <>
-                      <div className="h-px bg-white/[0.04] my-2 mx-2" />
-                      <button
-                        type="button"
-                        onClick={handleSignOut}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left text-red-400 hover:bg-red-500/10 active:bg-red-500/20 transition-colors"
-                      >
-                        <LogOut size={15} className="shrink-0" />
-                        <span className="text-xs font-bold flex-1">Sign Out</span>
-                      </button>
-                    </>
-                  )}
                 </div>
               </div>
             )}

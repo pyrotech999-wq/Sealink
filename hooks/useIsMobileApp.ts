@@ -16,7 +16,7 @@ export function useIsMobileApp() {
           ? (window as any).Capacitor.isNativePlatform()
           : false;
 
-      const isSmallScreen = window.matchMedia('(max-width: 768px)').matches;
+      const isSmallScreen = window.matchMedia('(max-width: 767px)').matches;
 
       setIsMobile(isCapacitor || isSmallScreen);
     };

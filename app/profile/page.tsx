@@ -24,27 +24,29 @@ export default async function ProfilePage({
 
   return (
     <div className="flex flex-1 flex-col bg-black">
-      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col px-4 py-8 sm:px-6 sm:py-10">
-        <Link
-          href="/"
-          className="text-sm font-medium text-green-800 hover:underline dark:text-green-400"
-        >
-          ← Home
-        </Link>
-        <h1 className="mt-4 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Edit profile</h1>
-        <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-          Your <strong className="font-medium text-zinc-800 dark:text-zinc-200">name</strong> is saved to your account (when
-          signed in with cloud sync) and used in messages and broadcasts so others see you properly — not a numeric id.
-          Boat, phone, and photo still apply on the map as before.
-        </p>
+      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col px-0 py-0 md:px-6 md:py-10">
+        <div className="hidden md:block">
+          <Link
+            href="/"
+            className="text-sm font-medium text-green-800 hover:underline dark:text-green-400"
+          >
+            ← Home
+          </Link>
+          <h1 className="mt-4 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Edit profile</h1>
+          <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+            Your <strong className="font-medium text-zinc-800 dark:text-zinc-200">name</strong> is saved to your account (when
+            signed in with cloud sync) and used in messages and broadcasts so others see you properly — not a numeric id.
+            Boat, phone, and photo still apply on the map as before.
+          </p>
 
-        {nameRequired ? (
-          <div className="mt-6 rounded-xl border border-amber-600/60 bg-amber-950/40 px-4 py-3 text-sm text-amber-100">
-            Add your name below to continue using SeaLink (at least 2 characters), then save.
-          </div>
-        ) : null}
+          {nameRequired ? (
+            <div className="mt-6 rounded-xl border border-amber-600/60 bg-amber-950/40 px-4 py-3 text-sm text-amber-100">
+              Add your name below to continue using SeaLink (at least 2 characters), then save.
+            </div>
+          ) : null}
+        </div>
 
-        <ProfileEditForm signedIn={signedIn} accountEmail={accountEmail} />
+        <ProfileEditForm signedIn={signedIn} accountEmail={accountEmail} nameRequired={nameRequired} />
       </main>
     </div>
   );
