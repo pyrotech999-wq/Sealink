@@ -16,5 +16,11 @@
     "monitorDeviceId": null,
     "alertDeviceIds": [],
     "updatedAt": "2026-06-18T12:57:34.378Z"
+  },
+  {
+    "uid": "462e8465937b16bded82b22697474e6d",
+    "monitorDeviceId": null,
+    "alertDeviceIds": [],
+    "updatedAt": "2026-06-22T09:54:56.621Z"
   }
 ]

@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { startAnchorAlarmSiren, stopAnchorAlarmSiren, primeAnchorAlarmAudio } from "@/lib/anchor-alarm-sound";
+import { primeMobSirenAudio } from "@/lib/mob-siren";
 import {
   clearPresentedAnchorAlertId,
   readPresentedAnchorAlertId,
@@ -81,12 +82,12 @@ export function AnchorAlertsGlobalHost() {
   /** Last remote anchor action: POST fields + optional terminal poll status + resolved device labels. */
   const [remoteAnchorActionDebug, setRemoteAnchorActionDebug] = useState<
     | (AnchorRemoteCommandPostDebug & {
-        terminalStatus?: string;
-        error?: string;
-        targetDeviceName?: string;
-        sourceDeviceName?: string;
-        sessionSummary?: string;
-      })
+      terminalStatus?: string;
+      error?: string;
+      targetDeviceName?: string;
+      sourceDeviceName?: string;
+      sessionSummary?: string;
+    })
     | null
   >(null);
 
@@ -179,36 +180,28 @@ export function AnchorAlertsGlobalHost() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    let listenersRegistered = false;
-
+    // Prime audio for ALL users immediately on first interaction —
+    // no sign-in gate so offline/anonymous anchor alarms also get audio.
     const primeAudio = () => {
       void primeAnchorAlarmAudio();
-      cleanup();
-    };
-
-    const cleanup = () => {
-      if (listenersRegistered) {
-        window.removeEventListener("click", primeAudio);
-        window.removeEventListener("touchstart", primeAudio);
-        window.removeEventListener("keydown", primeAudio);
-        listenersRegistered = false;
+      try {
+        primeMobSirenAudio();
+      } catch {
+        /* ignore */
       }
+      window.removeEventListener("click", primeAudio);
+      window.removeEventListener("touchstart", primeAudio);
+      window.removeEventListener("keydown", primeAudio);
     };
 
-    fetch("/api/demo/me", { credentials: "same-origin" })
-      .then((r) => r.json())
-      .then((data: any) => {
-        if (data?.signedIn) {
-          window.addEventListener("click", primeAudio);
-          window.addEventListener("touchstart", primeAudio);
-          window.addEventListener("keydown", primeAudio);
-          listenersRegistered = true;
-        }
-      })
-      .catch(() => {});
+    window.addEventListener("click", primeAudio);
+    window.addEventListener("touchstart", primeAudio);
+    window.addEventListener("keydown", primeAudio);
 
     return () => {
-      cleanup();
+      window.removeEventListener("click", primeAudio);
+      window.removeEventListener("touchstart", primeAudio);
+      window.removeEventListener("keydown", primeAudio);
     };
   }, []);
 

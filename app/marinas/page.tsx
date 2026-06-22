@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { MarinaBookingsClient } from "./MarinaBookingsClient";
+import { MarinasSwitcher } from "./MarinasSwitcher";
 
 export const metadata: Metadata = {
   title: "Marina berths",
@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 export default function MarinasPage() {
   return (
     <div className="flex flex-1 flex-col bg-black">
-      <MarinaBookingsClient />
+      <MarinasSwitcher />
     </div>
   );
 }
