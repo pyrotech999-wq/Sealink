@@ -80,7 +80,6 @@ export function MobIncomingAlertHost() {
   const [open, setOpen] = useState(false);
   const [msg, setMsg] = useState<ApiMsg | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [sessionOk, setSessionOk] = useState(false);
   const dismissedRef = useRef(readDismissed());
   const msgRef = useRef<ApiMsg | null>(null);
   const openRef = useRef(false);
@@ -136,22 +135,6 @@ export function MobIncomingAlertHost() {
   }, [silence]);
 
   useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const r = await fetch("/api/gear/session");
-        if (cancelled) return;
-        setSessionOk(r.ok);
-      } catch {
-        if (!cancelled) setSessionOk(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
     if (!open || !msg) return;
     startMobSiren();
     return () => {
@@ -160,8 +143,6 @@ export function MobIncomingAlertHost() {
   }, [open, msg]);
 
   useEffect(() => {
-    if (!sessionOk) return;
-
     const unsub = subscribeMapLive({
       id: "MobIncomingAlertHost",
       getCoords: () => {
@@ -211,7 +192,7 @@ export function MobIncomingAlertHost() {
     });
 
     return unsub;
-  }, [sessionOk, silence]);
+  }, [silence]);
 
   if (isBareMetaDataDeletionPage(pathname)) return null;
   if (!open || !msg) return null;

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef, useLayoutEffect } from "react";
 import {
   Home,
   Anchor,
@@ -17,12 +17,17 @@ import {
   Shield,
   HelpCircle,
   FileText,
+  Ship,
 } from "lucide-react";
+
+const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 export function MobileBottomNav() {
   const pathname = usePathname();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [session, setSession] = useState<{ signedIn: boolean; email?: string } | null>(null);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   const refreshSession = useCallback(() => {
     void fetch("/api/demo/me", { credentials: "same-origin", cache: "no-store" })
@@ -36,6 +41,72 @@ export function MobileBottomNav() {
   useEffect(() => {
     refreshSession();
   }, [pathname, refreshSession]);
+
+  // Hide bottom bar when keyboard is open (Android input collision fix)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleFocusIn = (e: FocusEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        setIsKeyboardVisible(true);
+      }
+    };
+
+    const handleFocusOut = () => {
+      setIsKeyboardVisible(false);
+    };
+
+    document.addEventListener("focusin", handleFocusIn);
+    document.addEventListener("focusout", handleFocusOut);
+
+    const handleResize = () => {
+      if (window.visualViewport) {
+        const isKeyboard = window.innerHeight - window.visualViewport.height > 150;
+        setIsKeyboardVisible(isKeyboard);
+      }
+    };
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", handleResize);
+    }
+
+    return () => {
+      document.removeEventListener("focusin", handleFocusIn);
+      document.removeEventListener("focusout", handleFocusOut);
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener("resize", handleResize);
+      }
+    };
+  }, []);
+
+  // Update layout padding dynamically to match the bar's exact height
+  useIsomorphicLayoutEffect(() => {
+    if (isKeyboardVisible) {
+      document.documentElement.style.setProperty("--sealink-bottom-dock-px", "0");
+      return;
+    }
+    const el = rootRef.current;
+    if (!el) return;
+    const apply = () => {
+      const h = el.getBoundingClientRect().height;
+      document.documentElement.style.setProperty("--sealink-bottom-dock-px", String(Math.max(0, Math.ceil(h))));
+    };
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    window.addEventListener("resize", apply);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", apply);
+    };
+  }, [isKeyboardVisible, isDrawerOpen]);
+
 
   const handleSignOut = async () => {
     try {
@@ -60,16 +131,26 @@ export function MobileBottomNav() {
     "/weather",
     "/navigation-charts",
     "/for-sale",
+    "/marinas",
     "/help",
     "/terms",
     "/privacy",
     "/profile"
   ].some(path => pathname === path || pathname.startsWith(path + "/"));
 
+
+  if (isKeyboardVisible) {
+    return null;
+  }
+
   return (
     <>
       {/* Bottom Bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-white/[0.08] bg-[#071b36]/95 backdrop-blur-md pb-safe">
+      <div
+        ref={rootRef}
+        className="fixed bottom-0 left-0 right-0 z-40 border-t border-white/[0.08] bg-[#071b36]/95 backdrop-blur-md pb-safe"
+      >
+
         <div className="grid grid-cols-4 relative">
           {primaryTabs.map((tab) => {
             const Icon = tab.icon;
@@ -216,6 +297,19 @@ export function MobileBottomNav() {
                   >
                     <DollarSign size={15} className="text-blue-400 shrink-0" />
                     <span className="text-xs font-bold flex-1">Buy & Sell</span>
+                    <ChevronRight size={12} className="text-zinc-600" />
+                  </Link>
+
+                  <Link
+                    href="/marinas"
+                    onClick={() => setIsDrawerOpen(false)}
+                    className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-colors ${pathname === "/marinas" || pathname.startsWith("/marinas/")
+                      ? "bg-cyan-500/10 text-cyan-300 font-bold"
+                      : "text-slate-300 hover:bg-white/[0.04] active:bg-white/[0.08]"
+                      }`}
+                  >
+                    <Ship size={15} className="text-teal-400 shrink-0" />
+                    <span className="text-xs font-bold flex-1">Marina Berths</span>
                     <ChevronRight size={12} className="text-zinc-600" />
                   </Link>
 

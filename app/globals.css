@@ -47,11 +47,13 @@ body {
 }
 
 @keyframes sealink-mob-flash {
+
   0%,
   100% {
     opacity: 1;
     filter: brightness(1.15);
   }
+
   50% {
     opacity: 0.45;
     filter: brightness(0.75);
@@ -64,13 +66,16 @@ body {
 
 /* Full-screen anchor geofence alarm — high-visibility police-style flash */
 @keyframes sealink-anchor-siren-bg {
+
   0%,
   100% {
     background-color: rgb(185 28 28);
   }
+
   33% {
     background-color: rgb(69 10 10);
   }
+
   66% {
     background-color: rgb(220 38 38);
   }
@@ -87,82 +92,81 @@ body {
   }
 }
 
-/* Message / thread panels: obvious, easy-to-grab scrollbars (Firefox + WebKit). */
+/* Message / thread panels: sleek, slim scrollbars. */
 .sealink-thread-scroll {
-  scrollbar-width: auto;
-  scrollbar-color: rgb(99 102 241) rgb(228 228 231);
-}
-html.dark .sealink-thread-scroll {
-  scrollbar-color: rgb(129 140 248) rgb(39 39 42);
-}
-.sealink-thread-scroll::-webkit-scrollbar {
-  width: 14px;
-}
-.sealink-thread-scroll::-webkit-scrollbar-track {
-  margin: 6px 0;
-  border-radius: 9999px;
-  background: rgb(228 228 231);
-}
-html.dark .sealink-thread-scroll::-webkit-scrollbar-track {
-  background: rgb(39 39 42);
-}
-.sealink-thread-scroll::-webkit-scrollbar-thumb {
-  border-radius: 9999px;
-  border: 3px solid transparent;
-  background-clip: padding-box;
-  background-color: rgb(79 70 229);
-}
-html.dark .sealink-thread-scroll::-webkit-scrollbar-thumb {
-  background-color: rgb(129 140 248);
-}
-.sealink-thread-scroll::-webkit-scrollbar-thumb:hover {
-  background-color: rgb(67 56 202);
-}
-html.dark .sealink-thread-scroll::-webkit-scrollbar-thumb:hover {
-  background-color: rgb(165 180 252);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(129, 140, 248, 0.4) transparent;
 }
 
-/* Weather & sea page: wider, lighter scrollbars (Firefox + WebKit). */
-.sealink-weather-scroll {
-  scrollbar-width: auto;
-  scrollbar-color: rgb(212 212 216) rgb(244 244 245);
+.sealink-thread-scroll::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
 }
-html.dark .sealink-weather-scroll {
-  scrollbar-color: rgb(161 161 170) rgb(58 58 62);
+
+.sealink-thread-scroll::-webkit-scrollbar-track {
+  background: transparent;
 }
-.sealink-weather-scroll::-webkit-scrollbar {
-  width: 14px;
-}
-.sealink-weather-scroll::-webkit-scrollbar-track {
-  margin: 4px 0;
+
+.sealink-thread-scroll::-webkit-scrollbar-thumb {
   border-radius: 9999px;
-  background: rgb(244 244 245);
+  background-color: rgba(129, 140, 248, 0.35);
 }
-html.dark .sealink-weather-scroll::-webkit-scrollbar-track {
-  background: rgb(58 58 62);
+
+.sealink-thread-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(129, 140, 248, 0.6);
 }
+
+/* Weather & sea page: sleek, slim scrollbars. */
+.sealink-weather-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(161, 161, 170, 0.4) transparent;
+}
+
+.sealink-weather-scroll::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.sealink-weather-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 .sealink-weather-scroll::-webkit-scrollbar-thumb {
   border-radius: 9999px;
-  border: 3px solid transparent;
-  background-clip: padding-box;
-  background-color: rgb(212 212 216);
+  background-color: rgba(161, 161 170, 0.35);
 }
-html.dark .sealink-weather-scroll::-webkit-scrollbar-thumb {
-  background-color: rgb(161 161 170);
-}
+
 .sealink-weather-scroll::-webkit-scrollbar-thumb:hover {
-  background-color: rgb(181 181 186);
+  background-color: rgba(161, 161, 170, 0.6);
 }
-html.dark .sealink-weather-scroll::-webkit-scrollbar-thumb:hover {
-  background-color: rgb(212 212 216);
+
+/* Global scrollbar style for premium feel */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.25);
 }
 
 @keyframes sealink-broadcast-reply-flash {
+
   0%,
   100% {
     color: rgb(220 38 38);
     text-shadow: 0 0 0.35rem rgb(248 113 113);
   }
+
   50% {
     color: rgb(22 163 74);
     text-shadow: 0 0 0.35rem rgb(74 222 128);
@@ -172,10 +176,26 @@ html.dark .sealink-weather-scroll::-webkit-scrollbar-thumb:hover {
 .sealink-broadcast-new-replies {
   animation: sealink-broadcast-reply-flash 2s ease-in-out infinite;
 }
+
 .safe-top {
   padding-top: env(safe-area-inset-top);
 }
 
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom);
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* Enable native touch/inertia momentum scrolling on iOS */
+.overflow-y-auto,
+.overflow-y-scroll,
+[class*="overflow-y-"] {
+  -webkit-overflow-scrolling: touch;
 }

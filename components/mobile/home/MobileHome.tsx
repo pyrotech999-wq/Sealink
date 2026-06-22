@@ -5,6 +5,8 @@ import MobileLocationCard from './MobileLocationCard';
 import { useCurrentLocation } from './useCurrentLocation';
 import { useWindForecast } from './useWindForecast';
 import Link from 'next/link';
+import { MobileAiDailySummary } from './MobileAiDailySummary';
+import { MobileSeaStateTideCard } from './MobileSeaStateTideCard';
 
 interface MobileHomeProps {
   signedIn: boolean;
@@ -95,6 +97,10 @@ export default function MobileHome({
         />
 
         <LiveMarineForecast forecast={forecast} />
+
+        <MobileAiDailySummary />
+
+        <MobileSeaStateTideCard />
 
         <QuickActions onAnchorClick={() => setAnchorOpen(true)} />
         {/* MAN OVERBOARD BUTTON */}

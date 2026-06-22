@@ -166,8 +166,11 @@ export async function primeAnchorAlarmAudio(): Promise<boolean> {
   const ctx = getAudioContext();
   if (ctx) {
     try {
-      await loadDecodedBuffer();
-      await ctx.resume();
+      // Call resume() synchronously inside the user gesture handler
+      const resumePromise = ctx.resume();
+      // Pre-load and decode in the background
+      void loadDecodedBuffer();
+      await resumePromise;
       return ctx.state === "running";
     } catch (err) {
       console.error("Failed to prime Web Audio context:", err);

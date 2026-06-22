@@ -5,6 +5,7 @@ import {
   CloudSun,
   MessageSquare,
   ChartNoAxesColumn,
+  Ship,
 } from 'lucide-react';
 
 const actions = [
@@ -21,6 +22,13 @@ const actions = [
     icon: CloudSun,
     colorClass: 'text-sky-400 group-hover:text-sky-300 drop-shadow-[0_0_8px_rgba(56,189,248,0.5)]',
     cardGlow: 'hover:shadow-[0_0_15px_rgba(14,165,233,0.15)] hover:border-sky-500/30',
+  },
+  {
+    title: 'Marinas',
+    href: '/marinas',
+    icon: Ship,
+    colorClass: 'text-teal-400 group-hover:text-teal-300 drop-shadow-[0_0_8px_rgba(45,212,191,0.5)]',
+    cardGlow: 'hover:shadow-[0_0_15px_rgba(13,148,136,0.15)] hover:border-teal-500/30',
   },
   {
     title: 'Messages',
@@ -51,7 +59,7 @@ export default function QuickActions({
         <span>⚡</span> Quick Control Center
       </h2>
 
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-5 gap-1.5 sm:gap-3">
         {actions.map((item) => {
           const Icon = item.icon;
 
