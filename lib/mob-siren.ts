@@ -8,6 +8,26 @@ const BLAST_MS = 520;
 const MASTER = 0.92;
 
 let activeTeardown: (() => void) | null = null;
+let sharedCtx: AudioContext | null = null;
+
+function getSharedCtx(): AudioContext | null {
+  if (typeof window === "undefined") return null;
+  if (sharedCtx) return sharedCtx;
+  const AC =
+    window.AudioContext ||
+    (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AC) return null;
+  sharedCtx = new AC();
+  return sharedCtx;
+}
+
+/** Call from a user gesture to warm/unlock the shared AudioContext. */
+export function primeMobSirenAudio(): void {
+  const ctx = getSharedCtx();
+  if (ctx && ctx.state === "suspended") {
+    void ctx.resume().catch(() => undefined);
+  }
+}
 
 export function stopMobSiren(): void {
   if (activeTeardown) {
@@ -18,17 +38,16 @@ export function stopMobSiren(): void {
 
 export function startMobSiren(): void {
   stopMobSiren();
-  if (typeof window === "undefined") return;
+  const ctx = getSharedCtx();
+  if (!ctx) return;
 
-  const AC =
-    window.AudioContext ||
-    (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-  if (!AC) return;
-
-  const ctx = new AC();
   let running = true;
   let intervalId = 0;
   let timeoutId = 0;
+
+  const master = ctx.createGain();
+  master.gain.setValueAtTime(MASTER, ctx.currentTime);
+  master.connect(ctx.destination);
 
   const teardown = () => {
     if (!running) return;
@@ -37,15 +56,15 @@ export function startMobSiren(): void {
     if (timeoutId) window.clearTimeout(timeoutId);
     intervalId = 0;
     timeoutId = 0;
-    void ctx.close().catch(() => undefined);
+    try {
+      master.disconnect();
+    } catch {
+      /* ignore */
+    }
     if (activeTeardown === teardown) activeTeardown = null;
   };
 
   activeTeardown = teardown;
-
-  const master = ctx.createGain();
-  master.gain.setValueAtTime(MASTER, ctx.currentTime);
-  master.connect(ctx.destination);
 
   const blast = () => {
     if (!running || ctx.state === "closed") return;
@@ -69,10 +88,16 @@ export function startMobSiren(): void {
     });
   };
 
-  void ctx.resume().then(() => {
-    if (!running) return;
+  if (ctx.state === "suspended") {
+    void ctx.resume().then(() => {
+      if (!running) return;
+      blast();
+      intervalId = window.setInterval(blast, BLAST_MS);
+      timeoutId = window.setTimeout(() => stopMobSiren(), MAX_MS);
+    });
+  } else {
     blast();
     intervalId = window.setInterval(blast, BLAST_MS);
     timeoutId = window.setTimeout(() => stopMobSiren(), MAX_MS);
-  });
+  }
 }

@@ -7,6 +7,7 @@ import { WeatherModelChartViewer } from '@/components/weather/WeatherModelChartV
 import { OpcChartsBox } from '@/components/weather/OpcChartsBox';
 import { MobileWeatherForecast } from './MobileWeatherForecast';
 import { useCurrentLocation } from '@/components/mobile/home/useCurrentLocation';
+import { AiForecast48hBox } from '@/components/home/AiForecast48hBox';
 import Link from 'next/link';
 import {
   ArrowLeft,
@@ -117,7 +118,10 @@ export default function MobileWeather() {
       <div className="flex-1 overflow-y-auto p-4 max-w-md mx-auto w-full space-y-4 pb-24">
         {/* Forecast Timeline & Sea Conditions Hook */}
         {location ? (
-          <MobileWeatherForecast lat={location.lat} lng={location.lng} />
+          <>
+            <MobileWeatherForecast lat={location.lat} lng={location.lng} />
+            <AiForecast48hBox lat={location.lat} lng={location.lng} />
+          </>
         ) : (
           <div className="rounded-3xl bg-[#0c192c]/65 p-8 text-center border border-white/[0.06] shadow-xl backdrop-blur-md flex flex-col items-center justify-center gap-2.5">
             <div className="size-6 rounded-full border-2 border-cyan-500 border-t-transparent animate-spin" />

@@ -6,6 +6,8 @@ import { getLastKnownPosition } from "@/lib/map-last-known";
 import { suppressMessagingChromePath } from "@/lib/messaging-chrome-paths";
 import { getDemoMe } from "@/lib/client/demo-me";
 import { subscribeMapLive } from "@/lib/client/map-live-store";
+import { useIsMobileApp } from "@/hooks/useIsMobileApp";
+
 
 type Alert = {
   broadcastId: string;
@@ -29,6 +31,7 @@ export function BroadcastReplyAlertsHost() {
   const [signedIn, setSignedIn] = useState(false);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [index, setIndex] = useState(0);
+  const { isMobile } = useIsMobileApp();
 
   useEffect(() => {
     void getDemoMe()
@@ -71,11 +74,15 @@ export function BroadcastReplyAlertsHost() {
     router.push(`${u.pathname}${u.search}`);
   };
 
+  const mobileClasses = "fixed top-0 left-0 right-0 z-50 border-b border-emerald-800/60 bg-zinc-950/98 px-2 py-2 shadow-2xl pt-[calc(env(safe-area-inset-top,0px)+0.5rem)] pb-2.5 backdrop-blur-md";
+  const desktopClasses = "sticky z-[35] border-b border-emerald-800/60 bg-zinc-950/95 px-2 py-2 shadow-lg backdrop-blur-sm sm:px-4";
+
   return (
     <div
-      className="sticky z-[35] border-b border-emerald-800/60 bg-zinc-950/95 px-2 py-2 shadow-lg backdrop-blur-sm sm:px-4"
-      style={{ top: "calc(env(safe-area-inset-top, 0px) + 3.35rem)" }}
+      className={isMobile ? mobileClasses : desktopClasses}
+      style={isMobile ? undefined : { top: "calc(env(safe-area-inset-top, 0px) + 3.35rem)" }}
     >
+
       <div className="mx-auto flex max-w-5xl flex-col gap-2">
         {alerts.length > 1 ? (
           <div className="flex items-center justify-center gap-2 text-xs font-medium text-zinc-300">
