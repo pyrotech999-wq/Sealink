@@ -19,6 +19,7 @@ import { useState, useEffect } from 'react';
 import { MobileAnchorAlertModal } from '@/components/mobile/home/MobileAnchorAlertModal';
 import { getAnchorAlertConfig, setAnchorAlertConfig, type AnchorAlertConfig } from '@/lib/anchor-alert-storage';
 import { getOrCreateDeviceId } from '@/lib/device-id';
+import { MobileSeasTheDayModal } from '@/components/mobile/home/MobileSeasTheDayModal';
 
 export default function MobileHome({
   signedIn,
@@ -28,7 +29,17 @@ export default function MobileHome({
   const meteo = useMeteo(location?.lat, location?.lng);
   const forecast = useWindForecast(location?.lat, location?.lng);
   const [anchorOpen, setAnchorOpen] = useState(false);
+  const [seasTheDayOpen, setSeasTheDayOpen] = useState(false);
   const router = useRouter();
+
+  // Show "Sea's the day!" popup automatically on first time load
+  useEffect(() => {
+    const hasShown = localStorage.getItem('sealink_seas_the_day_first_time');
+    if (!hasShown) {
+      setSeasTheDayOpen(true);
+      localStorage.setItem('sealink_seas_the_day_first_time', 'true');
+    }
+  }, []);
 
   // Dynamic state hooks for Anchor Alarm
   const [anchorCfg, setAnchorCfg] = useState<AnchorAlertConfig | null>(null);
@@ -89,6 +100,16 @@ export default function MobileHome({
 
       {/* SCROLLABLE CONTENT */}
       <div className="flex-1 overflow-y-auto px-5 pb-28">
+        <div className="mt-2 mb-4 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => setSeasTheDayOpen(true)}
+            className="inline-flex h-9 shrink-0 items-center justify-center rounded-2xl border border-teal-500/35 bg-teal-500/10 px-4 text-xs font-black text-teal-300 shadow-md shadow-teal-500/5 active:scale-95 transition-all duration-200"
+          >
+            ✨ Sea&apos;s the day!
+          </button>
+        </div>
+
         <MobileLocationCard
           lat={location?.lat}
           lng={location?.lng}
@@ -159,6 +180,12 @@ export default function MobileHome({
           setAnchorAlertConfig(merged);
         }}
         onMonitorRolesSaved={(next) => setAnchorMonitor(next)}
+      />
+      <MobileSeasTheDayModal
+        open={seasTheDayOpen}
+        onClose={() => setSeasTheDayOpen(false)}
+        lat={location?.lat ?? null}
+        lng={location?.lng ?? null}
       />
     </div>
   );

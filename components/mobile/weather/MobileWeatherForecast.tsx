@@ -4,6 +4,8 @@ import {
   DailyForecastRow,
   fetchDailyForecast,
 } from '@/lib/open-meteo-forecast';
+import { mphToKnots, seaStateForMaxWindMph } from '@/lib/wind-tiers';
+
 import { useEffect, useState } from 'react';
 import {
   Compass,
@@ -66,7 +68,7 @@ export function MobileWeatherForecast({ lat, lng }: Props) {
 
   function getWindDirection(deg?: number | null) {
     if (deg == null) return '--';
-    const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+    const dirs = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
     return dirs[Math.round(deg / 22.5) % 16];
   }
 
@@ -113,11 +115,10 @@ export function MobileWeatherForecast({ lat, lng }: Props) {
               key={row.date}
               type="button"
               onClick={() => setSelectedIdx(index)}
-              className={`flex min-w-[64px] flex-col items-center justify-between rounded-xl py-2 px-1 text-center transition-all border outline-none active:scale-95 ${
-                isSelected
-                  ? 'bg-indigo-600/20 border-indigo-500/50 text-indigo-300 ring-1 ring-indigo-500/20'
-                  : 'bg-white/[0.02] border-white/[0.04] text-slate-400 hover:border-white/10'
-              }`}
+              className={`flex min-w-[64px] flex-col items-center justify-between rounded-xl py-2 px-1 text-center transition-all border outline-none active:scale-95 ${isSelected
+                ? 'bg-indigo-600/20 border-indigo-500/50 text-indigo-300 ring-1 ring-indigo-500/20'
+                : 'bg-white/[0.02] border-white/[0.04] text-slate-400 hover:border-white/10'
+                }`}
             >
               <span className={`text-[9px] font-extrabold tracking-wider ${isSelected ? 'text-indigo-400' : 'text-slate-500'}`}>
                 {rowDate.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase()}
@@ -144,13 +145,12 @@ export function MobileWeatherForecast({ lat, lng }: Props) {
           </div>
 
           {/* Safety Badge */}
-          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-extrabold uppercase tracking-wide border ${
-            safetyStatus === "safe"
-              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-              : safetyStatus === "warning"
-                ? "bg-amber-500/10 border-amber-500/20 text-amber-400"
-                : "bg-red-500/10 border-red-500/20 text-red-400 animate-pulse"
-          }`}>
+          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-extrabold uppercase tracking-wide border ${safetyStatus === "safe"
+            ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+            : safetyStatus === "warning"
+              ? "bg-amber-500/10 border-amber-500/20 text-amber-400"
+              : "bg-red-500/10 border-red-500/20 text-red-400 animate-pulse"
+            }`}>
             {safetyStatus === "safe" ? <ShieldCheck size={10} /> : <ShieldAlert size={10} />}
             {safetyStatus === "safe" ? "Clear" : safetyStatus === "warning" ? "Caution" : "Warning"}
           </span>
@@ -221,20 +221,17 @@ export function MobileWeatherForecast({ lat, lng }: Props) {
         </div>
 
         {/* Safety Advisory Banner */}
-        <div className={`p-2.5 rounded-xl border text-[11px] font-semibold flex items-center gap-2 ${
-          safetyStatus === "safe"
-            ? "bg-emerald-500/5 border-emerald-500/10 text-emerald-400"
-            : safetyStatus === "warning"
-              ? "bg-amber-500/5 border-amber-500/10 text-amber-400"
-              : "bg-red-500/5 border-red-500/10 text-red-400"
-        }`}>
+        <div className={`p-2.5 rounded-xl border text-[11px] font-semibold flex items-center gap-2 ${safetyStatus === "safe"
+          ? "bg-emerald-500/5 border-emerald-500/10 text-emerald-400"
+          : safetyStatus === "warning"
+            ? "bg-amber-500/5 border-amber-500/10 text-amber-400"
+            : "bg-red-500/5 border-red-500/10 text-red-400"
+          }`}>
           <span className="relative flex h-2 w-2">
-            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-              safetyStatus === "safe" ? "bg-emerald-400" : safetyStatus === "warning" ? "bg-amber-400" : "bg-red-400"
-            }`}></span>
-            <span className={`relative inline-flex rounded-full h-2 w-2 ${
-              safetyStatus === "safe" ? "bg-emerald-500" : safetyStatus === "warning" ? "bg-amber-500" : "bg-red-500"
-            }`}></span>
+            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${safetyStatus === "safe" ? "bg-emerald-400" : safetyStatus === "warning" ? "bg-amber-400" : "bg-red-400"
+              }`}></span>
+            <span className={`relative inline-flex rounded-full h-2 w-2 ${safetyStatus === "safe" ? "bg-emerald-500" : safetyStatus === "warning" ? "bg-amber-500" : "bg-red-500"
+              }`}></span>
           </span>
           <span>{safetyLabel}</span>
         </div>
@@ -301,76 +298,86 @@ export function MobileWeatherForecast({ lat, lng }: Props) {
 
       {/* Outlook Carousel Header */}
       <div className="pt-2 text-left">
-        <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-300">Weekly Sea State Outlook</h2>
+        <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-300">Next 8-day wind forecast</h2>
         <p className="text-[10px] text-zinc-500 mt-0.5">Select any day below to load its full instrument telemetry.</p>
       </div>
 
       {/* Sea Conditions Outlook Cards Carousel */}
       <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide text-left">
         {rows.map((row, index) => {
-          const rowKnots = Math.round(row.maxMph * 0.868976);
-          const rowGustKnots = row.gustMaxMph ? Math.round(row.gustMaxMph * 0.868976) : 0;
+          const rowKnots = Math.round(mphToKnots(row.maxMph));
+          const rowGustKnots = row.gustMaxMph ? Math.round(mphToKnots(row.gustMaxMph)) : 0;
           const rowDirection = row.windDirDominantDeg ?? 0;
           const rowDirectionStr = getWindDirection(rowDirection);
+          const toward = row.windDirDominantDeg != null ? (((row.windDirDominantDeg + 180) % 360) + 360) % 360 : 0;
           const isSelected = index === selectedIdx;
 
-          let cardConditionText = "Calm Swell";
-          let rowConditionColor = "text-cyan-400";
-          if (rowKnots >= 20) {
-            cardConditionText = "Rough Seas";
-            rowConditionColor = "text-red-400";
-          } else if (rowKnots >= 12) {
-            cardConditionText = "Slight Waves";
-            rowConditionColor = "text-amber-400";
-          }
+          // Same tier logic as website: use max of wind or gust mph as the risk driver
+          const tierBasisMph = Math.max(row.maxMph, row.gustMaxMph ?? 0);
+          const tier = seaStateForMaxWindMph(tierBasisMph);
+          const badgeLabel = tier.id === 'calm' || tier.id === 'light' ? 'OK' : tier.id === 'amber' ? 'Care' : 'Risk';
+
+          // Card border/bg: always use the website's tier colors, but highlight selection using a current-color outline ring and scale
+          const cardClass = `${tier.boxClass} ${isSelected
+            ? 'ring-2 ring-current scale-[1.01] z-10 shadow-lg'
+            : 'opacity-70 hover:opacity-90'
+            }`;
 
           return (
             <button
               key={row.date}
               type="button"
               onClick={() => setSelectedIdx(index)}
-              className={`flex flex-col justify-between min-w-[130px] max-w-[130px] h-[210px] rounded-[22px] border p-3.5 text-center shadow-md transition-all active:scale-95 outline-none ${
-                isSelected
-                  ? 'bg-indigo-600/10 border-indigo-500/50 ring-1 ring-indigo-500/25 text-indigo-300'
-                  : 'bg-[#0f1d30]/65 border-white/[0.04] text-slate-300 hover:border-white/10'
-              }`}
+              className={`flex flex-col justify-between min-w-[145px] max-w-[145px] h-[240px] rounded-[22px] border-2 p-3.5 text-left shadow-md transition-all active:scale-95 outline-none ${cardClass}`}
             >
               <div>
-                <p className="text-[10px] font-extrabold tracking-wider text-slate-400 uppercase">
-                  {new Date(row.date).toLocaleDateString('en-US', { weekday: 'short' })}
-                </p>
-                <p className="text-[9px] text-slate-500">
-                  {new Date(row.date).getDate()} {new Date(row.date).toLocaleDateString('en-US', { month: 'short' })}
-                </p>
+                {/* Day + date + badge row */}
+                <div className="flex items-start justify-between gap-1">
+                  <div>
+                    <p className="text-[10px] font-extrabold tracking-wider uppercase opacity-90">
+                      {new Date(row.date).toLocaleDateString('en-US', { weekday: 'short' })}
+                    </p>
+                    <p className="text-[9px] opacity-70">
+                      {new Date(row.date).getDate()} {new Date(row.date).toLocaleDateString('en-US', { month: 'short' })}
+                    </p>
+                  </div>
+                  <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-black ${tier.badgeClass}`}>
+                    {badgeLabel}
+                  </span>
+                </div>
 
-                {/* Arrow indicator */}
-                <div className="my-2.5 flex justify-center">
+                {/* Wind direction compass arrow */}
+                <div className="my-2 flex justify-center">
                   <div
-                    className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-800/35 border border-white/[0.04]"
-                    style={{ transform: `rotate(${rowDirection}deg)` }}
+                    className="flex items-center justify-center w-9 h-9 rounded-full border-2 border-current/20 bg-black/[0.06]"
+                    style={{ transform: `rotate(${toward}deg)` }}
                   >
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                      <path d="M12 2L22 22L12 17L2 22L12 2Z" fill={isSelected ? "#818cf8" : "#4fd1c5"} />
+                      <path d="M12 5.5 13.35 10.25H12.55V20h-1.1v-9.75H10.65L12 5.5z" fill="currentColor" />
                     </svg>
                   </div>
                 </div>
 
-                <p className="text-[9px] font-bold text-slate-400 leading-none">
+                <p className="text-[9px] font-bold opacity-70 leading-none text-center">
                   {rowDirectionStr} {rowDirection}°
                 </p>
 
-                <p className="mt-1 text-base font-black text-slate-200 leading-none">
-                  {rowKnots} <span className="text-[10px] font-normal text-slate-400">kn</span>
+                {/* Wind speed */}
+                <p className="mt-1 text-xl font-black tabular-nums leading-none">
+                  {rowKnots} <span className="text-[10px] font-normal opacity-70">kn</span>
                 </p>
+                <p className="text-[10px] font-medium tabular-nums opacity-75">{Math.round(row.maxMph)} mph</p>
               </div>
 
-              <div className="border-t border-white/[0.04] pt-2 space-y-0.5">
-                <p className="text-[9px] font-extrabold text-slate-200">
-                  {rowGustKnots} kn <span className="text-[9px] font-normal text-slate-500">Gust</span>
-                </p>
-                <p className={`text-[8.5px] font-bold uppercase tracking-wider truncate ${rowConditionColor}`}>
-                  {cardConditionText}
-                </p>
+              <div className="border-t border-current/15 pt-2 space-y-0.5">
+                {rowGustKnots > 0 && (
+                  <>
+                    <p className="text-[9px] font-extrabold uppercase tracking-wide opacity-80">Max Gust</p>
+                    <p className="text-sm font-bold tabular-nums">{rowGustKnots} kn</p>
+                    <p className="text-[9px] opacity-70">{Math.round(row.gustMaxMph ?? 0)} mph</p>
+                  </>
+                )}
+                <p className="text-[8.5px] font-bold leading-snug opacity-90">{tier.sea}</p>
               </div>
             </button>
           );

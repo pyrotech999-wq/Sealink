@@ -233,7 +233,7 @@ export function MobileProfile({ signedIn, accountEmail, nameRequired = false }: 
     : fullName.slice(0, 2).toUpperCase() || "?";
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#071426] via-[#040c18] to-[#020610] text-white safe-top safe-bottom flex flex-col overflow-x-hidden">
+    <div className="min-h-screen bg-gradient-to-b from-[#071426] via-[#040c18] to-[#020610] text-white safe-bottom flex flex-col overflow-x-hidden">
       <input
         ref={fileRef}
         type="file"
@@ -244,7 +244,7 @@ export function MobileProfile({ signedIn, accountEmail, nameRequired = false }: 
       />
 
       {/* Nav Header */}
-      <div className="p-4 bg-[#0a192f]/80 border-b border-white/[0.06] backdrop-blur-md shrink-0 flex items-center justify-between">
+      <div className="pt-[calc(env(safe-area-inset-top)+1rem)] px-4 pb-4 bg-[#0a192f]/80 border-b border-white/[0.06] backdrop-blur-md shrink-0 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link
             href="/"
@@ -255,10 +255,10 @@ export function MobileProfile({ signedIn, accountEmail, nameRequired = false }: 
           </Link>
           <div>
             <h1 className="text-sm font-extrabold tracking-tight text-slate-100">
-              Profile &amp; Settings
+              Edit profile
             </h1>
             <p className="text-[9px] text-zinc-500">
-              Manage your SeaLink presence &amp; data
+              Your name is saved to your account and used in messages and broadcasts so others see you properly — not a numeric id.
             </p>
           </div>
         </div>

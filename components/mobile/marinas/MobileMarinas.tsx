@@ -209,7 +209,7 @@ function EnquiryPanel({
           <ArrowLeft size={15} />
         </button>
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Berth Enquiry</p>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Enquiry &amp; pre-booking</p>
           <p className="text-sm font-bold text-slate-100 truncate">{marina.name}</p>
           <p className="text-[10px] text-zinc-500">
             {marina.harbour}, {marina.region}
@@ -227,7 +227,7 @@ function EnquiryPanel({
               className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-emerald-600/15 border border-emerald-500/20 text-emerald-300 text-xs font-bold active:scale-95 transition-transform"
             >
               <Phone size={13} />
-              Call Marina
+              Call marina
             </a>
           )}
           <a
@@ -345,7 +345,7 @@ function EnquiryPanel({
             htmlFor="enquiry-length"
             className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-500 block mb-1"
           >
-            Boat Length (m)
+            Boat length (metres)
           </label>
           <input
             id="enquiry-length"
@@ -366,7 +366,7 @@ function EnquiryPanel({
             htmlFor="enquiry-note"
             className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-500 block mb-1"
           >
-            Additional Notes
+            Note to marina
           </label>
           <textarea
             id="enquiry-note"
@@ -399,7 +399,7 @@ function EnquiryPanel({
               ) : (
                 <Send size={14} />
               )}
-              {submitState === 'busy' ? 'Saving…' : 'Save Berth Enquiry'}
+              {submitState === 'busy' ? 'Saving…' : 'Save berth request'}
             </button>
 
             {enquiriesEmail && (
@@ -439,6 +439,12 @@ export function MobileMarinas() {
   const [geoLoading, setGeoLoading] = useState(false);
   const [selected, setSelected] = useState<MarinaListing | null>(null);
   const [countries, setCountries] = useState<string[]>([]);
+  const [listPage, setListPage] = useState(0);
+
+  // Reset pagination on filter change
+  useEffect(() => {
+    setListPage(0);
+  }, [search, country, arrival, departure, lengthM, userPos?.lat, userPos?.lng]);
 
   const enquiriesEmail = (process.env.NEXT_PUBLIC_MARINA_ENQUIRIES_EMAIL ?? '').trim();
   const minDate = todayIso();
@@ -493,7 +499,7 @@ export function MobileMarinas() {
 
   // Filter + sort
   const q = search.toLowerCase().trim();
-  const filtered = allMarinas
+  const sorted = allMarinas
     .filter(m => {
       if (country && m.country !== country) return false;
       if (!q) return true;
@@ -510,8 +516,21 @@ export function MobileMarinas() {
     .sort((a, b) => {
       if (a.distKm != null && b.distKm != null) return a.distKm - b.distKm;
       return a.marina.name.localeCompare(b.marina.name);
-    })
-    .slice(0, 40);
+    });
+
+  const filtered = sorted;
+
+  const LIST_PAGE_SIZE = 10;
+  const listPageCount = Math.max(1, Math.ceil(filtered.length / LIST_PAGE_SIZE));
+  const safeListPage = Math.min(listPage, listPageCount - 1);
+  const visibleMarinas = filtered.slice(
+    safeListPage * LIST_PAGE_SIZE,
+    safeListPage * LIST_PAGE_SIZE + LIST_PAGE_SIZE,
+  );
+  const rangeFrom = filtered.length === 0 ? 0 : safeListPage * LIST_PAGE_SIZE + 1;
+  const rangeTo = Math.min((safeListPage + 1) * LIST_PAGE_SIZE, filtered.length);
+  const canPrevPage = safeListPage > 0;
+  const canNextPage = safeListPage < listPageCount - 1;
 
   // Enquiry panel
   if (selected) {
@@ -539,8 +558,8 @@ export function MobileMarinas() {
               <Anchor size={15} className="text-indigo-400" />
             </div>
             <div>
-              <h1 className="text-base font-extrabold text-slate-100 leading-none">Marina Berths</h1>
-              <p className="text-[10px] text-zinc-500">Search &amp; enquire</p>
+              <h1 className="text-base font-extrabold text-slate-100 leading-none">Marina berths</h1>
+              <p className="text-[10px] text-zinc-500">Filter by country, text search, or use my location to locate nearby marinas.</p>
             </div>
           </div>
           <button
@@ -757,11 +776,11 @@ export function MobileMarinas() {
         ) : (
           <>
             <p className="text-[10px] text-zinc-600 font-bold px-0.5">
-              {filtered.length} result{filtered.length !== 1 ? 's' : ''}
+              Showing {rangeFrom}–{rangeTo} of {filtered.length} marina{filtered.length === 1 ? '' : 's'}
               {userPos ? ' · sorted by distance' : ''}
               {arrival ? ` · from ${arrival}` : ''}
             </p>
-            {filtered.map(({ marina, distKm }) => (
+            {visibleMarinas.map(({ marina, distKm }) => (
               <MarinaCard
                 key={marina.id}
                 marina={marina}
@@ -769,6 +788,29 @@ export function MobileMarinas() {
                 onSelect={() => setSelected(marina)}
               />
             ))}
+            {filtered.length > LIST_PAGE_SIZE && (
+              <div className="mt-4 flex flex-wrap items-center gap-2 px-0.5 pb-4">
+                <button
+                  type="button"
+                  disabled={!canPrevPage}
+                  onClick={() => setListPage(p => Math.max(0, p - 1))}
+                  className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-xs font-bold text-zinc-300 active:scale-95 disabled:opacity-40 disabled:active:scale-100 transition-all"
+                >
+                  Previous 10
+                </button>
+                <button
+                  type="button"
+                  disabled={!canNextPage}
+                  onClick={() => setListPage(p => Math.min(listPageCount - 1, p + 1))}
+                  className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-xs font-bold text-zinc-300 active:scale-95 disabled:opacity-40 disabled:active:scale-100 transition-all"
+                >
+                  Show next 10
+                </button>
+                <span className="text-[11px] text-zinc-500 font-medium ml-1">
+                  Page {safeListPage + 1} of {listPageCount}
+                </span>
+              </div>
+            )}
           </>
         )}
       </div>

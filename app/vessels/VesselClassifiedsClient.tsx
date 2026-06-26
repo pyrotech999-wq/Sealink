@@ -491,9 +491,9 @@ export function VesselClassifiedsClient() {
 
   if (isMobile) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-[#071426] via-[#040c18] to-[#020610] text-white safe-top safe-bottom flex flex-col overflow-x-hidden">
+      <div className="min-h-screen bg-gradient-to-b from-[#071426] via-[#040c18] to-[#020610] text-white safe-bottom flex flex-col overflow-x-hidden">
         {/* Immersive Header */}
-        <div className="p-4 bg-[#0a192f]/80 border-b border-white/[0.06] backdrop-blur-md shrink-0 flex items-center justify-between">
+        <div className="pt-[calc(env(safe-area-inset-top)+1rem)] px-4 pb-4 bg-[#0a192f]/80 border-b border-white/[0.06] backdrop-blur-md shrink-0 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link
               href="/for-sale"
@@ -505,7 +505,7 @@ export function VesselClassifiedsClient() {
             <div>
               <h1 className="text-sm font-extrabold tracking-tight text-slate-100 flex items-center gap-1.5 text-left">
                 <Ship className="size-4 text-sky-400" />
-                <span>Boats for Sale</span>
+                <span>Boats for sale</span>
               </h1>
               <p className="text-[9px] text-zinc-500 text-left">
                 Paid vessel classifieds on SeaLink

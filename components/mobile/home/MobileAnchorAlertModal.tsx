@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ANCHOR_MAX_HORIZ_ACCURACY_M, type AnchorGpsQuality } from "@/lib/anchor-gps-stabilizer";
 import { GPS_REFINE_TARGET_ACCURACY_M } from "@/lib/gps-refinement";
 import { isLikelyAndroid, openAndroidLocationAppDetailsSettings } from "@/lib/location-env";
@@ -120,6 +121,10 @@ export function MobileAnchorAlertModal({
   onMonitorRolesSaved,
   isAdmin = false,
 }: Props) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const anchorRadiusUiOptions = useMemo(() => getAnchorRadiusOptionsForUi(isAdmin), [isAdmin]);
   const [radius, setRadius] = useState<string>(String(config.radiusM));
   const [angleDeg, setAngleDeg] = useState<string>(String(config.angleDeg ?? ANGLE_OFF));
@@ -337,10 +342,10 @@ export function MobileAnchorAlertModal({
     return () => window.clearInterval(id);
   }, [open, monitorDeviceId]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
-  return (
-    <div className="fixed inset-0 z-[1000] bg-black/60 backdrop-blur-sm flex flex-col justify-end">
+  return createPortal(
+    <div className="fixed inset-0 z-[5000] bg-black/60 backdrop-blur-sm flex flex-col justify-end">
       <div className="relative w-full max-h-[92vh] rounded-t-[32px] border-t border-white/[0.08] bg-[#071120] flex flex-col overflow-hidden shadow-[0_-8px_32px_rgba(0,0,0,0.5)] transition-all duration-300">
         {/* Drag Handle */}
         <div className="mx-auto mt-3 h-1.5 w-12 rounded-full bg-white/20 shrink-0" />
@@ -350,8 +355,8 @@ export function MobileAnchorAlertModal({
           <div className="flex items-center gap-2.5">
             <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/10 text-xl text-amber-400 border border-amber-500/20 shadow-[0_0_12px_rgba(245,158,11,0.15)]">⚓</span>
             <div className="text-left">
-              <h3 className="text-sm font-bold text-slate-100">Anchor Alarm</h3>
-              <p className="text-[10px] text-zinc-400">Arm geofence parameters</p>
+              <h3 className="text-sm font-bold text-slate-100">Anchor alert &amp; geofence</h3>
+              <p className="text-[9px] text-zinc-400">Drop an anchor at your current GPS position and choose a circular geofence.</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -374,7 +379,7 @@ export function MobileAnchorAlertModal({
         </div>
 
         {/* Scrollable Content */}
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 py-4 pb-[max(calc(var(--sealink-bottom-dock-px,0px)+1.5rem),env(safe-area-inset-bottom)+1.5rem)] space-y-4 text-left">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 py-4 pb-6 space-y-4 text-left">
 
           {/* Status Card */}
           {config.armed && hasAnchor ? (
@@ -910,75 +915,77 @@ export function MobileAnchorAlertModal({
             </div>
           ) : null}
 
-          {/* Action Buttons */}
-          <div className="pt-4 pb-2 border-t border-white/[0.05] flex gap-3">
-            <button
-              type="button"
-              disabled={!canSet || (androidArmNeedsBackgroundFg && androidAnchorPermissionGate)}
-              onClick={() => {
-                if (androidArmNeedsBackgroundFg && !androidAnchorPermissionGate) {
-                  setAndroidAnchorPermissionError(null);
-                  setAndroidAnchorPermissionGate(true);
-                  return;
-                }
-                void primeAnchorAlarmAudio();
-                const n = parseAnchorRadiusM(Number(radius), { isAdmin });
-                const a = angleEnabled
-                  ? Math.max(0, Math.min(359, Math.round(Number(angleDeg) || ANGLE_DEFAULT_ON)))
-                  : ANGLE_OFF;
-                const monResolved = resolveMonitorDeviceIdForApi(monitorDeviceId, deviceId);
-                const ids = buildAlertDeviceIds(alertMode, alertOtherId, deviceId);
-                if (!emergencyDisableLiveMapApis) {
-                  void fetch("/api/anchor/monitor", {
-                    method: "POST",
-                    credentials: "same-origin",
-                    headers: { "Content-Type": "application/json", Accept: "application/json" },
-                    body: JSON.stringify({ monitorDeviceId: monResolved, alertDeviceIds: ids }),
-                  });
-                }
-                onUpdate({
-                  ...config,
-                  lat: pos!.lat,
-                  lng: pos!.lng,
-                  radiusM: n,
-                  angleDeg: a,
-                  armed: true,
-                  monitorDeviceId,
-                });
-                void startAndroidAnchorForegroundMonitoring({
-                  monitorDeviceId,
-                  deviceId,
-                  lat: pos!.lat,
-                  lng: pos!.lng,
-                  radiusM: n,
-                  angleDeg: a,
-                  lastBearingDeg: config.lastBearingDeg,
-                  testMode: readAnchorAndroidTestModeFromStorage(),
-                });
-                onClose();
-              }}
-              className="flex-1 h-14 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold text-sm shadow-lg shadow-emerald-950/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2 cursor-pointer"
-            >
-              ⚡ {androidArmNeedsBackgroundFg && !androidAnchorPermissionGate
-                ? "Review background monitoring…"
-                : "Arm geofence at current position"}
-            </button>
-            <button
-              type="button"
-              disabled={!config.armed}
-              onClick={() => {
-                void stopAndroidAnchorNativeMonitoringIfNeeded();
-                onUpdate({ ...config, armed: false });
-                onClose();
-              }}
-              className="px-5 h-14 rounded-2xl border border-white/[0.1] bg-white/[0.03] active:bg-white/[0.08] hover:text-white text-zinc-300 font-semibold text-sm active:scale-[0.98] transition-all disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
-            >
-              Disarm
-            </button>
-          </div>
-
         </div>
+
+        {/* Action Buttons */}
+        <div className="px-5 pt-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] border-t border-white/[0.05] bg-[#071120] flex gap-3 shrink-0">
+          <button
+            type="button"
+            disabled={!canSet || (androidArmNeedsBackgroundFg && androidAnchorPermissionGate)}
+            onClick={() => {
+              if (androidArmNeedsBackgroundFg && !androidAnchorPermissionGate) {
+                setAndroidAnchorPermissionError(null);
+                setAndroidAnchorPermissionGate(true);
+                return;
+              }
+              void primeAnchorAlarmAudio();
+              const n = parseAnchorRadiusM(Number(radius), { isAdmin });
+              const a = angleEnabled
+                ? Math.max(0, Math.min(359, Math.round(Number(angleDeg) || ANGLE_DEFAULT_ON)))
+                : ANGLE_OFF;
+              const monResolved = resolveMonitorDeviceIdForApi(monitorDeviceId, deviceId);
+              const ids = buildAlertDeviceIds(alertMode, alertOtherId, deviceId);
+              if (!emergencyDisableLiveMapApis) {
+                void fetch("/api/anchor/monitor", {
+                  method: "POST",
+                  credentials: "same-origin",
+                  headers: { "Content-Type": "application/json", Accept: "application/json" },
+                  body: JSON.stringify({ monitorDeviceId: monResolved, alertDeviceIds: ids }),
+                });
+              }
+              onUpdate({
+                ...config,
+                lat: pos!.lat,
+                lng: pos!.lng,
+                radiusM: n,
+                angleDeg: a,
+                armed: true,
+                monitorDeviceId,
+              });
+              void startAndroidAnchorForegroundMonitoring({
+                monitorDeviceId,
+                deviceId,
+                lat: pos!.lat,
+                lng: pos!.lng,
+                radiusM: n,
+                angleDeg: a,
+                lastBearingDeg: config.lastBearingDeg,
+                testMode: readAnchorAndroidTestModeFromStorage(),
+              });
+              onClose();
+            }}
+            className="flex-1 h-14 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold text-sm shadow-lg shadow-emerald-950/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2 cursor-pointer"
+          >
+            ⚡ {androidArmNeedsBackgroundFg && !androidAnchorPermissionGate
+              ? "Review background monitoring…"
+              : "Arm geofence at current position"}
+          </button>
+          <button
+            type="button"
+            disabled={!config.armed}
+            onClick={() => {
+              void stopAndroidAnchorNativeMonitoringIfNeeded();
+              onUpdate({ ...config, armed: false });
+              onClose();
+            }}
+            className="px-5 h-14 rounded-2xl border border-white/[0.1] bg-white/[0.03] active:bg-white/[0.08] hover:text-white text-zinc-300 font-semibold text-sm active:scale-[0.98] transition-all disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+          >
+            Disarm
+          </button>
+        </div>
+
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
