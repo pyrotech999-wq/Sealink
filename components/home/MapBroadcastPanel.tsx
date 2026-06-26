@@ -589,33 +589,37 @@ export function MapBroadcastPanel({
       <div
         className={
           L
-            ? "rounded-2xl border border-zinc-200/90 bg-zinc-50/80 p-5 shadow-sm dark:border-zinc-700/80 dark:bg-zinc-900/40 sm:p-6"
+            ? (isMobile
+              ? "rounded-3xl border border-white/[0.06] bg-[#0c192c]/45 p-4 sm:p-5 shadow-lg backdrop-blur-md"
+              : "rounded-2xl border border-zinc-200/90 bg-zinc-50/80 p-5 shadow-sm dark:border-zinc-700/80 dark:bg-zinc-900/40 sm:p-6")
             : "mt-4 rounded-xl border border-indigo-200/60 bg-gradient-to-b from-white/95 to-indigo-50/30 p-3 shadow-sm dark:border-indigo-900/40 dark:from-zinc-950/90 dark:to-indigo-950/20 sm:p-4"
         }
       >
         <h4
           className={
             L
-              ? "text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50"
+              ? (isMobile ? "text-sm font-extrabold uppercase tracking-wider text-slate-300" : "text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50")
               : "text-xs font-semibold text-indigo-950 dark:text-indigo-100"
           }
         >
           {L ? "Recent conversations" : "Private replies"}
         </h4>
-        <p className={`mt-1 text-zinc-600 dark:text-zinc-400 ${L ? "text-sm" : "hidden"}`}>
+        <p className={`mt-1 text-zinc-600 dark:text-zinc-400 ${L ? (isMobile ? "text-[10px] text-zinc-500" : "text-sm") : "hidden"}`}>
           Tap a thread to continue. Only you and the other boater can read these messages.
         </p>
         {inboxRows.length === 0 ? (
           <p
             className={`mt-3 rounded-xl border border-dashed px-3 py-4 text-center ${L
-              ? "border-zinc-300/80 bg-white/80 text-sm text-zinc-600 dark:border-zinc-600 dark:bg-zinc-950/50 dark:text-zinc-400"
+              ? (isMobile
+                ? "border-white/[0.08] bg-[#0d1b33]/40 text-xs text-slate-400"
+                : "border-zinc-300/80 bg-white/80 text-sm text-zinc-600 dark:border-zinc-600 dark:bg-zinc-950/50 dark:text-zinc-400")
               : "rounded-lg border border-indigo-200/70 bg-white/60 text-[11px] text-indigo-800/70 dark:border-indigo-800/50 dark:bg-zinc-900/40 dark:text-indigo-200/70"
               }`}
           >
             {L ? "No direct messages yet. Start one above or wait for a friend to message you." : "No private chats yet."}
           </p>
         ) : (
-          <ul className={`sealink-thread-scroll mt-4 space-y-2 overflow-y-auto pr-1 ${L ? "max-h-80" : "max-h-44"}`}>
+          <ul className={`sealink-thread-scroll mt-4 space-y-2 overflow-y-auto pr-1 ${L ? (isMobile ? "max-h-[50vh]" : "max-h-80") : "max-h-44"}`}>
             {inboxRows.map((row) => (
               <li key={row.threadId} className="flex gap-2">
                 <button
@@ -625,24 +629,29 @@ export function MapBroadcastPanel({
                     setChatContext(row.lastBody.trim().split(/\r?\n/)[0]?.slice(0, 120));
                     setChatPeerUid(row.peerUid);
                   }}
-                  className={
-                    L
+                  className={isMobile && L
+                    ? "flex min-w-0 flex-1 flex-col rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-3.5 text-left transition-all active:scale-[0.98]"
+                    : (L
                       ? "flex min-w-0 flex-1 flex-col rounded-xl border border-zinc-200 bg-white px-4 py-3 text-left shadow-sm transition hover:border-zinc-300 hover:shadow-md dark:border-zinc-700 dark:bg-zinc-950 dark:hover:border-zinc-600"
-                      : "flex min-w-0 flex-1 flex-col rounded-xl border border-indigo-100/90 bg-white px-3 py-2.5 text-left shadow-sm ring-indigo-400/30 transition hover:border-indigo-300 hover:ring-2 dark:border-indigo-900/40 dark:bg-zinc-900/80 dark:hover:border-indigo-700"
+                      : "flex min-w-0 flex-1 flex-col rounded-xl border border-indigo-100/90 bg-white px-3 py-2.5 text-left shadow-sm ring-indigo-400/30 transition hover:border-indigo-300 hover:ring-2 dark:border-indigo-900/40 dark:bg-zinc-900/80 dark:hover:border-indigo-700")
                   }
                 >
-                  <div className="flex flex-wrap items-baseline justify-between gap-1">
+                  <div className="flex flex-wrap items-baseline justify-between gap-1 w-full">
                     <span
-                      className={
-                        L
+                      className={isMobile && L
+                        ? "text-[10px] font-extrabold tracking-widest uppercase text-cyan-400"
+                        : (L
                           ? "text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400"
-                          : "text-xs font-semibold text-indigo-950 dark:text-indigo-100"
+                          : "text-xs font-semibold text-indigo-950 dark:text-indigo-100")
                       }
                     >
                       {L ? "Direct message" : "Conversation"}
                     </span>
                     <span
-                      className={`truncate font-medium text-zinc-900 dark:text-zinc-100 ${L ? "max-w-[70%] text-sm" : "text-[10px] text-indigo-600/90 dark:text-indigo-300/90"}`}
+                      className={isMobile && L
+                        ? "truncate text-xs font-bold text-slate-100 max-w-[70%]"
+                        : `truncate font-medium text-zinc-900 dark:text-zinc-100 ${L ? "max-w-[70%] text-sm" : "text-[10px] text-indigo-600/90 dark:text-indigo-300/90"}`
+                      }
                       title={row.peerUid}
                     >
                       {(() => {
@@ -654,23 +663,35 @@ export function MapBroadcastPanel({
                     </span>
                   </div>
                   <span
-                    className={`mt-1.5 line-clamp-3 text-zinc-800 dark:text-zinc-100 ${L ? "text-base leading-snug sm:text-lg" : "text-xs leading-snug"}`}
+                    className={isMobile && L
+                      ? "mt-1.5 line-clamp-3 text-sm leading-relaxed text-slate-200"
+                      : `mt-1.5 line-clamp-3 text-zinc-800 dark:text-zinc-100 ${L ? "text-base leading-snug sm:text-lg" : "text-xs leading-snug"}`
+                    }
                   >
                     {row.lastBody}
                   </span>
-                  <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                    <span className={`text-zinc-500 dark:text-zinc-400 ${L ? "text-sm" : "text-[11px]"}`}>
+                  <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    <span className={isMobile && L
+                      ? "text-[10px] text-zinc-500 font-semibold"
+                      : `text-zinc-500 dark:text-zinc-400 ${L ? "text-sm" : "text-[11px]"}`
+                    }>
                       {fmtTime(row.lastAt)}
                     </span>
                     {row.lastIsMine ? (
                       <span
-                        className={`rounded-full bg-zinc-200/90 px-2 py-0.5 font-medium text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200 ${L ? "text-xs" : "text-[10px]"}`}
+                        className={isMobile && L
+                          ? "rounded-full bg-white/[0.06] border border-white/[0.06] px-2 py-0.5 text-[9px] font-bold text-zinc-400"
+                          : `rounded-full bg-zinc-200/90 px-2 py-0.5 font-medium text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200 ${L ? "text-xs" : "text-[10px]"}`
+                        }
                       >
                         You sent last
                       </span>
                     ) : (
                       <span
-                        className={`rounded-full bg-amber-200/90 px-2 py-0.5 font-semibold text-amber-950 dark:bg-amber-900/50 dark:text-amber-100 ${L ? "text-xs" : "text-[10px]"}`}
+                        className={isMobile && L
+                          ? "rounded-full bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 text-[9px] font-bold text-cyan-400 animate-pulse"
+                          : `rounded-full bg-amber-200/90 px-2 py-0.5 font-semibold text-amber-950 dark:bg-amber-900/50 dark:text-amber-100 ${L ? "text-xs" : "text-[10px]"}`
+                        }
                       >
                         Awaiting your reply
                       </span>
@@ -681,8 +702,10 @@ export function MapBroadcastPanel({
                   type="button"
                   disabled={deletingThreadId === row.threadId}
                   onClick={(e) => void onDeleteDmThread(row, e)}
-                  className={`shrink-0 self-stretch rounded-xl border border-red-200 bg-red-50 font-semibold text-red-800 hover:bg-red-100 disabled:opacity-50 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950/55 ${L ? "px-3 py-2 text-base" : "px-2 py-1 text-[11px]"
-                    }`}
+                  className={isMobile && L
+                    ? "shrink-0 self-stretch rounded-2xl bg-red-500/10 border border-red-500/20 px-3 py-2 text-xs font-bold text-red-400 active:scale-95 transition-all disabled:opacity-50"
+                    : `shrink-0 self-stretch rounded-xl border border-red-200 bg-red-50 font-semibold text-red-800 hover:bg-red-100 disabled:opacity-50 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950/55 ${L ? "px-3 py-2 text-base" : "px-2 py-1 text-[11px]"}`
+                  }
                 >
                   {deletingThreadId === row.threadId ? "…" : "Delete"}
                 </button>
@@ -692,7 +715,7 @@ export function MapBroadcastPanel({
         )}
       </div>
     );
-  }, [signedIn, inboxRows, L, deletingThreadId, profileByUid]);
+  }, [signedIn, inboxRows, L, deletingThreadId, profileByUid, isMobile]);
 
   const startChatBlock = useMemo(() => {
     if (!signedIn || !L) return null;
@@ -711,27 +734,50 @@ export function MapBroadcastPanel({
       .filter((o) => o.kind === "email" && o.uid);
 
     return (
-      <div className="rounded-2xl border border-zinc-200/90 bg-white p-5 shadow-sm dark:border-zinc-700/80 dark:bg-zinc-950/60 sm:p-6">
-        <h4 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">New direct message</h4>
-        <p className="mt-1 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+      <div className={isMobile && L
+        ? "rounded-3xl border border-white/[0.06] bg-[#0c192c]/45 p-5 shadow-lg backdrop-blur-md"
+        : "rounded-2xl border border-zinc-200/90 bg-white p-5 shadow-sm dark:border-zinc-700/80 dark:bg-zinc-950/60 sm:p-6"
+      }>
+        <h4 className={isMobile && L
+          ? "text-sm font-extrabold uppercase tracking-wider text-slate-300"
+          : "text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50"
+        }>
+          New direct message
+        </h4>
+        <p className={isMobile && L
+          ? "mt-1.5 text-xs text-slate-400 leading-normal"
+          : "mt-1 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400"
+        }>
           Choose someone from your IFM friends list. Manage friends on the{" "}
-          <Link href="/ifm" className="font-semibold text-indigo-600 underline-offset-2 hover:underline dark:text-indigo-400">
+          <Link href="/ifm" className={isMobile
+            ? "font-semibold text-cyan-400 underline"
+            : "font-semibold text-indigo-600 underline-offset-2 hover:underline dark:text-indigo-400"
+          }>
             IFM map
           </Link>
           .
         </p>
         {friendOptions.length === 0 ? (
-          <p className="mt-4 rounded-xl border border-dashed border-zinc-300 bg-zinc-50/80 px-4 py-5 text-center text-sm text-zinc-600 dark:border-zinc-600 dark:bg-zinc-900/50 dark:text-zinc-400">
+          <p className={isMobile && L
+            ? "mt-4 rounded-2xl border border-dashed border-white/[0.08] bg-[#0d1b33]/40 px-4 py-5 text-center text-xs text-slate-400"
+            : "mt-4 rounded-xl border border-dashed border-zinc-300 bg-zinc-50/80 px-4 py-5 text-center text-sm text-zinc-600 dark:border-zinc-600 dark:bg-zinc-900/50 dark:text-zinc-400"
+          }>
             No email friends yet. Add contacts on the IFM page to message them here.
           </p>
         ) : (
           <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-            <label className="min-w-[min(100%,18rem)] flex-1 text-sm font-medium text-zinc-800 dark:text-zinc-200">
+            <label className={isMobile && L
+              ? "min-w-[min(100%,18rem)] flex-1 text-xs font-bold text-slate-300 uppercase tracking-wider"
+              : "min-w-[min(100%,18rem)] flex-1 text-sm font-medium text-zinc-800 dark:text-zinc-200"
+            }>
               Friend
               <select
                 value={startChatPeerUid}
                 onChange={(e) => setStartChatPeerUid(e.target.value)}
-                className="mt-1.5 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
+                className={isMobile && L
+                  ? "mt-1.5 w-full rounded-2xl border border-white/[0.08] bg-[#0d1b33] px-3.5 py-3 text-sm text-white shadow-sm outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30"
+                  : "mt-1.5 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-50"
+                }
               >
                 {friendOptions.map((o) => (
                   <option key={o.uid} value={o.uid}>
@@ -749,7 +795,10 @@ export function MapBroadcastPanel({
                 setChatContext("Conversation");
                 setChatPeerUid(uid);
               }}
-              className="h-11 shrink-0 rounded-xl bg-indigo-600 px-5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-indigo-600 dark:hover:bg-indigo-500"
+              className={isMobile && L
+                ? "w-full h-11 shrink-0 rounded-2xl bg-gradient-to-r from-cyan-600 to-blue-600 text-sm font-bold text-white shadow-lg active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed sm:w-auto sm:px-5"
+                : "h-11 shrink-0 rounded-xl bg-indigo-600 px-5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-indigo-600 dark:hover:bg-indigo-500"
+              }
             >
               Open chat
             </button>
@@ -757,7 +806,7 @@ export function MapBroadcastPanel({
         )}
       </div>
     );
-  }, [signedIn, L, ifmFriends, startChatPeerUid]);
+  }, [signedIn, L, ifmFriends, startChatPeerUid, profileByUid, isMobile]);
 
   const showAreaSection = !L || !signedIn || messagingTab === "area";
   const showDirectSection = L && signedIn && messagingTab === "direct";
@@ -766,26 +815,34 @@ export function MapBroadcastPanel({
     <section
       className={
         L
-          ? "rounded-2xl border border-zinc-200/90 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/60 sm:p-6"
+          ? (isMobile
+            ? "bg-[#071b36] p-4 space-y-5"
+            : "rounded-2xl border border-zinc-200/90 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/60 sm:p-6")
           : "rounded-xl border border-indigo-200/80 bg-indigo-50/40 p-4 dark:border-indigo-900/50 dark:bg-indigo-950/25"
       }
     >
       {L && signedIn ? (
         <div
-          className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+          className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
           role="tablist"
           aria-label="Message type"
         >
-          <div className="inline-flex rounded-xl border border-zinc-200 bg-zinc-100/90 p-1 dark:border-zinc-700 dark:bg-zinc-950/80">
+          <div className={isMobile ? "inline-flex w-full rounded-xl border border-white/[0.06] bg-[#0c192c]/45 p-1" : "inline-flex rounded-xl border border-zinc-200 bg-zinc-100/90 p-1 dark:border-zinc-700 dark:bg-zinc-950/80"}>
             <button
               type="button"
               role="tab"
               aria-selected={messagingTab === "direct"}
               onClick={() => setMessagingTab("direct")}
-              className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${messagingTab === "direct"
-                ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-50"
-                : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-                }`}
+              className={isMobile
+                ? `flex-1 rounded-lg px-4 py-2 text-xs font-semibold transition text-center ${messagingTab === "direct"
+                  ? "bg-white/[0.08] text-slate-100 border border-white/[0.06] shadow-sm"
+                  : "text-zinc-400 hover:text-zinc-200 border border-transparent"
+                }`
+                : `rounded-lg px-4 py-2 text-sm font-semibold transition ${messagingTab === "direct"
+                  ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-50"
+                  : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+                }`
+              }
             >
               Direct messages
             </button>
@@ -794,15 +851,21 @@ export function MapBroadcastPanel({
               role="tab"
               aria-selected={messagingTab === "area"}
               onClick={() => setMessagingTab("area")}
-              className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${messagingTab === "area"
-                ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-50"
-                : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-                }`}
+              className={isMobile
+                ? `flex-1 rounded-lg px-4 py-2 text-xs font-semibold transition text-center ${messagingTab === "area"
+                  ? "bg-white/[0.08] text-slate-100 border border-white/[0.06] shadow-sm"
+                  : "text-zinc-400 hover:text-zinc-200 border border-transparent"
+                }`
+                : `rounded-lg px-4 py-2 text-sm font-semibold transition ${messagingTab === "area"
+                  ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-50"
+                  : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+                }`
+              }
             >
               Area broadcasts
             </button>
           </div>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          <p className={isMobile ? "text-[10px] text-zinc-500 leading-normal" : "text-sm text-zinc-500 dark:text-zinc-400"}>
             {messagingTab === "direct"
               ? "Private 1:1 chats with IFM friends."
               : "Public-style posts visible to nearby boaters (~5 mi), depending on audience."}
@@ -811,9 +874,15 @@ export function MapBroadcastPanel({
       ) : null}
 
       {L && !signedIn ? (
-        <div className="mb-6 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4 dark:border-zinc-700 dark:bg-zinc-950/50 sm:px-5">
-          <p className="text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
-            <Link href="/sign-in" className="font-semibold text-indigo-600 underline-offset-2 hover:underline dark:text-indigo-400">
+        <div className={isMobile
+          ? "mb-4 rounded-2xl border border-white/[0.06] bg-[#0c192c]/45 p-4 shadow-lg backdrop-blur-md"
+          : "mb-6 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4 dark:border-zinc-700 dark:bg-zinc-950/50 sm:px-5"
+        }>
+          <p className={isMobile ? "text-xs leading-relaxed text-slate-200" : "text-sm leading-relaxed text-zinc-700 dark:text-zinc-300"}>
+            <Link href="/sign-in" className={isMobile
+              ? "font-semibold text-cyan-400 underline underline-offset-2 hover:text-cyan-300"
+              : "font-semibold text-indigo-600 underline-offset-2 hover:underline dark:text-indigo-400"
+            }>
               Sign in
             </Link>{" "}
             to send and receive direct messages. Area broadcasts below are still visible.
@@ -826,23 +895,26 @@ export function MapBroadcastPanel({
           <h3
             className={
               L
-                ? "text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50"
+                ? (isMobile ? "text-sm font-extrabold uppercase tracking-wider text-slate-300" : "text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50")
                 : "text-base font-semibold tracking-tight text-indigo-950 dark:text-indigo-100"
             }
           >
             Area broadcasts (~5 mi)
           </h3>
           <p
-            className={`mt-1 leading-snug ${L ? "text-sm text-zinc-600 dark:text-zinc-400" : "text-[11px] text-indigo-900/85 dark:text-indigo-200/85"}`}
+            className={isMobile && L ? "mt-1 text-[10px] text-zinc-400 leading-normal" : `mt-1 leading-snug ${L ? "text-sm text-zinc-600 dark:text-zinc-400" : "text-[11px] text-indigo-900/85 dark:text-indigo-200/85"}`}
           >
-            <strong className={`font-semibold ${L ? "text-zinc-800 dark:text-zinc-200" : "text-indigo-950 dark:text-indigo-100"}`}>
+            <strong className={isMobile && L ? "font-semibold text-slate-200" : `font-semibold ${L ? "text-zinc-800 dark:text-zinc-200" : "text-indigo-950 dark:text-indigo-100"}`}>
               Reply
             </strong>{" "}
             opens a shared thread on a new page.
           </p>
 
           <label
-            className={`mt-3 inline-flex cursor-pointer items-center gap-2 font-medium ${L ? "text-sm text-zinc-800 dark:text-zinc-200" : "text-xs text-indigo-900 dark:text-indigo-200"}`}
+            className={isMobile && L
+              ? "mt-2 inline-flex cursor-pointer items-center gap-2 text-xs text-zinc-300 font-medium"
+              : `mt-3 inline-flex cursor-pointer items-center gap-2 font-medium ${L ? "text-sm text-zinc-800 dark:text-zinc-200" : "text-xs text-indigo-900 dark:text-indigo-200"}`
+            }
           >
             <input
               type="checkbox"
@@ -855,7 +927,7 @@ export function MapBroadcastPanel({
               className="size-4 rounded border-indigo-300 text-indigo-700 focus:ring-indigo-600 dark:border-zinc-600"
             />
             Message alert sound
-            <span className={`font-normal ${L ? "text-zinc-500 dark:text-zinc-400" : "text-indigo-800/70 dark:text-indigo-200/70"}`}>
+            <span className={isMobile && L ? "font-normal text-zinc-500" : `font-normal ${L ? "text-zinc-500 dark:text-zinc-400" : "text-indigo-800/70 dark:text-indigo-200/70"}`}>
               (defaults on)
             </span>
           </label>
@@ -870,11 +942,13 @@ export function MapBroadcastPanel({
           ) : null}
 
           <div
-            className={`mt-3 overflow-hidden rounded-xl border bg-white/90 dark:bg-zinc-950/60 ${L ? "border-zinc-200 dark:border-zinc-700" : "border-indigo-200/60 dark:border-indigo-900/40"
-              }`}
+            className={isMobile && L
+              ? "mt-3 overflow-hidden rounded-2xl border border-white/[0.06] bg-[#0c192c]/45 backdrop-blur-md"
+              : `mt-3 overflow-hidden rounded-xl border bg-white/90 dark:bg-zinc-950/60 ${L ? "border-zinc-200 dark:border-zinc-700" : "border-indigo-200/60 dark:border-indigo-900/40"}`
+            }
           >
             <div
-              className={`sealink-thread-scroll min-h-[4.5rem] space-y-2 overflow-y-auto scroll-smooth p-2 pr-1.5 ${L ? "max-h-[min(55vh,28rem)] sm:max-h-[min(60vh,32rem)]" : "max-h-[11rem] sm:max-h-[12rem]"
+              className={`sealink-thread-scroll min-h-[4.5rem] space-y-2 overflow-y-auto scroll-smooth p-3.5 pr-2.5 ${L ? (isMobile ? "max-h-[50vh]" : "max-h-[min(55vh,28rem)] sm:max-h-[min(60vh,32rem)]") : "max-h-[11rem] sm:max-h-[12rem]"
                 }`}
               aria-busy={loading}
             >
@@ -913,42 +987,56 @@ export function MapBroadcastPanel({
                         if (el.closest("button, a")) return;
                         openBroadcastChat(m);
                       }}
-                      className={`rounded-md border px-2.5 py-2 dark:bg-zinc-900/80 ${L ? "px-3 py-3" : "text-sm"} ${m.isMob
-                        ? "border-red-400/90 bg-red-50/90 dark:border-red-800/70 dark:bg-red-950/35"
-                        : allClear
-                          ? "border-emerald-700/50 bg-emerald-50/90 dark:border-emerald-800/60 dark:bg-emerald-950/30"
-                          : "border-indigo-100/80 bg-white dark:border-indigo-900/30"
-                        } ${canOpenThread ? "cursor-pointer transition hover:border-indigo-300 hover:shadow-sm dark:hover:border-indigo-600" : ""}`}
+                      className={isMobile && L
+                        ? `rounded-xl border p-3.5 ${m.isMob
+                          ? "border-red-500/30 bg-red-500/10"
+                          : allClear
+                            ? "border-emerald-500/30 bg-emerald-50/10"
+                            : "border-white/[0.08] bg-white/[0.03]"
+                        } ${canOpenThread ? "cursor-pointer transition active:scale-[0.99]" : ""}`
+                        : `rounded-md border px-2.5 py-2 dark:bg-zinc-900/80 ${L ? "px-3 py-3" : "text-sm"} ${m.isMob
+                          ? "border-red-400/90 bg-red-50/90 dark:border-red-800/70 dark:bg-red-950/35"
+                          : allClear
+                            ? "border-emerald-700/50 bg-emerald-50/90 dark:border-emerald-800/60 dark:bg-emerald-950/30"
+                            : "border-indigo-100/80 bg-white dark:border-indigo-900/30"
+                        } ${canOpenThread ? "cursor-pointer transition hover:border-indigo-300 hover:shadow-sm dark:hover:border-indigo-600" : ""}`
+                      }
                     >
                       <div className="flex items-start justify-between gap-2">
                         <p
-                          className={`font-medium text-indigo-600 dark:text-indigo-400 ${L ? "text-base leading-snug" : "text-[11px] leading-snug"}`}
+                          className={`font-semibold ${isMobile ? "text-xs text-indigo-400" : `text-indigo-600 dark:text-indigo-400 ${L ? "text-base leading-snug" : "text-[11px] leading-snug"}`}`}
                         >
                           {fmtTime(m.createdAt)}
                           {m.isMob ? (
                             <span
-                              className={`ml-2 rounded bg-red-600 font-bold text-white dark:bg-red-700 ${L ? "px-2 py-1 text-sm" : "px-1 py-0.5 text-[10px]"}`}
+                              className={`ml-2 rounded bg-red-600 font-bold text-white dark:bg-red-700 ${L && !isMobile ? "px-2 py-1 text-sm" : "px-1.5 py-0.5 text-[9px]"}`}
                             >
                               MOB
                             </span>
                           ) : null}
                           {allClear ? (
                             <span
-                              className={`ml-2 rounded bg-emerald-700 font-bold text-white dark:bg-emerald-800 ${L ? "px-2 py-1 text-sm" : "px-1 py-0.5 text-[10px]"}`}
+                              className={`ml-2 rounded bg-emerald-700 font-bold text-white dark:bg-emerald-800 ${L && !isMobile ? "px-2 py-1 text-sm" : "px-1.5 py-0.5 text-[9px]"}`}
                             >
                               All clear
                             </span>
                           ) : null}
                           {m.isGlobal ? (
                             <span
-                              className={`ml-2 rounded bg-amber-100 text-amber-950 dark:bg-amber-900/50 dark:text-amber-100 ${L ? "px-2 py-1 text-sm" : "px-1 py-0.5 text-[10px]"}`}
+                              className={`ml-2 rounded font-semibold ${isMobile && L
+                                ? "bg-amber-500/15 text-amber-300 border border-amber-500/20 px-1.5 py-0.5 text-[9px]"
+                                : `bg-amber-100 text-amber-950 dark:bg-amber-900/50 dark:text-amber-100 ${L ? "px-2 py-1 text-sm" : "px-1 py-0.5 text-[10px]"}`
+                                }`}
                             >
                               All areas
                             </span>
                           ) : null}
                           {!m.isGlobal && m.audience === "friends_nearby" ? (
                             <span
-                              className={`ml-2 rounded bg-violet-200/90 text-violet-950 dark:bg-violet-900/55 dark:text-violet-100 ${L ? "px-2 py-1 text-sm" : "px-1 py-0.5 text-[10px]"}`}
+                              className={`ml-2 rounded font-semibold ${isMobile && L
+                                ? "bg-violet-500/15 text-violet-300 border border-violet-500/20 px-1.5 py-0.5 text-[9px]"
+                                : `bg-violet-200/90 text-violet-950 dark:bg-violet-900/55 dark:text-violet-100 ${L ? "px-2 py-1 text-sm" : "px-1 py-0.5 text-[10px]"}`
+                                }`}
                               title="Only IFM friends within ~5 mi could see this"
                             >
                               Friends nearby
@@ -956,7 +1044,10 @@ export function MapBroadcastPanel({
                           ) : null}
                           {!m.isGlobal && m.audience === "friends_global" ? (
                             <span
-                              className={`ml-2 rounded bg-fuchsia-200/90 text-fuchsia-950 dark:bg-fuchsia-900/50 dark:text-fuchsia-50 ${L ? "px-2 py-1 text-sm" : "px-1 py-0.5 text-[10px]"}`}
+                              className={`ml-2 rounded font-semibold ${isMobile && L
+                                ? "bg-fuchsia-500/15 text-fuchsia-300 border border-fuchsia-500/20 px-1.5 py-0.5 text-[9px]"
+                                : `bg-fuchsia-200/90 text-fuchsia-950 dark:bg-fuchsia-900/50 dark:text-fuchsia-50 ${L ? "px-2 py-1 text-sm" : "px-1 py-0.5 text-[10px]"}`
+                                }`}
                               title="Only your IFM friends (anywhere) could see this"
                             >
                               Friends worldwide
@@ -964,14 +1055,17 @@ export function MapBroadcastPanel({
                           ) : null}
                           {m.isMine ? (
                             <span
-                              className={`ml-2 rounded bg-indigo-100 text-indigo-900 dark:bg-indigo-900/60 dark:text-indigo-100 ${L ? "px-2 py-1 text-sm" : "px-1 py-0.5 text-[10px]"}`}
+                              className={`ml-2 rounded font-semibold ${isMobile && L
+                                ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/20 px-1.5 py-0.5 text-[9px]"
+                                : `bg-indigo-100 text-indigo-900 dark:bg-indigo-900/60 dark:text-indigo-100 ${L ? "px-2 py-1 text-sm" : "px-1 py-0.5 text-[10px]"}`
+                                }`}
                             >
                               You
                             </span>
                           ) : null}
                           {unreadBroadcastReplyIds.has(m.id) ? (
                             <span
-                              className={`sealink-broadcast-new-replies ml-2 inline-block rounded-md px-2 py-0.5 font-bold text-white ${L ? "text-sm" : "text-[10px]"}`}
+                              className={`sealink-broadcast-new-replies ml-2 inline-block rounded-md font-bold text-white ${isMobile && L ? "px-1.5 py-0.5 text-[9px]" : L ? "text-sm" : "text-[10px]"}`}
                             >
                               New replies
                             </span>
@@ -985,8 +1079,10 @@ export function MapBroadcastPanel({
                                 ev.stopPropagation();
                                 openBroadcastChat(m);
                               }}
-                              className={`rounded-md border border-indigo-200 bg-indigo-50 font-semibold text-indigo-900 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-100 dark:hover:bg-indigo-900/40 ${L ? "px-3 py-2 text-base" : "px-2 py-0.5 text-[11px]"
-                                }`}
+                              className={isMobile && L
+                                ? "rounded-lg bg-indigo-600/80 px-2.5 py-1 text-[11px] font-bold text-white active:scale-95 transition-all"
+                                : `rounded-md border border-indigo-200 bg-indigo-50 font-semibold text-indigo-900 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-100 dark:hover:bg-indigo-900/40 ${L ? "px-3 py-2 text-base" : "px-2 py-0.5 text-[11px]"}`
+                              }
                             >
                               Reply
                             </button>
@@ -998,8 +1094,10 @@ export function MapBroadcastPanel({
                                 onHideOnDevice(m.id);
                               }
                             }}
-                            className={`rounded-md border border-zinc-300 bg-zinc-100 font-semibold text-zinc-800 hover:bg-zinc-200 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700 ${L ? "px-3 py-2 text-base" : "px-2 py-0.5 text-[11px]"
-                              }`}
+                            className={isMobile && L
+                              ? "rounded-lg bg-white/[0.06] border border-white/[0.08] px-2.5 py-1 text-[11px] font-bold text-slate-300 active:scale-95 transition-all"
+                              : `rounded-md border border-zinc-300 bg-zinc-100 font-semibold text-zinc-800 hover:bg-zinc-200 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700 ${L ? "px-3 py-2 text-base" : "px-2 py-0.5 text-[11px]"}`
+                            }
                           >
                             Hide
                           </button>
@@ -1007,8 +1105,10 @@ export function MapBroadcastPanel({
                             <button
                               type="button"
                               onClick={() => void onAdminDelete(m)}
-                              className={`rounded-md border border-red-200 bg-red-50 font-semibold text-red-800 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950/55 ${L ? "px-3 py-2 text-base" : "px-2 py-0.5 text-[11px]"
-                                }`}
+                              className={isMobile && L
+                                ? "rounded-lg bg-red-600/80 px-2.5 py-1 text-[11px] font-bold text-white active:scale-95 transition-all"
+                                : `rounded-md border border-red-200 bg-red-50 font-semibold text-red-800 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950/55 ${L ? "px-3 py-2 text-base" : "px-2 py-0.5 text-[11px]"}`
+                              }
                             >
                               Admin delete
                             </button>
@@ -1020,15 +1120,19 @@ export function MapBroadcastPanel({
                           href={mobMapHref}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className={`mt-2 inline-flex w-full items-center justify-center rounded-lg bg-sky-600 py-2 text-center font-bold text-white hover:bg-sky-500 ${L ? "py-3 text-xl" : "text-xs sm:text-sm"
-                            }`}
+                          className={isMobile && L
+                            ? "mt-2 inline-flex w-full items-center justify-center rounded-xl bg-sky-600/80 py-2.5 text-center font-bold text-white active:scale-[0.98] transition-all text-xs"
+                            : `mt-2 inline-flex w-full items-center justify-center rounded-lg bg-sky-600 py-2 text-center font-bold text-white hover:bg-sky-500 ${L ? "py-3 text-xl" : "text-xs sm:text-sm"}`
+                          }
                         >
                           Open sender position on map
                         </a>
                       ) : null}
                       <div
-                        className={`mt-1 whitespace-pre-wrap leading-snug text-zinc-800 dark:text-zinc-200 ${L ? "text-lg leading-relaxed sm:text-xl" : ""
-                          }`}
+                        className={isMobile && L
+                          ? "mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-200"
+                          : `mt-1 whitespace-pre-wrap leading-snug text-zinc-800 dark:text-zinc-200 ${L ? "text-lg leading-relaxed sm:text-xl" : ""}`
+                        }
                       >
                         <LinkifiedPlainText text={m.body} />
                       </div>
@@ -1043,8 +1147,10 @@ export function MapBroadcastPanel({
             <form onSubmit={(e) => void onSend(e)} className="mt-3 space-y-2">
               {canSendGlobalBroadcast ? (
                 <label
-                  className={`flex cursor-pointer items-start gap-2 font-medium text-indigo-900 dark:text-indigo-200 ${L ? "text-lg" : "text-xs"
-                    }`}
+                  className={isMobile && L
+                    ? "flex cursor-pointer items-start gap-2.5 text-xs font-bold text-slate-300 uppercase tracking-wider"
+                    : `flex cursor-pointer items-start gap-2 font-medium text-indigo-900 dark:text-indigo-200 ${L ? "text-lg" : "text-xs"}`
+                  }
                 >
                   <input
                     type="checkbox"
@@ -1059,54 +1165,63 @@ export function MapBroadcastPanel({
               ) : null}
               {!broadcastAllAreas ? (
                 <fieldset
-                  className={`rounded-lg border border-indigo-200/80 bg-indigo-50/40 px-3 py-2 dark:border-indigo-800/60 dark:bg-indigo-950/25 ${L ? "space-y-2 py-3" : "space-y-1.5"}`}
+                  className={isMobile && L
+                    ? "rounded-2xl border border-white/[0.06] bg-[#0c192c]/45 p-4 shadow-lg backdrop-blur-md space-y-2.5"
+                    : `rounded-lg border border-indigo-200/80 bg-indigo-50/40 px-3 py-2 dark:border-indigo-800/60 dark:bg-indigo-950/25 ${L ? "space-y-2 py-3" : "space-y-1.5"}`
+                  }
                 >
-                  <legend className={`px-1 font-semibold text-indigo-900 dark:text-indigo-100 ${L ? "text-base" : "text-xs"}`}>
+                  <legend className={isMobile && L
+                    ? "px-1.5 text-xs font-bold text-slate-300 uppercase tracking-wider"
+                    : `px-1 font-semibold text-indigo-900 dark:text-indigo-100 ${L ? "text-base" : "text-xs"}`
+                  }>
                     Who can see this
                   </legend>
-                  <label className={`flex cursor-pointer items-start gap-2 text-indigo-900 dark:text-indigo-100 ${L ? "text-base" : "text-xs"}`}>
+                  <label className={isMobile && L ? "flex cursor-pointer items-start gap-2.5 text-xs text-slate-300 font-medium" : `flex cursor-pointer items-start gap-2 text-indigo-900 dark:text-indigo-100 ${L ? "text-base" : "text-xs"}`}>
                     <input
                       type="radio"
                       name="broadcastAudience"
                       checked={broadcastAudience === "all_nearby"}
                       onChange={() => setBroadcastAudience("all_nearby")}
-                      className="mt-0.5 size-4 shrink-0 border-indigo-300 text-indigo-700 focus:ring-indigo-600"
+                      className="mt-0.5 size-4 shrink-0 border-indigo-300 text-indigo-700 focus:ring-indigo-600 dark:border-zinc-600"
                     />
                     <span>
-                      <strong className="font-semibold">Everyone nearby</strong> (~5 mi)
+                      <strong className={isMobile ? "font-bold text-slate-200" : "font-semibold"}>Everyone nearby</strong> (~5 mi)
                     </span>
                   </label>
-                  <label className={`flex cursor-pointer items-start gap-2 text-indigo-900 dark:text-indigo-100 ${L ? "text-base" : "text-xs"}`}>
+                  <label className={isMobile && L ? "flex cursor-pointer items-start gap-2.5 text-xs text-slate-300 font-medium" : `flex cursor-pointer items-start gap-2 text-indigo-900 dark:text-indigo-100 ${L ? "text-base" : "text-xs"}`}>
                     <input
                       type="radio"
                       name="broadcastAudience"
                       checked={broadcastAudience === "friends_nearby"}
                       onChange={() => setBroadcastAudience("friends_nearby")}
-                      className="mt-0.5 size-4 shrink-0 border-indigo-300 text-violet-700 focus:ring-violet-600"
+                      className="mt-0.5 size-4 shrink-0 border-indigo-300 text-violet-700 focus:ring-violet-600 dark:border-zinc-600"
                     />
                     <span>
-                      <strong className="font-semibold">IFM friends nearby</strong> (~5 mi)
+                      <strong className={isMobile ? "font-bold text-slate-200" : "font-semibold"}>IFM friends nearby</strong> (~5 mi)
                     </span>
                   </label>
-                  <label className={`flex cursor-pointer items-start gap-2 text-indigo-900 dark:text-indigo-100 ${L ? "text-base" : "text-xs"}`}>
+                  <label className={isMobile && L ? "flex cursor-pointer items-start gap-2.5 text-xs text-slate-300 font-medium" : `flex cursor-pointer items-start gap-2 text-indigo-900 dark:text-indigo-100 ${L ? "text-base" : "text-xs"}`}>
                     <input
                       type="radio"
                       name="broadcastAudience"
                       checked={broadcastAudience === "friends_global"}
                       onChange={() => setBroadcastAudience("friends_global")}
-                      className="mt-0.5 size-4 shrink-0 border-indigo-300 text-fuchsia-700 focus:ring-fuchsia-600"
+                      className="mt-0.5 size-4 shrink-0 border-indigo-300 text-fuchsia-700 focus:ring-fuchsia-600 dark:border-zinc-600"
                     />
                     <span>
-                      <strong className="font-semibold">IFM friends worldwide</strong>
+                      <strong className={isMobile ? "font-bold text-slate-200" : "font-semibold"}>IFM friends worldwide</strong>
                     </span>
                   </label>
-                  <p className={`text-indigo-800/85 dark:text-indigo-200/75 ${L ? "text-sm pl-6" : "text-[10px] leading-snug pl-6"}`}>
+                  <p className={isMobile && L ? "text-[10px] text-slate-400 pl-6.5 leading-normal" : `text-indigo-800/85 dark:text-indigo-200/75 ${L ? "text-sm pl-6" : "text-[10px] leading-snug pl-6"}`}>
                     Manage friends on the IFM map.
                   </p>
                 </fieldset>
               ) : null}
               <label
-                className={`block font-medium text-indigo-900 dark:text-indigo-200 ${L ? "text-lg" : "text-xs"}`}
+                className={isMobile && L
+                  ? "block text-xs font-bold text-slate-300 uppercase tracking-wider"
+                  : `block font-medium text-indigo-900 dark:text-indigo-200 ${L ? "text-lg" : "text-xs"}`
+                }
               >
                 {broadcastAllAreas && canSendGlobalBroadcast
                   ? "Broadcast (all areas)"
@@ -1118,7 +1233,7 @@ export function MapBroadcastPanel({
                 <textarea
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
-                  rows={L ? 4 : 3}
+                  rows={isMobile ? 3 : (L ? 4 : 3)}
                   maxLength={500}
                   placeholder={
                     broadcastAudience === "friends_nearby"
@@ -1127,15 +1242,19 @@ export function MapBroadcastPanel({
                         ? "Heads-up for your IFM friends anywhere…"
                         : "Short heads-up for nearby boaters…"
                   }
-                  className={`mt-1 w-full rounded-lg border border-indigo-200 bg-white px-2 py-1.5 text-zinc-900 outline-none focus:border-indigo-500 dark:border-indigo-800 dark:bg-zinc-950 dark:text-zinc-50 ${L ? "py-3 text-base sm:text-lg" : "text-sm"
-                    }`}
+                  className={isMobile && L
+                    ? "mt-1.5 w-full rounded-2xl border border-white/[0.08] bg-[#0d1b33] px-3.5 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30 transition-all"
+                    : `mt-1 w-full rounded-lg border border-indigo-200 bg-white px-2 py-1.5 text-zinc-900 outline-none focus:border-indigo-500 dark:border-indigo-800 dark:bg-zinc-950 dark:text-zinc-50 ${L ? "py-3 text-base sm:text-lg" : "text-sm"}`
+                  }
                 />
               </label>
               <button
                 type="submit"
                 disabled={posting || !draft.trim()}
-                className={`rounded-lg bg-indigo-700 px-3 font-semibold text-white hover:bg-indigo-800 disabled:opacity-50 dark:bg-indigo-600 dark:hover:bg-indigo-500 ${L ? "h-11 text-base" : "h-9 text-sm"
-                  }`}
+                className={isMobile && L
+                  ? "w-full h-11 rounded-2xl bg-gradient-to-r from-cyan-600 to-blue-600 text-sm font-bold text-white shadow-lg active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  : `rounded-lg bg-indigo-700 px-3 font-semibold text-white hover:bg-indigo-800 disabled:opacity-50 dark:bg-indigo-600 dark:hover:bg-indigo-500 ${L ? "h-11 text-base" : "h-9 text-sm"}`
+                }
               >
                 {posting
                   ? "Sending…"
@@ -1149,11 +1268,14 @@ export function MapBroadcastPanel({
               </button>
             </form>
           ) : (
-            <p className={`mt-3 text-indigo-900/85 dark:text-indigo-200/80 ${L ? "text-sm leading-relaxed text-zinc-600 dark:text-zinc-400" : "text-xs"}`}>
-              Turn on <strong className="text-zinc-800 dark:text-zinc-200">Share my location on this map</strong> on the{" "}
+            <p className={isMobile && L
+              ? "mt-3 text-xs leading-relaxed text-slate-400"
+              : `mt-3 text-indigo-900/85 dark:text-indigo-200/80 ${L ? "text-sm leading-relaxed text-zinc-600 dark:text-zinc-400" : "text-xs"}`
+            }>
+              Turn on <strong className={isMobile ? "text-slate-200" : "text-zinc-800 dark:text-zinc-200"}>Share my location on this map</strong> on the{" "}
               <Link
                 href="/"
-                className="font-semibold text-indigo-600 underline underline-offset-2 hover:text-indigo-500 dark:text-indigo-400"
+                className={isMobile ? "font-bold text-cyan-400 underline" : "font-semibold text-indigo-600 underline underline-offset-2 hover:text-indigo-500 dark:text-indigo-400"}
               >
                 home map
               </Link>{" "}
