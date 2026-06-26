@@ -374,7 +374,7 @@ export function MobileAnchorAlertModal({
         </div>
 
         {/* Scrollable Content */}
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 py-4 pb-[max(1.5rem,env(safe-area-inset-bottom)+1.5rem)] space-y-4 text-left">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 py-4 pb-[max(calc(var(--sealink-bottom-dock-px,0px)+1.5rem),env(safe-area-inset-bottom)+1.5rem)] space-y-4 text-left">
 
           {/* Status Card */}
           {config.armed && hasAnchor ? (

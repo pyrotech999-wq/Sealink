@@ -7,6 +7,8 @@ import { LinkifiedPlainText } from "@/components/LinkifiedPlainText";
 import { formatChatSenderLine } from "@/lib/format-chat-sender";
 import { getLastKnownPosition } from "@/lib/map-last-known";
 import { getMessagePollDelayMs } from "@/lib/message-poll-delays";
+import { useIsMobileApp } from "@/hooks/useIsMobileApp";
+import { Send, ArrowLeft, CheckCheck } from "lucide-react";
 
 type Msg = {
   id: string;
@@ -38,6 +40,7 @@ const FETCH_MS = 28_000;
 export function BroadcastChatPageClient({ broadcastId }: { broadcastId: string }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { isMobile } = useIsMobileApp();
 
   const [readLat, setReadLat] = useState<number | null>(null);
   const [readLng, setReadLng] = useState<number | null>(null);
@@ -350,6 +353,118 @@ export function BroadcastChatPageClient({ broadcastId }: { broadcastId: string }
   const showRepliesLoading = initialRepliesLoading && messages.length === 0 && !err;
   const showEmptyAfterLoad = initialRepliesDone && !initialRepliesLoading && messages.length === 0 && !err;
 
+  /* ── Mobile UI ── */
+  if (isMobile) {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col bg-gradient-to-b from-[#071b36] to-[#040a15] text-white">
+        {/* Header */}
+        <div className="shrink-0 border-b border-white/[0.06] bg-[#0c1a35]/80 px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3 backdrop-blur-md">
+          <div className="flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={() => router.push("/messaging")}
+              className="flex items-center gap-1.5 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-xs font-bold text-slate-300 active:scale-95 transition-all"
+            >
+              <ArrowLeft size={14} /> Back
+            </button>
+            <div className="min-w-0 flex-1 text-center">
+              <p className="truncate text-sm font-extrabold text-white">Broadcast Replies</p>
+              <p className="truncate text-[10px] text-cyan-400">{authorLine}</p>
+            </div>
+            <button
+              type="button"
+              disabled={markingSeen}
+              onClick={() => void markSeen()}
+              className="flex items-center gap-1 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-300 active:scale-95 transition-all disabled:opacity-40"
+            >
+              <CheckCheck size={13} />
+              {markingSeen ? "…" : "Seen"}
+            </button>
+          </div>
+
+          {/* Original broadcast body */}
+          {broadcast?.body ? (
+            <div className="mt-3 rounded-2xl border border-amber-500/20 bg-amber-500/[0.05] px-4 py-3">
+              <span className="text-[9px] font-bold uppercase tracking-widest text-amber-400">Original broadcast</span>
+              <p className="mt-1.5 text-xs leading-relaxed text-slate-200 whitespace-pre-wrap break-words line-clamp-4">
+                <LinkifiedPlainText text={broadcast.body} />
+              </p>
+            </div>
+          ) : null}
+        </div>
+
+        {/* Messages feed */}
+        <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+          <p className="text-center text-[10px] font-bold uppercase tracking-widest text-slate-500">
+            Thread replies — visible to everyone who saw the original
+          </p>
+
+          {showRepliesLoading && (
+            <div className="py-8 text-center text-xs text-slate-400 animate-pulse">Loading replies…</div>
+          )}
+          {err && (
+            <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-center text-xs text-red-400">{err}</div>
+          )}
+          {showEmptyAfterLoad && (
+            <div className="py-12 text-center">
+              <span className="text-2xl">💬</span>
+              <p className="mt-2 text-xs text-slate-400 font-medium">No replies yet. Be the first!</p>
+            </div>
+          )}
+
+          {messages.map((m) => (
+            <div key={m.id} className={`flex flex-col ${m.isMine ? "items-end" : "items-start"}`}>
+              <span className="mb-1 px-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                {senderLabel(m)}
+              </span>
+              <div
+                className={`max-w-[85%] rounded-[20px] px-4 py-2.5 shadow-xl text-sm leading-relaxed break-words whitespace-pre-wrap ${m.isMine
+                  ? "rounded-tr-none bg-gradient-to-r from-blue-600 to-indigo-600 text-white border border-blue-500/25"
+                  : "rounded-tl-none bg-gradient-to-b from-[#112139] to-[#071120] text-slate-100 border border-white/[0.05]"
+                  }`}
+              >
+                <LinkifiedPlainText text={m.body} />
+                <span className={`mt-1.5 block text-[8.5px] font-semibold text-right ${m.isMine ? "text-blue-200/70" : "text-slate-400/80"}`}>
+                  {fmtMsgTime(m.createdAt)}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Composer */}
+        <form
+          onSubmit={(e) => void onSend(e)}
+          className="shrink-0 border-t border-white/[0.06] bg-[#081328] p-4 flex gap-2.5 items-end pb-[max(1rem,env(safe-area-inset-bottom))]"
+          style={{ paddingBottom: "max(1rem, calc(var(--sealink-bottom-dock-px, 0px) + env(safe-area-inset-bottom)))" }}
+        >
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={1}
+            maxLength={4000}
+            placeholder="Type a reply…"
+            className="flex-1 max-h-24 min-h-[44px] rounded-2xl border border-white/[0.08] bg-[#0d1b33] px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30 transition-all resize-none"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                void onSend(e as unknown as React.FormEvent);
+              }
+            }}
+          />
+          <button
+            type="submit"
+            disabled={sending || !draft.trim()}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg hover:brightness-110 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Send size={16} />
+          </button>
+        </form>
+      </div>
+    );
+  }
+
+  /* ── Desktop / Web UI (unchanged) ── */
   return (
     <div className="flex min-h-[calc(100dvh-8rem)] flex-col bg-zinc-950">
       {/* Area broadcast system: navigation + context + original post */}
@@ -416,11 +531,10 @@ export function BroadcastChatPageClient({ broadcastId }: { broadcastId: string }
             <div key={m.id} className={`flex flex-col ${m.isMine ? "items-end" : "items-start"}`}>
               <span className="mb-0.5 px-1 text-[10px] font-semibold text-zinc-400">{senderLabel(m)}</span>
               <div
-                className={`max-w-[88%] rounded-2xl px-3 py-2.5 text-base leading-relaxed shadow-sm sm:text-lg ${
-                  m.isMine
-                    ? "rounded-br-md bg-indigo-600 text-white"
-                    : "rounded-bl-md border border-zinc-600 bg-zinc-800 text-zinc-50"
-                }`}
+                className={`max-w-[88%] rounded-2xl px-3 py-2.5 text-base leading-relaxed shadow-sm sm:text-lg ${m.isMine
+                  ? "rounded-br-md bg-indigo-600 text-white"
+                  : "rounded-bl-md border border-zinc-600 bg-zinc-800 text-zinc-50"
+                  }`}
               >
                 <div className="whitespace-pre-wrap break-words">
                   <LinkifiedPlainText text={m.body} />
@@ -459,3 +573,4 @@ export function BroadcastChatPageClient({ broadcastId }: { broadcastId: string }
     </div>
   );
 }
+

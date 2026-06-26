@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useBroadcastToast } from "@/components/BroadcastToastProvider";
 import { VicinityChatDrawer } from "@/components/home/VicinityChatDrawer";
+import { MobileVicinityChatDrawer } from "@/components/mobile/messages/MobileVicinityChatDrawer";
 import { LinkifiedPlainText } from "@/components/LinkifiedPlainText";
 import { mapHrefPreferCoords } from "@/lib/map-links";
 import { MOB_CANCEL_BROADCAST_INTRO } from "@/lib/map-broadcast-constants";
@@ -139,6 +140,7 @@ export function MapBroadcastPanel({
 }: Props) {
   const router = useRouter();
   const L = layout === "messaging";
+  const { isMobile } = useIsMobileApp();
   const toast = useBroadcastToast();
   const [messages, setMessages] = useState<BroadcastMsg[]>([]);
   const [draft, setDraft] = useState("");
@@ -1171,19 +1173,35 @@ export function MapBroadcastPanel({
       {!L && signedIn ? privateRepliesBlock : null}
 
       {chatPeerUid ? (
-        <VicinityChatDrawer
-          open
-          peerUid={chatPeerUid}
-          readLat={readLat}
-          readLng={readLng}
-          contextLine={chatContext}
-          textScale={L ? "readable" : "default"}
-          onClose={() => {
-            setChatPeerUid(null);
-            setChatContext(undefined);
-            void fetchInbox();
-          }}
-        />
+        isMobile ? (
+          <MobileVicinityChatDrawer
+            open
+            peerUid={chatPeerUid}
+            readLat={readLat}
+            readLng={readLng}
+            contextLine={chatContext}
+            textScale="default"
+            onClose={() => {
+              setChatPeerUid(null);
+              setChatContext(undefined);
+              void fetchInbox();
+            }}
+          />
+        ) : (
+          <VicinityChatDrawer
+            open
+            peerUid={chatPeerUid}
+            readLat={readLat}
+            readLng={readLng}
+            contextLine={chatContext}
+            textScale={L ? "readable" : "default"}
+            onClose={() => {
+              setChatPeerUid(null);
+              setChatContext(undefined);
+              void fetchInbox();
+            }}
+          />
+        )
       ) : null}
     </section>
   );
