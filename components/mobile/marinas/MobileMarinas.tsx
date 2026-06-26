@@ -84,57 +84,82 @@ function MarinaCard({
   onSelect: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className="w-full text-left rounded-2xl border border-white/[0.07] bg-[#0c1a32]/70 p-4 shadow-md backdrop-blur-sm active:scale-[0.99] transition-transform"
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-slate-100 truncate">{marina.name}</p>
-          <p className="text-[10px] text-zinc-400 mt-0.5 truncate">
-            {marina.harbour}, {marina.region}
-          </p>
-        </div>
-        {distKm != null && (
-          <span className="shrink-0 mt-0.5 rounded-full bg-sky-900/50 border border-sky-500/20 px-2 py-0.5 text-[9px] font-bold text-sky-400">
-            {distKm < 1 ? `${Math.round(distKm * 1000)} m` : `${distKm.toFixed(1)} km`}
-          </span>
-        )}
-      </div>
-
-      {marina.facilities.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1">
-          {marina.facilities.slice(0, 5).map(f => (
-            <span
-              key={f}
-              className="rounded bg-white/[0.04] border border-white/[0.06] px-1.5 py-0.5 text-[9px] text-zinc-400 font-medium"
-            >
-              {f}
+    <div className="w-full rounded-2xl border border-white/[0.07] bg-[#0c1a32]/70 p-4 shadow-md backdrop-blur-sm transition-all">
+      <div onClick={onSelect} className="cursor-pointer active:opacity-80">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-slate-100 truncate">{marina.name}</p>
+            <p className="text-[10px] text-zinc-400 mt-0.5 truncate">
+              {marina.harbour}, {marina.region}
+            </p>
+          </div>
+          {distKm != null && (
+            <span className="shrink-0 mt-0.5 rounded-full bg-sky-900/50 border border-sky-500/20 px-2 py-0.5 text-[9px] font-bold text-sky-400">
+              {distKm < 1 ? `${Math.round(distKm * 1000)} m` : `${distKm.toFixed(1)} km`}
             </span>
-          ))}
-          {marina.facilities.length > 5 && (
-            <span className="text-[9px] text-zinc-600">+{marina.facilities.length - 5} more</span>
           )}
         </div>
-      )}
 
-      <div className="mt-2 flex gap-3 text-[10px] text-zinc-500">
-        {marina.depthM != null && (
-          <span className="flex items-center gap-0.5">
-            <Waves size={9} className="text-sky-500" />
-            {marina.depthM} m depth
-          </span>
+        {marina.phone && (
+          <p className="mt-2 text-xs text-zinc-400">
+            <span className="text-zinc-500">Phone: </span>
+            <span className="font-semibold text-emerald-400">{marina.phone}</span>
+          </p>
         )}
-        {marina.maxLengthM != null && (
-          <span className="flex items-center gap-0.5">
-            <Anchor size={9} className="text-indigo-400" />
-            max {marina.maxLengthM} m
-          </span>
+
+        {marina.facilities.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {marina.facilities.slice(0, 5).map(f => (
+              <span
+                key={f}
+                className="rounded bg-white/[0.04] border border-white/[0.06] px-1.5 py-0.5 text-[9px] text-zinc-400 font-medium"
+              >
+                {f}
+              </span>
+            ))}
+            {marina.facilities.length > 5 && (
+              <span className="text-[9px] text-zinc-600">+{marina.facilities.length - 5} more</span>
+            )}
+          </div>
         )}
-        {marina.priceFromEur != null && <span>€{marina.priceFromEur}/night</span>}
+
+        <div className="mt-2.5 flex gap-3 text-[10px] text-zinc-500">
+          {marina.depthM != null && (
+            <span className="flex items-center gap-0.5">
+              <Waves size={9} className="text-sky-500" />
+              {marina.depthM} m depth
+            </span>
+          )}
+          {marina.maxLengthM != null && (
+            <span className="flex items-center gap-0.5">
+              <Anchor size={9} className="text-indigo-400" />
+              max {marina.maxLengthM} m
+            </span>
+          )}
+          {marina.priceFromEur != null && <span>€{marina.priceFromEur}/night</span>}
+        </div>
       </div>
-    </button>
+
+      <div className="mt-3 flex gap-2 border-t border-white/[0.05] pt-3">
+        {marina.phone && (
+          <a
+            href={`tel:${marina.phone.replace(/\s/g, '')}`}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-emerald-600/15 border border-emerald-500/20 text-emerald-300 text-[11px] font-bold active:scale-95 transition-transform"
+          >
+            <Phone size={12} />
+            Call marina
+          </a>
+        )}
+        <button
+          type="button"
+          onClick={onSelect}
+          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-indigo-600/20 border border-indigo-500/20 text-indigo-300 text-[11px] font-bold active:scale-95 transition-transform"
+        >
+          <CalendarDays size={12} />
+          Book / Enquiry
+        </button>
+      </div>
+    </div>
   );
 }
 
