@@ -11,6 +11,7 @@ import { MobileSeaStateTideCard } from './MobileSeaStateTideCard';
 interface MobileHomeProps {
   signedIn: boolean;
   welcomeFirstName: string | null;
+  isAdmin: boolean;
 }
 import QuickActions from './QuickAction';
 import { useRouter } from 'next/navigation';
@@ -24,6 +25,7 @@ import { MobileSeasTheDayModal } from '@/components/mobile/home/MobileSeasTheDay
 export default function MobileHome({
   signedIn,
   welcomeFirstName,
+  isAdmin,
 }: MobileHomeProps) {
   const location = useCurrentLocation();
   const meteo = useMeteo(location?.lat, location?.lng);
@@ -52,11 +54,11 @@ export default function MobileHome({
     }
 
     // Initial load
-    setAnchorCfg(getAnchorAlertConfig({ isAdmin: false }));
+    setAnchorCfg(getAnchorAlertConfig({ isAdmin }));
 
     // Listen for storage changes (e.g. from the modal or background service)
     const handleUpdate = () => {
-      setAnchorCfg(getAnchorAlertConfig({ isAdmin: false }));
+      setAnchorCfg(getAnchorAlertConfig({ isAdmin }));
     };
 
     window.addEventListener('storage', handleUpdate);
@@ -78,7 +80,7 @@ export default function MobileHome({
       window.removeEventListener('storage', handleUpdate);
       clearInterval(interval);
     };
-  }, []);
+  }, [isAdmin]);
 
   return (
     <div className="fixed inset-0 bg-[#071b36] text-white flex flex-col overflow-hidden">
@@ -136,7 +138,7 @@ export default function MobileHome({
       <MobileAnchorAlertModal
         open={anchorOpen}
         onClose={() => setAnchorOpen(false)}
-        isAdmin={false}
+        isAdmin={isAdmin}
         emergencyDisableLiveMapApis={false}
         sharing={true}
         hasFix={Boolean(location)}

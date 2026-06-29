@@ -314,9 +314,8 @@ export function MobileNavigationCharts() {
                 const active = loadPhase === key;
                 return (
                   <div key={key} className="space-y-1.5">
-                    <div className={`h-1.5 rounded-full transition-all duration-300 ${
-                      done ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]" : active ? "bg-cyan-500 animate-pulse shadow-[0_0_8px_rgba(6,182,212,0.4)]" : "bg-white/[0.08]"
-                    }`} />
+                    <div className={`h-1.5 rounded-full transition-all duration-300 ${done ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]" : active ? "bg-cyan-500 animate-pulse shadow-[0_0_8px_rgba(6,182,212,0.4)]" : "bg-white/[0.08]"
+                      }`} />
                     <div className="text-[9px] text-center truncate font-extrabold text-zinc-500 uppercase tracking-wide">
                       {PHASE_LABELS[key].split(" ")[0]}
                     </div>
@@ -359,7 +358,7 @@ export function MobileNavigationCharts() {
         )}
 
         {/* Chart Upload / Metadata Card */}
-        <div className="rounded-3xl border border-white/[0.06] bg-[#0c192c]/45 p-4.5 shadow-lg backdrop-blur-md space-y-4">
+        {/* <div className="rounded-3xl border border-white/[0.06] bg-[#0c192c]/45 p-4.5 shadow-lg backdrop-blur-md space-y-4">
           <div className="flex items-center justify-between border-b border-white/[0.05] pb-2.5">
             <div className="flex items-center gap-2">
               <Upload size={14} className="text-zinc-400" />
@@ -458,7 +457,7 @@ export function MobileNavigationCharts() {
               )}
             </div>
           )}
-        </div>
+        </div> */}
 
         {/* External Navigation Apps Card */}
         <div className="rounded-3xl border border-white/[0.06] bg-[#0c192c]/45 p-4.5 shadow-lg backdrop-blur-md space-y-4">
@@ -467,11 +466,10 @@ export function MobileNavigationCharts() {
               <Compass size={14} className="text-zinc-400" />
               <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">External Nav Integration</span>
             </div>
-            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-extrabold tracking-wide uppercase border ${
-              userLocation
-                ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-400"
-                : "bg-amber-500/10 border-amber-500/25 text-amber-400"
-            }`}>
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-extrabold tracking-wide uppercase border ${userLocation
+              ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-400"
+              : "bg-amber-500/10 border-amber-500/25 text-amber-400"
+              }`}>
               {userLocation ? "GPS Locked" : "Searching GPS..."}
             </span>
           </div>
@@ -481,11 +479,10 @@ export function MobileNavigationCharts() {
               type="button"
               onClick={onSendToApp}
               disabled={locating}
-              className={`w-full flex items-center justify-center gap-2 rounded-2xl h-12 text-sm font-bold text-white transition-all active:scale-[0.98] cursor-pointer ${
-                locating
-                  ? "bg-emerald-600/50 cursor-not-allowed"
-                  : "bg-violet-600 hover:bg-violet-500 shadow-lg shadow-violet-900/30 text-white"
-              }`}
+              className={`w-full flex items-center justify-center gap-2 rounded-2xl h-12 text-sm font-bold text-white transition-all active:scale-[0.98] cursor-pointer ${locating
+                ? "bg-emerald-600/50 cursor-not-allowed"
+                : "bg-violet-600 hover:bg-violet-500 shadow-lg shadow-violet-900/30 text-white"
+                }`}
             >
               {locating ? (
                 <>
@@ -570,7 +567,7 @@ export function MobileNavigationCharts() {
         </Link>
 
         {/* Pilot Charts Accordion */}
-        <div className="rounded-3xl border border-white/[0.06] bg-[#0c192c]/45 shadow-lg backdrop-blur-md overflow-hidden">
+        {/* <div className="rounded-3xl border border-white/[0.06] bg-[#0c192c]/45 shadow-lg backdrop-blur-md overflow-hidden">
           <button
             type="button"
             onClick={() => setIsPilotChartsOpen(!isPilotChartsOpen)}
@@ -588,7 +585,7 @@ export function MobileNavigationCharts() {
               <PilotChartsDownloads />
             </div>
           )}
-        </div>
+        </div> */}
       </div>
     </div>
   );

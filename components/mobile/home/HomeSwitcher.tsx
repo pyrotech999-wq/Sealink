@@ -5,33 +5,37 @@ import { Capacitor } from "@capacitor/core";
 import MobileHome from "./MobileHome";
 
 interface HomeSwitcherProps {
-children: React.ReactNode;
-signedIn: boolean;
-welcomeFirstName: string | null;
+  children: React.ReactNode;
+  signedIn: boolean;
+  welcomeFirstName: string | null;
+  isAdmin?: boolean;
 }
 
 export default function HomeSwitcher({
-children,
-signedIn,
-welcomeFirstName,
+  children,
+  signedIn,
+  welcomeFirstName,
+  isAdmin = false,
 }: HomeSwitcherProps) {
-const [mounted, setMounted] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
-useEffect(() => {
-setMounted(true);
-}, []);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
-if (!mounted) {
-return <>{children}</>;
-}
+  if (!mounted) {
+    return <>{children}</>;
+  }
 
-const isApp = Capacitor.isNativePlatform();
+  const isApp = Capacitor.isNativePlatform();
 
-return isApp ? ( <MobileHome
-   signedIn={signedIn}
-   welcomeFirstName={welcomeFirstName}
- />
-) : (
-<>{children}</>
-);
+  return isApp ? (
+    <MobileHome
+      signedIn={signedIn}
+      welcomeFirstName={welcomeFirstName}
+      isAdmin={isAdmin}
+    />
+  ) : (
+    <>{children}</>
+  );
 }

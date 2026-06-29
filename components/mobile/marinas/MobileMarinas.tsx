@@ -19,6 +19,9 @@ import {
 } from 'lucide-react';
 import { type MarinaListing } from '@/lib/marina-types';
 import { distanceKm } from '@/lib/geo-haversine';
+import { humanGeolocationMessage } from '@/lib/geolocation-utils';
+import { Capacitor } from '@capacitor/core';
+import { Geolocation } from '@capacitor/geolocation';
 
 const LIST_FETCH_LIMIT = 2000;
 
@@ -88,14 +91,18 @@ function MarinaCard({
       <div onClick={onSelect} className="cursor-pointer active:opacity-80">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-slate-100 truncate">{marina.name}</p>
+            <p className="text-sm font-bold text-slate-100 truncate">
+              {marina.name}
+            </p>
             <p className="text-[10px] text-zinc-400 mt-0.5 truncate">
               {marina.harbour}, {marina.region}
             </p>
           </div>
           {distKm != null && (
             <span className="shrink-0 mt-0.5 rounded-full bg-sky-900/50 border border-sky-500/20 px-2 py-0.5 text-[9px] font-bold text-sky-400">
-              {distKm < 1 ? `${Math.round(distKm * 1000)} m` : `${distKm.toFixed(1)} km`}
+              {distKm < 1
+                ? `${Math.round(distKm * 1000)} m`
+                : `${distKm.toFixed(1)} km`}
             </span>
           )}
         </div>
@@ -103,7 +110,9 @@ function MarinaCard({
         {marina.phone && (
           <p className="mt-2 text-xs text-zinc-400">
             <span className="text-zinc-500">Phone: </span>
-            <span className="font-semibold text-emerald-400">{marina.phone}</span>
+            <span className="font-semibold text-emerald-400">
+              {marina.phone}
+            </span>
           </p>
         )}
 
@@ -118,7 +127,9 @@ function MarinaCard({
               </span>
             ))}
             {marina.facilities.length > 5 && (
-              <span className="text-[9px] text-zinc-600">+{marina.facilities.length - 5} more</span>
+              <span className="text-[9px] text-zinc-600">
+                +{marina.facilities.length - 5} more
+              </span>
             )}
           </div>
         )}
@@ -136,7 +147,9 @@ function MarinaCard({
               max {marina.maxLengthM} m
             </span>
           )}
-          {marina.priceFromEur != null && <span>€{marina.priceFromEur}/night</span>}
+          {marina.priceFromEur != null && (
+            <span>€{marina.priceFromEur}/night</span>
+          )}
         </div>
       </div>
 
@@ -185,6 +198,7 @@ function EnquiryPanel({
     note: '',
   });
   const [submitState, setSubmitState] = useState<SubmitState>('idle');
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
 
   const set = (k: keyof EnquiryForm) => (v: string) =>
@@ -192,30 +206,44 @@ function EnquiryPanel({
 
   const handleSubmit = async () => {
     setSubmitState('busy');
+    setSubmitError(null);
     try {
-      const body = JSON.stringify({
+      const payload: Record<string, unknown> = {
         marinaId: marina.id,
-        marinaName: marina.name,
-        marinaPhone: marina.phone || '',
-        arrival: form.arrival,
-        departure: form.departure || addDaysIso(form.arrival || minDate, 1),
-        boatLengthM: form.lengthM ? Number(form.lengthM) : null,
-        note: form.note,
-      });
+        arrival: form.arrival.trim() || minDate,
+        departure: form.departure.trim(),
+        note: form.note.trim(),
+      };
+      const len = form.lengthM.trim();
+      if (len !== '') payload.boatLengthM = Number(len);
+
       const res = await fetch('/api/marinas/berth-requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body,
+        body: JSON.stringify(payload),
       });
-      setSubmitState(res.ok ? 'ok' : 'error');
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok) {
+        setSubmitState('error');
+        setSubmitError(data.error ?? `Request failed (${res.status})`);
+      } else {
+        setSubmitState('ok');
+      }
     } catch {
       setSubmitState('error');
+      setSubmitError('Network error — try again.');
     }
   };
 
   const emailBody = encodeURIComponent(
-    buildEnquiryBody(marina, form.arrival, form.departure, form.lengthM, form.note),
+    buildEnquiryBody(
+      marina,
+      form.arrival,
+      form.departure,
+      form.lengthM,
+      form.note,
+    ),
   );
   const emailHref = `mailto:${enquiriesEmail}?subject=${encodeURIComponent(
     `Berth enquiry – ${marina.name}`,
@@ -234,8 +262,12 @@ function EnquiryPanel({
           <ArrowLeft size={15} />
         </button>
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Enquiry &amp; pre-booking</p>
-          <p className="text-sm font-bold text-slate-100 truncate">{marina.name}</p>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+            Enquiry &amp; pre-booking
+          </p>
+          <p className="text-sm font-bold text-slate-100 truncate">
+            {marina.name}
+          </p>
           <p className="text-[10px] text-zinc-500">
             {marina.harbour}, {marina.region}
           </p>
@@ -277,21 +309,26 @@ function EnquiryPanel({
         </button>
         {expanded && (
           <div className="rounded-xl bg-[#0c1a32]/60 border border-white/[0.06] p-3 space-y-2 text-xs text-zinc-400">
-            {marina.description && <p className="leading-relaxed">{marina.description}</p>}
+            {marina.description && (
+              <p className="leading-relaxed">{marina.description}</p>
+            )}
             <div className="grid grid-cols-2 gap-x-4 gap-y-1">
               {marina.depthM != null && (
                 <div>
-                  <span className="text-zinc-600">Depth:</span> {marina.depthM} m
+                  <span className="text-zinc-600">Depth:</span> {marina.depthM}{' '}
+                  m
                 </div>
               )}
               {marina.maxLengthM != null && (
                 <div>
-                  <span className="text-zinc-600">Max length:</span> {marina.maxLengthM} m
+                  <span className="text-zinc-600">Max length:</span>{' '}
+                  {marina.maxLengthM} m
                 </div>
               )}
               {marina.priceFromEur != null && (
                 <div>
-                  <span className="text-zinc-600">From:</span> €{marina.priceFromEur}/night
+                  <span className="text-zinc-600">From:</span> €
+                  {marina.priceFromEur}/night
                 </div>
               )}
             </div>
@@ -312,7 +349,9 @@ function EnquiryPanel({
 
         {/* Dates */}
         <div className="space-y-3">
-          <p className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-500">Dates</p>
+          <p className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-500">
+            Dates
+          </p>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label
@@ -438,7 +477,9 @@ function EnquiryPanel({
             )}
 
             {submitState === 'error' && (
-              <p className="text-xs text-red-400 text-center">Could not save. Please try again.</p>
+              <p className="text-xs text-red-400 text-center">
+                {submitError || 'Could not save. Please try again.'}
+              </p>
             )}
           </div>
         )}
@@ -458,10 +499,14 @@ export function MobileMarinas() {
   const [lengthM, setLengthM] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-  const [allMarinas, setAllMarinas] = useState<MarinaListing[]>([]);
+  const [listMarinas, setListMarinas] = useState<MarinaListing[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userPos, setUserPos] = useState<{ lat: number; lng: number } | null>(null);
+  const [userPos, setUserPos] = useState<{ lat: number; lng: number } | null>(
+    null,
+  );
   const [geoLoading, setGeoLoading] = useState(false);
+  const [geoError, setGeoError] = useState<string | null>(null);
+  const [radiusMi, setRadiusMi] = useState(10);
   const [selected, setSelected] = useState<MarinaListing | null>(null);
   const [countries, setCountries] = useState<string[]>([]);
   const [listPage, setListPage] = useState(0);
@@ -469,91 +514,178 @@ export function MobileMarinas() {
   // Reset pagination on filter change
   useEffect(() => {
     setListPage(0);
-  }, [search, country, arrival, departure, lengthM, userPos?.lat, userPos?.lng]);
+  }, [
+    search,
+    country,
+    arrival,
+    departure,
+    lengthM,
+    userPos?.lat,
+    userPos?.lng,
+    radiusMi,
+  ]);
 
-  const enquiriesEmail = (process.env.NEXT_PUBLIC_MARINA_ENQUIRIES_EMAIL ?? '').trim();
+  const enquiriesEmail = (
+    process.env.NEXT_PUBLIC_MARINA_ENQUIRIES_EMAIL ?? ''
+  ).trim();
   const minDate = todayIso();
 
-  // Fetch marina list
+  // Load countries from the API
   useEffect(() => {
-    void (async () => {
-      try {
-        const res = await fetch(`/api/marinas/list?limit=${LIST_FETCH_LIMIT}`, {
-          credentials: 'same-origin',
-          cache: 'no-store',
-        });
-        if (!res.ok) return;
-        const d = (await res.json()) as { marinas?: MarinaListing[] };
-        const list = Array.isArray(d.marinas) ? d.marinas : [];
-        setAllMarinas(list);
-        const uniqueCountries = Array.from(new Set(list.map(m => m.country).filter(Boolean))).sort();
-        setCountries(uniqueCountries);
-      } catch {
-        /* ignore */
-      } finally {
-        setLoading(false);
-      }
-    })();
+    void fetch('/api/marinas/countries', { credentials: 'same-origin' })
+      .then(r => r.json() as Promise<{ countries?: string[] }>)
+      .then(d => {
+        if (d && Array.isArray(d.countries)) setCountries(d.countries);
+      })
+      .catch(() => {
+        /* keep empty; select still works */
+      });
   }, []);
 
+  useEffect(() => {
+    if (countries.length === 0) return;
+    setCountry(prev => {
+      if (prev === '' || countries.includes(prev)) return prev;
+      return countries.includes('United Kingdom') ? 'United Kingdom' : '';
+    });
+  }, [countries]);
+
+  // Fetch marinas based on filters
+  useEffect(() => {
+    const ac = new AbortController();
+    const t = setTimeout(() => {
+      setLoading(true);
+      const params = new URLSearchParams();
+      if (country) params.set('country', country);
+      const qt = search.trim();
+      if (qt) params.set('q', qt);
+      const len = lengthM.trim();
+      if (len !== '') params.set('boatLengthM', len);
+      if (userPos) {
+        params.set('lat', String(userPos.lat));
+        params.set('lng', String(userPos.lng));
+        params.set('radiusMi', String(radiusMi));
+      }
+      params.set('limit', String(LIST_FETCH_LIMIT));
+      void fetch(`/api/marinas/list?${params.toString()}`, {
+        signal: ac.signal,
+        credentials: 'same-origin',
+      })
+        .then(r => r.json() as Promise<{ marinas?: MarinaListing[] }>)
+        .then(d => {
+          if (ac.signal.aborted) return;
+          setListMarinas(Array.isArray(d.marinas) ? d.marinas : []);
+        })
+        .catch(() => {
+          if (!ac.signal.aborted) {
+            setListMarinas([]);
+          }
+        })
+        .finally(() => {
+          if (!ac.signal.aborted) setLoading(false);
+        });
+    }, 300);
+    return () => {
+      ac.abort();
+      clearTimeout(t);
+    };
+  }, [country, search, lengthM, userPos, radiusMi]);
+
   // Near me
-  const getNearMe = useCallback(() => {
-    if (!navigator.geolocation) return;
+  const getNearMe = useCallback(async () => {
     setGeoLoading(true);
-    navigator.geolocation.getCurrentPosition(
-      pos => {
-        setUserPos({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setGeoLoading(false);
-      },
-      () => setGeoLoading(false),
-      { enableHighAccuracy: true, timeout: 10000 },
-    );
+    setGeoError(null);
+
+    try {
+      if (Capacitor.isNativePlatform()) {
+        // Native Android / iOS
+        const permission = await Geolocation.requestPermissions();
+        console.log('Is Native:', Capacitor.isNativePlatform());
+        if (
+          permission.location !== 'granted' &&
+          permission.coarseLocation !== 'granted'
+        ) {
+          throw new Error('Location permission denied.');
+        }
+
+        const position = await Geolocation.getCurrentPosition({
+          enableHighAccuracy: true,
+          timeout: 30000,
+        });
+
+        setUserPos({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+      } else {
+        // Browser
+        navigator.geolocation.getCurrentPosition(
+          position => {
+            setUserPos({
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+            });
+
+            setGeoLoading(false);
+          },
+          error => {
+            setGeoLoading(false);
+            setGeoError(error.message);
+          },
+          {
+            enableHighAccuracy: true,
+          },
+        );
+
+        return;
+      }
+    } catch (err) {
+      console.error(err);
+
+      setGeoError(
+        err instanceof Error ? err.message : 'Unable to get your location.',
+      );
+    } finally {
+      setGeoLoading(false);
+    }
   }, []);
 
   // Clear all filters
   const clearFilters = () => {
     setSearch('');
-    setCountry('');
+    setCountry('United Kingdom');
     setArrival('');
     setDeparture('');
     setLengthM('');
     setUserPos(null);
+    setGeoError(null);
+    setRadiusMi(10);
   };
 
-  const hasActiveFilters = search || country !== 'United Kingdom' || arrival || departure || lengthM || userPos;
-
-  // Filter + sort
-  const q = search.toLowerCase().trim();
-  const sorted = allMarinas
-    .filter(m => {
-      if (country && m.country !== country) return false;
-      if (!q) return true;
-      return (
-        m.name.toLowerCase().includes(q) ||
-        m.harbour.toLowerCase().includes(q) ||
-        m.region.toLowerCase().includes(q)
-      );
-    })
-    .map(m => ({
-      marina: m,
-      distKm: userPos ? distanceKm(userPos.lat, userPos.lng, m.lat, m.lng) : null,
-    }))
-    .sort((a, b) => {
-      if (a.distKm != null && b.distKm != null) return a.distKm - b.distKm;
-      return a.marina.name.localeCompare(b.marina.name);
-    });
-
-  const filtered = sorted;
+  const hasActiveFilters =
+    search ||
+    country !== 'United Kingdom' ||
+    arrival ||
+    departure ||
+    lengthM ||
+    userPos;
 
   const LIST_PAGE_SIZE = 10;
-  const listPageCount = Math.max(1, Math.ceil(filtered.length / LIST_PAGE_SIZE));
+  const listPageCount = Math.max(
+    1,
+    Math.ceil(listMarinas.length / LIST_PAGE_SIZE),
+  );
   const safeListPage = Math.min(listPage, listPageCount - 1);
-  const visibleMarinas = filtered.slice(
+  const visibleMarinas = listMarinas.slice(
     safeListPage * LIST_PAGE_SIZE,
     safeListPage * LIST_PAGE_SIZE + LIST_PAGE_SIZE,
   );
-  const rangeFrom = filtered.length === 0 ? 0 : safeListPage * LIST_PAGE_SIZE + 1;
-  const rangeTo = Math.min((safeListPage + 1) * LIST_PAGE_SIZE, filtered.length);
+  const rangeFrom =
+    listMarinas.length === 0 ? 0 : safeListPage * LIST_PAGE_SIZE + 1;
+  const rangeTo = Math.min(
+    (safeListPage + 1) * LIST_PAGE_SIZE,
+    listMarinas.length,
+  );
   const canPrevPage = safeListPage > 0;
   const canNextPage = safeListPage < listPageCount - 1;
 
@@ -575,7 +707,6 @@ export function MobileMarinas() {
     <div className="fixed inset-0 bg-[#071b36] text-white flex flex-col overflow-hidden">
       {/* ── HEADER ── */}
       <div className="shrink-0 px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3 bg-[#071b36] border-b border-white/[0.05]">
-
         {/* Title row */}
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
@@ -583,17 +714,23 @@ export function MobileMarinas() {
               <Anchor size={15} className="text-indigo-400" />
             </div>
             <div>
-              <h1 className="text-base font-extrabold text-slate-100 leading-none">Marina berths</h1>
-              <p className="text-[10px] text-zinc-500">Filter by country, text search, or use my location to locate nearby marinas.</p>
+              <h1 className="text-base font-extrabold text-slate-100 leading-none">
+                Marina berths
+              </h1>
+              <p className="text-[10px] text-zinc-500">
+                Filter by country, text search, or use my location to locate
+                nearby marinas.
+              </p>
             </div>
           </div>
           <button
             type="button"
             onClick={() => setFiltersOpen(v => !v)}
-            className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[11px] font-bold transition-colors active:scale-95 ${filtersOpen || hasActiveFilters
-              ? 'bg-indigo-600/20 border-indigo-500/30 text-indigo-300'
-              : 'bg-white/[0.03] border-white/[0.07] text-zinc-400'
-              }`}
+            className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[11px] font-bold transition-colors active:scale-95 ${
+              filtersOpen || hasActiveFilters
+                ? 'bg-indigo-600/20 border-indigo-500/30 text-indigo-300'
+                : 'bg-white/[0.03] border-white/[0.07] text-zinc-400'
+            }`}
           >
             <SlidersHorizontal size={12} />
             Filters
@@ -607,7 +744,10 @@ export function MobileMarinas() {
 
         {/* Search bar (always visible) */}
         <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+          <Search
+            size={14}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"
+          />
           <input
             id="marina-search"
             type="search"
@@ -621,7 +761,6 @@ export function MobileMarinas() {
         {/* ── EXPANDED FILTERS PANEL ── */}
         {filtersOpen && (
           <div className="mt-3 space-y-3 rounded-2xl border border-white/[0.07] bg-white/[0.02] p-3">
-
             {/* Country + Near me */}
             <div className="flex gap-2">
               <select
@@ -641,10 +780,11 @@ export function MobileMarinas() {
                 type="button"
                 onClick={getNearMe}
                 disabled={geoLoading}
-                className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] font-bold active:scale-95 transition-transform disabled:opacity-50 ${userPos
-                  ? 'bg-sky-600/20 border-sky-500/30 text-sky-300'
-                  : 'bg-sky-900/20 border-sky-500/25 text-sky-400'
-                  }`}
+                className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] font-bold active:scale-95 transition-transform disabled:opacity-50 ${
+                  userPos
+                    ? 'bg-sky-600/20 border-sky-500/30 text-sky-300'
+                    : 'bg-sky-900/20 border-sky-500/25 text-sky-400'
+                }`}
               >
                 {geoLoading ? (
                   <div className="size-3 rounded-full border-2 border-sky-400 border-t-transparent animate-spin" />
@@ -655,6 +795,30 @@ export function MobileMarinas() {
               </button>
             </div>
 
+            {geoError && (
+              <p className="text-[10px] text-red-400 mt-1">{geoError}</p>
+            )}
+
+            {userPos && (
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-white/[0.06] bg-white/[0.02] p-2 text-xs">
+                <span className="text-zinc-400">Search radius:</span>
+                <select
+                  value={radiusMi}
+                  onChange={e => setRadiusMi(Number(e.target.value))}
+                  className="rounded-lg border border-white/[0.08] bg-white/[0.04] px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-sky-500/40 appearance-none"
+                >
+                  <option value={10}>10 mi</option>
+                  <option value={25}>25 mi</option>
+                  <option value={50}>50 mi</option>
+                  <option value={100}>100 mi</option>
+                  <option value={250}>250 mi</option>
+                  <option value={500}>500 mi</option>
+                  <option value={1500}>1,500 mi</option>
+                  <option value={9999}>Worldwide (sort only)</option>
+                </select>
+              </div>
+            )}
+
             {/* Arrival / Departure */}
             <div>
               <p className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-500 mb-1.5 flex items-center gap-1">
@@ -662,7 +826,10 @@ export function MobileMarinas() {
               </p>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label htmlFor="filter-arrival" className="text-[9px] text-zinc-600 block mb-1">
+                  <label
+                    htmlFor="filter-arrival"
+                    className="text-[9px] text-zinc-600 block mb-1"
+                  >
                     Arrival
                   </label>
                   <input
@@ -681,7 +848,10 @@ export function MobileMarinas() {
                   />
                 </div>
                 <div>
-                  <label htmlFor="filter-departure" className="text-[9px] text-zinc-600 block mb-1">
+                  <label
+                    htmlFor="filter-departure"
+                    className="text-[9px] text-zinc-600 block mb-1"
+                  >
                     Departure
                   </label>
                   <input
@@ -728,7 +898,8 @@ export function MobileMarinas() {
               />
               {lengthM && (
                 <p className="text-[9px] text-zinc-600 mt-1">
-                  Tip: set arrival, then we suggest a departure two nights ahead.
+                  Tip: set arrival, then we suggest a departure two nights
+                  ahead.
                 </p>
               )}
             </div>
@@ -785,11 +956,13 @@ export function MobileMarinas() {
             <div className="size-6 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
             <p className="text-xs text-zinc-500">Loading marinas…</p>
           </div>
-        ) : filtered.length === 0 ? (
+        ) : listMarinas.length === 0 ? (
           <div className="py-12 text-center">
             <Anchor size={28} className="text-zinc-700 mx-auto mb-3" />
             <p className="text-sm font-bold text-zinc-400">No marinas found</p>
-            <p className="text-xs text-zinc-600 mt-1">Try a different country or search term</p>
+            <p className="text-xs text-zinc-600 mt-1">
+              Try a different country or search term
+            </p>
             <button
               type="button"
               onClick={clearFilters}
@@ -801,19 +974,25 @@ export function MobileMarinas() {
         ) : (
           <>
             <p className="text-[10px] text-zinc-600 font-bold px-0.5">
-              Showing {rangeFrom}–{rangeTo} of {filtered.length} marina{filtered.length === 1 ? '' : 's'}
+              Showing {rangeFrom}–{rangeTo} of {listMarinas.length} marina
+              {listMarinas.length === 1 ? '' : 's'}
               {userPos ? ' · sorted by distance' : ''}
               {arrival ? ` · from ${arrival}` : ''}
             </p>
-            {visibleMarinas.map(({ marina, distKm }) => (
-              <MarinaCard
-                key={marina.id}
-                marina={marina}
-                distKm={distKm}
-                onSelect={() => setSelected(marina)}
-              />
-            ))}
-            {filtered.length > LIST_PAGE_SIZE && (
+            {visibleMarinas.map(m => {
+              const distKm = userPos
+                ? distanceKm(userPos.lat, userPos.lng, m.lat, m.lng)
+                : null;
+              return (
+                <MarinaCard
+                  key={m.id}
+                  marina={m}
+                  distKm={distKm}
+                  onSelect={() => setSelected(m)}
+                />
+              );
+            })}
+            {listMarinas.length > LIST_PAGE_SIZE && (
               <div className="mt-4 flex flex-wrap items-center gap-2 px-0.5 pb-4">
                 <button
                   type="button"
@@ -826,7 +1005,9 @@ export function MobileMarinas() {
                 <button
                   type="button"
                   disabled={!canNextPage}
-                  onClick={() => setListPage(p => Math.min(listPageCount - 1, p + 1))}
+                  onClick={() =>
+                    setListPage(p => Math.min(listPageCount - 1, p + 1))
+                  }
                   className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-xs font-bold text-zinc-300 active:scale-95 disabled:opacity-40 disabled:active:scale-100 transition-all"
                 >
                   Show next 10

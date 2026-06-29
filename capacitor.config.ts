@@ -19,6 +19,7 @@ function loadEnvFile(): void {
       ) {
         val = val.slice(1, -1);
       }
+
       process.env[key] = val;
     }
   }
@@ -35,8 +36,8 @@ const config: CapacitorConfig = {
   appName: 'SeaLink',
   webDir: 'public',
   server: {
-    //url: "http://192.168.1.24:3000",
-    url: 'https://sealinkapp.com',
+    url: "http://192.168.1.24:3000",
+    //url: 'https://sealinkapp.com',
     cleartext: true,
   },
 };

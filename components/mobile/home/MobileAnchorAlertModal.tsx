@@ -494,6 +494,11 @@ export function MobileAnchorAlertModal({
               <span className="mt-1.5 block text-[10px] text-zinc-500 leading-normal">
                 Alert fires if the boat drifts outside this boundary circle.
               </span>
+              {isAdmin ? (
+                <span className="mt-1.5 block text-[10px] text-amber-300 leading-normal">
+                  Admin 2 m ring is for testing the alarm only — normal GPS noise is often larger than 2 m, so expect false triggers unless conditions are ideal or you use Android native test mode.
+                </span>
+              ) : null}
             </label>
 
             <div className="border-t border-white/[0.05] pt-3">

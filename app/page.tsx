@@ -21,7 +21,11 @@ export default async function Home() {
     : null;
 
   return (
-    <HomeSwitcher signedIn={signedIn} welcomeFirstName={welcomeFirstName}>
+    <HomeSwitcher
+      signedIn={signedIn}
+      welcomeFirstName={welcomeFirstName}
+      isAdmin={authUser?.isAdmin ?? false}
+    >
       <div className="flex flex-1 flex-col bg-black">
         <HomeHeader signedIn={signedIn} isAdmin={authUser?.isAdmin ?? false} />
 

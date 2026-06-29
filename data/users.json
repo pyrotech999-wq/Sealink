@@ -3,8 +3,8 @@
     "uid": "44066841a0fd3370bee8e1dfc008d6bc",
     "email": "pyrotech999@hotmail.co.uk",
     "password": {
-      "saltHex": "6fa3780896691e1c30d302b0f4381bcf",
-      "hashHex": "321c9ee54fda4fc73b75323ff3e6d9363b8048285b8e403df5baf70f06bb069b83ff9a051b95b4e923af0a1efa8ba9986768ff86898fa5c84008c9776f64dfb3"
+      "saltHex": "0972698156fe18bdb3ed959bfa726efa",
+      "hashHex": "2d858a57884d26324f13aca6a085c42210a4c3ad8589777eb58cc594ed7959c78ff23d9cc9eb7a8c7e9b13ab720554041d24d1c5de1a83e9a756023d683a7618"
     },
     "createdAt": "2026-05-01T08:43:24.175Z",
     "updatedAt": "2026-05-01T08:43:24.175Z"

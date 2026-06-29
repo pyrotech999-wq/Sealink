@@ -25,15 +25,15 @@ const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffec
 export function MobileBottomNav() {
   const pathname = usePathname();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [session, setSession] = useState<{ signedIn: boolean; email?: string } | null>(null);
+  const [session, setSession] = useState<{ signedIn: boolean; email?: string; isAdmin?: boolean } | null>(null);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   const refreshSession = useCallback(() => {
     void fetch("/api/demo/me", { credentials: "same-origin", cache: "no-store" })
       .then(async (r) => {
-        const d = (await r.json()) as { signedIn?: boolean; email?: string };
-        setSession({ signedIn: Boolean(d.signedIn), email: d.email });
+        const d = (await r.json()) as { signedIn?: boolean; email?: string; isAdmin?: boolean };
+        setSession({ signedIn: Boolean(d.signedIn), email: d.email, isAdmin: d.isAdmin });
       })
       .catch(() => setSession({ signedIn: false }));
   }, []);
@@ -312,6 +312,52 @@ export function MobileBottomNav() {
                     <span className="text-xs font-bold flex-1">Marina Berths</span>
                     <ChevronRight size={12} className="text-zinc-600" />
                   </Link>
+
+                  {session?.isAdmin && (
+                    <>
+                      <div className="h-px bg-white/[0.04] my-2 mx-2" />
+                      <p className="text-[9px] font-bold uppercase tracking-wider text-amber-400 mb-1 px-3 mt-1.5">Admin Tools</p>
+
+                      <Link
+                        href="/admin/access"
+                        onClick={() => setIsDrawerOpen(false)}
+                        className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-colors ${pathname === "/admin/access"
+                          ? "bg-amber-500/10 text-amber-300 font-bold"
+                          : "text-slate-300 hover:bg-white/[0.04] active:bg-white/[0.08]"
+                          }`}
+                      >
+                        <Shield size={15} className="text-amber-400 shrink-0" />
+                        <span className="text-xs font-bold flex-1">Subscription Access</span>
+                        <ChevronRight size={12} className="text-zinc-600" />
+                      </Link>
+
+                      <Link
+                        href="/admin/vessel-adverts"
+                        onClick={() => setIsDrawerOpen(false)}
+                        className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-colors ${pathname === "/admin/vessel-adverts"
+                          ? "bg-amber-500/10 text-amber-300 font-bold"
+                          : "text-slate-300 hover:bg-white/[0.04] active:bg-white/[0.08]"
+                          }`}
+                      >
+                        <Shield size={15} className="text-amber-400 shrink-0" />
+                        <span className="text-xs font-bold flex-1">Boat Adverts</span>
+                        <ChevronRight size={12} className="text-zinc-600" />
+                      </Link>
+
+                      <Link
+                        href="/admin/site-banners"
+                        onClick={() => setIsDrawerOpen(false)}
+                        className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-colors ${pathname === "/admin/site-banners"
+                          ? "bg-amber-500/10 text-amber-300 font-bold"
+                          : "text-slate-300 hover:bg-white/[0.04] active:bg-white/[0.08]"
+                          }`}
+                      >
+                        <Shield size={15} className="text-amber-400 shrink-0" />
+                        <span className="text-xs font-bold flex-1">Site Banners</span>
+                        <ChevronRight size={12} className="text-zinc-600" />
+                      </Link>
+                    </>
+                  )}
 
                   <div className="h-px bg-white/[0.04] my-2 mx-2" />
                   <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 mb-1 px-3 mt-1">Information</p>
