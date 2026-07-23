@@ -9,6 +9,7 @@ function num(x: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+
 function asListing(m: unknown): MarinaListing | null {
   if (!m || typeof m !== "object") return null;
   const r = m as Record<string, unknown>;
